@@ -49,65 +49,29 @@
  * 
  */
 
+#ifndef HAVOQGT_MPI_DETAIL_ITERATOR_HPP_INCLUDED
+#define HAVOQGT_MPI_DETAIL_ITERATOR_HPP_INCLUDED
 
-#ifndef HAVOQGT_OMP_OMP_HPP_INCLUDED
-#define HAVOQGT_OMP_OMP_HPP_INCLUDED
+#include <havoqgt/mpi.hpp>
 
-
-#include <omp.h>
-#include <detail/omp.hpp>
-#include <assert.h>
-
-
-namespace havoqgt { namespace omp {
-
-/** 
- * Initializes the parallel environment for havoqgt.
- * Typically called early in main(). 
- */
-inline void init_environment() {
-  // Start parallel region and get thread information.
-  #pragma omp parallel
-  {
-    detail::__tls_thread_num() = omp_get_thread_num();
-    detail::__num_threads() = omp_get_num_threads();
-    assert(detail::__tls_thread_num() == omp_get_thread_num());
-    assert(detail::__num_threads() == omp_get_num_threads());
-  }
-}
+namespace havoqgt { namespace mpi { namespace detail {
 
 /**
- * Returns the threads identifier.
+ * Tests if all processes' iterator range is empty
+ * @param itr begin iterator
+ * @param itr_end end iterator
+ * @param comm MPI communicator
+ * @return true, if all processes have empty range, else false
  */
-inline int thread_num() {
-  return detail::__tls_thread_num();
+template <typename Iterator>
+bool global_iterator_range_empty(Iterator itr, Iterator itr_end, MPI_Comm comm) {
+  uint32_t my_unfinished = itr != itr_end;
+  uint32_t ranks_unfinished = mpi_all_reduce(my_unfinished, 
+                                             std::plus<uint32_t>(), 
+                                             comm);
+  return ranks_unfinished == 0;
 }
 
-/**
- * Returns the number of threads that havoqgt uses.
- */
-inline int num_threads() {
-  return detail::__num_threads();
-}
+}}}
 
-/**
- * Asserts that current execution is in a sequential region.
- */
-inline void assert_sequential() {
-  assert(omp_in_parallel() == 0);
-}
-
-/**
- * Asserts that current execution is in a parallel region.
- */
-inline void assert_parallel() {
-  assert(omp_in_parallel() == 1);
-  assert(thread_num() == omp_get_thread_num());
-  assert(num_threads() == omp_get_num_threads());
-}
-
-
-} } //end havoqgt::omp
-
-
-#endif //HAVOQGT_OMP_OMP_HPP_INCLUDED
+#endif //HAVOQGT_MPI_DETAIL_ITERATOR_HPP_INCLUDED

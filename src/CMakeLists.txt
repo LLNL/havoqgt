@@ -1,0 +1,13 @@
+function(add_exe source)
+  if (MPI_FOUND AND Boost_FOUND )
+  add_executable(${source} ${source})
+    #include_havoqgt()
+    include_link_mpi(${source})
+    include_link_boost(${source})
+    include_directories(${source})
+    install(TARGETS ${source} DESTINATION bin)
+  endif( MPI_FOUND AND Boost_FOUND )
+endfunction()
+
+add_exe( generate_graph )
+add_exe( run_bfs )

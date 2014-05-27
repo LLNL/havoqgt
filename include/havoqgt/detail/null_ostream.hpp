@@ -49,93 +49,48 @@
  * 
  */
 
+#ifndef HAVOQGT_DETAIL_NULL_OSTREAM_HPP_INCLUDED
+#define HAVOQGT_DETAIL_NULL_OSTREAM_HPP_INCLUDED
 
-#ifndef HAVOQGT_OMP_EXTERNAL_MEMORY_ARENA_HPP_INCLUDED
-#define HAVOQGT_OMP_EXTERNAL_MEMORY_ARENA_HPP_INCLUDED
+#include <streambuf>
+#include <ostream>
 
-#include <omp.hpp>
-#include <vector>
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
+/// Null ostream, adapted from:
+/// http://stackoverflow.com/questions/760301/implementing-a-no-op-stdostream
 
-namespace havoqgt { namespace omp { 
-
-class external_memory_arena
-{
-public:
-  typedef boost::interprocess::managed_mapped_file::segment_manager segment_manager;
-
-  external_memory_arena(const char* fname, uint64_t fsize_bytes)
-    : m_vec_ptr( num_threads ())
-  {
-    namespace bip = boost::interprocess;
-    assert_sequential();
-    #pragma omp parallel
+namespace havoqgt { namespace detail {
+  
+template <class cT, class traits = std::char_traits<cT> >
+class basic_nullbuf: public std::basic_streambuf<cT, traits> {
+    typename traits::int_type overflow(typename traits::int_type c)
     {
-      assert_parallel();
-      std::stringstream ssfname;
-      ssfname << fname << "_" << thread_num();
-      m_vec_ptr[thread_num()] = new bip::managed_mapped_file(bip::create_only, ssfname.str().c_str(), fsize_bytes);
+        return traits::not_eof(c); // indicate success
     }
-  }
-  external_memory_arena(const char* fname)
-    : m_vec_ptr( num_threads ())
-  {
-    namespace bip = boost::interprocess;
-    assert_sequential();
-    #pragma omp parallel
-    {
-      assert_parallel();
-      std::stringstream ssfname;
-      ssfname << fname << "_" << thread_num();
-      m_vec_ptr[thread_num()] = new bip::managed_mapped_file(bip::open_only, ssfname.str().c_str());
-    }
-  }
-  ~external_memory_arena() 
-  {
-    assert_sequential();
-    #pragma omp parallel
-    {
-      assert_parallel();
-      delete m_vec_ptr[thread_num()];
-    }
-  }
-  template <typename T>
-  struct allocator {
-    typedef typename boost::interprocess::allocator<T,boost::interprocess::managed_mapped_file::segment_manager> type;
-  };
-
-  template<typename T>
-  typename allocator<T>::type make_allocator() {
-    return typename allocator<T>::type(get_sm());
-  }
-
-  boost::interprocess::managed_mapped_file::segment_manager* get_sm()
-  {
-    return m_vec_ptr[thread_num()]->get_segment_manager();
-  }
-
-  static void remove(const char* fname)
-  {
-    assert_sequential();
-    #pragma omp parallel
-    {
-      assert_parallel();
-      std::stringstream ssfname;
-      ssfname << fname << "_" << thread_num();
-      ::remove(ssfname.str().c_str());
-    }
-  }
-
-private:
-  /**
-   * Not Copyable
-   */
-  external_memory_arena(const external_memory_arena&);
-
-  std::vector<boost::interprocess::managed_mapped_file*> m_vec_ptr;
 };
 
-}}
+template <class cT, class traits = std::char_traits<cT> >
+class basic_onullstream: public std::basic_ostream<cT, traits> {
+    public:
+        basic_onullstream():
+        std::basic_ios<cT, traits>(&m_sbuf),
+        std::basic_ostream<cT, traits>(&m_sbuf)
+        {
+            this->init(&m_sbuf);
+        }
 
-#endif //HAVOQGT_OMP_EXTERNAL_MEMORY_ARENA_HPP_INCLUDED
+    private:
+        basic_nullbuf<cT, traits> m_sbuf;
+};
+
+inline std::ostream& get_null_ostream() {
+  static basic_onullstream<char> null_ostream;
+  return null_ostream;
+}
+
+//typedef basic_onullstream<char> onullstream;
+//typedef basic_onullstream<wchar_t> wonullstream;  
+  
+}} //end namespace havoqgt::detail
+
+
+#endif //HAVOQGT_DETAIL_NULL_OSTREAM_HPP_INCLUDED

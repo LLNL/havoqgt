@@ -49,12 +49,11 @@
  * 
  */
 
-
 #ifndef HAVOQGT_RMAT_EDGE_GENERATOR_HPP_INCLUDED
 #define HAVOQGT_RMAT_EDGE_GENERATOR_HPP_INCLUDED
 
 #include <boost/random.hpp>
-#include <detail/hash.hpp>
+#include <havoqgt/detail/hash.hpp>
 
 #include <utility>
 #include <stdint.h>

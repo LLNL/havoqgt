@@ -49,113 +49,91 @@
  * 
  */
 
-#ifndef HAVOQGT_MPI_BREADTH_FIRST_SEARCH_HPP_INCLUDED
-#define HAVOQGT_MPI_BREADTH_FIRST_SEARCH_HPP_INCLUDED
+#ifndef HAVOQGT_MPI_SINGLE_SOURCE_SHORTEST_PATH_HPP_INCLUDED
+#define HAVOQGT_MPI_SINGLE_SOURCE_SHORTEST_PATH_HPP_INCLUDED
+
 
 
 #include <havoqgt/visitor_queue.hpp>
-#include <boost/container/deque.hpp>
+#include <queue>
 
 namespace havoqgt { namespace mpi {
 
 
 template <typename Visitor>
-class bfs_queue
+class sssp_queue
 {
-public:
-  typedef uint32_t level_number_type;
-  typedef typename boost::container::deque<Visitor>::size_type size_type;
 
 protected:
-  std::vector<boost::container::deque<Visitor> > m_vec_bfs_level_stack;
-  level_number_type m_cur_min_level;
-  size_type m_size;
+  std::priority_queue< Visitor, std::vector<Visitor>, 
+                               std::greater<Visitor> > m_data;
 public:
-  bfs_queue() : m_vec_bfs_level_stack(20), m_cur_min_level(std::numeric_limits<level_number_type>::max()), m_size(0) { }
+  sssp_queue() { }
 
   bool push(Visitor const & task)
   {
-    while(task.level() >= m_vec_bfs_level_stack.size()) {
-      m_vec_bfs_level_stack.push_back(boost::container::deque<Visitor>());
-    }
-    m_vec_bfs_level_stack[task.level()].push_back(task);
-    ++m_size;
-    m_cur_min_level = std::min(m_cur_min_level, (uint32_t)task.level());
+    m_data.push(task);
     return true;
   }
 
   void pop()
   {
-    m_vec_bfs_level_stack[m_cur_min_level].pop_back();
-    --m_size;
-    if(m_vec_bfs_level_stack[m_cur_min_level].empty()) {
-      //if now empty, find next level;
-      for(;m_cur_min_level < m_vec_bfs_level_stack.size(); ++m_cur_min_level) {
-        if(!m_vec_bfs_level_stack[m_cur_min_level].empty()) break;
-      }
-    }
+    m_data.pop();
   }
 
   Visitor const & top() //const
   {
-    return m_vec_bfs_level_stack[m_cur_min_level].back();
+    return m_data.top();
   }
 
-  size_type size() const
+  size_t size() const
   {
-    return m_size;
+    return m_data.size();;
   }
 
   bool empty() const
   {
-    return (m_size == 0);
+    return m_data.empty();
   }
 
   void clear()
   {
-     for(typename std::vector<boost::container::deque<Visitor> >::iterator itr = m_vec_bfs_level_stack.begin();
-       itr != m_vec_bfs_level_stack.end(); ++itr) {
-       itr->clear();
-     }
-     m_size = 0;
-     m_cur_min_level = std::numeric_limits<level_number_type>::max();
-   }
+    m_data.clear();
+  }
 };
 
 
-
-template<typename Graph, typename LevelData, typename ParentData>
-class bfs_visitor {
+template<typename Graph, typename PathData, typename EdgeWeight>
+class sssp_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
-  bfs_visitor(): m_level(std::numeric_limits<uint64_t>::max())  { }
-  bfs_visitor(vertex_locator _vertex, uint64_t _level, 
-              uint64_t _parent):
-              vertex(_vertex), m_parent(_parent), m_level(_level) { }
+  typedef typename PathData::value_type                  path_type;
+  sssp_visitor(): m_path(std::numeric_limits<path_type>::max())  { }
+  sssp_visitor(vertex_locator _vertex, path_type _level):
+              vertex(_vertex), m_path(_level) { }
 
-  bfs_visitor(vertex_locator _vertex) :
-              vertex(_vertex), m_parent(0), m_level(0) { }            
+  sssp_visitor(vertex_locator _vertex) :
+              vertex(_vertex), m_path(0) { }            
 
   
   bool pre_visit() const {
-    bool do_visit  = (*level_data())[vertex] > level();
+    bool do_visit  = (*path_data())[vertex] > m_path;
     if(do_visit) {
-      (*level_data())[vertex] = level();
+      (*path_data())[vertex] = m_path;
     }
     return do_visit;
   }
 
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    if(level() <= (*level_data())[vertex]) {
-      (*level_data())[vertex] = level();
-      (*parent_data())[vertex] = parent();
-
+    if(m_path == (*path_data())[vertex]) 
+    {
       typedef typename Graph::edge_iterator eitr_type;
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
+        path_type weight = (*edge_data())[eitr];
         //std::cout << "Visiting neighbor: " << g.locator_to_label(neighbor) << std::endl;
-        bfs_visitor new_visitor( neighbor, level() + 1, g.locator_to_label(vertex));
+        sssp_visitor new_visitor( neighbor, weight + m_path);
         vis_queue->queue_visitor(new_visitor);
       }
       return true;
@@ -163,45 +141,43 @@ public:
     return false;
   }
 
-  uint64_t         level() const {  return m_level; }
-  uint64_t  parent() const  { return m_parent; }
-
-  friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
-    return v1.level() > v2.level();
+  friend inline bool operator>(const sssp_visitor& v1, const sssp_visitor& v2) {
+    return v1.m_path > v2.m_path;
   }
 
-  friend inline bool operator<(const bfs_visitor& v1, const bfs_visitor& v2) {
-    return v1.level() < v2.level();
+  friend inline bool operator<(const sssp_visitor& v1, const sssp_visitor& v2) {
+    return v1.m_path < v2.m_path;
   }
 
-  static void set_level_data(LevelData* _data) { level_data() = _data; }
+  static void set_path_data(PathData* _data) { path_data() = _data; }
 
-  static LevelData*& level_data() {
-    static LevelData* data;
+  static PathData*& path_data() {
+    static PathData* data;
     return data;
   }
 
-  static void set_parent_data(ParentData* _data) { parent_data() = _data; }
-  static ParentData*& parent_data() {
-    static ParentData* data;
+  static void set_edge_weight(EdgeWeight* _data) { edge_data() = _data; }
+
+  static EdgeWeight*& edge_data() {
+    static EdgeWeight* data;
     return data;
   }
+
   vertex_locator   vertex;
-  uint64_t         m_level : 24;
-  uint64_t         m_parent : 40;
+  path_type        m_path;
 };
 
  
-template <typename TGraph, typename LevelData, typename ParentData>
-void breadth_first_search(TGraph& g, 
-                          LevelData& level_data, 
-                          ParentData& parent_data,
-                          typename TGraph::vertex_locator s) {
+template <typename TGraph, typename PathData, typename EdgeWeight>
+void single_source_shortest_path(TGraph& g, 
+                                 PathData& path_data, 
+                                 EdgeWeight& edge_data,
+                                 typename TGraph::vertex_locator s) {
   
-  typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
-  visitor_type::set_level_data(&level_data);
-  visitor_type::set_parent_data(&parent_data);
-  typedef visitor_queue< visitor_type, bfs_queue, TGraph >    visitor_queue_type;
+  typedef  sssp_visitor<TGraph, PathData, EdgeWeight>    visitor_type;
+  visitor_type::set_path_data(&path_data);
+  visitor_type::set_edge_weight(&edge_data);
+  typedef visitor_queue< visitor_type, sssp_queue, TGraph >    visitor_queue_type;
    
   visitor_queue_type vq(&g);
   vq.init_visitor_traversal(s);
@@ -214,4 +190,4 @@ void breadth_first_search(TGraph& g,
 
 
 
-#endif //HAVOQGT_MPI_BREADTH_FIRST_SEARCH_HPP_INCLUDED
+#endif //HAVOQGT_MPI_SINGLE_SOURCE_SHORTEST_PATH_HPP_INCLUDED

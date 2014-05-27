@@ -48,23 +48,136 @@
  * purposes.
  * 
  */
+ 
+
+#ifndef HAVOQGT_MPI_PAGE_RANK_HPP_INCLUDED
+#define HAVOQGT_MPI_PAGE_RANK_HPP_INCLUDED
 
 
-#ifndef HAVOQGT_OMP_DETAIL_OMP_HPP_INCLUDED
-#define HAVOQGT_OMP_DETAIL_OMP_HPP_INCLUDED
 
-namespace havoqgt { namespace omp { namespace detail {
+#include <havoqgt/visitor_queue.hpp>
+#include <boost/container/deque.hpp>
+#include <vector>
 
-inline int& __tls_thread_num() {
-  static __thread int thread_num = -1;
-  return thread_num;
+namespace havoqgt { namespace mpi {
+
+template <typename Visitor>
+class pr_queue
+{
+
+protected:
+  std::vector< Visitor > m_data;
+public:
+  pr_queue() { }
+
+  bool push(Visitor const & task)
+  {
+    m_data.push_back(task);
+    return true;
+  }
+
+  void pop()
+  {
+    m_data.pop_back();
+  }
+
+  Visitor const & top() //const
+  {
+    return m_data.back();
+  }
+
+  size_t size() const
+  {
+    return m_data.size();;
+  }
+
+  bool empty() const
+  {
+    return m_data.empty();
+  }
+
+  void clear()
+  {
+    m_data.clear();
+  }
+};
+
+
+
+template<typename Graph, typename PRData>
+class pr_visitor {
+public:
+  typedef typename Graph::vertex_locator                 vertex_locator;
+  pr_visitor(): rank(0)  { }
+
+  pr_visitor(vertex_locator _vertex, double _rank)
+    : vertex(_vertex)
+    , rank(_rank) { }
+
+  pr_visitor(vertex_locator _vertex)
+    : vertex(_vertex)
+    , rank(0) { }      
+
+  
+  bool pre_visit() const {
+    rank_data()[vertex] += rank;
+    return false;
+  }
+
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    double old_rank = 1;
+    uint64_t degree = g.degree(vertex);
+    double send_rank = 1;//old_rank / double(degree);
+
+
+    typedef typename Graph::edge_iterator eitr_type;
+    for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
+      vertex_locator neighbor = eitr.target();
+      pr_visitor new_visitor( neighbor, send_rank);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    return true;
+
+  }
+
+
+  friend inline bool operator>(const pr_visitor& v1, const pr_visitor& v2) {
+    return false;
+  }
+
+  friend inline bool operator<(const pr_visitor& v1, const pr_visitor& v2) {
+    return false;
+  }
+
+  static PRData& rank_data(PRData* _data = NULL) {
+    static PRData* data;
+    if(_data) data = _data;
+    return *data;
+  }
+
+
+  vertex_locator   vertex;
+  double           rank;
+};
+
+ 
+template <typename TGraph, typename PRData>
+void page_rank(TGraph& g, PRData& pr_data) {
+  typedef  pr_visitor<TGraph, PRData>    visitor_type;
+  visitor_type::rank_data(&pr_data);
+  typedef visitor_queue< visitor_type, pr_queue, TGraph >    visitor_queue_type;
+   
+  visitor_queue_type vq(&g);
+  vq.init_visitor_traversal();
+  pr_data.all_reduce();
 }
 
-inline int& __num_threads() {
-  static int num_threads = -1;
-  return num_threads;
-}
 
-} } } //end havoqgt::omp::detail
 
-#endif //HAVOQGT_OMP_DETAIL_OMP_HPP_INCLUDED
+}} //end namespace havoqgt::mpi
+
+
+
+
+#endif //HAVOQGT_MPI_PAGE_RANK_HPP_INCLUDED

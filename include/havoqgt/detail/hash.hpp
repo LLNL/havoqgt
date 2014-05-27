@@ -56,11 +56,12 @@
 #include <stdint.h>
 
 namespace havoqgt { namespace detail {
+///
+/// Hash functions
+///
+/// \todo requires documentation!
+/// \todo requires testing!
 
-
-/**
- * 32bit hash function from: http://burtleburtle.net/bob/hash/integer.html
- */
 inline uint32_t hash32( uint32_t a)
 {
    a = (a+0x7ed55d16) + (a<<12);
@@ -83,8 +84,7 @@ inline uint16_t hash16( uint16_t a)
    return a;
 }
 
-inline uint64_t shifted_n_hash32(uint64_t input, int n) 
-{
+inline uint64_t shifted_n_hash32(uint64_t input, int n) {
   uint64_t to_hash = input >> n;
   uint64_t mask    = 0xFFFFFFFF;
   to_hash &= mask;
@@ -98,8 +98,7 @@ inline uint64_t shifted_n_hash32(uint64_t input, int n)
   return input;
 }
 
-inline uint64_t shifted_n_hash16(uint64_t input, int n) 
-{
+inline uint64_t shifted_n_hash16(uint64_t input, int n) {
   uint64_t to_hash = input >> n;
   uint64_t mask    = 0xFFFF;
   to_hash &= mask;
@@ -113,8 +112,8 @@ inline uint64_t shifted_n_hash16(uint64_t input, int n)
   return input;
 }
 
-inline uint64_t hash_nbits(uint64_t input, int n) 
-{
+inline uint64_t hash_nbits(uint64_t input, int n) {
+  //std::cout << "hash_nbits(" << input << ", " << n << ") = ";
   if(n==32) {
     input =  hash32(input);
   } else if(n>32){
@@ -137,6 +136,7 @@ inline uint64_t hash_nbits(uint64_t input, int n)
       input = shifted_n_hash16(input, i);
     }
   }
+  //std::cout << input << std::endl;
   return input;
 }
 

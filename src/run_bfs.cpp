@@ -5,7 +5,7 @@
  * LLNL-CODE-644630. 
  * All rights reserved.
  * 
- * This file is part of HavoqGT, Version 1.0. 
+ * This file is part of HavoqGT, Version 0.1. 
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
  * 
  * Please also read this link – Our Notice and GNU Lesser General Public License.
@@ -49,55 +49,377 @@
  * 
  */
 
-
-#include <external_memory_arena.hpp>
-#include <adjacency_list_graph.hpp>
-#include <breadth_first_search.hpp>
+#include <havoqgt/delegate_partitioned_graph.hpp>
+#include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/gen_preferential_attachment_edge_list.hpp>
+#include <havoqgt/breadth_first_search.hpp>
+#include <havoqgt/single_source_shortest_path.hpp>
+#include <havoqgt/page_rank.hpp>
+#include <havoqgt/environment.hpp>
 #include <iostream>
+#include <assert.h>
+#include <deque>
+#include <utility>
+#include <algorithm>
+#include <functional>
 
-using namespace havoqgt::omp;
+#include <boost/interprocess/managed_mapped_file.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+
+
+// class heap_arena 
+// {
+// public:
+//   heap_arena() { }
+//   template <typename T>
+//   struct allocator {
+//     typedef typename std::allocator<T> type;
+//   };
+
+//   template<typename T>
+//   std::allocator<T> make_allocator() {
+//     return std::allocator<T>();
+//   }
+// private:
+//   heap_arena(const heap_arena&);
+// };
+
+// class extended_memory_arena {
+//   // typedef boost::interprocess::basic_managed_mapped_file 
+//   //   <char
+//   //   ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family, void*>
+//   //   ,boost::interprocess::iset_index>  managed_mapped_file;
+  
+// public:
+//   template <typename T>
+//   struct allocator {
+//     typedef typename boost::interprocess::managed_mapped_file::template allocator<T>::type type;
+//   };
+
+//   template <typename T>
+//   typename allocator<T>::type make_allocator() {
+//     return m_mapped_file->template get_allocator<T>();
+//   }
+//   extended_memory_arena(const char* fname) 
+//     {//: m_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128) {} 
+//       m_mapped_file = new boost::interprocess::managed_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128);
+//   }
+//   void print_info()
+//   {
+//     //std::cout << "free/size = " << m_mapped_file->get_free_memory() << " / " << m_mapped_file->get_size() << std::endl;
+//     std::cout << "check_sanity() == " << m_mapped_file->check_sanity() << std::endl;
+//   }
+// private:
+//   boost::interprocess::managed_mapped_file* m_mapped_file;
+// };
+
+
+
+// notes for how to setup a good test
+// take rank * 100 and make edges between (all local)
+// Make one vert per rank a hub.
+
+namespace hmpi = havoqgt::mpi;
+using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
-
-  if(argc != 3)
+  CHK_MPI(MPI_Init(&argc, &argv)); 
   {
-    std::cerr << "Usage: " << argv[0] << " <filename> <scale>" <<std::endl;
-    return 1;
-  }
-
-  havoqgt::omp::init_environment();
-
-  const char* fname = argv[1];
-  int SCALE = atoi(argv[2]);
-  std::cout << "Graph: " << fname << ", scale = " << SCALE << std::endl;
-
-  external_memory_arena em(fname);
-
-  typedef adjacency_list_graph<external_memory_arena> graph_type;
-  graph_type graph(em, "rmat_adj_list");
-
-  for(uint64_t i=0, raw_source=0; i<10; ++i) {
-    //std::cout << "BFS from source " << i << std::endl;
-    graph_type::vertex_data<uint8_t> bfs_level(&graph, 255);
-    graph_type::vertex_descriptor source;
-    do {
-      source.local_id = raw_source++;
-      source.thread_id = 0;
-    } while(graph.num_edges(source) == 0);
-    double time_start = omp_get_wtime();
-    breadth_first_search(graph, source, bfs_level);
-    double time_end = omp_get_wtime();
-
-    uint64_t level_count = 0;
-    uint64_t level = 0;
-    do {
-      level_count = bfs_level.count_equal(level);
-      std::cout << "BFS Level " << level << " has " << level_count << " vertices." << std::endl;
-      ++level;
-    } while(level_count > 0);
-    if(level > 1) {
-      std::cout << "TEPS = " << (double(uint64_t(1) << uint64_t(SCALE)) * 16) / (time_end - time_start) << std::endl;
+  int mpi_rank(0), mpi_size(0);
+  CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
+  CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
+  havoqgt::get_environment();
+  
+  if(mpi_rank == 0){
+    std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
+    std::cout << "CMD line:";
+    for(int i=0; i<argc; ++i) {
+      std::cout << " " << argv[i];
     }
+    std::cout << std::endl;
+    havoqgt::get_environment().print();
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  //typedef std::pair<uint64_t, uint64_t> edge_type;
+  //std::deque<edge_type> tmp_edges;
+  
+  //havoqgt::mpi::edge_list<uint64_t> oned(MPI_COMM_WORLD);
+  //havoqgt::mpi::edge_list<uint64_t> transpose_hubs(MPI_COMM_WORLD);
+  //typedef extended_memory_arena arena_type;
+  std::stringstream fname;
+  fname << "/l/ssd/graph_test_" << mpi_rank;
+  //arena_type arena(fname.str().c_str());
+
+  typedef boost::interprocess::managed_mapped_file arena_type;
+  remove(fname.str().c_str());
+  boost::interprocess::managed_mapped_file  asdf(boost::interprocess::create_only, fname.str().c_str(), 1024ULL*1024*1024*16);
+
+
+  uint64_t num_vertices = 1;
+  uint64_t vert_scale;  
+  double   pa_beta;
+  uint64_t hub_threshold;
+  std::string type;
+  if(argc != 5) {
+    std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold>" << std::endl;
+    exit(-1);
+  } else {
+    type = argv[1];
+    vert_scale    = boost::lexical_cast<uint64_t>(argv[2]);
+    pa_beta       = boost::lexical_cast<double>(argv[3]);
+    hub_threshold = boost::lexical_cast<uint64_t>(argv[4]);
+  }
+  num_vertices <<= vert_scale;
+  if(mpi_rank == 0) {
+    std::cout << "Building graph type: " << type << std::endl;
+    std::cout << "Building graph Scale: " << vert_scale << std::endl;
+    std::cout << "Hub threshold = " << hub_threshold << std::endl;
+    std::cout << "PA-beta = " << pa_beta << std::endl;
   }
 
-};
+  std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+
+  if(type == "RMAT") {
+    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
+    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
+                                      vert_scale, num_edges_per_rank,
+                                      0.57, 0.19, 0.19, 0.05, true, false);
+    input_edges.resize(num_edges_per_rank); //times 2 because its undirected
+    std::copy(rmat.begin(), rmat.end(), input_edges.begin());
+  } else if(type == "PA") {
+    gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
+  } else {
+    std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
+  }
+
+  typedef hmpi::delegate_partitioned_graph<arena_type> graph_type;
+  graph_type graph(asdf, MPI_COMM_WORLD, input_edges, hub_threshold);
+
+  //arena.print_info();
+
+  {
+    std::vector< std::pair<uint64_t, uint64_t> > empty(0);
+    input_edges.swap(empty);
+  }
+
+
+
+  //
+  // Calculate max degree
+  uint64_t max_degree(0);
+  for(graph_type::vertex_iterator vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+    max_degree = std::max(max_degree, graph.degree(*vitr));
+  }
+  for(graph_type::controller_iterator citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+    max_degree = std::max(max_degree, graph.degree(*citr));
+  }
+  uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+  if(mpi_rank == 0) {
+    std::cout << "Max Degree = " << global_max_degree << std::endl;
+  }
+
+  //BFS Experiments
+  {
+    graph_type::vertex_data<uint8_t, arena_type::segment_manager >* bfs_level_data 
+          = graph.create_vertex_data< uint8_t >(asdf);
+
+    graph_type::vertex_data<uint64_t, arena_type::segment_manager >* bfs_parent_data 
+          = graph.create_vertex_data< uint64_t >(asdf);
+
+    //arena.print_info();
+    //
+    //  Run BFS experiments
+    double time(0); 
+    int count(0);
+    uint64_t isource=0;
+    for(int nrbfs = 0; nrbfs < 16; ++nrbfs) {
+      graph_type::vertex_locator source = graph.label_to_locator(isource);
+      uint64_t global_degree(0);
+      do {
+        uint64_t local_degree = 0;
+        source = graph.label_to_locator(isource++);
+        if(source.is_delegate()) break;
+        if(mpi_rank == source.owner()) {
+          local_degree = graph.degree(source);
+        }
+        global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+      } while(global_degree == 0);
+      if(mpi_rank == source.owner()) {
+        std::cout << "Starting vertex = " << isource << std::endl;
+        std::cout << "delegate? = " << source.is_delegate() << std::endl;
+        std::cout << "local_id = " << source.local_id() << std::endl;
+        std::cout << "degree = " << graph.degree(source) << std::endl;
+      }
+
+      bfs_level_data->reset(128);
+
+      MPI_Barrier( MPI_COMM_WORLD );      
+      double time_start = MPI_Wtime();
+      hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data, source);
+      MPI_Barrier( MPI_COMM_WORLD );
+      double time_end = MPI_Wtime();
+
+      uint64_t visited_total(0);
+      for(uint64_t level = 0; level < 15; ++level) {
+        uint64_t local_count(0);
+        graph_type::vertex_iterator vitr;
+        for(vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+          if((*bfs_level_data)[*vitr] == level) {
+            ++local_count;
+          }
+        }
+
+        //Count the controllers!
+        graph_type::controller_iterator citr;
+        for(citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+          if((*bfs_level_data)[*citr] == level) {
+            ++local_count;
+          }
+        }
+        uint64_t global_count = mpi_all_reduce(local_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
+        visited_total += global_count;
+        if(mpi_rank == 0 && global_count > 0) {
+          std::cout << "Level " << level << ": " << global_count << std::endl;
+        }
+        if(global_count == 0) break;
+      }
+
+      if(mpi_rank == 0) {
+        if(visited_total > 1000) {
+          std::cout << "Visited total = " << visited_total << ", percentage visited = " << double(visited_total) / double(num_vertices) * 100 << "%" << std::endl;
+          std::cout << "BFS Time = " << time_end - time_start << std::endl;
+          time += time_end - time_start;
+          ++count;
+        }
+      }
+    }
+    if(mpi_rank == 0) {
+      std::cout << "Count BFS = " << count << std::endl;
+      std::cout << "AVERAGE BFS= " << time / double(count) << std::endl;
+    }
+
+    //arena.print_info();
+  } //End BFS Test
+  //arena.print_info();
+  { //PageRank Test
+    graph_type::vertex_data<double, arena_type::segment_manager >* pr_data
+          = graph.create_vertex_data< double >(asdf);
+
+    MPI_Barrier( MPI_COMM_WORLD );      
+    double time_start = MPI_Wtime();
+    for(int i=0; i<10; ++i) {
+    pr_data->reset(0);
+
+    hmpi::page_rank(graph, *pr_data);
+
+    }
+    MPI_Barrier( MPI_COMM_WORLD );
+    double time_end = MPI_Wtime();
+    if(mpi_rank == 0) {
+      std::cout << "Average Page Rank Time = " << (time_end - time_start) / double(10) << std::endl;
+    }
+
+    // std::cout << "Here?" << std::endl;
+
+    // graph_type::vertex_iterator vitr;
+    // for(vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+    //   assert( (*pr_data)[*vitr] == graph.degree(*vitr) );
+    //   if( (*pr_data)[*vitr] != graph.degree(*vitr) ) {
+    //     std::cout << "ERROR Reg: " << (*pr_data)[*vitr] << " != " << graph.degree(*vitr) << std::endl;
+    //     exit(-1);
+    //   }
+    // }
+    // graph_type::controller_iterator citr;
+    // for(citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+    //   assert( (*pr_data)[*citr] == graph.degree(*citr) );
+    //   if( (*pr_data)[*citr] != graph.degree(*citr) ) {
+    //     std::cout << "ERROR Controller" << std::endl;
+    //     exit(-1);
+    //   }
+    // }
+    std::cout << "Ending PageRank Test!!" << std::endl; 
+  } //End Pagerank Test
+
+  std::cout << "Between Tests !!" << std::endl; 
+  { //SSSP Test
+    graph_type::vertex_data<uint64_t, arena_type::segment_manager >* sssp_data 
+          = graph.create_vertex_data< uint64_t >(asdf);
+    graph_type::edge_data<uint32_t, arena_type::segment_manager >* edge_data 
+          = graph.create_edge_data< uint32_t >(asdf);
+
+    //Generate Random Edge Values
+    boost::random::mt19937 rng(mpi_rank*13);
+    boost::random::uniform_int_distribution<> rand_num(1,1024*1024*1024);
+    typedef graph_type::edge_data<uint32_t, arena_type >::iterator edge_iterator;
+    for(edge_iterator itr = edge_data->owned_begin(); itr != edge_data->owned_end(); ++itr)
+    {
+      *itr = rand_num(rng);
+    }
+    for(edge_iterator itr = edge_data->delegate_begin(); itr != edge_data->delegate_end(); ++itr)
+    {
+      *itr = rand_num(rng);
+    }
+
+
+    MPI_Barrier( MPI_COMM_WORLD );      
+    double time_start = MPI_Wtime();
+    uint64_t isource=0;
+    for(int i=0; i<10; ++i) {
+      graph_type::vertex_locator source = graph.label_to_locator(isource);
+      uint64_t global_degree(0);
+      do {
+        uint64_t local_degree = 0;
+        source = graph.label_to_locator(isource++);
+        if(source.is_delegate()) break;
+        if(mpi_rank == source.owner()) {
+          local_degree = graph.degree(source);
+        }
+        global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+      } while(global_degree == 0);
+      if(mpi_rank == source.owner()) {
+        std::cout << "Starting vertex = " << isource << std::endl;
+        std::cout << "delegate? = " << source.is_delegate() << std::endl;
+        std::cout << "local_id = " << source.local_id() << std::endl;
+        std::cout << "degree = " << graph.degree(source) << std::endl;
+      }
+      sssp_data->reset(std::numeric_limits<uint64_t>::max());
+      MPI_Barrier( MPI_COMM_WORLD );      
+      double time_start = MPI_Wtime();
+      hmpi::single_source_shortest_path(graph, *sssp_data, *edge_data, source);
+      MPI_Barrier( MPI_COMM_WORLD );
+      double time_end = MPI_Wtime();
+
+
+      uint64_t local_count(0);
+      graph_type::vertex_iterator vitr;
+      for(vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+        if((*sssp_data)[*vitr] > 0) {
+          ++local_count;
+        }
+      }
+
+      //Count the controllers!
+      graph_type::controller_iterator citr;
+      for(citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+        if((*sssp_data)[*citr] > 0) {
+          ++local_count;
+        }
+      }
+      uint64_t global_count = mpi_all_reduce(local_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
+      if(global_count == 0) break;
+
+      if(mpi_rank == 0) {
+        if(global_count > 100) {
+          std::cout << "Visited total = " << global_count << ", percentage visited = " << double(global_count) / double(num_vertices) * 100 << "%" << std::endl;
+          std::cout << "BFS Time = " << time_end - time_start << std::endl;
+        }
+      }
+    }
+  } //End SSSP Test
+
+  } //END Main MPI
+  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));                                                                                      
+  CHK_MPI(MPI_Finalize());
+  return 0;
+}

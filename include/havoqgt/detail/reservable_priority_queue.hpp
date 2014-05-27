@@ -49,89 +49,25 @@
  * 
  */
 
+#ifndef HAVOQGT_DETAIL_RESERVABLE_PRIORITY_QUEUE_HPP_INCLUDED
+#define HAVOQGT_DETAIL_RESERVABLE_PRIORITY_QUEUE_HPP_INCLUDED
 
-#ifndef HAVOQGT_OMP_GENERATE_GRAPH500_RMAT_HPP_INCLUDED
-#define HAVOQGT_OMP_GENERATE_GRAPH500_RMAT_HPP_INCLUDED
 
-#include <mailbox.hpp>
-#include <termination_detection.hpp>
-#include <rmat_edge_generator.hpp>
+#include <vector>
+#include <queue>
 
-namespace havoqgt { namespace omp {
+namespace havoqgt { namespace detail {
 
-template <typename AdjListGraph>
-class generate_graph500_rmat {
-  typedef AdjListGraph adj_list_graph_type;
-  typedef typename adj_list_graph_type::edge_descriptor edge_descriptor;
-
+template <typename  T, typename CONT=std::vector<T>, typename COMP=std::less<T> >
+class reservable_priority_queue: public std::priority_queue<T, CONT, COMP>
+{
 public:
-  generate_graph500_rmat(adj_list_graph_type* ptr_graph, uint64_t scale)
-    : m_mailbox(this)
-    , m_ptr_graph(ptr_graph)
-    , m_scale(scale)
-  {
-    run();
-  }
-private:
-  void run()
-  {
-    using namespace havoqgt;
-    using namespace havoqgt::omp;
-    assert_sequential();
-
-    uint64_t num_vertices = uint64_t(1) << m_scale;
-    uint64_t num_uedges = num_vertices * 16; 
-    #pragma omp parallel
-    {
-      assert_parallel();
-      rmat_edge_generator rmat(thread_num() * 13, m_scale, num_uedges,
-                               0.57, 0.19, 0.19, 0.05, true, true);
-      rmat_edge_generator::input_iterator_type itr = rmat.begin();
-
-      #pragma omp for nowait
-      for (uint64_t i = 0; i < num_uedges; ++i)
-      {
-        std::pair<uint64_t,uint64_t> raw_edge = *itr; ++itr;
-        edge_descriptor edge;
-        edge.first.thread_id  = raw_edge.first % num_threads();
-        edge.first.local_id   = raw_edge.first / num_threads();
-        edge.second.thread_id = raw_edge.second % num_threads();
-        edge.second.local_id  = raw_edge.second / num_threads();
-
-        m_mailbox.send(edge.first.thread_id, edge);
-        m_td.inc_sent();
-
-        // make edge undirected
-        std::swap(edge.first, edge.second);
-        m_mailbox.send(edge.first.thread_id, edge);
-        m_td.inc_sent();
-      }
-      
-      while(!m_mailbox.is_idle() || !m_td.test_for_termination()) {
-        m_mailbox.idle_receive();
-      }
-    }
-
-    assert(m_td.global_completed() == num_uedges*2);
-  }
-
-protected:
-  template <typename T, typename U> friend class havoqgt::omp::mailbox;
-  template <typename T>
-  void mailbox_receive(const T& data)
-  {
-    assert(data.first.thread_id == thread_num());
-    m_ptr_graph->add_edge(data);
-    m_td.inc_completed(1);
-  }
-private:
-  havoqgt::omp::termination_detection m_td;
-  havoqgt::omp::mailbox<edge_descriptor, generate_graph500_rmat> m_mailbox;
-  adj_list_graph_type* m_ptr_graph;
-  uint64_t m_scale;
+    typedef typename std::priority_queue<T>::size_type size_type;
+    reservable_priority_queue(size_type capacity = 0) { reserve(capacity); };
+    void reserve(size_type capacity) { this->c.reserve(capacity); } 
+    size_type capacity() const { return this->c.capacity(); } 
 };
 
-}} //end havoqgt::omp
+} } //end namespace havoqgt { namespace detail {
 
-
-#endif // HAVOQGT_OMP_GENERATE_GRAPH500_RMAT_HPP_INCLUDED
+#endif //end HAVOQGT_DETAIL_RESERVABLE_PRIORITY_QUEUE_HPP_INCLUDED
