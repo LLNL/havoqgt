@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #ifndef HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
@@ -67,14 +67,14 @@
 
 
 namespace havoqgt {
-namespace mpi { 
+namespace mpi {
 
 namespace bip = boost::interprocess;
 
 /**
  * Delegate partitioned graph using MPI for communication.
  *
- * @todo Test using simple deterministic patterns. 
+ * @todo Test using simple deterministic patterns.
  * @todo Add edge_data
  * @todo Make vertex_iterator a random access iterator
  * @todo Add invalid bit or state to vertex_locator
@@ -87,12 +87,12 @@ public:
   /// Object that uniquely locates a vertex, both MPI rank and local offset.
   class vertex_locator {
   public:
-    vertex_locator() { 
+    vertex_locator() {
       m_is_delegate  = 0;
       m_is_bcast     = 0;
       m_is_intercept = 0;
-      m_owner_dest   = std::numeric_limits<uint64_t>::max();  
-      m_local_id     = std::numeric_limits<uint64_t>::max(); 
+      m_owner_dest   = std::numeric_limits<uint64_t>::max();
+      m_local_id     = std::numeric_limits<uint64_t>::max();
     }
     bool is_delegate() const { return m_is_delegate == 1;}
     uint32_t owner() const { return m_owner_dest; }
@@ -104,10 +104,10 @@ public:
     bool is_intercept() const { return m_is_intercept == 1;}
     void set_intercept(bool intercept) { m_is_intercept = intercept; }
 
-    friend bool operator==(const vertex_locator& x, 
+    friend bool operator==(const vertex_locator& x,
                            const vertex_locator& y) {return x.is_equal(y); }
 
-    friend bool operator!=(const vertex_locator& x, 
+    friend bool operator!=(const vertex_locator& x,
                            const vertex_locator& y) {return !(x.is_equal(y)); }
   private:
     friend class delegate_partitioned_graph;
@@ -116,8 +116,8 @@ public:
     unsigned int m_is_intercept : 1;
     unsigned int m_owner_dest   : 20;
     uint64_t     m_local_id     : 39;
-    vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest); 
-  };  
+    vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
+  };
 
   /// Edge Iterator class for delegate partitioned graph
   class edge_iterator {
@@ -128,14 +128,14 @@ public:
 
     bool is_equal(const edge_iterator& x) const;
 
-    friend bool operator==(const edge_iterator& x, 
+    friend bool operator==(const edge_iterator& x,
                            const edge_iterator& y) {return x.is_equal(y); }
 
-    friend bool operator!=(const edge_iterator& x, 
+    friend bool operator!=(const edge_iterator& x,
                            const edge_iterator& y) {return !(x.is_equal(y)); }
 
     vertex_locator source() const { return m_source; }
-    vertex_locator target() const; 
+    vertex_locator target() const;
   protected:
     friend class delegate_partitioned_graph;
     template <typename T1, typename T2> friend class edge_data;
@@ -148,7 +148,7 @@ public:
 
   /// Vertex Iterator class for delegate partitioned graph
   class vertex_iterator
-    : public std::iterator<std::input_iterator_tag, vertex_locator, ptrdiff_t, 
+    : public std::iterator<std::input_iterator_tag, vertex_locator, ptrdiff_t,
                            const vertex_locator* const, const vertex_locator&> {
   public:
     vertex_iterator() : m_ptr_graph(NULL) { }
@@ -157,13 +157,13 @@ public:
 
     bool is_equal(const vertex_iterator& x) const;
 
-    friend bool operator==(const vertex_iterator& x, 
+    friend bool operator==(const vertex_iterator& x,
                            const vertex_iterator& y) { return x.is_equal(y); }
 
-    friend bool operator!=(const vertex_iterator& x, 
+    friend bool operator!=(const vertex_iterator& x,
                            const vertex_iterator& y) { return !(x.is_equal(y)); }
 
-    
+
     const vertex_locator& operator*()        const { return m_locator; }
     const vertex_locator* const operator->() const { return &m_locator; }
   private:
@@ -175,7 +175,7 @@ public:
     vertex_locator                          m_locator;
   };
 
-  /// Vertex Data storage 
+  /// Vertex Data storage
   template <typename T, typename SegmentManager>
   class vertex_data {
   public:
@@ -189,7 +189,7 @@ public:
       }
       for(size_t i=0; i<m_delegate_data.size(); ++i) {
         m_delegate_data[i] = r;
-      } 
+      }
     }
     void all_reduce() {
       std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
@@ -207,7 +207,7 @@ public:
     bip::vector<T, typename SegmentManager::template allocator<T>::type > m_delegate_data;
   };
 
-  /// Edge Data storage 
+  /// Edge Data storage
   template <typename T, typename SegmentManager>
   class edge_data {
   public:
@@ -222,7 +222,7 @@ public:
       }
       for(size_t i=0; i<m_delegate_edge_data.size(); ++i) {
         m_delegate_edge_data[i] = r;
-      } 
+      }
     }
     iterator delegate_begin() { return m_delegate_edge_data.begin(); }
     iterator delegate_end()   { return m_delegate_edge_data.end(); }
@@ -236,15 +236,20 @@ public:
     bip::vector<T, typename SegmentManager::template allocator<T>::type > m_owned_edge_data;
     bip::vector<T, typename SegmentManager::template allocator<T>::type > m_delegate_edge_data;
   };
-  
+
   typedef typename std::vector<vertex_locator>::const_iterator controller_iterator;
 
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
-  delegate_partitioned_graph(Arena& arena, 
-                             MPI_Comm mpi_comm, 
-                             Container& edges, 
+  delegate_partitioned_graph(Arena& arena,
+                             MPI_Comm mpi_comm,
+                             Container& edges,
                              uint64_t delegate_degree_threshold);
+
+
+
+
+
 
   /// Converts a vertex_locator to the vertex label
   uint64_t locator_to_label(vertex_locator locator) const;
@@ -265,7 +270,7 @@ public:
   uint64_t local_degree(vertex_locator locator) const;
 
   /// Returns a begin iterator for all local vertices
-  vertex_iterator vertices_begin() const; 
+  vertex_iterator vertices_begin() const;
 
   /// Returns an end iterator for all local vertices
   vertex_iterator vertices_end() const;
@@ -300,7 +305,7 @@ public:
 
 private:
   /// Synchronizes hub set amongst all processes.
-  void sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs, 
+  void sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                            boost::unordered_set<uint64_t>& global_hubs,
                            bool local_change);
 
@@ -313,7 +318,7 @@ private:
   /// Stores information about owned vertices
   class vert_info {
   public:
-    vert_info(bool in_is_delegate, uint64_t in_delegate_id, 
+    vert_info(bool in_is_delegate, uint64_t in_delegate_id,
               uint64_t in_low_csr_idx);
     unsigned is_delegate :  1;
     unsigned delegate_id : 24;
@@ -326,14 +331,21 @@ private:
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_info;
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_degree;
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_label;
-  boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>, 
+  boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>,
           std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type > m_map_delegate_locator;
   bip::vector<vertex_locator, typename Arena::template allocator<vertex_locator>::type > m_delegate_targets;
-  std::vector<vertex_locator> m_controller_locators; 
+  std::vector<vertex_locator> m_controller_locators;
 };
 
+/// Frees the container of edges
+template <typename Container>
+void free_edge_container(Container &edges) {};
 
-
+template<>
+void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
+	std::vector< std::pair<uint64_t, uint64_t> >empty(0);
+  edges.swap(empty);
+};
 
 } // namespace mpi
 } // namespace havoqgt
