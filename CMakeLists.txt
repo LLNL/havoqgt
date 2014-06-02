@@ -1,5 +1,6 @@
 project (HAVOQGT)
 cmake_minimum_required (VERSION 2.6)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules)
 
 #
 # Options
@@ -24,10 +25,13 @@ endmacro()
 #
 # BOOST is required
 #
-find_package( Boost 1.41.0 )
+find_package( Boost )
+find_package (Threads)
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
+  target_link_libraries (${target} pthread)
+  target_link_libraries (${target} rt)
 endmacro() 
 
 add_subdirectory (include)
