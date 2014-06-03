@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -67,7 +67,7 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 
 
-// class heap_arena 
+// class heap_arena
 // {
 // public:
 //   heap_arena() { }
@@ -85,11 +85,11 @@
 // };
 
 // class extended_memory_arena {
-//   // typedef boost::interprocess::basic_managed_mapped_file 
+//   // typedef boost::interprocess::basic_managed_mapped_file
 //   //   <char
 //   //   ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family, void*>
 //   //   ,boost::interprocess::iset_index>  managed_mapped_file;
-  
+
 // public:
 //   template <typename T>
 //   struct allocator {
@@ -100,8 +100,8 @@
 //   typename allocator<T>::type make_allocator() {
 //     return m_mapped_file->template get_allocator<T>();
 //   }
-//   extended_memory_arena(const char* fname) 
-//     {//: m_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128) {} 
+//   extended_memory_arena(const char* fname)
+//     {//: m_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128) {}
 //       m_mapped_file = new boost::interprocess::managed_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128);
 //   }
 //   void print_info()
@@ -123,13 +123,13 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
-  CHK_MPI(MPI_Init(&argc, &argv)); 
+  CHK_MPI(MPI_Init(&argc, &argv));
   {
   int mpi_rank(0), mpi_size(0);
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
   havoqgt::get_environment();
-  
+
   if(mpi_rank == 0){
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     std::cout << "CMD line:";
@@ -140,10 +140,10 @@ int main(int argc, char** argv) {
     havoqgt::get_environment().print();
   }
   MPI_Barrier(MPI_COMM_WORLD);
-  
+
   //typedef std::pair<uint64_t, uint64_t> edge_type;
   //std::deque<edge_type> tmp_edges;
-  
+
   //havoqgt::mpi::edge_list<uint64_t> oned(MPI_COMM_WORLD);
   //havoqgt::mpi::edge_list<uint64_t> transpose_hubs(MPI_COMM_WORLD);
   //typedef extended_memory_arena arena_type;
@@ -151,13 +151,15 @@ int main(int argc, char** argv) {
   fname << "/l/ssd/graph_test_" << mpi_rank;
   //arena_type arena(fname.str().c_str());
 
-  typedef boost::interprocess::managed_mapped_file arena_type;
+  typedef boost::interprocess::managed_mapped_file mapped_t;
+  typedef mapped_t::segment_manager segment_manager_t;
+
   remove(fname.str().c_str());
-  boost::interprocess::managed_mapped_file  asdf(boost::interprocess::create_only, fname.str().c_str(), 1024ULL*1024*1024*16);
+  mapped_t  asdf(bip::create_only, fname.str().c_str(), 1024ULL*1024*1024*16);
 
 
   uint64_t num_vertices = 1;
-  uint64_t vert_scale;  
+  uint64_t vert_scale;
   double   pa_beta;
   uint64_t hub_threshold;
   std::string type;
@@ -193,8 +195,9 @@ int main(int argc, char** argv) {
     std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
   }
 
-  typedef hmpi::delegate_partitioned_graph<arena_type> graph_type;
-  graph_type graph(asdf, MPI_COMM_WORLD, input_edges, hub_threshold);
+  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  bip::allocator<void, segment_manager_t> alloc_inst (asdf.get_segment_manager());
+  graph_type graph(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
 
   //arena.print_info();
 
@@ -221,16 +224,16 @@ int main(int argc, char** argv) {
 
   //BFS Experiments
   {
-    graph_type::vertex_data<uint8_t, arena_type::segment_manager >* bfs_level_data 
-          = graph.create_vertex_data< uint8_t >(asdf);
+    graph_type::vertex_data<uint8_t, segment_manager_t >* bfs_level_data
+          = graph.create_vertex_data< uint8_t, segment_manager_t >(asdf.get_segment_manager());
 
-    graph_type::vertex_data<uint64_t, arena_type::segment_manager >* bfs_parent_data 
-          = graph.create_vertex_data< uint64_t >(asdf);
+    graph_type::vertex_data<uint64_t, segment_manager_t >* bfs_parent_data
+          = graph.create_vertex_data< uint64_t, segment_manager_t >(asdf.get_segment_manager());
 
     //arena.print_info();
     //
     //  Run BFS experiments
-    double time(0); 
+    double time(0);
     int count(0);
     uint64_t isource=0;
     for(int nrbfs = 0; nrbfs < 16; ++nrbfs) {
@@ -254,7 +257,7 @@ int main(int argc, char** argv) {
 
       bfs_level_data->reset(128);
 
-      MPI_Barrier( MPI_COMM_WORLD );      
+      MPI_Barrier( MPI_COMM_WORLD );
       double time_start = MPI_Wtime();
       hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data, source);
       MPI_Barrier( MPI_COMM_WORLD );
@@ -303,10 +306,10 @@ int main(int argc, char** argv) {
   } //End BFS Test
   //arena.print_info();
   { //PageRank Test
-    graph_type::vertex_data<double, arena_type::segment_manager >* pr_data
-          = graph.create_vertex_data< double >(asdf);
+    graph_type::vertex_data<double, segment_manager_t >* pr_data
+          = graph.create_vertex_data< double, segment_manager_t >(asdf.get_segment_manager());
 
-    MPI_Barrier( MPI_COMM_WORLD );      
+    MPI_Barrier( MPI_COMM_WORLD );
     double time_start = MPI_Wtime();
     for(int i=0; i<10; ++i) {
     pr_data->reset(0);
@@ -338,20 +341,20 @@ int main(int argc, char** argv) {
     //     exit(-1);
     //   }
     // }
-    std::cout << "Ending PageRank Test!!" << std::endl; 
+    std::cout << "Ending PageRank Test!!" << std::endl;
   } //End Pagerank Test
 
-  std::cout << "Between Tests !!" << std::endl; 
+  std::cout << "Between Tests !!" << std::endl;
   { //SSSP Test
-    graph_type::vertex_data<uint64_t, arena_type::segment_manager >* sssp_data 
-          = graph.create_vertex_data< uint64_t >(asdf);
-    graph_type::edge_data<uint32_t, arena_type::segment_manager >* edge_data 
-          = graph.create_edge_data< uint32_t >(asdf);
+    graph_type::vertex_data<uint64_t, segment_manager_t >* sssp_data
+          = graph.create_vertex_data< uint64_t, segment_manager_t >(asdf.get_segment_manager());
+    graph_type::edge_data<uint32_t, segment_manager_t >* edge_data
+          = graph.create_edge_data< uint32_t, segment_manager_t >(asdf.get_segment_manager());
 
     //Generate Random Edge Values
     boost::random::mt19937 rng(mpi_rank*13);
     boost::random::uniform_int_distribution<> rand_num(1,1024*1024*1024);
-    typedef graph_type::edge_data<uint32_t, arena_type >::iterator edge_iterator;
+    typedef graph_type::edge_data<uint32_t, segment_manager_t >::iterator edge_iterator;
     for(edge_iterator itr = edge_data->owned_begin(); itr != edge_data->owned_end(); ++itr)
     {
       *itr = rand_num(rng);
@@ -362,7 +365,7 @@ int main(int argc, char** argv) {
     }
 
 
-    MPI_Barrier( MPI_COMM_WORLD );      
+    MPI_Barrier( MPI_COMM_WORLD );
     double time_start = MPI_Wtime();
     uint64_t isource=0;
     for(int i=0; i<10; ++i) {
@@ -384,7 +387,7 @@ int main(int argc, char** argv) {
         std::cout << "degree = " << graph.degree(source) << std::endl;
       }
       sssp_data->reset(std::numeric_limits<uint64_t>::max());
-      MPI_Barrier( MPI_COMM_WORLD );      
+      MPI_Barrier( MPI_COMM_WORLD );
       double time_start = MPI_Wtime();
       hmpi::single_source_shortest_path(graph, *sssp_data, *edge_data, source);
       MPI_Barrier( MPI_COMM_WORLD );
@@ -419,7 +422,7 @@ int main(int argc, char** argv) {
   } //End SSSP Test
 
   } //END Main MPI
-  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));                                                                                      
+  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());
   return 0;
 }

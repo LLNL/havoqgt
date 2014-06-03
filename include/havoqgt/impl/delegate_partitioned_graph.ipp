@@ -50,9 +50,9 @@ public:
 };
 
 template <typename InputIterator>
-void 
-count_high_degree_transpose(MPI_Comm mpi_comm, 
-                 InputIterator unsorted_itr, 
+void
+count_high_degree_transpose(MPI_Comm mpi_comm,
+                 InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
                  std::vector<uint64_t>& high_count_per_rank)
@@ -75,12 +75,12 @@ count_high_degree_transpose(MPI_Comm mpi_comm,
 }
 
 template <typename InputIterator>
-void 
-count_low_degree(MPI_Comm mpi_comm, 
-                 InputIterator unsorted_itr, 
+void
+count_low_degree(MPI_Comm mpi_comm,
+                 InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold) 
+                 uint64_t delegate_degree_threshold)
 {
   double time_start = MPI_Wtime();
   using boost::unordered_map;
@@ -99,8 +99,8 @@ count_low_degree(MPI_Comm mpi_comm,
     std::vector<uint64_t> to_recv_1d;
     std::vector<uint64_t> to_exchange_1d(0);
     ++gi;
-    for(uint64_t i=0; gi!=8 & gi!=16 && gi!=32 && gi!=64 && gi!=128 && gi != 256 && gi != 512 
-                      && gi != 1024 && gi != 4096 && i<4*4096 && unsorted_itr != unsorted_itr_end; 
+    for(uint64_t i=0; gi!=8 & gi!=16 && gi!=32 && gi!=64 && gi!=128 && gi != 256 && gi != 512
+                      && gi != 1024 && gi != 4096 && i<4*4096 && unsorted_itr != unsorted_itr_end;
                       ++i, ++unsorted_itr, ++gi) {
       if(global_hub_set.count(unsorted_itr->first) == 0) {
         to_exchange_1d.push_back(unsorted_itr->first);
@@ -139,11 +139,11 @@ count_low_degree(MPI_Comm mpi_comm,
 }
 
 template <typename InputIterator>
-void partition_low_degree(MPI_Comm mpi_comm, 
-                 InputIterator unsorted_itr, 
+void partition_low_degree(MPI_Comm mpi_comm,
+                 InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 std::deque<std::pair<uint64_t, uint64_t> >& edges_low) 
+                 std::deque<std::pair<uint64_t, uint64_t> >& edges_low)
 {
   double time_start = MPI_Wtime();
   int mpi_rank(0), mpi_size(0);
@@ -181,13 +181,13 @@ void partition_low_degree(MPI_Comm mpi_comm,
 }
 
 template <typename InputIterator>
-void partition_high_degree(MPI_Comm mpi_comm, 
-                 InputIterator unsorted_itr, 
+void partition_high_degree(MPI_Comm mpi_comm,
+                 InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
                  std::deque<std::pair<uint64_t, uint64_t> >& edges_high,
-                 std::deque<std::pair<uint64_t, uint64_t> >& edges_high_overflow, 
-                 std::map<int, uint64_t>& overflow_schedule) 
+                 std::deque<std::pair<uint64_t, uint64_t> >& edges_high_overflow,
+                 std::map<int, uint64_t>& overflow_schedule)
 {
   double time_start = MPI_Wtime();
   int mpi_rank(0), mpi_size(0);
@@ -195,7 +195,7 @@ void partition_high_degree(MPI_Comm mpi_comm,
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
   while(!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end, mpi_comm)) {
-    
+
     std::vector<std::pair<uint64_t, uint64_t> > to_recv_edges_high;
     std::vector<std::pair<int, std::pair<uint64_t, uint64_t> > > to_recv_overflow;
     {
@@ -256,34 +256,38 @@ void partition_high_degree(MPI_Comm mpi_comm,
  * @param mpi_comm MPI communicator
  * @param Container input edges to partition
  * @param delegate_degree_threshold Threshold used to assign delegates
- */
-template <typename Arena>
+*/
+
+template <typename segment_manager_t>
 template <typename Container>
-delegate_partitioned_graph<Arena>::
-delegate_partitioned_graph(Arena& arena, 
-                           MPI_Comm mpi_comm, 
-                           Container& edges, 
-                           uint64_t delegate_degree_threshold) 
+delegate_partitioned_graph<segment_manager_t>::
+delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
+													 MPI_Comm mpi_comm,
+                           Container& edges,
+                           uint64_t delegate_degree_threshold
+                           )
     : m_mpi_comm(mpi_comm),
-      m_owned_info(arena.template get_allocator<vert_info>()),
-      m_owned_targets(arena.template get_allocator<vertex_locator>()),
-      m_delegate_info(arena.template get_allocator<uint64_t>()),
-      m_delegate_degree(arena.template get_allocator<uint64_t>()),
-      m_delegate_label(arena.template get_allocator<uint64_t>()),
-      m_map_delegate_locator(100, boost::hash<uint64_t>(), std::equal_to<uint64_t>(), arena.template get_allocator<std::pair<uint64_t,vertex_locator> >()),
-      m_delegate_targets(arena.template get_allocator<vertex_locator>()),
+      m_owned_info(seg_allocator),
+      m_owned_targets(seg_allocator),
+      m_delegate_info(seg_allocator),
+      m_delegate_degree(seg_allocator),
+      m_delegate_label(seg_allocator),
+      m_map_delegate_locator(100, boost::hash<uint64_t>(),
+      		std::equal_to<uint64_t>(), seg_allocator),
+      m_delegate_targets(seg_allocator),
       m_delegate_degree_threshold(delegate_degree_threshold) {
+
   MPI_Barrier(m_mpi_comm);
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
-  
+
   std::deque< std::pair<uint64_t, uint64_t> > edges_low, edges_high, edges_high_overflow;
   boost::unordered_set<uint64_t> global_hubs;
 
   assert(sizeof(vertex_locator) == 8);
-  
-   
+
+
 
   //
   // Count low degree & find delegates
@@ -337,7 +341,7 @@ delegate_partitioned_graph(Arena& arena,
     Container empty(0);
     edges.swap(empty);
   }
-  
+
 
   //
   // Check correctness
@@ -375,7 +379,7 @@ delegate_partitioned_graph(Arena& arena,
   m_delegate_label.resize(vec_sorted_hubs.size());
   std::sort(vec_sorted_hubs.begin(), vec_sorted_hubs.end());
   for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
-    m_map_delegate_locator[vec_sorted_hubs[i]] = vertex_locator(true, i, 
+    m_map_delegate_locator[vec_sorted_hubs[i]] = vertex_locator(true, i,
                                             uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size)));
     m_delegate_label[i] = vec_sorted_hubs[i];
   }
@@ -434,9 +438,12 @@ delegate_partitioned_graph(Arena& arena,
 
   //
   // Tag owned delegates
-  for(typename boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>, 
-          std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type >::iterator itr = m_map_delegate_locator.begin();
-      itr != m_map_delegate_locator.end(); ++itr) {
+  //
+
+  //typename boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>,
+   //       std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type >::iterator itr = m_map_delegate_locator.begin();
+  for(auto itr = m_map_delegate_locator.begin();
+  		itr != m_map_delegate_locator.end(); ++itr) {
     uint64_t label = itr->first;
     vertex_locator locator = itr->second;
     //if(locator.owner() == m_mpi_rank) {
@@ -457,7 +464,7 @@ delegate_partitioned_graph(Arena& arena,
 
   /*if(m_mpi_rank == 0) {
     for(size_t i=0; i<m_delegate_degree.size(); ++i) {
-      std::cout << "Hub label = " << m_delegate_label[i] << ", degree = " << m_delegate_degree[i] << std::endl;  
+      std::cout << "Hub label = " << m_delegate_label[i] << ", degree = " << m_delegate_degree[i] << std::endl;
     }
   }*/
 
@@ -478,7 +485,7 @@ delegate_partitioned_graph(Arena& arena,
     if(m_owned_targets[i].is_delegate()) ++local_count_del_target;
   }
   uint64_t total_count_del_target = mpi_all_reduce(local_count_del_target, std::plus<uint64_t>(), MPI_COMM_WORLD);
-                                                                                         
+
   if(m_mpi_rank == 0) {
     std::cout << "Count of hub vertices = " << global_hubs.size() << std::endl;
     std::cout << "Total percentage good hub edges = " << double(high_sum_size) / double(total_sum_size) * 100.0 << std::endl;
@@ -501,29 +508,34 @@ delegate_partitioned_graph(Arena& arena,
  * @param  locator vertex_locator to convert
  * @return vertex label
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-uint64_t 
-delegate_partitioned_graph<Arena>::
-locator_to_label(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
+uint64_t
+delegate_partitioned_graph<segment_manager_t>::
+locator_to_label(delegate_partitioned_graph<segment_manager_t>::vertex_locator
+									locator) const {
   if(locator.is_delegate()) {
     return m_delegate_label[locator.local_id()];
-  } 
-  return uint64_t(locator.local_id()) * uint64_t(m_mpi_size) + uint64_t(locator.owner()); 
+  }
+  return uint64_t(locator.local_id()) *
+  			 uint64_t(m_mpi_size) +
+  			 uint64_t(locator.owner());
 }
 
 /**
  * @param  label vertex label to convert
  * @return locator for the label
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_locator 
-delegate_partitioned_graph<Arena>::
+typename delegate_partitioned_graph<segment_manager_t>::vertex_locator
+delegate_partitioned_graph<segment_manager_t>::
 label_to_locator(uint64_t label) const {
-  typename boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>, 
-          std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type >::const_iterator itr 
-      = m_map_delegate_locator.find(label);
+	typename boost::unordered_map< uint64_t, vertex_locator,
+  						boost::hash<uint64_t>, std::equal_to<uint64_t>,
+  						seg_allocator_t< std::pair<uint64_t,vertex_locator> >
+           	>::const_iterator itr = m_map_delegate_locator.find(label);
+
   if(itr == m_map_delegate_locator.end()) {
     uint32_t owner    = label % uint64_t(m_mpi_size);
     uint64_t local_id = label / uint64_t(m_mpi_size);
@@ -533,19 +545,19 @@ label_to_locator(uint64_t label) const {
 }
 
 /**
- * @details Gather operations performed when at least one process has 
+ * @details Gather operations performed when at least one process has
  *         found new local hubs
  * @param  local_hubs            set of local hubs
  * @param  global_hubs           set of global hubs to be updated
  * @param  found_new_hub_locally true, if new local hub has been found
  */
-template <typename Arena>
-inline void 
-delegate_partitioned_graph<Arena>::
-sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs, 
+template <typename segment_manager_t>
+inline void
+delegate_partitioned_graph<segment_manager_t>::
+sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                          boost::unordered_set<uint64_t>& global_hubs,
                          bool local_change) {
-  uint32_t new_hubs = mpi_all_reduce(uint32_t(local_change), 
+  uint32_t new_hubs = mpi_all_reduce(uint32_t(local_change),
                                      std::plus<uint32_t>(), m_mpi_comm);
 
   if(new_hubs > 0) {
@@ -562,19 +574,20 @@ sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
  * @param  locator Vertex locator
  * @return Begin Edge Iterator
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::edge_iterator 
-delegate_partitioned_graph<Arena>::
-edges_begin(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
+typename delegate_partitioned_graph<segment_manager_t>::edge_iterator
+delegate_partitioned_graph<segment_manager_t>::
+edges_begin(delegate_partitioned_graph<segment_manager_t>::vertex_locator
+						 locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_info.size());
     return edge_iterator(locator, m_delegate_info[locator.local_id()], this);
   }
   assert(locator.owner() == m_mpi_rank);
   assert(locator.local_id() < m_owned_info.size());
-  return edge_iterator(locator, 
-                       m_owned_info[locator.local_id()].low_csr_idx, 
+  return edge_iterator(locator,
+                       m_owned_info[locator.local_id()].low_csr_idx,
                        this);
 }
 
@@ -582,11 +595,12 @@ edges_begin(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
  * @param  locator Vertex locator
  * @return End Edge Iterator
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::edge_iterator 
-delegate_partitioned_graph<Arena>::
-edges_end(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
+typename delegate_partitioned_graph<segment_manager_t>::edge_iterator
+delegate_partitioned_graph<segment_manager_t>::
+edges_end(delegate_partitioned_graph<segment_manager_t>::vertex_locator
+						locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id()+1 < m_delegate_info.size());
     return edge_iterator(locator, m_delegate_info[locator.local_id() + 1], this);
@@ -600,18 +614,19 @@ edges_end(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-uint64_t 
-delegate_partitioned_graph<Arena>::
-degree(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
+uint64_t
+delegate_partitioned_graph<segment_manager_t>::
+degree(delegate_partitioned_graph<segment_manager_t>::vertex_locator
+				locator) const {
   uint64_t local_id = locator.local_id();
   if(locator.is_delegate()) {
     assert(local_id < m_delegate_degree.size());
     return m_delegate_degree[local_id];
   }
   assert(local_id + 1 < m_owned_info.size());
-  return m_owned_info[local_id+1].low_csr_idx - 
+  return m_owned_info[local_id+1].low_csr_idx -
          m_owned_info[local_id].low_csr_idx;
 }
 
@@ -619,83 +634,108 @@ degree(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-uint64_t 
-delegate_partitioned_graph<Arena>::
-local_degree(delegate_partitioned_graph<Arena>::vertex_locator locator) const {
+uint64_t
+delegate_partitioned_graph<segment_manager_t>::
+local_degree(delegate_partitioned_graph<segment_manager_t>::vertex_locator
+							locator) const {
   uint64_t local_id = locator.local_id();
   if(locator.is_delegate()) {
     assert(local_id + 1 < m_delegate_info.size());
     return m_delegate_info[local_id + 1] - m_delegate_info[local_id];
   }
   assert(local_id + 1 < m_owned_info.size());
-  return m_owned_info[local_id+1].low_csr_idx - 
+  return m_owned_info[local_id+1].low_csr_idx -
          m_owned_info[local_id].low_csr_idx;
 }
 
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_iterator 
-delegate_partitioned_graph<Arena>::
-vertices_begin() const { 
-  return vertex_iterator(0,this); 
+typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator
+delegate_partitioned_graph<segment_manager_t>::
+vertices_begin() const {
+  return vertex_iterator(0,this);
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_iterator 
-delegate_partitioned_graph<Arena>::
-vertices_end() const { 
-  return vertex_iterator(m_owned_info.size()-1,this); 
+typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator
+delegate_partitioned_graph<segment_manager_t>::
+vertices_end() const {
+  return vertex_iterator(m_owned_info.size()-1,this);
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-bool 
-delegate_partitioned_graph<Arena>::
-is_label_delegate(uint64_t label) const { 
-  return m_map_delegate_locator.count(label) > 0; 
+bool
+delegate_partitioned_graph<segment_manager_t>::
+is_label_delegate(uint64_t label) const {
+  return m_map_delegate_locator.count(label) > 0;
 }
 
-template <typename Arena>
-template <typename T, typename Arena2>
-typename delegate_partitioned_graph<Arena>::template vertex_data<T, typename Arena2::segment_manager>* 
-delegate_partitioned_graph<Arena>::
-create_vertex_data(Arena2& arena) const {
+template <typename segment_manager_t>
+template <typename T, typename segment_manager_o_t>
+typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
+	T, segment_manager_o_t>*
+delegate_partitioned_graph<segment_manager_t>::
+create_vertex_data(segment_manager_o_t* segment_manager_o) const {
 
-  return arena.template construct<vertex_data<T, typename Arena2::segment_manager> >(bip::anonymous_instance)(m_owned_info.size(), m_delegate_info.size(), arena.get_segment_manager());
+	typedef typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
+	T, segment_manager_o_t> mytype;
+
+  return segment_manager_o->template construct<mytype>
+  			(bip::anonymous_instance)
+  			(m_owned_info.size(), m_delegate_info.size(), segment_manager_o);
 }
 
 /**
  * @param   init initial value for each vertex
  */
-template <typename Arena>
-template <typename T, typename Arena2>
-delegate_partitioned_graph<Arena>::vertex_data<T, typename Arena2::segment_manager>* 
-delegate_partitioned_graph<Arena>::
-create_vertex_data(const T& init, Arena2& arena) const {
-  return arena.template construct<vertex_data<T, typename Arena2::segment_manager> >(bip::anonymous_instance)(m_owned_info.size(), m_delegate_info.size(), init,  arena.get_segment_manager());
+template <typename segment_manager_t>
+template <typename T, typename segment_manager_o_t>
+typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
+	T, segment_manager_o_t>*
+delegate_partitioned_graph<segment_manager_t>::
+create_vertex_data(const T& init, segment_manager_o_t* segment_manager_o) const {
+
+	typedef typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
+	T, segment_manager_o_t> mytype;
+
+  return segment_manager_o->template construct<mytype>
+  					(bip::anonymous_instance)
+  					(m_owned_info.size(), m_delegate_info.size(), init, segment_manager_o);
 }
 
-template <typename Arena>
-template <typename T, typename Arena2>
-typename delegate_partitioned_graph<Arena>::template edge_data<T, typename Arena2::segment_manager>* 
-delegate_partitioned_graph<Arena>::
-create_edge_data(Arena2& arena) const {
-  return arena.template construct<edge_data<T, typename Arena2::segment_manager> >(bip::anonymous_instance)(m_owned_targets.size(), m_delegate_targets.size(), arena.get_segment_manager());
+template <typename segment_manager_t>
+template <typename T, typename segment_manager_o_t>
+typename delegate_partitioned_graph<segment_manager_t>::template edge_data<T, segment_manager_o_t>*
+delegate_partitioned_graph<segment_manager_t>::
+create_edge_data(segment_manager_o_t* segment_manager_o) const {
+	typedef typename delegate_partitioned_graph<segment_manager_t>::template
+  										edge_data<T, segment_manager_o_t> mytype;
+
+  return segment_manager_o->template construct<mytype>
+  					(bip::anonymous_instance)
+  					(m_owned_targets.size(), m_delegate_targets.size(), segment_manager_o);
 }
 
 /**
  * @param   init initial value for each vertex
  */
-template <typename Arena>
-template <typename T, typename Arena2>
-delegate_partitioned_graph<Arena>::edge_data<T, typename Arena2::segment_manager>* 
-delegate_partitioned_graph<Arena>::
-create_edge_data(const T& init, Arena2& arena) const {
-  return arena.template construct<edge_data<T, typename Arena2::segment_manager> >(bip::anonymous_instance)(m_owned_targets.size(), m_delegate_targets.size(), init,  arena.get_segment_manager());
+template <typename segment_manager_t>
+template <typename T, typename segment_manager_o_t>
+delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t> *
+delegate_partitioned_graph<segment_manager_t>::
+create_edge_data(const T& init, segment_manager_o_t * segment_manager_o) const {
+
+	typedef delegate_partitioned_graph<segment_manager_t>::
+  										edge_data<T, segment_manager_o_t> mytype;
+
+  return segment_manager_o->template construct<mytype>
+  					(bip::anonymous_instance)
+  					(m_owned_targets.size(), m_delegate_targets.size(), init, segment_manager_o);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -706,11 +746,11 @@ create_edge_data(const T& init, Arena2& arena) const {
  * @details Here are some very important details.
  */
 /**
- * 
+ *
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-delegate_partitioned_graph<Arena>::vertex_locator::
+delegate_partitioned_graph<segment_manager_t>::vertex_locator::
 vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest) {
   m_is_bcast     = 0;
   m_is_intercept = 0;
@@ -731,10 +771,10 @@ vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest) {
   }
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-delegate_partitioned_graph<Arena>::vertex_locator::
-is_equal(const typename delegate_partitioned_graph<Arena>::vertex_locator x) const {
+delegate_partitioned_graph<segment_manager_t>::vertex_locator::
+is_equal(const typename delegate_partitioned_graph<segment_manager_t>::vertex_locator x) const {
   return m_is_delegate  == x.m_is_delegate
       && m_is_bcast     == x.m_is_bcast
       && m_is_intercept == x.m_is_intercept
@@ -754,61 +794,61 @@ is_equal(const typename delegate_partitioned_graph<Arena>::vertex_locator x) con
 /**
  * @
  */
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-delegate_partitioned_graph<Arena>::edge_iterator::
-edge_iterator(vertex_locator source, 
+delegate_partitioned_graph<segment_manager_t>::edge_iterator::
+edge_iterator(vertex_locator source,
               uint64_t edge_offset,
               const delegate_partitioned_graph* const pgraph)
   : m_source(source)
   , m_edge_offset(edge_offset)
   , m_ptr_graph(pgraph) { }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::edge_iterator&
-delegate_partitioned_graph<Arena>::edge_iterator::operator++() {
+typename delegate_partitioned_graph<segment_manager_t>::edge_iterator&
+delegate_partitioned_graph<segment_manager_t>::edge_iterator::operator++() {
   ++m_edge_offset;
   return *this;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::edge_iterator
-delegate_partitioned_graph<Arena>::edge_iterator::operator++(int) {
+typename delegate_partitioned_graph<segment_manager_t>::edge_iterator
+delegate_partitioned_graph<segment_manager_t>::edge_iterator::operator++(int) {
   edge_iterator to_return = *this;
   ++m_edge_offset;
   return to_return;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-delegate_partitioned_graph<Arena>::edge_iterator::
-is_equal(const typename delegate_partitioned_graph<Arena>::edge_iterator& x) const {
+delegate_partitioned_graph<segment_manager_t>::edge_iterator::
+is_equal(const typename delegate_partitioned_graph<segment_manager_t>::edge_iterator& x) const {
     assert(m_source      == x.m_source);
     assert(m_ptr_graph   == x.m_ptr_graph);
     return m_edge_offset == x.m_edge_offset;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-operator==(const typename delegate_partitioned_graph<Arena>::edge_iterator& x,
-           const typename delegate_partitioned_graph<Arena>::edge_iterator& y) {
+operator==(const typename delegate_partitioned_graph<segment_manager_t>::edge_iterator& x,
+           const typename delegate_partitioned_graph<segment_manager_t>::edge_iterator& y) {
   return x.is_equal(y);
 
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-operator!=(const typename delegate_partitioned_graph<Arena>::edge_iterator& x,
-           const typename delegate_partitioned_graph<Arena>::edge_iterator& y) {
+operator!=(const typename delegate_partitioned_graph<segment_manager_t>::edge_iterator& x,
+           const typename delegate_partitioned_graph<segment_manager_t>::edge_iterator& y) {
   return !(x.is_equal(y));
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_locator
-delegate_partitioned_graph<Arena>::edge_iterator::target() const {
+typename delegate_partitioned_graph<segment_manager_t>::vertex_locator
+delegate_partitioned_graph<segment_manager_t>::edge_iterator::target() const {
   if(m_source.is_delegate()) {
     assert(m_edge_offset < m_ptr_graph->m_delegate_targets.size());
     return m_ptr_graph->m_delegate_targets[m_edge_offset];
@@ -821,60 +861,60 @@ delegate_partitioned_graph<Arena>::edge_iterator::target() const {
 //                             Vertex Iterator                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-delegate_partitioned_graph<Arena>::vertex_iterator::
-vertex_iterator(uint64_t index, const delegate_partitioned_graph<Arena>*  pgraph)
+delegate_partitioned_graph<segment_manager_t>::vertex_iterator::
+vertex_iterator(uint64_t index, const delegate_partitioned_graph<segment_manager_t>*  pgraph)
   : m_ptr_graph(pgraph)
   , m_owned_vert_index(index) {
   update_locator();
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_iterator& 
-delegate_partitioned_graph<Arena>::vertex_iterator::operator++() {
+typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator&
+delegate_partitioned_graph<segment_manager_t>::vertex_iterator::operator++() {
   ++m_owned_vert_index;
   update_locator();
   return *this;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-typename delegate_partitioned_graph<Arena>::vertex_iterator 
-delegate_partitioned_graph<Arena>::vertex_iterator::operator++(int) {
+typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator
+delegate_partitioned_graph<segment_manager_t>::vertex_iterator::operator++(int) {
   vertex_iterator to_return = *this;
   ++m_owned_vert_index;
   update_locator();
   return to_return;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-delegate_partitioned_graph<Arena>::vertex_iterator::
-is_equal(const typename delegate_partitioned_graph<Arena>::vertex_iterator& x) const {
+delegate_partitioned_graph<segment_manager_t>::vertex_iterator::
+is_equal(const typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator& x) const {
   assert(m_ptr_graph        == x.m_ptr_graph);
   return m_owned_vert_index == x.m_owned_vert_index;
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-operator==(const typename delegate_partitioned_graph<Arena>::vertex_iterator& x,
-           const typename delegate_partitioned_graph<Arena>::vertex_iterator& y) {
+operator==(const typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator& x,
+           const typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator& y) {
   return x.is_equal(y);
 
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline bool
-operator!=(const typename delegate_partitioned_graph<Arena>::vertex_iterator& x,
-           const typename delegate_partitioned_graph<Arena>::vertex_iterator& y) {
+operator!=(const typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator& x,
+           const typename delegate_partitioned_graph<segment_manager_t>::vertex_iterator& y) {
   return !(x.is_equal(y));
 }
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline void
-delegate_partitioned_graph<Arena>::vertex_iterator::
+delegate_partitioned_graph<segment_manager_t>::vertex_iterator::
 update_locator() {
   for(; m_owned_vert_index < m_ptr_graph->m_owned_info.size()
         && m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == true;
@@ -890,9 +930,9 @@ update_locator() {
 //                                vert_info                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename Arena>
+template <typename segment_manager_t>
 inline
-delegate_partitioned_graph<Arena>::vert_info::
+delegate_partitioned_graph<segment_manager_t>::vert_info::
 vert_info(bool in_is_delegate, uint64_t in_delegate_id, uint64_t in_low_csr_idx)
   : is_delegate(in_is_delegate)
   , delegate_id(in_delegate_id)
@@ -906,27 +946,27 @@ vert_info(bool in_is_delegate, uint64_t in_delegate_id, uint64_t in_low_csr_idx)
 ////////////////////////////////////////////////////////////////////////////////
 //                                vertex_data                                 //
 ////////////////////////////////////////////////////////////////////////////////
-template <typename Arena>
-template<typename T, typename SegmentManager>
-delegate_partitioned_graph<Arena>::vertex_data<T,SegmentManager>::
-vertex_data(uint64_t owned_data_size, uint64_t delegate_size, SegmentManager* sm)
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+delegate_partitioned_graph<segment_manager_t>::vertex_data<T,segment_manager_o_t>::
+vertex_data(uint64_t owned_data_size, uint64_t delegate_size, segment_manager_o_t* sm)
   : m_owned_vert_data(sm->template get_allocator<T>())
   , m_delegate_data(sm->template get_allocator<T>()) {
   m_owned_vert_data.resize(owned_data_size);
   m_delegate_data.resize(delegate_size);
   }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-delegate_partitioned_graph<Arena>::vertex_data<T, SegmentManager>::
-vertex_data(uint64_t owned_data_size, uint64_t delegate_size, const T& init, SegmentManager* sm)
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+delegate_partitioned_graph<segment_manager_t>::vertex_data<T, segment_manager_o_t>::
+vertex_data(uint64_t owned_data_size, uint64_t delegate_size, const T& init, segment_manager_o_t* sm)
   : m_owned_vert_data(owned_data_size, init, sm->template get_allocator<T>())
   , m_delegate_data(delegate_size, init, sm->template get_allocator<T>()) { }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-T& 
-delegate_partitioned_graph<Arena>::vertex_data<T, SegmentManager>::
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+T&
+delegate_partitioned_graph<segment_manager_t>::vertex_data<T, segment_manager_o_t>::
 operator[](const vertex_locator& locator) {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_data.size());
@@ -936,10 +976,10 @@ operator[](const vertex_locator& locator) {
   return m_owned_vert_data[locator.local_id()];
 }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-const T& 
-delegate_partitioned_graph<Arena>::vertex_data<T, SegmentManager>::operator[](const vertex_locator& locator) const {
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+const T&
+delegate_partitioned_graph<segment_manager_t>::vertex_data<T, segment_manager_o_t>::operator[](const vertex_locator& locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_data.size());
     return m_delegate_data[locator.local_id()];
@@ -951,27 +991,27 @@ delegate_partitioned_graph<Arena>::vertex_data<T, SegmentManager>::operator[](co
 ////////////////////////////////////////////////////////////////////////////////
 //                                edge_data                                 //
 ////////////////////////////////////////////////////////////////////////////////
-template <typename Arena>
-template<typename T, typename SegmentManager>
-delegate_partitioned_graph<Arena>::edge_data<T,SegmentManager>::
-edge_data(uint64_t owned_size, uint64_t delegate_size, SegmentManager* sm)
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+delegate_partitioned_graph<segment_manager_t>::edge_data<T,segment_manager_o_t>::
+edge_data(uint64_t owned_size, uint64_t delegate_size, segment_manager_o_t* sm)
   : m_owned_edge_data(sm->template get_allocator<T>())
   , m_delegate_edge_data(sm->template get_allocator<T>()) {
   m_owned_edge_data.resize(owned_size);
   m_delegate_edge_data.resize(delegate_size);
   }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-delegate_partitioned_graph<Arena>::edge_data<T, SegmentManager>::
-edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, SegmentManager* sm)
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t>::
+edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, segment_manager_o_t* sm)
   : m_owned_edge_data(owned_size, init, sm->template get_allocator<T>())
   , m_delegate_edge_data(delegate_size, init, sm->template get_allocator<T>()) { }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-T& 
-delegate_partitioned_graph<Arena>::edge_data<T, SegmentManager>::
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+T&
+delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t>::
 operator[](const edge_iterator& itr) {
   if(itr.m_source.is_delegate()) {
     assert(itr.m_edge_offset < m_delegate_edge_data.size());
@@ -981,10 +1021,10 @@ operator[](const edge_iterator& itr) {
   return m_owned_edge_data[itr.m_edge_offset];
 }
 
-template <typename Arena>
-template<typename T, typename SegmentManager>
-const T& 
-delegate_partitioned_graph<Arena>::edge_data<T, SegmentManager>::operator[](const edge_iterator& itr) const {
+template <typename segment_manager_t>
+template<typename T, typename segment_manager_o_t>
+const T&
+delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t>::operator[](const edge_iterator& itr) const {
   if(itr.m_source.is_delegate()) {
     assert(itr.m_edge_offset < m_delegate_edge_data.size());
     return m_delegate_edge_data[itr.m_edge_offset];
