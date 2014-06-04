@@ -206,28 +206,38 @@ int main(int argc, char** argv) {
 
 
   if (load_from_disk  == 0) {
-  	std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+
 	  if(type == "RMAT") {
 	    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
 	    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
 	                                      vert_scale, num_edges_per_rank,
 	                                      0.57, 0.19, 0.19, 0.05, true, false);
-	    input_edges.resize(num_edges_per_rank); //times 2 because its undirected
-	    std::copy(rmat.begin(), rmat.end(), input_edges.begin());
+
+	    graph = segment_manager->construct<graph_type>
+  		("graph_obj")
+  		(alloc_inst, MPI_COMM_WORLD, rmat, hub_threshold);
+
+
 	  } else if(type == "PA") {
+	  	std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+
 	    gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
+
+	    graph = segment_manager->construct<graph_type>
+  				("graph_obj")
+  				(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+
+	    {
+    		std::vector< std::pair<uint64_t, uint64_t> > empty(0);
+    		input_edges.swap(empty);
+    	}
 	  } else {
 	    std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
 	  }
 
-	 	graph = segment_manager->construct<graph_type>
-  		("graph_obj")
-  		(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
 
-	  {
-    	std::vector< std::pair<uint64_t, uint64_t> > empty(0);
-    	input_edges.swap(empty);
-    }
+
+
 	} else {
 		graph = segment_manager->find<graph_type>("graph_obj").first;
 	}
