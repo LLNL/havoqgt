@@ -523,6 +523,15 @@ class delegate_partitioned_graph {
 	}
 };
 
+/// Frees the container of edges
+template <typename Container>
+void free_edge_container(Container &edges) {};
+
+template<>
+void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
+	std::vector< std::pair<uint64_t, uint64_t> >empty(0);
+  edges.swap(empty);
+};
 
 
 

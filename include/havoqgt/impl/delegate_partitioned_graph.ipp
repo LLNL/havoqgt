@@ -337,10 +337,8 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
   if(m_mpi_rank == 0) {
     std::cout << "Partition time = " << time_end - time_start << std::endl;
   }
-  {
-    Container empty(0);
-    edges.swap(empty);
-  }
+
+  free_edge_container<Container>(edges);
 
 
   //
