@@ -74,12 +74,16 @@ public:
 
   ///
   /// InputIterator class for rmat_edge_generator
+
   class input_iterator_type : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t, const edge_type*, const edge_type&> {
 
-   public:
+  public:
     input_iterator_type(rmat_edge_generator* ptr_rmat, uint64_t count)
-    		: m_ptr_rmat(ptr_rmat), m_count(count),
-    		  m_make_undirected(false) {
+    	: m_ptr_rmat(ptr_rmat)
+    	, m_rng(ptr_rmat->m_seed)
+    	, m_gen(m_rng)
+    	, m_count(count)
+      , m_make_undirected(false) {
       if(m_count == 0) {
         get_next();
         m_count = 0; //reset to zero
@@ -99,6 +103,10 @@ public:
       return __tmp;
     }
 
+    edge_type *operator->() {
+      return &m_current;
+    }
+
     bool is_equal(const input_iterator_type& _x) const {
       return m_count == (_x.m_count);
     }
@@ -113,42 +121,45 @@ public:
     operator!=(const input_iterator_type& x, const input_iterator_type& y)
     { return !x.is_equal(y); }
 
-   private:
+  private:
     input_iterator_type();
 
     void get_next() {
-      if(m_ptr_rmat->m_undirected && m_make_undirected) {
+      if (m_ptr_rmat->m_undirected && m_make_undirected) {
         std::swap(m_current.first, m_current.second);
         m_make_undirected = false;
       } else {
-        m_current = m_ptr_rmat->generate_edge();
+        m_current = m_ptr_rmat->generate_edge(m_gen);
         ++m_count;
         m_make_undirected = true;
       }
     }
 
-		uint64_t padding;
     rmat_edge_generator* m_ptr_rmat;
-
-
-    uint64_t             m_count;
-    edge_type            m_current;
-    bool                 m_make_undirected;
+    boost::mt19937 m_rng;
+  	boost::uniform_01<boost::mt19937> m_gen;
+    uint64_t m_count;
+    edge_type m_current;
+    bool m_make_undirected;
   };
 
 
   /// seed used to be 5489
-  rmat_edge_generator(uint64_t seed, uint64_t vertex_scale, uint64_t edge_count,
-                      double a, double b, double c, double d, bool scramble,
-                      bool undirected):
-  										m_seed(seed),
-                      m_rng(seed),
-                      m_gen(m_rng),
-                      m_vertex_scale(vertex_scale),
-                      m_edge_count(edge_count),
-                      m_scramble(scramble),
-                      m_undirected(undirected),
-                      m_rmat_a(a), m_rmat_b(b), m_rmat_c(c), m_rmat_d(d) { }
+  rmat_edge_generator(uint64_t seed, uint64_t vertex_scale,
+  										uint64_t edge_count, double a, double b, double c,
+  										double d, bool scramble, bool undirected)
+  		: m_seed(seed)
+  		, m_rng(seed)
+    	, m_gen(m_rng)
+      , m_vertex_scale(vertex_scale)
+      , m_edge_count(edge_count)
+      , m_scramble(scramble)
+      , m_undirected(undirected)
+      , m_rmat_a(a)
+      , m_rmat_b(b)
+      , m_rmat_c(c)
+      , m_rmat_d(d) { }
+
 
   /// Returns the begin of the input iterator
   input_iterator_type begin() {
@@ -160,10 +171,16 @@ public:
     return input_iterator_type(this, m_edge_count);
   }
 
+  size_t size() {
+  	return m_edge_count;
+  }
 
 protected:
   /// Generates a new RMAT edge.  This function was adapted from the Boost Graph Library.
   edge_type generate_edge() {
+  	return generate_edge(m_gen);
+  }
+  edge_type generate_edge(boost::uniform_01<boost::mt19937> &gen) {
     double rmat_a = m_rmat_a;
     double rmat_b = m_rmat_b;
     double rmat_c = m_rmat_c;
@@ -171,7 +188,7 @@ protected:
     uint64_t u = 0, v = 0;
     uint64_t step = (uint64_t(1) << m_vertex_scale)/2;
     for (unsigned int j = 0; j < m_vertex_scale; ++j) {
-      double p = m_gen();
+      double p = gen();
 
       if (p < rmat_a)
         ;
@@ -188,10 +205,10 @@ protected:
 
       // 0.2 and 0.9 are hardcoded in the reference SSCA implementation.
       // The maximum change in any given value should be less than 10%
-      rmat_a *= 0.9 + 0.2 * m_gen();
-      rmat_b *= 0.9 + 0.2 * m_gen();
-      rmat_c *= 0.9 + 0.2 * m_gen();
-      rmat_d *= 0.9 + 0.2 * m_gen();
+      rmat_a *= 0.9 + 0.2 * gen();
+      rmat_b *= 0.9 + 0.2 * gen();
+      rmat_c *= 0.9 + 0.2 * gen();
+      rmat_d *= 0.9 + 0.2 * gen();
 
       double S = rmat_a + rmat_b + rmat_c + rmat_d;
 
@@ -209,17 +226,17 @@ protected:
   }
 
 
-  uint64_t m_seed;
+  const uint64_t m_seed;
   boost::mt19937 m_rng;
   boost::uniform_01<boost::mt19937> m_gen;
-  uint64_t m_vertex_scale;
-  uint64_t m_edge_count;
-  bool     m_scramble;
-  bool     m_undirected;
-  double m_rmat_a;
-  double m_rmat_b;
-  double m_rmat_c;
-  double m_rmat_d;
+  const uint64_t m_vertex_scale;
+  const uint64_t m_edge_count;
+  const bool     m_scramble;
+  const bool     m_undirected;
+  const double m_rmat_a;
+  const double m_rmat_b;
+  const double m_rmat_c;
+  const double m_rmat_d;
 };
 
 } //end namespace havoqgt
