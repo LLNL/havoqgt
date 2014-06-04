@@ -157,15 +157,24 @@ int main(int argc, char** argv) {
   uint64_t hub_threshold;
   uint32_t load_from_disk;
   std::string type;
-  if (argc != 6) {
-    std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <load_from_disk>" << std::endl;
+  std::string fname_output;
+  std::string fname_compare = "";
+  if (argc < 7) {
+    std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
+    					<< " <load_from_disk> <file to compare to> (argc:" << argc <<
+    					" )." << std::endl;
     exit(-1);
   } else {
-    type = argv[1];
-    vert_scale    = boost::lexical_cast<uint64_t>(argv[2]);
-    pa_beta       = boost::lexical_cast<double>(argv[3]);
-    hub_threshold = boost::lexical_cast<uint64_t>(argv[4]);
-    load_from_disk = boost::lexical_cast<uint32_t>(argv[5]);
+  	size_t pos = 1;
+    type = argv[pos++];
+    vert_scale    = boost::lexical_cast<uint64_t>(argv[pos++]);
+    pa_beta       = boost::lexical_cast<double>(argv[pos++]);
+    hub_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
+    fname_output = argv[pos++];
+    load_from_disk = boost::lexical_cast<uint32_t>(argv[pos++]);
+    if (pos < argc) {
+    	fname_compare = argv[pos++];
+    }
   }
   num_vertices <<= vert_scale;
   if (mpi_rank == 0) {
@@ -173,14 +182,18 @@ int main(int argc, char** argv) {
     std::cout << "Building graph Scale: " << vert_scale << std::endl;
     std::cout << "Hub threshold = " << hub_threshold << std::endl;
     std::cout << "PA-beta = " << pa_beta << std::endl;
-    std::cout << "Load From Disk = " << load_from_disk << std::endl;
+    std::cout << "File name = " << fname_output << std::endl;
+    std::cout << "Load from disk = " << load_from_disk << std::endl;
+    if (fname_compare != "") {
+    	std::cout << "Comparing graph to " << fname_compare << std::endl;
+    }
   }
 
 
   std::stringstream fname;
-  fname << "/l/ssd/graph_test_" << mpi_rank;
+  fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
 
-  if (load_from_disk  == 0) {
+	if (load_from_disk  == 0) {
   	remove(fname.str().c_str());
   }
 
@@ -232,6 +245,24 @@ int main(int argc, char** argv) {
   uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
   if(mpi_rank == 0) {
     std::cout << "Max Degree = " << global_max_degree << std::endl;
+  }
+
+  if (fname_compare != "") {
+  	std::stringstream fname2;
+  	fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
+
+  	mapped_t  asdf2(bip::open_or_create, fname2.str().c_str(), 1024ULL*1024*1024*16);
+  	segment_manager_t* segment_manager2 = asdf2.get_segment_manager();
+
+  	graph_type *graph_other =
+  			segment_manager2->find<graph_type>("graph_obj").first;
+
+  	std::cout << "[" << mpi_rank << "]Comparing member variables of the two graphs";
+  	if (graph != nullptr && graph_other != nullptr && *graph == *graph_other) {
+  		std::cout << "...they are equivelent" << std::endl;
+  	} else {
+  		std::cout << "...they are different." << std::endl;
+  	}
   }
 
 

@@ -348,11 +348,11 @@ class delegate_partitioned_graph {
   	return m_controller_locators.end();
   }
 
-private:
+//private:
   /// Synchronizes hub set amongst all processes.
   void sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                            boost::unordered_set<uint64_t>& global_hubs,
-                           bool local_change);
+                           bool local_change, MPI_Comm mpi_comm);
 
 
   /// Stores information about owned vertices
@@ -364,10 +364,17 @@ private:
     uint32_t is_delegate :  1;
     uint32_t delegate_id : 24;
     uint64_t low_csr_idx : 39;
+
+    inline bool operator==(const vert_info& other){
+    	return (is_delegate == other.is_delegate && delegate_id == other.delegate_id
+    		&& low_csr_idx == other.low_csr_idx);
+    }
+
+    inline bool operator!=(const vert_info& other){
+    	return !(*this == other);
+    }
   };
 
-
-  MPI_Comm m_mpi_comm;
   int m_mpi_size;
   int m_mpi_rank;
 
@@ -391,6 +398,129 @@ private:
 
   bip::vector<vertex_locator, seg_allocator_t<vertex_locator> >
   	m_controller_locators;
+
+
+
+
+  inline bool operator==(const delegate_partitioned_graph<segment_manager_t>&
+  			other){
+ 	  if (m_mpi_size != other.m_mpi_size) {
+  		return false;
+  	} else if (m_mpi_rank != other.m_mpi_rank) {
+  		return false;
+  	} else if (m_delegate_degree_threshold != other.m_delegate_degree_threshold) {
+  		return false;
+  	}
+
+  	{
+  		size_t size = m_owned_info.size();
+  		if (size != other.m_owned_info.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_owned_info[i] != other.m_owned_info[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+  		size_t size = m_owned_targets.size();
+  		if (size != other.m_owned_targets.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_owned_targets[i] != other.m_owned_targets[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_delegate_info.size();
+  		if (size != other.m_delegate_info.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_info[i] != other.m_delegate_info[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+
+		{
+  		size_t size = m_delegate_degree.size();
+  		if (size != other.m_delegate_degree.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_degree[i] != other.m_delegate_degree[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_delegate_label.size();
+  		if (size != other.m_delegate_label.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_label[i] != other.m_delegate_label[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+  		size_t size = m_delegate_targets.size();
+  		if (size != other.m_delegate_targets.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_targets[i] != other.m_delegate_targets[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_controller_locators.size();
+  		if (size != other.m_controller_locators.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_controller_locators[i] != other.m_controller_locators[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+			if (m_map_delegate_locator != other.m_map_delegate_locator) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	inline bool operator!=(const delegate_partitioned_graph<segment_manager_t>&
+				other){
+		return !(*this == other);
+	}
 };
 
 

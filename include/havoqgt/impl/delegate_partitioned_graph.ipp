@@ -266,8 +266,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
                            Container& edges,
                            uint64_t delegate_degree_threshold
                            )
-    : m_mpi_comm(mpi_comm),
-      m_owned_info(seg_allocator),
+    : m_owned_info(seg_allocator),
       m_owned_targets(seg_allocator),
       m_delegate_info(seg_allocator),
       m_delegate_degree(seg_allocator),
@@ -278,7 +277,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
       m_delegate_targets(seg_allocator),
       m_delegate_degree_threshold(delegate_degree_threshold) {
 
-  MPI_Barrier(m_mpi_comm);
+  MPI_Barrier(mpi_comm);
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
@@ -298,7 +297,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
   // Partition low degree vertices
   partition_low_degree(mpi_comm, edges.begin(), edges.end(), global_hubs, edges_low);
   std::vector<uint64_t> low_count_per_rank;
-  mpi_all_gather(uint64_t(edges_low.size()), low_count_per_rank, m_mpi_comm);
+  mpi_all_gather(uint64_t(edges_low.size()), low_count_per_rank, mpi_comm);
 
   //
   // Compute high degree vertices
@@ -306,7 +305,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
   count_high_degree_transpose(mpi_comm, edges.begin(), edges.end(), global_hubs, high_count_per_rank);
   //
   // Compute Overflow schedule
-  uint64_t global_edge_count = mpi_all_reduce(uint64_t(edges.size()*2), std::plus<uint64_t>(), m_mpi_comm);
+  uint64_t global_edge_count = mpi_all_reduce(uint64_t(edges.size()*2), std::plus<uint64_t>(), mpi_comm);
   uint64_t target_edges_per_rank = global_edge_count / m_mpi_size;
   std::map<int,uint64_t> overflow_schedule;
   uint64_t heavy_idx(0), light_idx(0);
@@ -333,7 +332,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs, edges_high, edges_high_overflow, overflow_schedule);
 
-  MPI_Barrier(m_mpi_comm);
+  MPI_Barrier(mpi_comm);
   double time_end = MPI_Wtime();
   if(m_mpi_rank == 0) {
     std::cout << "Partition time = " << time_end - time_start << std::endl;
@@ -430,7 +429,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
     std::vector<uint64_t> my_hub_degrees(m_delegate_degree.begin(), m_delegate_degree.end());
     std::vector<uint64_t> tmp_hub_degrees;
     if(my_hub_degrees.size() > 0) {
-      mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), m_mpi_comm);
+      mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), mpi_comm);
       m_delegate_degree.clear();
       m_delegate_degree.insert(m_delegate_degree.end(),tmp_hub_degrees.begin(), tmp_hub_degrees.end());
     }
@@ -555,15 +554,15 @@ inline void
 delegate_partitioned_graph<segment_manager_t>::
 sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                          boost::unordered_set<uint64_t>& global_hubs,
-                         bool local_change) {
+                         bool local_change, MPI_Comm mpi_comm) {
   uint32_t new_hubs = mpi_all_reduce(uint32_t(local_change),
-                                     std::plus<uint32_t>(), m_mpi_comm);
+                                     std::plus<uint32_t>(), mpi_comm);
 
   if(new_hubs > 0) {
     std::vector<uint64_t> vec_local_hubs(local_hubs.begin(), local_hubs.end());
     std::vector<uint64_t> vec_global_hubs;
     // global gather local hubs
-    mpi_all_gather(vec_local_hubs, vec_global_hubs, m_mpi_comm);
+    mpi_all_gather(vec_local_hubs, vec_global_hubs, mpi_comm);
     // Insert gathered global hubs to set
     global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
   }
