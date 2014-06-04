@@ -225,10 +225,12 @@ int main(int argc, char** argv) {
   //BFS Experiments
   {
     graph_type::vertex_data<uint8_t, segment_manager_t >* bfs_level_data
-          = graph.create_vertex_data< uint8_t, segment_manager_t >(asdf.get_segment_manager());
+          = graph.create_vertex_data<uint8_t, segment_manager_t>(
+          			asdf.get_segment_manager(), "bfs_level_data");
 
     graph_type::vertex_data<uint64_t, segment_manager_t >* bfs_parent_data
-          = graph.create_vertex_data< uint64_t, segment_manager_t >(asdf.get_segment_manager());
+          = graph.create_vertex_data<uint64_t, segment_manager_t>(
+          			asdf.get_segment_manager(), "bfs_parent_data");
 
     //arena.print_info();
     //

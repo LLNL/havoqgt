@@ -274,6 +274,7 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
       m_delegate_label(seg_allocator),
       m_map_delegate_locator(100, boost::hash<uint64_t>(),
       		std::equal_to<uint64_t>(), seg_allocator),
+      m_controller_locators(seg_allocator),
       m_delegate_targets(seg_allocator),
       m_delegate_degree_threshold(delegate_degree_threshold) {
 
@@ -440,8 +441,6 @@ delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
   // Tag owned delegates
   //
 
-  //typename boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>,
-   //       std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type >::iterator itr = m_map_delegate_locator.begin();
   for(auto itr = m_map_delegate_locator.begin();
   		itr != m_map_delegate_locator.end(); ++itr) {
     uint64_t label = itr->first;
@@ -680,14 +679,19 @@ template <typename T, typename segment_manager_o_t>
 typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
 	T, segment_manager_o_t>*
 delegate_partitioned_graph<segment_manager_t>::
-create_vertex_data(segment_manager_o_t* segment_manager_o) const {
+create_vertex_data(segment_manager_o_t* segment_manager_o,
+		const char *obj_name) const {
 
 	typedef typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
 	T, segment_manager_o_t> mytype;
 
-  return segment_manager_o->template construct<mytype>
-  			(bip::anonymous_instance)
+	if (obj_name == nullptr) {
+		return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
   			(m_owned_info.size(), m_delegate_info.size(), segment_manager_o);
+  } else {
+		return segment_manager_o->template construct<mytype>(obj_name)
+  			(m_owned_info.size(), m_delegate_info.size(), segment_manager_o);
+  }
 }
 
 /**
@@ -698,27 +702,42 @@ template <typename T, typename segment_manager_o_t>
 typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
 	T, segment_manager_o_t>*
 delegate_partitioned_graph<segment_manager_t>::
-create_vertex_data(const T& init, segment_manager_o_t* segment_manager_o) const {
+create_vertex_data(const T& init, segment_manager_o_t* segment_manager_o,
+		const char *obj_name) const {
 
 	typedef typename delegate_partitioned_graph<segment_manager_t>::template vertex_data<
 	T, segment_manager_o_t> mytype;
 
-  return segment_manager_o->template construct<mytype>
-  					(bip::anonymous_instance)
-  					(m_owned_info.size(), m_delegate_info.size(), init, segment_manager_o);
+	if (obj_name == nullptr) {
+		return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
+  					(m_owned_info.size(), m_delegate_info.size(), init,
+  						segment_manager_o);
+  } else {
+		return segment_manager_o->template construct<mytype>(obj_name)
+  					(m_owned_info.size(), m_delegate_info.size(), init,
+  						segment_manager_o);
+  }
+
 }
 
 template <typename segment_manager_t>
 template <typename T, typename segment_manager_o_t>
 typename delegate_partitioned_graph<segment_manager_t>::template edge_data<T, segment_manager_o_t>*
 delegate_partitioned_graph<segment_manager_t>::
-create_edge_data(segment_manager_o_t* segment_manager_o) const {
+create_edge_data(segment_manager_o_t* segment_manager_o,
+		const char *obj_name) const {
 	typedef typename delegate_partitioned_graph<segment_manager_t>::template
   										edge_data<T, segment_manager_o_t> mytype;
 
-  return segment_manager_o->template construct<mytype>
-  					(bip::anonymous_instance)
-  					(m_owned_targets.size(), m_delegate_targets.size(), segment_manager_o);
+  if (obj_name == nullptr) {
+  	return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
+  					(m_owned_targets.size(), m_delegate_targets.size(),
+  						segment_manager_o);
+  } else {
+		return segment_manager_o->template construct<mytype>(obj_name)
+  					(m_owned_targets.size(), m_delegate_targets.size(),
+  						segment_manager_o);
+  }
 }
 
 /**
@@ -728,14 +747,23 @@ template <typename segment_manager_t>
 template <typename T, typename segment_manager_o_t>
 delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t> *
 delegate_partitioned_graph<segment_manager_t>::
-create_edge_data(const T& init, segment_manager_o_t * segment_manager_o) const {
+create_edge_data(const T& init, segment_manager_o_t * segment_manager_o,
+		const char *obj_name) const {
 
 	typedef delegate_partitioned_graph<segment_manager_t>::
   										edge_data<T, segment_manager_o_t> mytype;
 
-  return segment_manager_o->template construct<mytype>
-  					(bip::anonymous_instance)
-  					(m_owned_targets.size(), m_delegate_targets.size(), init, segment_manager_o);
+  if (obj_name == nullptr) {
+		return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
+  					(m_owned_targets.size(), m_delegate_targets.size(), init,
+  						segment_manager_o);
+  } else {
+		return segment_manager_o->template construct<mytype>(obj_name)
+  					(m_owned_targets.size(), m_delegate_targets.size(), init,
+  						segment_manager_o);
+  }
+
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1032,8 +1060,6 @@ delegate_partitioned_graph<segment_manager_t>::edge_data<T, segment_manager_o_t>
   assert(itr.m_edge_offset < m_owned_edge_data.size());
   return m_owned_edge_data[itr.m_edge_offset];
 }
-
-
 } // namespace mpi
 } // namespace havoqgt
 

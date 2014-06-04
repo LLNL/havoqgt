@@ -121,6 +121,10 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
+	typedef bip::managed_mapped_file mapped_t;
+  typedef mapped_t::segment_manager segment_manager_t;
+  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+
   CHK_MPI(MPI_Init(&argc, &argv));
   {
   int mpi_rank(0), mpi_size(0);
@@ -145,77 +149,85 @@ int main(int argc, char** argv) {
   //havoqgt::mpi::edge_list<uint64_t> oned(MPI_COMM_WORLD);
   //havoqgt::mpi::edge_list<uint64_t> transpose_hubs(MPI_COMM_WORLD);
   //typedef extended_memory_arena arena_type;
-  std::stringstream fname;
-  fname << "/l/ssd/graph_test_" << mpi_rank;
-  //arena_type arena(fname.str().c_str());
-
-  typedef bip::managed_mapped_file mapped_t;
-  typedef mapped_t::segment_manager segment_manager_t;
-
-  remove(fname.str().c_str());
-  mapped_t  asdf(bip::create_only, fname.str().c_str(), 1024ULL*1024*1024*16);
 
 
   uint64_t num_vertices = 1;
   uint64_t vert_scale;
   double   pa_beta;
   uint64_t hub_threshold;
+  uint32_t load_from_disk;
   std::string type;
-  if(argc != 5) {
-    std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold>" << std::endl;
+  if (argc != 6) {
+    std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <load_from_disk>" << std::endl;
     exit(-1);
   } else {
     type = argv[1];
     vert_scale    = boost::lexical_cast<uint64_t>(argv[2]);
     pa_beta       = boost::lexical_cast<double>(argv[3]);
     hub_threshold = boost::lexical_cast<uint64_t>(argv[4]);
+    load_from_disk = boost::lexical_cast<uint32_t>(argv[5]);
   }
   num_vertices <<= vert_scale;
-  if(mpi_rank == 0) {
+  if (mpi_rank == 0) {
     std::cout << "Building graph type: " << type << std::endl;
     std::cout << "Building graph Scale: " << vert_scale << std::endl;
     std::cout << "Hub threshold = " << hub_threshold << std::endl;
     std::cout << "PA-beta = " << pa_beta << std::endl;
+    std::cout << "Load From Disk = " << load_from_disk << std::endl;
   }
 
-  std::vector< std::pair<uint64_t, uint64_t> > input_edges;
 
-  if(type == "RMAT") {
-    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
-    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-                                      vert_scale, num_edges_per_rank,
-                                      0.57, 0.19, 0.19, 0.05, true, false);
-    input_edges.resize(num_edges_per_rank); //times 2 because its undirected
-    std::copy(rmat.begin(), rmat.end(), input_edges.begin());
-  } else if(type == "PA") {
-    gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
-  } else {
-    std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
+  std::stringstream fname;
+  fname << "/l/ssd/graph_test_" << mpi_rank;
+
+  if (load_from_disk  == 0) {
+  	remove(fname.str().c_str());
   }
 
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
-  bip::allocator<void, segment_manager_t> alloc_inst (asdf.get_segment_manager());
+  mapped_t  asdf(bip::open_or_create, fname.str().c_str(), 1024ULL*1024*1024*16);
+  segment_manager_t* segment_manager = asdf.get_segment_manager();
+ 	bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
-  graph_type graph(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+  graph_type *graph;
 
-  //arena.print_info();
 
-  {
-    std::vector< std::pair<uint64_t, uint64_t> > empty(0);
-    input_edges.swap(empty);
-  }
+  if (load_from_disk  == 0) {
+  	std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+	  if(type == "RMAT") {
+	    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
+	    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
+	                                      vert_scale, num_edges_per_rank,
+	                                      0.57, 0.19, 0.19, 0.05, true, false);
+	    input_edges.resize(num_edges_per_rank); //times 2 because its undirected
+	    std::copy(rmat.begin(), rmat.end(), input_edges.begin());
+	  } else if(type == "PA") {
+	    gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
+	  } else {
+	    std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
+	  }
 
+	 	graph = segment_manager->construct<graph_type>
+  		("graph_obj")
+  		(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+
+	  {
+    	std::vector< std::pair<uint64_t, uint64_t> > empty(0);
+    	input_edges.swap(empty);
+    }
+	} else {
+		graph = segment_manager->find<graph_type>("graph_obj").first;
+	}
 
 
   //
   // Calculate max degree
   uint64_t max_degree(0);
-  for(graph_type::vertex_iterator vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
-    max_degree = std::max(max_degree, graph.degree(*vitr));
+  for(auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
+    max_degree = std::max(max_degree, graph->degree(*vitr));
   }
-  for(graph_type::controller_iterator citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
-    max_degree = std::max(max_degree, graph.degree(*citr));
+  for(auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
+    max_degree = std::max(max_degree, graph->degree(*citr));
   }
   uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
   if(mpi_rank == 0) {

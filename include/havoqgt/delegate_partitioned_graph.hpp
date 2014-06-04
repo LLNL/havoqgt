@@ -269,7 +269,8 @@ class delegate_partitioned_graph {
     		m_delegate_edge_data;
   };
 
-  typedef typename std::vector<vertex_locator>::const_iterator controller_iterator;
+  typedef typename bip::vector<vertex_locator, seg_allocator_t<vertex_locator> >
+  		::const_iterator controller_iterator;
 
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
@@ -308,22 +309,26 @@ class delegate_partitioned_graph {
   /// Creates vertex_data of type T
   template <typename T, typename seg_manager_o_t>
   vertex_data<T, seg_manager_o_t>* create_vertex_data(
-  		seg_manager_o_t*) const;
+  		seg_manager_o_t*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates vertex_data of type T, with initial value
   template <typename T, typename seg_manager_o_t>
   vertex_data<T, seg_manager_o_t>* create_vertex_data(
-  		const T& init, seg_manager_o_t*) const;
+  		const T& init, seg_manager_o_t*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T
   template <typename T, typename seg_manager_o_t>
   edge_data<T, seg_manager_o_t>* create_edge_data(
-  		seg_manager_o_t*) const;
+  		seg_manager_o_t*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T, with initial value
   template <typename T, typename seg_manager_o_t>
   edge_data<T, seg_manager_o_t>* create_edge_data(
-  		const T& init, seg_manager_o_t*) const;
+  		const T& init, seg_manager_o_t*,
+  		const char *obj_name = nullptr) const;
 
   size_t num_local_vertices() const {
   	return m_owned_info.size();
@@ -384,7 +389,8 @@ private:
   		seg_allocator_t< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
 
-  std::vector<vertex_locator> m_controller_locators;
+  bip::vector<vertex_locator, seg_allocator_t<vertex_locator> >
+  	m_controller_locators;
 };
 
 
