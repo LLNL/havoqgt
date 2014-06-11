@@ -571,9 +571,18 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       *itr_start = new_ver_loc;
       itr_start = std::find(itr_start+1, itr_end, old_ver_loc);
     }
-  }
+
+    //
+    // Tag owned delegates
+    //
+    if (t_owner == m_mpi_rank) {
+      m_owned_info[t_local_id].is_delegate = 1;
+      m_owned_info[t_local_id].delegate_id = i;
+    }
+  }  // for items in vec_sorted_hubs
 
 
+  MPI_Barrier(mpi_comm); // TODO(steven): delete this
 
 
 
@@ -607,7 +616,11 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
       while (new_source_id > cur_source_id) {
         ++cur_source_id;
-        assert(m_owned_info[cur_source_id] == vert_info(false,0,i));
+        if (m_owned_info[cur_source_id].is_delegate != 1) {
+          // This check is necessary as some have been upgraded to delegate
+          // already, which occurs after this point.
+          assert(m_owned_info[cur_source_id] == vert_info(false,0,i));
+        }
       }
 
       assert(m_owned_info[new_source_id].low_csr_idx <= i);
@@ -650,20 +663,19 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   assert(m_delegate_degree.size() == m_delegate_label.size());
 
   //
-  // Tag owned delegates
-  //
-
-  for(auto itr = m_map_delegate_locator.begin();
+  // Verify CSR integration properlly tagged owned delegates
+  for (auto itr = m_map_delegate_locator.begin();
       itr != m_map_delegate_locator.end(); ++itr) {
     uint64_t label = itr->first;
     vertex_locator locator = itr->second;
-    //if(locator.owner() == m_mpi_rank) {
-    if(label % uint64_t(m_mpi_size) == m_mpi_rank) {
-      uint64_t local_id = label / uint64_t(m_mpi_size);
-      m_owned_info[local_id].is_delegate = 1;
-      m_owned_info[local_id].delegate_id = locator.local_id();
+
+    uint64_t local_id = label / uint64_t(m_mpi_size);
+    if (label % uint64_t(m_mpi_size) == m_mpi_rank) {
+      assert(m_owned_info[local_id].is_delegate == 1);
+      assert(m_owned_info[local_id].delegate_id == locator.local_id());
     }
   }
+
 
   //
   // Build controller lists
