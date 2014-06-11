@@ -58,7 +58,8 @@
 
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
- #include <boost/interprocess/containers/map.hpp>
+#include <boost/container/map.hpp>
+#include <boost/interprocess/containers/map.hpp>
 #include <stdint.h>
 #include <utility>
 #include <limits>
@@ -82,12 +83,12 @@ namespace bip = boost::interprocess;
  * @todo Verify low-degree CSR creation:  ipp line 167
  * @todo Boostify controller locator
  */
-template <typename segment_manager_t>
+template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
 
  	template<typename T>
- 	using seg_allocator_t = bip::allocator<T, segment_manager_t>;
+ 	using SegmentAllocator = bip::allocator<T, SegementManager>;
 
   /// Object that uniquely locates a vertex, both MPI rank and local offset.
   class vertex_locator {
@@ -96,8 +97,22 @@ class delegate_partitioned_graph {
       m_is_delegate  = 0;
       m_is_bcast     = 0;
       m_is_intercept = 0;
-      m_owner_dest   = std::numeric_limits<uint64_t>::max();
+      m_owner_dest   = std::numeric_limits<uint32_t>::max();
       m_local_id     = std::numeric_limits<uint64_t>::max();
+    }
+
+    bool is_valid() {
+    	struct Temp {
+    		uint64_t local_id : 39;
+    		uint32_t owner_dest : 20;
+    	};
+
+    	Temp conv;
+    	conv.local_id = std::numeric_limits<uint64_t>::max();
+    	conv.owner_dest = std::numeric_limits<uint64_t>::max();
+
+
+    	return (m_local_id != conv.local_id || m_owner_dest != conv.owner_dest);
     }
 
     bool is_delegate() const { return m_is_delegate == 1;}
@@ -112,6 +127,21 @@ class delegate_partitioned_graph {
 
     friend bool operator==(const vertex_locator& x,
                            const vertex_locator& y) {return x.is_equal(y); }
+    friend bool operator<(const vertex_locator& x,
+                           const vertex_locator& y) {
+    	if (x.m_is_delegate == y.m_is_delegate) {
+    		if (x.m_owner_dest == y.m_owner_dest) {
+	    		return x.m_local_id < y.m_local_id;
+	    	}
+	    	else {
+	    		return x.m_owner_dest < y.m_owner_dest;
+	    	}
+
+    	} else {
+    		return x.m_is_delegate < y.m_is_delegate;
+    	}
+
+    }
 
     friend bool operator!=(const vertex_locator& x,
                            const vertex_locator& y) {return !(x.is_equal(y)); }
@@ -120,7 +150,7 @@ class delegate_partitioned_graph {
     unsigned int m_is_delegate  : 1;
 		unsigned int m_is_bcast     : 3;
 		unsigned int m_is_intercept : 1;
-	  unsigned int m_owner_dest   : 20;
+	  uint32_t m_owner_dest   : 20;
     uint64_t m_local_id     : 39;
 
     vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
@@ -191,7 +221,7 @@ class delegate_partitioned_graph {
   };
 
   /// Vertex Data storage
-  template <typename T, typename seg_manager_o_t>
+  template <typename T, typename SegManagerOther>
   class vertex_data {
    public:
    	typedef T value_type;
@@ -219,20 +249,20 @@ class delegate_partitioned_graph {
   //private:
   //  friend class delegate_partitioned_graph;
     vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-    	seg_manager_o_t* segment_manager);
+    	SegManagerOther* segment_manager);
     vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-    	const T& init, seg_manager_o_t* segment_manager);
+    	const T& init, SegManagerOther* segment_manager);
 
    private:
-    bip::vector<T, bip::allocator<T, seg_manager_o_t>  > m_owned_vert_data;
-    bip::vector<T, bip::allocator<T, seg_manager_o_t>  > m_delegate_data;
+    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_owned_vert_data;
+    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_delegate_data;
   };
 
   /// Edge Data storage
-  template <typename T, typename seg_manager_o_t>
+  template <typename T, typename SegManagerOther>
   class edge_data {
    public:
-   	typedef typename bip::vector< T, bip::allocator<T, seg_manager_o_t> >
+   	typedef typename bip::vector< T, bip::allocator<T, SegManagerOther> >
    			::iterator iterator;
     typedef T value_type;
 
@@ -258,23 +288,23 @@ class delegate_partitioned_graph {
   //private:
   //  friend class delegate_partitioned_graph;
     edge_data(uint64_t owned_size, uint64_t delegate_size,
-    		seg_manager_o_t* sm);
+    		SegManagerOther* sm);
     edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
-    		seg_manager_o_t* sm);
+    		SegManagerOther* sm);
 
    private:
-    bip::vector< T, bip::allocator<T, seg_manager_o_t> >
+    bip::vector< T, bip::allocator<T, SegManagerOther> >
     		m_owned_edge_data;
-    bip::vector< T, bip::allocator<T, seg_manager_o_t> >
+    bip::vector< T, bip::allocator<T, SegManagerOther> >
     		m_delegate_edge_data;
   };
 
-  typedef typename bip::vector<vertex_locator, seg_allocator_t<vertex_locator> >
+  typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
   		::const_iterator controller_iterator;
 
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
-  delegate_partitioned_graph(const seg_allocator_t<void>& seg_allocator,
+  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
                              Container& edges,
                              uint64_t delegate_degree_threshold);
@@ -307,27 +337,27 @@ class delegate_partitioned_graph {
   bool is_label_delegate(uint64_t label) const;
 
   /// Creates vertex_data of type T
-  template <typename T, typename seg_manager_o_t>
-  vertex_data<T, seg_manager_o_t>* create_vertex_data(
-  		seg_manager_o_t*,
+  template <typename T, typename SegManagerOther>
+  vertex_data<T, SegManagerOther>* create_vertex_data(
+  		SegManagerOther*,
   		const char *obj_name = nullptr) const;
 
   /// Creates vertex_data of type T, with initial value
-  template <typename T, typename seg_manager_o_t>
-  vertex_data<T, seg_manager_o_t>* create_vertex_data(
-  		const T& init, seg_manager_o_t*,
+  template <typename T, typename SegManagerOther>
+  vertex_data<T, SegManagerOther>* create_vertex_data(
+  		const T& init, SegManagerOther*,
   		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T
-  template <typename T, typename seg_manager_o_t>
-  edge_data<T, seg_manager_o_t>* create_edge_data(
-  		seg_manager_o_t*,
+  template <typename T, typename SegManagerOther>
+  edge_data<T, SegManagerOther>* create_edge_data(
+  		SegManagerOther*,
   		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T, with initial value
-  template <typename T, typename seg_manager_o_t>
-  edge_data<T, seg_manager_o_t>* create_edge_data(
-  		const T& init, seg_manager_o_t*,
+  template <typename T, typename SegManagerOther>
+  edge_data<T, SegManagerOther>* create_edge_data(
+  		const T& init, SegManagerOther*,
   		const char *obj_name = nullptr) const;
 
   size_t num_local_vertices() const {
@@ -355,6 +385,39 @@ class delegate_partitioned_graph {
                            bool local_change, MPI_Comm mpi_comm);
 
 
+  template <typename InputIterator>
+	void count_high_degree_transpose(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::vector<uint64_t>& high_count_per_rank);
+
+
+	template <typename InputIterator>
+	void count_low_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::vector<uint64_t>& vertex_low_degree_count,
+               uint64_t delegate_degree_threshold);
+
+	template <typename InputIterator>
+	void partition_low_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_low);
+
+	template <typename InputIterator>
+	void partition_high_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_high,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_high_overflow,
+               std::map<int, uint64_t>& overflow_schedule);
+
+
   /// Stores information about owned vertices
   class vert_info {
   public:
@@ -378,32 +441,34 @@ class delegate_partitioned_graph {
   int m_mpi_size;
   int m_mpi_rank;
 
+  uint64_t m_max_vertex;
 
-	bip::vector<vert_info, seg_allocator_t<vert_info>> m_owned_info;
-  bip::vector<vertex_locator, seg_allocator_t<vertex_locator>> m_owned_targets;
+	bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
+  bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
 
 	// Delegate Storage
   uint64_t m_delegate_degree_threshold;
-  bip::vector< uint64_t, seg_allocator_t<uint64_t> > m_delegate_info;
-  bip::vector< uint64_t, seg_allocator_t<uint64_t> > m_delegate_degree;
-  bip::vector< uint64_t, seg_allocator_t<uint64_t> > m_delegate_label;
-  bip::vector< vertex_locator, seg_allocator_t<vertex_locator> >
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
+  bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
   		m_delegate_targets;
 
   //Note: BIP only contains a map, not an unordered_map object.
   boost::unordered_map<
   		uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
-  		seg_allocator_t< std::pair<uint64_t,vertex_locator> >
+  		SegmentAllocator< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
 
-  bip::vector<vertex_locator, seg_allocator_t<vertex_locator> >
+  bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
   	m_controller_locators;
 
 
 
 
-  inline bool operator==(const delegate_partitioned_graph<segment_manager_t>&
-  			other){
+  inline bool operator==(const delegate_partitioned_graph<SegementManager>&
+  			other)
+  {
  	  if (m_mpi_size != other.m_mpi_size) {
   		return false;
   	} else if (m_mpi_rank != other.m_mpi_rank) {
@@ -517,7 +582,7 @@ class delegate_partitioned_graph {
 		return true;
 	}
 
-	inline bool operator!=(const delegate_partitioned_graph<segment_manager_t>&
+	inline bool operator!=(const delegate_partitioned_graph<SegementManager>&
 				other){
 		return !(*this == other);
 	}
