@@ -413,11 +413,11 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // Partition low degree vertices
   partition_low_degree(mpi_comm, edges.begin(), edges.end(), global_hubs, edges_low);
 
-  // Notes(Steven): if we should be able to determine the size of edges_low and
-  // insert it directly into a CSR.
 
   std::vector<uint64_t> low_count_per_rank;
-  mpi_all_gather(uint64_t(edges_low.size()), low_count_per_rank, mpi_comm);
+
+  assert( m_owned_targets.size() == edges_low.size() );
+  mpi_all_gather(uint64_t(m_owned_targets.size()), low_count_per_rank, mpi_comm);
 
   //
   // Compute high degree vertices
@@ -441,10 +441,12 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
         if (high_count_per_rank[heavy_idx] == 0) {
           break; //can't move more
+          // Q(steven): seems like this can be moved up to between the while
+          // and if statements
         }
 
         uint64_t max_to_offload = std::min(high_count_per_rank[heavy_idx],
-              high_count_per_rank[heavy_idx]  +low_count_per_rank[heavy_idx] -
+              high_count_per_rank[heavy_idx] + low_count_per_rank[heavy_idx] -
               target_edges_per_rank);
 
         uint64_t max_to_receive = target_edges_per_rank -
@@ -471,6 +473,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
         edges_high, edges_high_overflow, overflow_schedule);
+
+  std::cout << "over flow val: " << overflow_schedule[m_mpi_rank] << " edges_high " << edges_high.size() << std::endl;
 
   MPI_Barrier(mpi_comm);
 
@@ -591,9 +595,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     // If they are equal then the Low CSR code should be correct
   {
 
-    if(m_owned_targets.capacity() != edges_low.size() ) {
+    if(m_owned_targets.size() != edges_low.size() ) {
       std::cout << m_mpi_rank << ": m_owned_targets capacity is " <<
-          m_owned_targets.capacity() << " but should be " << edges_low.size() <<
+          m_owned_targets.size() << " but should be " << edges_low.size() <<
           "." << std::endl;
     }
 
@@ -601,13 +605,13 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     uint64_t max_owned_delegate_id = edges_high.size() > 0 ?
         local_source_id(m_mpi_size)(edges_high.back()) : 0;
 
-    max_local_id = std::max(max_local_id, max_owned_delegate_id) +2 ;
+    // max_local_id = std::max(max_local_id, max_owned_delegate_id) +2 ;
 
-    if(m_owned_info.capacity() != max_local_id ) {
-      std::cout << m_mpi_rank << ": m_owned_info capacity is " <<
-          m_owned_info.capacity() << " but should be " << max_local_id <<
-          "." << std::endl;
-    }
+    // if(m_owned_info.capacity() != max_local_id ) {
+    //   std::cout << m_mpi_rank << ": m_owned_info capacity is " <<
+    //       m_owned_info.capacity() << " but should be " << max_local_id <<
+    //       "." << std::endl;
+    // }
 
     uint64_t cur_source_id = 0;
     for (uint64_t i=0; i<edges_low.size(); ++i) {
