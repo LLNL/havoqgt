@@ -288,7 +288,8 @@ partition_low_degree(MPI_Comm mpi_comm,
 
   double time_end = MPI_Wtime();
   if (mpi_rank == 0) {
-    std::cout << "partition_low_degree time = " << time_end - time_start << std::endl;
+    std::cout << "partition_low_degree time = " << time_end - time_start
+    		<< std::endl;
   }
 }  // partition_low_degree
 
@@ -309,57 +310,77 @@ partition_high_degree(MPI_Comm mpi_comm,
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
-  while(!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end, mpi_comm)) {
+  while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
+  			mpi_comm)) {
 
-    std::vector<std::pair<uint64_t, uint64_t> > to_recv_edges_high;
-    std::vector<std::pair<int, std::pair<uint64_t, uint64_t> > > to_recv_overflow;
+    std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
+    std::vector<  std::pair<int, std::pair<uint64_t, uint64_t> >  >
+    		to_recv_overflow;
     {
       std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
       to_send_edges_high.reserve(16*1024);
-      for(size_t i=0; unsorted_itr != unsorted_itr_end && i<16*1024; ++unsorted_itr) {
-        if(global_hub_set.count(unsorted_itr->first) == 1) {
+
+      for (size_t i=0; unsorted_itr != unsorted_itr_end && i<16*1024;
+      			++unsorted_itr) {
+        if (global_hub_set.count(unsorted_itr->first) == 1) {
+        	// IF it is a hub node
           ++i;
           to_send_edges_high.push_back(*unsorted_itr);
         }
-        //transpose version
-        if(global_hub_set.count(unsorted_itr->second) == 1) {
+
+        // transpose version
+        if (global_hub_set.count(unsorted_itr->second) == 1) {
           ++i;
           to_send_edges_high.push_back(std::make_pair(unsorted_itr->second,
                                                    unsorted_itr->first));
         }
       }
-      mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, edge_target_partitioner(mpi_size), mpi_comm);
+      mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high,
+      			edge_target_partitioner(mpi_size), mpi_comm);
     }
-    for(size_t i=0; i<edges_high.size(); ++i) {
+
+    for (size_t i=0; i<edges_high.size(); ++i) {
       assert(edges_high[i].second % mpi_size == mpi_rank);
     }
+
     {
       // Copy high edges to either edges_high or overflow
-      std::vector<std::pair<int, std::pair<uint64_t, uint64_t> > > to_send_overflow;
-      for(size_t i=0; i<to_recv_edges_high.size(); ++i) {
-        if(overflow_schedule.empty()) {
+      std::vector<  std::pair< int, std::pair<uint64_t, uint64_t> >  >
+      		to_send_overflow;
+
+      for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
+        if (overflow_schedule.empty()) {
           edges_high.push_back(to_recv_edges_high[i]);
         } else {
           int dest = overflow_schedule.begin()->first;
           overflow_schedule[dest]--;
+
           if(overflow_schedule[dest] == 0) {
             overflow_schedule.erase(dest);
           }
-          to_send_overflow.push_back(std::make_pair(dest, to_recv_edges_high[i]));
+          to_send_overflow.push_back(std::make_pair(dest,
+          			to_recv_edges_high[i]));
         }
       }
-      uint64_t global_overflow_size = mpi_all_reduce(uint64_t(to_send_overflow.size()), std::plus<uint64_t>(), mpi_comm);
+
+      uint64_t global_overflow_size = mpi_all_reduce(
+      			uint64_t(to_send_overflow.size()), std::plus<uint64_t>(), mpi_comm);
+
       if(global_overflow_size > 0) {
-        mpi_all_to_all_better(to_send_overflow, to_recv_overflow, dest_pair_partitioner(), mpi_comm);
+        mpi_all_to_all_better(to_send_overflow, to_recv_overflow,
+        		dest_pair_partitioner(), mpi_comm);
       }
     }
     for(size_t i=0; i<to_recv_overflow.size(); ++i) {
       edges_high_overflow.push_back(to_recv_overflow[i].second);
     }
-  }
+  }  // end while get next edge
   double time_end = MPI_Wtime();
-  if(mpi_rank == 0)
-  std::cout << "partition_high_degree time = " << time_end - time_start << std::endl;
+
+  if (mpi_rank == 0) {
+  	std::cout << "partition_high_degree time = " << time_end - time_start
+  			<< std::endl;
+  }
 }
 
 
