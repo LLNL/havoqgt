@@ -456,11 +456,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     uint64_t high_total_nodes = low_count_per_rank[heavy_idx] +
         high_count_per_rank[heavy_idx];
 
-<<<<<<< HEAD
-    while (total_nodes > target_edges_per_rank) {
-=======
     while (high_total_nodes > target_edges_per_rank) {
->>>>>>> develop
 
       if (high_count_per_rank[heavy_idx] == 0) {
         break;
@@ -476,13 +472,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
         // Likewise if we have extra high nodes we don't want to send more than
         // the extra.
         uint64_t max_to_offload = std::min(num_high_nodes, extra_nodes);
-<<<<<<< HEAD
 
-
-=======
-
-
->>>>>>> develop
         // At the same time we don't want to send more nodes then they need.
         uint64_t max_to_receive = target_edges_per_rank -
               high_count_per_rank[light_idx] - low_count_per_rank[light_idx];
@@ -523,16 +513,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
         edges_high, edges_high_overflow, overflow_schedule);
 
-<<<<<<< HEAD
-  std::string str_temp =  "over flow vals: ";
-  for (int i = 0; i < m_mpi_size; i++) {
-    str_temp << overflow_schedule[i] << ", ";
-  }
 
   std::cout  << str_temp << std::endl;
 
-=======
->>>>>>> develop
   MPI_Barrier(mpi_comm);
 
 
