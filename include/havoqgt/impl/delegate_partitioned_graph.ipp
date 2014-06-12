@@ -425,56 +425,94 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   count_high_degree_transpose(mpi_comm, edges.begin(), edges.end(), global_hubs, high_count_per_rank);
 
 
+
   //
   // Compute Overflow schedule
   uint64_t global_edge_count = mpi_all_reduce(uint64_t(edges.size()*2),
         std::plus<uint64_t>(), mpi_comm);
   uint64_t target_edges_per_rank = global_edge_count / m_mpi_size;
 
+  // std::string str_temp =
+	 //  		"[" + std::to_string(m_mpi_rank)
+	 //  		+ "] [H: " + std::to_string(high_count_per_rank[m_mpi_rank])
+	 //  		+ "] [L: " + std::to_string(low_count_per_rank[m_mpi_rank])
+	 //  		+ "] [T: " + std::to_string(high_count_per_rank[m_mpi_rank] +
+	 //  																low_count_per_rank[m_mpi_rank])
+	 //  		+ "] [E: " + std::to_string(high_count_per_rank[m_mpi_rank] +
+	 //  																low_count_per_rank[m_mpi_rank] -
+	 //  																target_edges_per_rank)
+	 //  		+ "] [N: " + std::to_string(target_edges_per_rank -
+	 //  																high_count_per_rank[m_mpi_rank] -
+	 //  																low_count_per_rank[m_mpi_rank])
+	 //  		+ "] \t Overflow values: ";
+
+	// TODO: add code to calculate the number high edges I will recieve
+	// The high_count_per_rank+ that will be the number of high_nodes
+	// Which allows me to determine the number of edges I will have?
+
   std::map<int,uint64_t> overflow_schedule;
   uint64_t heavy_idx(0), light_idx(0);
   for (; heavy_idx < m_mpi_size && light_idx < m_mpi_size; ++heavy_idx) {
-    while (low_count_per_rank[heavy_idx] + high_count_per_rank[heavy_idx]
-            > target_edges_per_rank) {
-      if (low_count_per_rank[light_idx] + high_count_per_rank[light_idx]
+    uint64_t high_total_nodes = low_count_per_rank[heavy_idx] +
+        high_count_per_rank[heavy_idx];
+
+    while (high_total_nodes > target_edges_per_rank) {
+
+      if (high_count_per_rank[heavy_idx] == 0) {
+        break;
+      }
+      else if (low_count_per_rank[light_idx] + high_count_per_rank[light_idx]
                 < target_edges_per_rank) {
 
-        if (high_count_per_rank[heavy_idx] == 0) {
-          break; //can't move more
-          // Q(steven): seems like this can be moved up to between the while
-          // and if statements
-        }
 
-        uint64_t max_to_offload = std::min(high_count_per_rank[heavy_idx],
-              high_count_per_rank[heavy_idx] + low_count_per_rank[heavy_idx] -
-              target_edges_per_rank);
+        uint64_t num_high_nodes = high_count_per_rank[heavy_idx];
+        uint64_t extra_nodes = high_total_nodes - target_edges_per_rank;
+        // We can only send the extra high_nodes, so if we are over the
+        // threshold but have no high nodes we can't send any.
+        // Likewise if we have extra high nodes we don't want to send more than
+        // the extra.
+        uint64_t max_to_offload = std::min(num_high_nodes, extra_nodes);
 
+
+        // At the same time we don't want to send more nodes then they need.
         uint64_t max_to_receive = target_edges_per_rank -
               high_count_per_rank[light_idx] - low_count_per_rank[light_idx];
 
         uint64_t to_move = std::min(max_to_offload, max_to_receive);
 
-        high_count_per_rank[heavy_idx] -= to_move;
-        high_count_per_rank[light_idx] += to_move;
+        high_count_per_rank[heavy_idx] -= to_move; // adjust the node count on
+        high_count_per_rank[light_idx] += to_move; // each
+        high_total_nodes -= to_move;  // keep this variable current
 
-        if (heavy_idx == m_mpi_rank) {
+        if (heavy_idx == m_mpi_rank) { //if this is us, then we need to log what we are sending
           overflow_schedule[light_idx] += to_move;
         }
-      } else {
-        ++light_idx;
-        if (light_idx == m_mpi_size) {
-          break;
+      } else { // light_idx does not need anymore nodes
+        ++light_idx; // so check the next inline
+        if (light_idx == m_mpi_size) {  // if there are no more
+          break; // break the while loop, and the for loop's end condition is
+                 // also met
         }
       } // else
     }  // while
   }  // for
 
+ //  { // Debuging
+	//   MPI_Barrier(mpi_comm); // TODO: remove with prin
+
+
+
+	//   for (int i = 0; i < m_mpi_size; i++) {
+	//     str_temp += std::to_string(overflow_schedule[i]) + ",";
+	//   }
+
+	//   std::cout  << str_temp << std::endl;
+	// }
+
   //
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
         edges_high, edges_high_overflow, overflow_schedule);
-
-  std::cout << "over flow val: " << overflow_schedule[m_mpi_rank] << " edges_high " << edges_high.size() << std::endl;
 
   MPI_Barrier(mpi_comm);
 
