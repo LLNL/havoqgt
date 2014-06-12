@@ -58,6 +58,8 @@
 
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
+#include <boost/container/map.hpp>
+#include <boost/interprocess/containers/map.hpp>
 #include <stdint.h>
 #include <utility>
 #include <limits>
@@ -81,19 +83,47 @@ namespace bip = boost::interprocess;
  * @todo Verify low-degree CSR creation:  ipp line 167
  * @todo Boostify controller locator
  */
-template <typename Arena>
+template <typename SegementManager>
 class delegate_partitioned_graph {
-public:
+ public:
+
+ 	template<typename T>
+ 	using SegmentAllocator = bip::allocator<T, SegementManager>;
+
   /// Object that uniquely locates a vertex, both MPI rank and local offset.
   class vertex_locator {
+<<<<<<< HEAD
   public:
+=======
+   public:
+>>>>>>> develop
     vertex_locator() {
       m_is_delegate  = 0;
       m_is_bcast     = 0;
       m_is_intercept = 0;
+<<<<<<< HEAD
       m_owner_dest   = std::numeric_limits<uint64_t>::max();
       m_local_id     = std::numeric_limits<uint64_t>::max();
+=======
+      m_owner_dest   = std::numeric_limits<uint32_t>::max();
+      m_local_id     = std::numeric_limits<uint64_t>::max();
     }
+
+    bool is_valid() {
+    	struct Temp {
+    		uint64_t local_id : 39;
+    		uint32_t owner_dest : 20;
+    	};
+
+    	Temp conv;
+    	conv.local_id = std::numeric_limits<uint64_t>::max();
+    	conv.owner_dest = std::numeric_limits<uint64_t>::max();
+
+
+    	return (m_local_id != conv.local_id || m_owner_dest != conv.owner_dest);
+>>>>>>> develop
+    }
+
     bool is_delegate() const { return m_is_delegate == 1;}
     uint32_t owner() const { return m_owner_dest; }
     void set_dest(uint32_t dest) { m_owner_dest = dest; assert(m_owner_dest == dest);}
@@ -106,23 +136,51 @@ public:
 
     friend bool operator==(const vertex_locator& x,
                            const vertex_locator& y) {return x.is_equal(y); }
+    friend bool operator<(const vertex_locator& x,
+                           const vertex_locator& y) {
+    	if (x.m_is_delegate == y.m_is_delegate) {
+    		if (x.m_owner_dest == y.m_owner_dest) {
+	    		return x.m_local_id < y.m_local_id;
+	    	}
+	    	else {
+	    		return x.m_owner_dest < y.m_owner_dest;
+	    	}
 
+    	} else {
+    		return x.m_is_delegate < y.m_is_delegate;
+    	}
+
+<<<<<<< HEAD
+=======
+    }
+
+>>>>>>> develop
     friend bool operator!=(const vertex_locator& x,
                            const vertex_locator& y) {return !(x.is_equal(y)); }
-  private:
+   private:
     friend class delegate_partitioned_graph;
     unsigned int m_is_delegate  : 1;
+<<<<<<< HEAD
     unsigned int m_is_bcast     : 3;
     unsigned int m_is_intercept : 1;
     unsigned int m_owner_dest   : 20;
     uint64_t     m_local_id     : 39;
+=======
+		unsigned int m_is_bcast     : 3;
+		unsigned int m_is_intercept : 1;
+	  uint32_t m_owner_dest   : 20;
+    uint64_t m_local_id     : 39;
+
+>>>>>>> develop
     vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
   };
 
   /// Edge Iterator class for delegate partitioned graph
   class edge_iterator {
-  public:
-    edge_iterator():m_ptr_graph(NULL) { }
+   public:
+    edge_iterator()
+    	: m_ptr_graph(NULL) {};
+
     edge_iterator& operator++();
     edge_iterator operator++(int);
 
@@ -136,11 +194,17 @@ public:
 
     vertex_locator source() const { return m_source; }
     vertex_locator target() const;
+<<<<<<< HEAD
   protected:
+=======
+
+   protected:
+>>>>>>> develop
     friend class delegate_partitioned_graph;
     template <typename T1, typename T2> friend class edge_data;
     edge_iterator(vertex_locator source, uint64_t edge_offset,
                   const delegate_partitioned_graph* const pgraph);
+
     vertex_locator                          m_source;
     uint64_t                                m_edge_offset;
     const delegate_partitioned_graph* const m_ptr_graph;
@@ -150,8 +214,9 @@ public:
   class vertex_iterator
     : public std::iterator<std::input_iterator_tag, vertex_locator, ptrdiff_t,
                            const vertex_locator* const, const vertex_locator&> {
-  public:
-    vertex_iterator() : m_ptr_graph(NULL) { }
+   public:
+    vertex_iterator()
+    	: m_ptr_graph(NULL) {};
     vertex_iterator& operator++();
     vertex_iterator operator++(int);
 
@@ -166,23 +231,32 @@ public:
 
     const vertex_locator& operator*()        const { return m_locator; }
     const vertex_locator* const operator->() const { return &m_locator; }
-  private:
+
+   private:
     friend class delegate_partitioned_graph;
+
     vertex_iterator(uint64_t index, const delegate_partitioned_graph*  pgraph);
     void update_locator();
+
     const delegate_partitioned_graph*  m_ptr_graph;
     uint64_t                                m_owned_vert_index;
     vertex_locator                          m_locator;
   };
 
   /// Vertex Data storage
+<<<<<<< HEAD
   template <typename T, typename SegmentManager>
+=======
+  template <typename T, typename SegManagerOther>
+>>>>>>> develop
   class vertex_data {
-  public:
-    typedef T value_type;
+   public:
+   	typedef T value_type;
     vertex_data() {}
+
     T&       operator[] (const vertex_locator& locator);
     const T& operator[] (const vertex_locator& locator) const;
+
     void reset(const T& r) {
       for(size_t i=0; i<m_owned_vert_data.size(); ++i) {
         m_owned_vert_data[i] = r;
@@ -191,6 +265,7 @@ public:
         m_delegate_data[i] = r;
       }
     }
+
     void all_reduce() {
       std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
       std::vector<T> tmp_out(tmp_in.size(), 0);
@@ -200,22 +275,33 @@ public:
 
   //private:
   //  friend class delegate_partitioned_graph;
-    vertex_data(uint64_t owned_data_size, uint64_t delegate_size, SegmentManager* arena);
-    vertex_data(uint64_t owned_data_size, uint64_t delegate_size, const T& init, SegmentManager* arena);
-  private:
-    bip::vector<T, typename SegmentManager::template allocator<T>::type > m_owned_vert_data;
-    bip::vector<T, typename SegmentManager::template allocator<T>::type > m_delegate_data;
+    vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
+    	SegManagerOther* segment_manager);
+    vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
+    	const T& init, SegManagerOther* segment_manager);
+
+   private:
+    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_owned_vert_data;
+    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_delegate_data;
   };
 
   /// Edge Data storage
+<<<<<<< HEAD
   template <typename T, typename SegmentManager>
+=======
+  template <typename T, typename SegManagerOther>
+>>>>>>> develop
   class edge_data {
-  public:
-    typedef typename bip::vector<T, typename SegmentManager::template allocator<T>::type >::iterator iterator;
+   public:
+   	typedef typename bip::vector< T, bip::allocator<T, SegManagerOther> >
+   			::iterator iterator;
     typedef T value_type;
+
     edge_data() {}
+
     T&       operator[] (const edge_iterator& itr);
     const T& operator[] (const edge_iterator& itr) const;
+
     void reset(const T& r) {
       for(size_t i=0; i<m_owned_edge_data.size(); ++i) {
         m_owned_edge_data[i] = r;
@@ -224,24 +310,40 @@ public:
         m_delegate_edge_data[i] = r;
       }
     }
+
     iterator delegate_begin() { return m_delegate_edge_data.begin(); }
     iterator delegate_end()   { return m_delegate_edge_data.end(); }
     iterator owned_begin()    { return m_owned_edge_data.begin(); }
     iterator owned_end()      { return m_owned_edge_data.end(); }
+
   //private:
   //  friend class delegate_partitioned_graph;
-    edge_data(uint64_t owned_size, uint64_t delegate_size, SegmentManager* sm);
-    edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, SegmentManager* sm);
-  private:
-    bip::vector<T, typename SegmentManager::template allocator<T>::type > m_owned_edge_data;
-    bip::vector<T, typename SegmentManager::template allocator<T>::type > m_delegate_edge_data;
+    edge_data(uint64_t owned_size, uint64_t delegate_size,
+    		SegManagerOther* sm);
+    edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
+    		SegManagerOther* sm);
+
+   private:
+    bip::vector< T, bip::allocator<T, SegManagerOther> >
+    		m_owned_edge_data;
+    bip::vector< T, bip::allocator<T, SegManagerOther> >
+    		m_delegate_edge_data;
   };
 
+<<<<<<< HEAD
   typedef typename std::vector<vertex_locator>::const_iterator controller_iterator;
 
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
   delegate_partitioned_graph(Arena& arena,
+=======
+  typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
+  		::const_iterator controller_iterator;
+
+  /// Constructor that initializes given and unsorted sequence of edges
+  template <typename Container>
+  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+>>>>>>> develop
                              MPI_Comm mpi_comm,
                              Container& edges,
                              uint64_t delegate_degree_threshold);
@@ -279,55 +381,118 @@ public:
   bool is_label_delegate(uint64_t label) const;
 
   /// Creates vertex_data of type T
-  template <typename T, typename Arena2>
-  vertex_data<T, typename Arena2::segment_manager>* create_vertex_data(Arena2&) const;
+  template <typename T, typename SegManagerOther>
+  vertex_data<T, SegManagerOther>* create_vertex_data(
+  		SegManagerOther*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates vertex_data of type T, with initial value
-  template <typename T, typename Arena2>
-  vertex_data<T, typename Arena2::segment_manager>* create_vertex_data(const T& init, Arena2&) const;
+  template <typename T, typename SegManagerOther>
+  vertex_data<T, SegManagerOther>* create_vertex_data(
+  		const T& init, SegManagerOther*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T
-  template <typename T, typename Arena2>
-  edge_data<T, typename Arena2::segment_manager>* create_edge_data(Arena2&) const;
+  template <typename T, typename SegManagerOther>
+  edge_data<T, SegManagerOther>* create_edge_data(
+  		SegManagerOther*,
+  		const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T, with initial value
-  template <typename T, typename Arena2>
-  edge_data<T, typename Arena2::segment_manager>* create_edge_data(const T& init, Arena2&) const;
+  template <typename T, typename SegManagerOther>
+  edge_data<T, SegManagerOther>* create_edge_data(
+  		const T& init, SegManagerOther*,
+  		const char *obj_name = nullptr) const;
 
-  size_t num_local_vertices() const { return m_owned_info.size(); }
+  size_t num_local_vertices() const {
+  	return m_owned_info.size();
+  }
 
   size_t num_delegates() const { return m_delegate_degree.size(); }
 
-  uint32_t master(const vertex_locator& locator) const {return locator.m_local_id % m_mpi_size; }
+  uint32_t master(const vertex_locator& locator) const {
+  	return locator.m_local_id % m_mpi_size;
+  }
 
-  controller_iterator controller_begin() const { return m_controller_locators.begin(); }
-  controller_iterator controller_end()   const { return m_controller_locators.end(); }
+  controller_iterator controller_begin() const {
+  	return m_controller_locators.begin();
+  }
 
-private:
+  controller_iterator controller_end()   const {
+  	return m_controller_locators.end();
+  }
+
+//private:
   /// Synchronizes hub set amongst all processes.
   void sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                            boost::unordered_set<uint64_t>& global_hubs,
-                           bool local_change);
+                           bool local_change, MPI_Comm mpi_comm);
 
 
-private:
-  MPI_Comm m_mpi_comm;
-  int m_mpi_size;
-  int m_mpi_rank;
+  template <typename InputIterator>
+	void count_high_degree_transpose(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::vector<uint64_t>& high_count_per_rank);
+
+
+	template <typename InputIterator>
+	void count_low_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::vector<uint64_t>& vertex_low_degree_count,
+               uint64_t delegate_degree_threshold);
+
+	template <typename InputIterator>
+	void partition_low_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_low);
+
+	template <typename InputIterator>
+	void partition_high_degree(MPI_Comm mpi_comm,
+               InputIterator unsorted_itr,
+               InputIterator unsorted_itr_end,
+               boost::unordered_set<uint64_t>& global_hub_set,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_high,
+               std::deque<std::pair<uint64_t, uint64_t> >& edges_high_overflow,
+               std::map<int, uint64_t>& overflow_schedule);
+
 
   /// Stores information about owned vertices
   class vert_info {
   public:
     vert_info(bool in_is_delegate, uint64_t in_delegate_id,
               uint64_t in_low_csr_idx);
-    unsigned is_delegate :  1;
-    unsigned delegate_id : 24;
+
+    uint32_t is_delegate :  1;
+    uint32_t delegate_id : 24;
     uint64_t low_csr_idx : 39;
+
+    inline bool operator==(const vert_info& other){
+    	return (is_delegate == other.is_delegate && delegate_id == other.delegate_id
+    		&& low_csr_idx == other.low_csr_idx);
+    }
+
+    inline bool operator!=(const vert_info& other){
+    	return !(*this == other);
+    }
   };
-  bip::vector<vert_info, typename Arena::template allocator<vert_info>::type > m_owned_info;
-  bip::vector<vertex_locator, typename Arena::template allocator<vertex_locator>::type > m_owned_targets;
-  // Delegate Storage
+
+  int m_mpi_size;
+  int m_mpi_rank;
+
+  uint64_t m_max_vertex;
+
+	bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
+  bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+
+	// Delegate Storage
   uint64_t m_delegate_degree_threshold;
+<<<<<<< HEAD
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_info;
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_degree;
   bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_label;
@@ -335,11 +500,160 @@ private:
           std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type > m_map_delegate_locator;
   bip::vector<vertex_locator, typename Arena::template allocator<vertex_locator>::type > m_delegate_targets;
   std::vector<vertex_locator> m_controller_locators;
+=======
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
+  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
+  bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
+  		m_delegate_targets;
+
+  //Note: BIP only contains a map, not an unordered_map object.
+  boost::unordered_map<
+  		uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
+  		SegmentAllocator< std::pair<uint64_t,vertex_locator> >
+     > m_map_delegate_locator;
+
+  bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
+  	m_controller_locators;
+
+
+
+
+  inline bool operator==(const delegate_partitioned_graph<SegementManager>&
+  			other)
+  {
+ 	  if (m_mpi_size != other.m_mpi_size) {
+  		return false;
+  	} else if (m_mpi_rank != other.m_mpi_rank) {
+  		return false;
+  	} else if (m_delegate_degree_threshold != other.m_delegate_degree_threshold) {
+  		return false;
+  	}
+
+  	{
+  		size_t size = m_owned_info.size();
+  		if (size != other.m_owned_info.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_owned_info[i] != other.m_owned_info[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+  		size_t size = m_owned_targets.size();
+  		if (size != other.m_owned_targets.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_owned_targets[i] != other.m_owned_targets[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_delegate_info.size();
+  		if (size != other.m_delegate_info.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_info[i] != other.m_delegate_info[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+
+		{
+  		size_t size = m_delegate_degree.size();
+  		if (size != other.m_delegate_degree.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_degree[i] != other.m_delegate_degree[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_delegate_label.size();
+  		if (size != other.m_delegate_label.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_label[i] != other.m_delegate_label[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+  		size_t size = m_delegate_targets.size();
+  		if (size != other.m_delegate_targets.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_delegate_targets[i] != other.m_delegate_targets[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+
+		{
+  		size_t size = m_controller_locators.size();
+  		if (size != other.m_controller_locators.size()) {
+  			return false;
+  		} else {
+  			for (size_t i = 0; i < size; i++) {
+  				if (m_controller_locators[i] != other.m_controller_locators[i]) {
+  					return false;
+  				}
+  			}
+  		}
+		}
+
+		{
+			if (m_map_delegate_locator != other.m_map_delegate_locator) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	inline bool operator!=(const delegate_partitioned_graph<SegementManager>&
+				other){
+		return !(*this == other);
+	}
+>>>>>>> develop
 };
 
 /// Frees the container of edges
 template <typename Container>
 void free_edge_container(Container &edges) {};
+<<<<<<< HEAD
+=======
+
+template<>
+void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
+	std::vector< std::pair<uint64_t, uint64_t> >empty(0);
+  edges.swap(empty);
+};
+>>>>>>> develop
 
 template<>
 void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
