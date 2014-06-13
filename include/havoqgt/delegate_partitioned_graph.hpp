@@ -92,19 +92,12 @@ class delegate_partitioned_graph {
 
   /// Object that uniquely locates a vertex, both MPI rank and local offset.
   class vertex_locator {
-<<<<<<< HEAD
-  public:
-=======
+
    public:
->>>>>>> develop
     vertex_locator() {
       m_is_delegate  = 0;
       m_is_bcast     = 0;
       m_is_intercept = 0;
-<<<<<<< HEAD
-      m_owner_dest   = std::numeric_limits<uint64_t>::max();
-      m_local_id     = std::numeric_limits<uint64_t>::max();
-=======
       m_owner_dest   = std::numeric_limits<uint32_t>::max();
       m_local_id     = std::numeric_limits<uint64_t>::max();
     }
@@ -121,7 +114,6 @@ class delegate_partitioned_graph {
 
 
     	return (m_local_id != conv.local_id || m_owner_dest != conv.owner_dest);
->>>>>>> develop
     }
 
     bool is_delegate() const { return m_is_delegate == 1;}
@@ -149,29 +141,20 @@ class delegate_partitioned_graph {
     	} else {
     		return x.m_is_delegate < y.m_is_delegate;
     	}
-
-<<<<<<< HEAD
-=======
     }
 
->>>>>>> develop
+
     friend bool operator!=(const vertex_locator& x,
                            const vertex_locator& y) {return !(x.is_equal(y)); }
    private:
     friend class delegate_partitioned_graph;
     unsigned int m_is_delegate  : 1;
-<<<<<<< HEAD
+
     unsigned int m_is_bcast     : 3;
     unsigned int m_is_intercept : 1;
     unsigned int m_owner_dest   : 20;
     uint64_t     m_local_id     : 39;
-=======
-		unsigned int m_is_bcast     : 3;
-		unsigned int m_is_intercept : 1;
-	  uint32_t m_owner_dest   : 20;
-    uint64_t m_local_id     : 39;
 
->>>>>>> develop
     vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
   };
 
@@ -194,12 +177,8 @@ class delegate_partitioned_graph {
 
     vertex_locator source() const { return m_source; }
     vertex_locator target() const;
-<<<<<<< HEAD
-  protected:
-=======
 
    protected:
->>>>>>> develop
     friend class delegate_partitioned_graph;
     template <typename T1, typename T2> friend class edge_data;
     edge_iterator(vertex_locator source, uint64_t edge_offset,
@@ -244,11 +223,8 @@ class delegate_partitioned_graph {
   };
 
   /// Vertex Data storage
-<<<<<<< HEAD
-  template <typename T, typename SegmentManager>
-=======
+
   template <typename T, typename SegManagerOther>
->>>>>>> develop
   class vertex_data {
    public:
    	typedef T value_type;
@@ -286,11 +262,8 @@ class delegate_partitioned_graph {
   };
 
   /// Edge Data storage
-<<<<<<< HEAD
-  template <typename T, typename SegmentManager>
-=======
+
   template <typename T, typename SegManagerOther>
->>>>>>> develop
   class edge_data {
    public:
    	typedef typename bip::vector< T, bip::allocator<T, SegManagerOther> >
@@ -330,22 +303,15 @@ class delegate_partitioned_graph {
     		m_delegate_edge_data;
   };
 
-<<<<<<< HEAD
-  typedef typename std::vector<vertex_locator>::const_iterator controller_iterator;
 
-  /// Constructor that initializes given and unsorted sequence of edges
-  template <typename Container>
-  delegate_partitioned_graph(Arena& arena,
-=======
   typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
   		::const_iterator controller_iterator;
 
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
->>>>>>> develop
                              MPI_Comm mpi_comm,
-                             Container& edges,
+                             Container& edges, uint64_t max_vertex,
                              uint64_t delegate_degree_threshold);
 
 
@@ -485,22 +451,17 @@ class delegate_partitioned_graph {
   int m_mpi_size;
   int m_mpi_rank;
 
-  uint64_t m_max_vertex;
+  uint64_t m_max_vertex {0};
+
+  bip::vector<  std:pair<uint64_t, uint64_t>, SegmentAllocator<
+  		std:pair<uint64_t, uint64_t> >  > local_degree_count;
 
 	bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
 
 	// Delegate Storage
   uint64_t m_delegate_degree_threshold;
-<<<<<<< HEAD
-  bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_info;
-  bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_degree;
-  bip::vector<uint64_t, typename Arena::template allocator<uint64_t>::type > m_delegate_label;
-  boost::unordered_map<uint64_t, vertex_locator, boost::hash<uint64_t>,
-          std::equal_to<uint64_t>, typename Arena::template allocator<std::pair<uint64_t,vertex_locator> >::type > m_map_delegate_locator;
-  bip::vector<vertex_locator, typename Arena::template allocator<vertex_locator>::type > m_delegate_targets;
-  std::vector<vertex_locator> m_controller_locators;
-=======
+
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
@@ -639,21 +600,18 @@ class delegate_partitioned_graph {
 				other){
 		return !(*this == other);
 	}
->>>>>>> develop
 };
 
 /// Frees the container of edges
 template <typename Container>
 void free_edge_container(Container &edges) {};
-<<<<<<< HEAD
-=======
+
 
 template<>
 void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
 	std::vector< std::pair<uint64_t, uint64_t> >empty(0);
   edges.swap(empty);
 };
->>>>>>> develop
 
 template<>
 void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
