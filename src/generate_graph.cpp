@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
 
 	    graph = segment_manager->construct<graph_type>
   		("graph_obj")
-  		(alloc_inst, MPI_COMM_WORLD, rmat, hub_threshold);
+  		(alloc_inst, MPI_COMM_WORLD, rmat, uint64_t(5489), hub_threshold);
 
 
 	  } else if(type == "PA") {
@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
 
 	    graph = segment_manager->construct<graph_type>
   				("graph_obj")
-  				(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+  				(alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold);
 
 	    {
     		std::vector< std::pair<uint64_t, uint64_t> > empty(0);
@@ -281,3 +281,4 @@ int main(int argc, char** argv) {
   CHK_MPI(MPI_Finalize());
   return 0;
 }
+

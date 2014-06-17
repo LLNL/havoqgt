@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
 
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
   bip::allocator<void, segment_manager_t> alloc_inst (asdf.get_segment_manager());
-  graph_type graph(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+  graph_type graph(alloc_inst, MPI_COMM_WORLD,  input_edges, uint64_t(5489), hub_threshold);
 
   //arena.print_info();
 
