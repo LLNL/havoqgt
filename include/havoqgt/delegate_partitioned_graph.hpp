@@ -417,7 +417,8 @@ class delegate_partitioned_graph {
                  InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold);
+                 uint64_t delegate_degree_threshold,
+                 uint64_t& edges_high_count);
 
 
   void send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<

@@ -214,11 +214,11 @@ int main(int argc, char** argv) {
 	    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
 	    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
 	                                      vert_scale, num_edges_per_rank,
-	                                      0.57, 0.19, 0.19, 0.05, true, false);
+	                                      0.57, 0.19, 0.19, 0.05, true, true);
 
 	    graph = segment_manager->construct<graph_type>
   		("graph_obj")
-  		(alloc_inst, MPI_COMM_WORLD, rmat, uint64_t(5489), hub_threshold);
+  		(alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
 
 
 	  } else if(type == "PA") {

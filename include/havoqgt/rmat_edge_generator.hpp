@@ -171,6 +171,10 @@ public:
     return input_iterator_type(this, m_edge_count);
   }
 
+  uint64_t max_vertex_id() {
+  	return (0x1 << m_vertex_scale);
+  }
+
   size_t size() {
   	return m_edge_count;
   }
