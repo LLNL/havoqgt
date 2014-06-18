@@ -340,18 +340,18 @@ count_degrees(MPI_Comm mpi_comm,
   assert(sanity_high_vertex_count == high_vertex_count);
 
   {
-  	//next sync the hub lists
-  	std::vector<uint64_t> vec_global_hubs;
-  	mpi_all_gather(temp_local_hubs, vec_global_hubs, mpi_comm);
-  	// Insert gathered global hubs to set
-  	global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
-	}
+    //next sync the hub lists
+    std::vector<uint64_t> vec_global_hubs;
+    mpi_all_gather(temp_local_hubs, vec_global_hubs, mpi_comm);
+    // Insert gathered global hubs to set
+    global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
+  }
 
 
   // if(m_mpi_rank == 0) {
-  // 	std::vector<uint64_t> vec_hubs(global_hubs.begin(), global_hubs.end());
-  // 	std::sort(vec_hubs.begin(), vec_hubs.end());
-  // 	std::cout << "[" << m_mpi_rank << "]::: ";
+  //  std::vector<uint64_t> vec_hubs(global_hubs.begin(), global_hubs.end());
+  //  std::sort(vec_hubs.begin(), vec_hubs.end());
+  //  std::cout << "[" << m_mpi_rank << "]::: ";
   //   for (auto i = vec_hubs.begin(); i != vec_hubs.end(); i++) {
   //     std::cout << "[" << *i << "] ";
   //   }
@@ -559,7 +559,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   edges_high_count = high_count_per_rank[m_mpi_rank];
   uint64_t sanity_check_high_edge_count = 0;
   for (int i = 0; i < m_delegate_info.size(); i++) {
-  	sanity_check_high_edge_count += m_delegate_info[i];
+    sanity_check_high_edge_count += m_delegate_info[i];
   }
   assert(edges_high_count == sanity_check_high_edge_count);
 }  // partition_low_degree
@@ -607,6 +607,7 @@ partition_high_degree(MPI_Comm mpi_comm,
 
       uint64_t source_id = to_recv_edges_high[i].first;
       uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
+      m_delegate_degree[new_source_id]++;
 
       uint64_t place_pos = (m_delegate_info_offset[new_source_id])++;
       place_pos += m_delegate_info[new_source_id];
@@ -747,8 +748,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   //
   // Build controller lists
-  for(size_t i=0; i<m_delegate_degree.size(); ++i) {
-    if(i%m_mpi_size == m_mpi_rank) {
+  for (size_t i=0; i < m_delegate_degree.size(); ++i) {
+    if (i % m_mpi_size == m_mpi_rank) {
       m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
     }
   }
