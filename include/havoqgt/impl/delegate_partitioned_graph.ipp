@@ -337,11 +337,24 @@ count_degrees(MPI_Comm mpi_comm,
 
   assert(sanity_high_vertex_count == high_vertex_count);
 
-  //next sync the hub lists
-  std::vector<uint64_t> vec_global_hubs;
-  mpi_all_gather(temp_local_hubs, vec_global_hubs, mpi_comm);
-  // Insert gathered global hubs to set
-  global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
+  {
+  	//next sync the hub lists
+  	std::vector<uint64_t> vec_global_hubs;
+  	mpi_all_gather(temp_local_hubs, vec_global_hubs, mpi_comm);
+  	// Insert gathered global hubs to set
+  	global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
+	}
+
+
+  if(m_mpi_rank == 0) {
+  	std::vector<uint64_t> vec_hubs(global_hubs.begin(), global_hubs.end());
+  	std::sort(vec_hubs.begin(), vec_hubs.end());
+  	std::cout << "[" << m_mpi_rank << "]::: ";
+    for (auto i = vec_hubs.begin(); i != vec_hubs.end(); i++) {
+      std::cout << "[" << *i << "] ";
+    }
+    std::cout << std::endl;
+  }
 }  // count_degres
 
 template <typename SegementManager>
