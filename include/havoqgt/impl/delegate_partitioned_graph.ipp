@@ -322,7 +322,8 @@ count_degrees(MPI_Comm mpi_comm,
   // Next
   // Figure out how many edges have a have a high degree source
   // Figure out how many edges have a low degree source
-  std::vector<uint64_t> temp_local_hubs(high_vertex_count);
+  std::vector<uint64_t> temp_local_hubs;
+  temp_local_hubs.reserve(high_vertex_count);
   uint64_t sanity_high_vertex_count = 0;
   for (int i = 0; i < m_local_degree_count.size(); i++) {
     const uint64_t outgoing = m_local_degree_count[i].first;
@@ -330,6 +331,7 @@ count_degrees(MPI_Comm mpi_comm,
 
     if (incoming >= delegate_degree_threshold) {
       const uint64_t global_id = (i * m_mpi_size) + m_mpi_rank;
+      assert(global_id != 0);
       temp_local_hubs.push_back(global_id);
       sanity_high_vertex_count++;
     }
@@ -346,15 +348,15 @@ count_degrees(MPI_Comm mpi_comm,
 	}
 
 
-  if(m_mpi_rank == 0) {
-  	std::vector<uint64_t> vec_hubs(global_hubs.begin(), global_hubs.end());
-  	std::sort(vec_hubs.begin(), vec_hubs.end());
-  	std::cout << "[" << m_mpi_rank << "]::: ";
-    for (auto i = vec_hubs.begin(); i != vec_hubs.end(); i++) {
-      std::cout << "[" << *i << "] ";
-    }
-    std::cout << std::endl;
-  }
+  // if(m_mpi_rank == 0) {
+  // 	std::vector<uint64_t> vec_hubs(global_hubs.begin(), global_hubs.end());
+  // 	std::sort(vec_hubs.begin(), vec_hubs.end());
+  // 	std::cout << "[" << m_mpi_rank << "]::: ";
+  //   for (auto i = vec_hubs.begin(); i != vec_hubs.end(); i++) {
+  //     std::cout << "[" << *i << "] ";
+  //   }
+  //   std::cout << std::endl;
+  // }
 }  // count_degres
 
 template <typename SegementManager>
