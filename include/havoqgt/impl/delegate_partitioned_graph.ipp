@@ -669,7 +669,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
 
 
-  m_max_vertex = max_vertex / m_mpi_size;
+  m_max_vertex = std::ceil(double(max_vertex) / double(m_mpi_size));
 
   m_local_degree_count.resize(m_max_vertex+1, std::make_pair(0,0));
   //

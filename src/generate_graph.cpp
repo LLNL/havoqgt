@@ -51,6 +51,7 @@
 
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
 #include <iostream>
@@ -210,7 +211,17 @@ int main(int argc, char** argv) {
 
   if (load_from_disk  == 0) {
 
-    if(type == "RMAT") {
+    if(type == "UPTRI") {
+      uint64_t num_edges = num_vertices * 16;
+      havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
+           true);
+
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
+
+
+    } else if(type == "RMAT") {
       uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
                                         vert_scale, num_edges_per_rank,
