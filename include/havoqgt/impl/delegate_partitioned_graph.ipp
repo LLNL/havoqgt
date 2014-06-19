@@ -20,56 +20,63 @@ namespace mpi {
  */
 
 class source_partitioner {
-public:
-  source_partitioner(int p):m_mpi_size(p) { }
+ public:
+  explicit source_partitioner(int p):m_mpi_size(p) { }
   int operator()(uint64_t i) const { return i % m_mpi_size; }
-private:
+
+ private:
   int m_mpi_size;
 };
 
 class edge_source_partitioner {
-public:
-  edge_source_partitioner(int p):m_mpi_size(p) { }
-  int operator()(std::pair<uint64_t,uint64_t> i) const { return i.first % m_mpi_size; }
-private:
+ public:
+  explicit edge_source_partitioner(int p):m_mpi_size(p) { }
+  int operator()(std::pair<uint64_t, uint64_t> i) const {
+    return i.first % m_mpi_size;
+  }
+
+ private:
   int m_mpi_size;
 };
 
 class edge_target_partitioner {
-public:
-  edge_target_partitioner(int p):m_mpi_size(p) { }
-  int operator()(std::pair<uint64_t,uint64_t> i) const { return i.second % m_mpi_size; }
-private:
+ public:
+  explicit edge_target_partitioner(int p):m_mpi_size(p) { }
+  int operator()(std::pair<uint64_t, uint64_t> i) const {
+    return i.second % m_mpi_size;
+  }
+
+ private:
   int m_mpi_size;
 };
 
 class dest_pair_partitioner {
-public:
+ public:
   template<typename T>
-  int operator()(std::pair<int,T> i) const { return i.first; }
+  int operator()(std::pair<int, T> i) const { return i.first; }
 };
 
 class local_source_id {
  public:
-  local_source_id(int p):m_mpi_size(p) {}
+  explicit local_source_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T,T> i) const { return i.first / m_mpi_size; }
+  T operator()(std::pair<T, T> i) const { return i.first / m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
 
 class local_dest_id {
  public:
-  local_dest_id(int p):m_mpi_size(p) {}
+  explicit local_dest_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T,T> i) const { return i.second / m_mpi_size; }
+  T operator()(std::pair<T, T> i) const { return i.second / m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
 
 class get_local_id {
  public:
-  get_local_id(int p):m_mpi_size(p) {}
+  explicit get_local_id(int p):m_mpi_size(p) {}
   template<typename T>
   T operator()(T i) const { return i / m_mpi_size; }
  private:
@@ -80,25 +87,25 @@ class get_local_id {
 
 class owner_source_id {
  public:
-  owner_source_id(int p):m_mpi_size(p) {}
+  explicit owner_source_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T,T> i) const { return i.first % m_mpi_size; }
+  T operator()(std::pair<T, T> i) const { return i.first % m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
 
 class owner_dest_id {
  public:
-  owner_dest_id(int p):m_mpi_size(p) {}
+  explicit owner_dest_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T,T> i) const { return i.second % m_mpi_size; }
+  T operator()(std::pair<T, T> i) const { return i.second % m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
 
 class get_owner_id {
  public:
-  get_owner_id(int p):m_mpi_size(p) {}
+  explicit get_owner_id(int p):m_mpi_size(p) {}
   template<typename T>
   T operator()(T i) const { return i % m_mpi_size; }
  private:
@@ -113,10 +120,10 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
   uint64_t delegate_degree_threshold, std::vector<
   boost::container::map< uint64_t, std::pair<uint64_t, uint64_t> >  >&
   maps_to_send) {
-
-  for(int i = 0; i < m_mpi_size; ++i) {
-    //start inner loop at i to avoid re-exchanging data
-    for(int j = i; j < m_mpi_size; ++j) {
+  // Send to Each Node in turn.
+  for (int i = 0; i < m_mpi_size; ++i) {
+    // start inner loop at i to avoid re-exchanging data
+    for (int j = i; j < m_mpi_size; ++j) {
       int swap_id = -1;
       if (i == m_mpi_rank && j == m_mpi_rank) {
         continue;
@@ -153,9 +160,9 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
 
       assert(temp_buff.size() == std::max(send_count, recv_count));
 
-      // std::cout << "[ " << m_mpi_rank << "]" << " Sending " << send_count << " to "
-      //   << swap_id << ". Recieving " << recv_count << " from " << swap_id << ". "
-      //   << std::endl;
+      // std::cout << "[ " << m_mpi_rank << "]" << " Sending " << send_count <<
+      //  " to " << swap_id << ". Recieving " << recv_count << " from " <<
+      //  swap_id << ". " << std::endl;
 
 
       CHK_MPI(MPI_Sendrecv_replace(&(temp_buff[0]), temp_buff.size(),
@@ -189,10 +196,10 @@ void
 delegate_partitioned_graph<SegementManager>::
 send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
   uint64_t, uint64_t> >&maps_to_send) {
-
-  for(int i = 0; i < m_mpi_size; ++i) {
-    //start inner loop at i to avoid re-exchanging data
-    for(int j = i; j < m_mpi_size; ++j) {
+  // Iterate over nodes
+  for (int i = 0; i < m_mpi_size; ++i) {
+    // start inner loop at i to avoid re-exchanging data
+    for (int j = i; j < m_mpi_size; ++j) {
       int swap_id = -1;
       if (i == m_mpi_rank && j == m_mpi_rank) {
         continue;
@@ -207,7 +214,7 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
       assert(swap_id != m_mpi_rank);
 
       MPI_Status status;
-      uint64_t send_count = maps_to_send[swap_id].size() * 2;  // [hub id, edge count]
+      uint64_t send_count = maps_to_send[swap_id].size() * 2;
       uint64_t recv_count = send_count;
 
       // First determine the max buffer that we need
@@ -222,18 +229,18 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
         temp_buff[pos++] = (*itr).second;
       }
 
-      CHK_MPI( MPI_Sendrecv_replace(&(temp_buff[0]), temp_buff.size(),
-            MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status) );
+      CHK_MPI(MPI_Sendrecv_replace(&(temp_buff[0]), temp_buff.size(),
+            MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status));
 
-      // Now update the recieved vector
+      // Now update the received vector
       for (size_t j = 0; j < recv_count; ) {
         const uint64_t ver_id = temp_buff[j++];
         const uint64_t delegate_dest_count = temp_buff[j++];
 
-        const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
-        assert(new_source_id < m_delegate_info.size());
-        m_delegate_info[new_source_id] += delegate_dest_count;
-      }  // for each recieved element.
+        const uint64_t source_id = m_map_delegate_locator[ver_id].local_id();
+        assert(source_id < m_delegate_info.size());
+        m_delegate_info[source_id] += delegate_dest_count;
+      }  // for each received element.
     }  // for over nodes
   }  // for over nodes
 
@@ -246,7 +253,6 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
     assert(new_source_id < m_delegate_info.size());
     m_delegate_info[new_source_id] += delegate_dest_count;
   }
-
 }  // send_high_info
 
 template <typename SegementManager>
@@ -261,8 +267,8 @@ count_degrees(MPI_Comm mpi_comm,
   double time_start = MPI_Wtime();
   using boost::container::map;
   int mpi_rank(0), mpi_size(0);
-  CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
-  CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   if (mpi_rank == 0) {
     std::cout << "Starting:  count_degrees" << std::endl;
   }
@@ -270,23 +276,19 @@ count_degrees(MPI_Comm mpi_comm,
 
   uint64_t high_vertex_count(0);
 
-
-  auto edge_itr = unsorted_itr;
-
   // Loop until no processor is producing edges
-  while (!detail::global_iterator_range_empty(edge_itr,
+  while (!detail::global_iterator_range_empty(unsorted_itr,
         unsorted_itr_end, mpi_comm)) {
-
     std::vector<
       boost::container::map< uint64_t, std::pair<uint64_t, uint64_t> >
     > maps_to_send(m_mpi_size);
 
     // Generate Enough information to send
     const size_t threshold = 1024;
-    for (size_t i = 0; i < threshold && edge_itr != unsorted_itr_end; i++) {
+    for (size_t i = 0; i < threshold && unsorted_itr != unsorted_itr_end; i++) {
       // First we get source info
-      uint64_t local_id = local_source_id(m_mpi_size)(*edge_itr);
-      uint64_t owner    = owner_source_id(m_mpi_size)(*edge_itr);
+      uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
+      uint64_t owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
 
       if (owner == m_mpi_rank) {
         m_local_degree_count[local_id].first++;
@@ -295,8 +297,8 @@ count_degrees(MPI_Comm mpi_comm,
       }
 
       // Then we get dest info
-      local_id = local_dest_id(m_mpi_size)(*edge_itr);
-      owner    = owner_dest_id(m_mpi_size)(*edge_itr);
+      local_id = local_dest_id(m_mpi_size)(*unsorted_itr);
+      owner    = owner_dest_id(m_mpi_size)(*unsorted_itr);
 
       if (owner == m_mpi_rank) {
         m_local_degree_count[local_id].second++;
@@ -306,7 +308,7 @@ count_degrees(MPI_Comm mpi_comm,
       } else {
         maps_to_send[owner][local_id].second++;
       }
-      edge_itr++;
+      unsorted_itr++;
     }  // for until threshold is reached
 
     send_vertex_info(mpi_comm, high_vertex_count, delegate_degree_threshold,
@@ -372,15 +374,23 @@ initialize_low_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 
   // Initilize the m_owned_info
   for (uint64_t vert_id = 0; vert_id < m_owned_info.size(); vert_id++) {
-    uint64_t num_edges = m_local_degree_count[vert_id].first;
-
-    if (num_edges >= delegate_degree_threshold) {
-      num_edges = 0;
-    }
+    const uint64_t outgoing = m_local_degree_count[vert_id].first;
+    const uint64_t incoming = m_local_degree_count[vert_id].second;
 
     m_owned_info[vert_id] = vert_info(false, 0, edge_count);
 
-    edge_count += num_edges;
+    if (incoming >= delegate_degree_threshold) {
+      const uint64_t global_id = (vert_id * m_mpi_size) + m_mpi_rank;
+      assert(global_id != 0);
+      if (global_id < m_max_vertex) {
+        // IF vert_id == size-1 then the above will be true
+        // And this assert will hit incorrectly
+        assert(global_hubs.count(global_id) != 0);
+      }
+    } else {
+
+      edge_count += outgoing;
+    }
   }
   m_owned_targets.resize(edge_count, vertex_locator());
 
@@ -536,6 +546,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
       uint64_t temp_offset = (m_owned_info_tracker[new_vertex_id])++;
       uint64_t loc = temp_offset + m_owned_info[new_vertex_id].low_csr_idx;
+
 
       assert(loc <  m_owned_info[new_vertex_id+1].low_csr_idx);
       assert(!m_owned_targets[loc].is_valid());
@@ -779,6 +790,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   uint64_t total_count_del_target = mpi_all_reduce(local_count_del_target, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
   if(m_mpi_rank == 0) {
+    std::cout << "Max Vertex Id = " << max_vertex << std::endl;
     std::cout << "Count of hub vertices = " << global_hubs.size() << std::endl;
     std::cout << "Total percentage good hub edges = " << double(high_sum_size) / double(total_sum_size) * 100.0 << std::endl;
     std::cout << "total count del target = " << total_count_del_target << std::endl;

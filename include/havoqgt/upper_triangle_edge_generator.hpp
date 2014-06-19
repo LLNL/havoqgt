@@ -74,7 +74,7 @@ class upper_triangle_edge_generator {
    private:
     void get_next() {
       if (m_count == m_num_edges) {
-        m_current = std::make_pair(0,0);
+        m_current = std::make_pair(0, 0);
         assert(false);
         return;
       }
@@ -96,7 +96,7 @@ class upper_triangle_edge_generator {
       , m_num_edges(num_edges)
       , m_undirected(undirected)
       , m_count(num_edges) {
-      m_current = std::make_pair(0,0);
+      m_current = std::make_pair(0, 0);
     }
 
     input_iterator_type(uint64_t max_vertex, uint64_t num_edges,
@@ -111,7 +111,7 @@ class upper_triangle_edge_generator {
     }
 
     const edge_type& operator*() const { return m_current; }
-    //const uint64_t* operator->() const { return &(operator*()); }
+    // const uint64_t* operator->() const { return &(operator*()); }
     input_iterator_type& operator++() {
       get_next();
       return *this;
@@ -142,41 +142,44 @@ class upper_triangle_edge_generator {
     { return !x.is_equal(y); }
 
    private:
-      input_iterator_type();
+    input_iterator_type();
 
+    edge_type generate_edge() {
+      if (m_j < m_max_vertex) {
+        m_j++;
+      } else {
+        m_i++;
+        m_j = m_i;
+      }
+      assert(m_i <= m_max_vertex);
+      assert(m_j <= m_max_vertex);
+      return std::make_pair(m_j, m_i);
+    }  // generate_edge
 
-
-      edge_type generate_edge() {
-        if (m_j < m_max_vertex) {
-          m_j++;
-        } else {
-          m_i++;
-          m_j = m_i;
-        }
-        assert(m_i <= m_max_vertex);
-        assert(m_j <= m_max_vertex);
-        return std::make_pair(m_j, m_i);
-      }  // generate_edge
-
-      const uint64_t m_max_vertex, m_num_edges;
-      const bool m_undirected;
-      bool m_make_undirected {false};
-      uint64_t m_count {0}, m_i {0}, m_j {0};
-      edge_type m_current;
-
-
-
-
+    const uint64_t m_max_vertex, m_num_edges;
+    const bool m_undirected;
+    bool m_make_undirected {false};
+    uint64_t m_count {0}, m_i {0}, m_j {0};
+    edge_type m_current;
   };  // class input_iterator_type
 
   uint64_t find_max_vertex(uint64_t num_edges) {
-    // (1/2)(x+1)(x+2) <= num_edges.
+    // (1/2)(x)(x+1) <= num_edges.
     uint64_t x = 0, y = 0;
     num_edges *= 2;
     while (y < num_edges) {
       x++;
-      y = (x + 1) * (x + 2);
+      y = x * (x + 1);
     }
+
+    int count = 0;
+    for (int i = 0; i < x; i++) {
+      for (int j = i; j < x; j++) {
+        count++;
+      }
+    }
+    assert(count * 2 >= num_edges);
+
     return x;
   };
 
@@ -197,7 +200,19 @@ class upper_triangle_edge_generator {
         count++;
       }
     }
-    begin();
+    sanity_check();
+  }
+
+  void sanity_check() {
+    auto itr1 = begin();
+    auto itr2 = begin();
+    auto itr_end = end();
+    while (itr1 != itr_end) {
+      assert(itr1 == itr2);
+      assert(*itr1 == *itr2);
+      itr1++;
+      itr2++;
+    }
 
   }
 

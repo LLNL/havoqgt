@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
     if(type == "UPTRI") {
       uint64_t num_edges = num_vertices * 16;
       havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
-           true);
+           false);
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
