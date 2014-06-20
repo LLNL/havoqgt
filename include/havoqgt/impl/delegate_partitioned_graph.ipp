@@ -255,6 +255,160 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
   }
 }  // send_high_info
 
+
+/**
+ * This function, in a non optimized manner, generates a list of vertexs and
+ * counts to send to a node that needs more delegate edges.
+ *
+ * It can be improved by optimizing how selection is done.
+ */
+template <typename SegementManager>
+void
+delegate_partitioned_graph<SegementManager>::
+generate_send_list(std::vector<uint64_t> &send_list, uint64_t&  num_send) {
+  uint64_t send_count = 0;
+  uint64_t ver_count = 0;
+  for (uint64_t i = 0; i < m_delegate_info.size() && send_count <  num_send; i++) {
+    if (m_delegate_info[i] != 0) {
+      send_count += m_delegate_info[i];
+      ver_count++;
+    }
+  }
+
+  send_list.reserve(ver_count * 2);
+  send_count = 0;
+  for (uint64_t i = 0; i < m_delegate_info.size() && send_count <  num_send; i++) {
+    if (m_delegate_info[i] != 0) {
+      uint64_t elements = m_delegate_info[i];
+
+      if (send_count + elements > num_send) {
+        elements = num_send - send_count;
+      }
+      m_delegate_info[i] -= elements;
+      send_count += elements;
+
+      send_list.push_back(i);
+      send_list.push_back(elements);
+
+    }
+  }
+
+  num_send = send_count;
+}
+
+
+template <typename SegementManager>
+void
+delegate_partitioned_graph<SegementManager>::
+calculate_overflow(MPI_Comm mpi_comm, uint64_t desired_total_edges,
+    uint64_t& owned_edge_count) {
+
+  uint64_t delegate_edges = 0;
+  for (uint64_t i = 0; i < m_delegate_info.size(); i++) {
+    delegate_edges += m_delegate_info[i];
+  }
+
+  uint64_t desired_delegates = desired_total_edges - owned_edge_count;
+
+  uint64_t transfer_count = 0;
+  if (desired_delegates <= 0) {
+    // Send All of the delegate edges owned by us
+    transfer_count = delegate_edges;
+  } else if (delegate_edges > desired_delegates) {
+    // We have more delagtes we need, so send a few.
+    transfer_count = delegate_edges - desired_delegates;
+  } else if (delegate_edges == desired_delegates) {
+    // We have just enough so send none and recieve none.
+    transfer_count = 0;
+  } else {  // if (delegate_edges < desired_delegates) {
+    // We send none and recieve some
+    transfer_count = delegate_edges - desired_delegates;
+  }
+
+  // If transfer_count < 0 we recieve at most that many delegates
+  // If trasnfer_count > 0 we send that many delegates.
+
+  // Now we need to update everyones CSR based on the transfer count.
+  for (int i = 0; i < m_mpi_size; ++i) {
+    // start inner loop at i to avoid re-exchanging data
+    for (int j = i; j < m_mpi_size; ++j) {
+      int swap_id = -1;
+      if (i == m_mpi_rank && j == m_mpi_rank) {
+        continue;
+      } else if (i == m_mpi_rank) {
+        swap_id = j;
+      } else if (j == m_mpi_rank) {
+        swap_id = i;
+      } else {
+        continue;
+      }
+
+      assert(swap_id != m_mpi_rank);
+
+      MPI_Status status;
+      uint64_t send_count = transfer_count;
+      uint64_t recv_count = send_count;
+
+      // First determine the max buffer that we need
+      // This way we only have to allocate it once
+      CHK_MPI(MPI_Sendrecv_replace(&recv_count, 1,
+          MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status) );
+
+      if ((send_count == 0 || recv_count == 0) ||
+         (send_count > 0 && recv_count > 0) ||
+         (send_count < 0 && recv_count < 0)) {
+        // Either neither of us need edges, or we both need edges, or we both
+        // have extra edges
+        continue;
+      } else if (send_count > 0 && recv_count < 0) {
+        std::vector<uint64_t> send_list;
+
+        send_count = std::min(send_count, -1* recv_count);
+        assert(send_count >= 0);
+
+        generate_send_list(send_list, send_count);
+        uint64_t len = send_list.size();
+
+        CHK_MPI(MPI_Send(&len, 1, MPI_UNSIGNED_LONG, swap_id, 0, mpi_comm));
+
+        CHK_MPI(MPI_Send(&(send_list[0]), len, MPI_UNSIGNED_LONG, swap_id, 0,
+            mpi_comm));
+
+        owned_edge_count -= len;
+        transfer_count -= len;
+      } else if (send_count < 0 && recv_count > 0) {
+        MPI_Status status;
+
+        uint64_t len;
+        CHK_MPI(
+          MPI_Recv(&len, 1, MPI_UNSIGNED_LONG, swap_id, 0, mpi_comm, &status)
+        );
+
+        std::vector<uint64_t> recv_list(len);
+        CHK_MPI(
+          MPI_Recv(&(recv_list[0]), len, MPI_UNSIGNED_LONG, swap_id, 0,
+            mpi_comm, &status)
+        );
+
+        for (int i = 0; i < len;) {
+          const uint64_t vert_id = recv_list[i++];
+          const uint64_t count = recv_list[i++];
+          m_delegate_info[vert_id] += count;
+          transfer_count += count;
+          owned_edge_count += count;
+          assert(transfer_count <= 0);
+        }
+      } else {
+        assert(false);
+      }
+
+    }  // for over nodes
+  }  // for over nodes
+
+
+}
+
+
 template <typename SegementManager>
 template <typename InputIterator>
 void
@@ -425,7 +579,7 @@ initialize_low_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 template <typename SegementManager>
 void
 delegate_partitioned_graph<SegementManager>::
-allocate_high_edge_storage() {
+allocate_delegate_info() {
   //
   // Setup High CSR
   //
@@ -437,7 +591,7 @@ allocate_high_edge_storage() {
 template <typename SegementManager>
 void
 delegate_partitioned_graph<SegementManager>::
-initialize_delegate_info(uint64_t edges_high_count) {
+initialize_delegate_target(uint64_t edges_high_count) {
   //
   // Setup High CSR
   // Currently each position holds the number of edges.
@@ -620,12 +774,22 @@ partition_high_degree(MPI_Comm mpi_comm,
       uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
       m_delegate_degree[new_source_id]++;
 
-      uint64_t place_pos = (m_delegate_info_offset[new_source_id])++;
+      uint64_t place_pos = m_delegate_info_offset[new_source_id];
       place_pos += m_delegate_info[new_source_id];
-      assert(place_pos < m_delegate_targets.size());
-      uint64_t new_target_label = to_recv_edges_high[i].second;
 
-      m_delegate_targets[place_pos] = label_to_locator(new_target_label);
+      if (place_pos == m_delegate_info[new_source_id]) {
+        //TODO: Resend this, somebody else needs it....
+        //How to resend it?????
+        assert(false);
+      }
+      else {
+        assert(place_pos < m_delegate_info[new_source_id+1]);
+        assert(place_pos < m_delegate_targets.size());
+        uint64_t new_target_label = to_recv_edges_high[i].second;
+
+        m_delegate_targets[place_pos] = label_to_locator(new_target_label);
+        m_delegate_info_offset[new_source_id]++;
+      }
     }  // for edges recieved
 
   }  // end while get next edge
@@ -698,7 +862,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // for the low CSR
   initialize_low_edge_storage(global_hubs, delegate_degree_threshold);
 
-  allocate_high_edge_storage();
+  allocate_delegate_info();
 
 
   uint64_t edges_high_count;
@@ -706,10 +870,12 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       global_hubs, delegate_degree_threshold, edges_high_count);
 
 
-  initialize_delegate_info(edges_high_count);
-
   //
   // Partition high degree, using overflow schedule
+  uint64_t desired_total_edges = edges.size() / m_mpi_size;
+  calculate_overflow(mpi_comm, desired_total_edges, edges_high_count);
+  initialize_delegate_target(edges_high_count);
+
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs);
 
 
