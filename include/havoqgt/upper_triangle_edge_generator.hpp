@@ -153,13 +153,13 @@ class upper_triangle_edge_generator {
       }
       assert(m_i <= m_max_vertex);
       assert(m_j <= m_max_vertex);
-      return std::make_pair(m_j, m_i);
+      return std::make_pair(m_j + 1, m_i + 1);
     }  // generate_edge
 
     const uint64_t m_max_vertex, m_num_edges;
     const bool m_undirected;
     bool m_make_undirected {false};
-    uint64_t m_count {0}, m_i {0}, m_j {0};
+    uint64_t m_count {0}, m_i, m_j;
     edge_type m_current;
   };  // class input_iterator_type
 
@@ -180,17 +180,18 @@ class upper_triangle_edge_generator {
     }
     assert(count * 2 >= num_edges);
 
-    return x;
+    return x + 1; // +1 because we skip 0 vertex
   };
 
   upper_triangle_edge_generator(uint64_t total_edges, int rank, int size,
         bool undirected)
-      : m_undirected(undirected)
+      : m_total_edges(total_edges)
+      , m_undirected(undirected)
       , m_max_vertex(find_max_vertex(total_edges)) {
     // Determine the max_vertex id
+    m_lower_edge_id = (total_edges / size) * rank;
     m_upper_edge_id = (total_edges / size) * (rank + 1);
     m_upper_edge_id = std::min(total_edges, m_upper_edge_id);
-    m_lower_edge_id = (total_edges / size) * rank;
 
     uint64_t start_count = (total_edges / size) * rank;
 
@@ -234,16 +235,16 @@ class upper_triangle_edge_generator {
   }
 
   size_t size() {
-    const uint64_t num_edges = m_upper_edge_id - m_lower_edge_id;
-
-    return num_edges;
+    return m_total_edges;
   }
 
   uint64_t m_upper_edge_id, m_lower_edge_id;
+  const uint64_t m_total_edges;
   const bool m_undirected;
 
   const uint64_t m_max_vertex;
   uint64_t m_i, m_j;
+
 };
 
 
