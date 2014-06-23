@@ -285,7 +285,8 @@ void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partiti
 }
 
 template <typename T, typename Partitioner>
-void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Partitioner owner, MPI_Comm mpi_comm) {
+void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
+      Partitioner owner, MPI_Comm mpi_comm, int send_left_range = 0) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
@@ -298,9 +299,16 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Part
   //sort send vector by owner
   //std::sort(in_vec.begin(), in_vec.end(), owner_sort<T,Partitioner>(owner));
 
+  const int mpi_rank_next = ((mpi_rank + 1) == mpi_size) ? 0 : mpi_rank + 1;
+
   //calc send counts
   for(size_t i=0; i<in_vec.size(); ++i) {
-    send_counts[owner(in_vec[i])] += sizeof(T); //sizeof(t) lets us use PODS
+    if (i < send_left_range) {
+
+      send_counts[mpi_rank_next] += sizeof(T); //sizeof(t) lets us use PODS
+    } else {
+      send_counts[owner(in_vec[i])] += sizeof(T); //sizeof(t) lets us use PODS
+    }
     //if(i>0) {
     //  assert(owner(inout_vec[i-1]) <= owner(inout_vec[i]));
     //}
@@ -317,7 +325,13 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Part
     std::vector<T> order_vec(in_vec.size());
     std::vector<int> temp_arrange(mpi_size,0);
     for(size_t i=0; i<in_vec.size(); ++i) {
-      int dest_rank = owner(in_vec[i]);
+      int dest_rank;
+      if (i < send_left_range) {
+        dest_rank = mpi_rank_next;
+      } else {
+        dest_rank = owner(in_vec[i]);
+      }
+
       size_t dest_offset = send_disps[dest_rank] + temp_arrange[dest_rank];
       temp_arrange[dest_rank] += sizeof(T);
       dest_offset /= sizeof(T);

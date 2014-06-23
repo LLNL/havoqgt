@@ -50,6 +50,28 @@ class edge_target_partitioner {
   int m_mpi_size;
 };
 
+class edge_target_resend_partitioner {
+ public:
+  explicit edge_target_resend_partitioner(int s, int r)
+    : m_mpi_size(s)
+    , m_mpi_rank(r) { }
+  int operator()(std::pair<uint64_t, uint64_t> i) const {
+    int dest = i.second % m_mpi_size;
+    if (dest == m_mpi_rank) {
+      return ((m_mpi_rank + 1) == m_mpi_size) ? 0 : m_mpi_rank + 1;
+    } else {
+      return dest;
+    }
+
+
+  }
+
+ private:
+  int m_mpi_size;
+  int m_mpi_rank;
+};
+
+
 class dest_pair_partitioner {
  public:
   template<typename T>
@@ -744,43 +766,69 @@ partition_high_degree(MPI_Comm mpi_comm,
 
   std::vector<uint64_t> m_delegate_info_offset(m_delegate_info.size(), 0);
 
+  std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
+  to_send_edges_high.reserve(16*1024);
+  int resend_count = 0;
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
         mpi_comm)) {
 
     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
-    std::vector<  std::pair<int, std::pair<uint64_t, uint64_t> >  >
-        to_recv_overflow;
 
     {  // send/recv block
-      std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
-      to_send_edges_high.reserve(16*1024);
-
-      for (size_t i=0; unsorted_itr != unsorted_itr_end && i<16*1024;
-            ++unsorted_itr) {
+      while (unsorted_itr != unsorted_itr_end &&
+             to_send_edges_high.size()<16*1024) {
         if (global_hub_set.count(unsorted_itr->first) == 1) {
-          // IF it is a hub node
-          ++i;
+          // If it is a hub node
+          if (owner_dest_id(m_mpi_size)(*unsorted_itr) == m_mpi_rank) {
+            uint64_t source_id = (*unsorted_itr).first;
+            uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
+
+
+            uint64_t place_pos = m_delegate_info_offset[new_source_id];
+            place_pos += m_delegate_info[new_source_id];
+
+            if (place_pos < m_delegate_info[new_source_id+1]) {
+              assert(place_pos < m_delegate_targets.size());
+              uint64_t new_target_label = (*unsorted_itr).second;
+
+              m_delegate_targets[place_pos] = label_to_locator(new_target_label);
+              m_delegate_info_offset[new_source_id]++;
+              m_delegate_degree[new_source_id]++;
+
+              continue;
+            }
+            // Else we don't need this one, so add it to the send list
+            // Potential Optimization: See if we can replace an edge that was
+            // give to this node that has a destination that is not owned by us
+            // with this edge.
+          }
+          // Send the edge if we don't own it or if we own it but have no room.
           to_send_edges_high.push_back(*unsorted_itr);
         }
-
+        ++unsorted_itr;
       }
       mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high,
-            edge_target_partitioner(mpi_size), mpi_comm);
+            edge_target_resend_partitioner(mpi_size, mpi_rank), mpi_comm,
+            resend_count);
+      to_send_edges_high.clear();
+      resend_count = 0;
+      assert(to_send_edges_high.size() == 0);
+
     }  // end send/recv block
 
     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
 
       uint64_t source_id = to_recv_edges_high[i].first;
       uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
-      m_delegate_degree[new_source_id]++;
+
 
       uint64_t place_pos = m_delegate_info_offset[new_source_id];
       place_pos += m_delegate_info[new_source_id];
 
-      if (place_pos == m_delegate_info[new_source_id]) {
-        //TODO: Resend this, somebody else needs it....
-        //How to resend it?????
-        assert(false);
+      if (place_pos == m_delegate_info[new_source_id+1]) {
+        // We have no room for this node, so lets send it off.
+        to_send_edges_high.push_back(to_recv_edges_high[i]);
+        resend_count++;
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
@@ -789,6 +837,7 @@ partition_high_degree(MPI_Comm mpi_comm,
 
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
         m_delegate_info_offset[new_source_id]++;
+        m_delegate_degree[new_source_id]++;
       }
     }  // for edges recieved
 
