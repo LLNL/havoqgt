@@ -320,7 +320,7 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
     std::vector<T> order_vec(in_vec.size());
     std::vector<int> temp_arrange(mpi_size,0);
     for(size_t i=0; i<in_vec.size(); ++i) {
-      int dest_rank = owner(in_vec[i], false);
+      int dest_rank = owner(in_vec[i], true);
 
       size_t dest_offset = send_disps[dest_rank] + temp_arrange[dest_rank];
       temp_arrange[dest_rank] += sizeof(T);
@@ -328,6 +328,11 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
       order_vec[dest_offset] = in_vec[i];
     }
     in_vec.swap(order_vec);
+  }
+
+  //Update send totals.
+  for(size_t i=0; i<in_vec.size(); ++i) {
+    owner(in_vec[i], true);
   }
 
 

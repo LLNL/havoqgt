@@ -810,6 +810,7 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
             // Else we don't need this one, so add it to the send list
           }
           // Send the edge if we don't own it or if we own it but have no room.
+          assert(edge.second != 0);
           to_send_edges_high.push_back(
               std::make_pair(new_source_id, edge.second));
         }
@@ -832,6 +833,7 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
       if (place_pos == m_delegate_info[new_source_id+1]) {
         // We have no room for this node, so lets send it off.
+        assert(to_recv_edges_high[i].second != 0);
         to_send_edges_high.push_back(to_recv_edges_high[i]);
       }
       else {
@@ -924,7 +926,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
 
 
-#if 1
+#if 0
+  #define DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS 1
   std::string temp = "[" + std::to_string(m_mpi_rank)+ "]\n";
   // for (int i = 0; i < m_delegate_info.size(); i++) {
   //   temp +=  std::to_string(m_delegate_info[i]) + ", ";
@@ -942,7 +945,7 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
     transfer_info);
 
 
-#if 1
+#ifdef DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS
   // for (int i = 0; i < m_delegate_info.size(); i++) {
   //   temp +=  std::to_string(m_delegate_info[i]) + ", ";
   // }
