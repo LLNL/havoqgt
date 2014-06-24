@@ -235,7 +235,8 @@ class upper_triangle_edge_generator {
   }
 
   size_t size() {
-    return m_total_edges;
+    const uint64_t num_edges = m_upper_edge_id - m_lower_edge_id;
+    return num_edges;
   }
 
   uint64_t m_upper_edge_id, m_lower_edge_id;
