@@ -407,10 +407,10 @@ class delegate_partitioned_graph {
                  uint64_t &edges_high_count);
 
   template <typename InputIterator>
-  void partition_high_degree(MPI_Comm mpi_comm,
-                 InputIterator unsorted_itr,
-                 InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set);
+  void partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
+      InputIterator unsorted_itr_end,
+      boost::unordered_set<uint64_t>& global_hub_set,
+      std::map<uint64_t, std::deque<std::pair<int, uint64_t>>> &transfer_info);
 
   template <typename InputIterator>
   void count_degrees(MPI_Comm mpi_comm,
@@ -431,9 +431,11 @@ class delegate_partitioned_graph {
 
 
   void calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
-    const uint64_t owned_low_count);
+    const uint64_t owned_low_count,
+    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info);
 
-  void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send);
+  void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
+    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info);
 
   /// Stores information about owned vertices
   class vert_info {
