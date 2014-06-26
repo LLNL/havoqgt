@@ -299,8 +299,6 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
   //sort send vector by owner
   //std::sort(in_vec.begin(), in_vec.end(), owner_sort<T,Partitioner>(owner));
 
-  const int mpi_rank_next = ((mpi_rank + 1) == mpi_size) ? 0 : mpi_rank + 1;
-
   //calc send counts
   for(size_t i=0; i<in_vec.size(); ++i) {
     send_counts[owner(in_vec[i], true)] += sizeof(T); //sizeof(t) lets us use PODS
@@ -320,7 +318,8 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
     std::vector<T> order_vec(in_vec.size());
     std::vector<int> temp_arrange(mpi_size,0);
     for(size_t i=0; i<in_vec.size(); ++i) {
-      int dest_rank = owner(in_vec[i], true);
+      int dest_rank = owner(in_vec[i], false);
+      assert (dest_rank >=0 && dest_rank < mpi_size);
 
       size_t dest_offset = send_disps[dest_rank] + temp_arrange[dest_rank];
       temp_arrange[dest_rank] += sizeof(T);
@@ -328,11 +327,6 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
       order_vec[dest_offset] = in_vec[i];
     }
     in_vec.swap(order_vec);
-  }
-
-  //Update send totals.
-  for(size_t i=0; i<in_vec.size(); ++i) {
-    owner(in_vec[i], true);
   }
 
 

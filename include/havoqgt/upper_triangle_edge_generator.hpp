@@ -172,9 +172,9 @@ class upper_triangle_edge_generator {
       y = x * (x + 1);
     }
 
-    int count = 0;
-    for (int i = 0; i < x; i++) {
-      for (int j = i; j < x; j++) {
+    uint64_t count = 0;
+    for (uint64_t i = 0; i < x; i++) {
+      for (uint64_t j = i; j < x; j++) {
         count++;
       }
     }

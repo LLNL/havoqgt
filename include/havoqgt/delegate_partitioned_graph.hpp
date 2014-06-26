@@ -73,6 +73,18 @@ namespace mpi {
 
 namespace bip = boost::interprocess;
 
+
+typedef struct OverflowSendInfo{
+  OverflowSendInfo(int sid, int count)
+    : to_send_id(sid)
+    , to_send_count(count)
+    , temp_to_send_count(0) {}
+
+  int to_send_id;
+  uint64_t to_send_count;
+  uint64_t temp_to_send_count;
+}OverflowSendInfo;
+
 /**
  * Delegate partitioned graph using MPI for communication.
  *
@@ -410,7 +422,7 @@ class delegate_partitioned_graph {
   void partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
       InputIterator unsorted_itr_end,
       boost::unordered_set<uint64_t>& global_hub_set,
-      std::map<uint64_t, std::deque<std::pair<int, uint64_t>>> &transfer_info);
+      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
 
   template <typename InputIterator>
   void count_degrees(MPI_Comm mpi_comm,
@@ -432,10 +444,10 @@ class delegate_partitioned_graph {
 
   void calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     const uint64_t owned_low_count,
-    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info);
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
   void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
-    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info);
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
   /// Stores information about owned vertices
   class vert_info {

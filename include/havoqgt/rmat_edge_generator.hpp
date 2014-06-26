@@ -133,6 +133,8 @@ public:
         ++m_count;
         m_make_undirected = true;
       }
+      assert(m_current.first <= m_ptr_rmat->max_vertex_id());
+      assert(m_current.second <= m_ptr_rmat->max_vertex_id());
     }
 
     rmat_edge_generator* m_ptr_rmat;

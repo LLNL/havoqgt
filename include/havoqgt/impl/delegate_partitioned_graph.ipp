@@ -53,36 +53,65 @@ class edge_target_partitioner {
 class high_edge_partitioner {
  public:
   explicit high_edge_partitioner(int s, int r,
-    std::map<uint64_t, std::deque<std::pair<int, uint64_t>>> *transfer_info)
+    std::map<uint64_t, std::deque<OverflowSendInfo>> *transfer_info)
     : m_mpi_size(s)
     , m_mpi_rank(r)
     , m_transfer_info(transfer_info) { }
-  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting) const {
-    int dest = i.second % m_mpi_size;
+  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting = true) {
+    const uint64_t delegate_id = i.first;
+
+    int dest = int(i.second % m_mpi_size);
     if (dest == m_mpi_rank) {
-      assert(m_transfer_info->count(i.first) == 1);
+      assert(m_transfer_info->count(delegate_id) == 1);
+      auto list = m_transfer_info->at(delegate_id);
+      assert(list.size() > 0);
 
-      dest =  m_transfer_info->at(i.first).front().first;
-      assert(m_transfer_info->at(i.first).front().second > 0);
-
-      if (!is_counting) {
-        uint64_t left_to_send = --m_transfer_info->at(i.first).front().second;
-
-        if (left_to_send == 0) {
-          m_transfer_info->at(i.first).pop_front();
-          if (m_transfer_info->at(i.first).empty()) {
-            m_transfer_info->erase(i.first);
+      if (is_counting) {
+        for (size_t j = 0; j < list.size(); j++) {
+          if (list[j].temp_to_send_count < list[j].to_send_count) {
+            (list[j].temp_to_send_count)++;
+            dest = list[j].to_send_id;
+            break;
           }
         }
-      }
-    }
+      } else {
+        dest = list.front().to_send_id;
+
+        list.front().to_send_count--;
+        if (list.front().to_send_count == 0) {
+          list.pop_front();
+          if (list.size() == 0) {
+            m_transfer_info->erase(delegate_id);
+          }
+        } else {
+          list.front().temp_to_send_count = 0;
+        }
+      }  // else not counting
+    }  // if dest == rank
+
+    assert (dest >= 0);
     return dest;
   }
 
+  void reset(std::pair<uint64_t, uint64_t> i) {
+    const uint64_t delegate_id = i.first;
+    int dest = int(i.second % m_mpi_size);
+
+    if (dest == m_mpi_rank) {
+      assert(m_transfer_info->count(delegate_id) == 1);
+      auto list = m_transfer_info->at(delegate_id);
+      assert(list.size() > 0);
+
+      for (size_t j = 0; j < list.size(); j++) {
+        list[j].temp_to_send_count =0;
+      }
+    }  // if dest == rank
+  }
+
  private:
-  int m_mpi_size;
-  int m_mpi_rank;
-  std::map<uint64_t, std::deque<std::pair<int, uint64_t>>> * m_transfer_info;
+  const int m_mpi_size;
+  const int m_mpi_rank;
+  std::map<uint64_t, std::deque<OverflowSendInfo>> * m_transfer_info;
 };
 
 
@@ -125,7 +154,7 @@ class owner_source_id {
  public:
   explicit owner_source_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T, T> i) const { return i.first % m_mpi_size; }
+  int operator()(std::pair<T, T> i) const { return i.first % m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
@@ -134,7 +163,7 @@ class owner_dest_id {
  public:
   explicit owner_dest_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(std::pair<T, T> i) const { return i.second % m_mpi_size; }
+  int operator()(std::pair<T, T> i) const { return i.second % m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
@@ -143,7 +172,7 @@ class get_owner_id {
  public:
   explicit get_owner_id(int p):m_mpi_size(p) {}
   template<typename T>
-  T operator()(T i) const { return i % m_mpi_size; }
+  int operator()(T i) const { return i % m_mpi_size; }
  private:
   uint64_t m_mpi_size;
 };
@@ -281,7 +310,7 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
   }  // for over nodes
 
   auto itr = maps_to_send[m_mpi_rank].begin();
-  for (uint64_t pos = 0; itr != maps_to_send[m_mpi_rank].end(); itr++) {
+  for (; itr != maps_to_send[m_mpi_rank].end(); itr++) {
     const uint64_t ver_id = (*itr).first;
     const uint64_t delegate_dest_count = (*itr).second;
 
@@ -302,7 +331,7 @@ template <typename SegementManager>
 void
 delegate_partitioned_graph<SegementManager>::
 generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
-    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info) {
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
   uint64_t send_count = 0;
   uint64_t ver_count = 0;
   for (uint64_t i = 0; i < m_delegate_info.size() && send_count <  num_send; i++) {
@@ -327,8 +356,11 @@ generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send
       send_list.push_back(i);
       send_list.push_back(elements);
 
-      transfer_info[i].push_back(std::make_pair(send_id, elements));
+      if (transfer_info.count(i) == 0 ) {
+        transfer_info[i] = std::deque<OverflowSendInfo>();
+      }
 
+      transfer_info[i].push_back(OverflowSendInfo(send_id, elements));
     }
   }
   assert(num_send == send_count);
@@ -340,7 +372,7 @@ void
 delegate_partitioned_graph<SegementManager>::
 calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     const uint64_t owned_low_count,
-    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info) {
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
 
 
   std::vector<uint64_t> low_count_per_rank;
@@ -361,7 +393,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
 
   // std::map<int, uint64_t> to_send(m_mpi_size, 0);
   // std::map<int, uint64_t> to_recv(m_mpi_size, 0);
-  uint64_t heavy_idx(0), light_idx(0);
+  int heavy_idx(0), light_idx(0);
   for(; heavy_idx < m_mpi_size && light_idx < m_mpi_size; ++heavy_idx) {
     while(low_count_per_rank[heavy_idx] + high_count_per_rank[heavy_idx] >
           target_edges_per_rank) {
@@ -470,12 +502,12 @@ count_degrees(MPI_Comm mpi_comm,
     for (size_t i = 0; i < threshold && unsorted_itr != unsorted_itr_end; i++) {
       // First we get source info
       uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
-      uint64_t owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
+      int owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
 
       if (owner == m_mpi_rank) {
         m_local_degree_count[local_id].first++;
       } else {
-        maps_to_send[owner][local_id].first++;
+        maps_to_send.at(owner)[local_id].first++;
       }
 
       // Then we get dest info
@@ -488,7 +520,7 @@ count_degrees(MPI_Comm mpi_comm,
           high_vertex_count++;
         }
       } else {
-        maps_to_send[owner][local_id].second++;
+        maps_to_send.at(owner)[local_id].second++;
       }
       unsorted_itr++;
     }  // for until threshold is reached
@@ -509,8 +541,8 @@ count_degrees(MPI_Comm mpi_comm,
   std::vector<uint64_t> temp_local_hubs;
   temp_local_hubs.reserve(high_vertex_count);
   uint64_t sanity_high_vertex_count = 0;
-  for (int i = 0; i < m_local_degree_count.size(); i++) {
-    const uint64_t outgoing = m_local_degree_count[i].first;
+  for (size_t i = 0; i < m_local_degree_count.size(); i++) {
+    // const uint64_t outgoing = m_local_degree_count[i].first;
     const uint64_t incoming = m_local_degree_count[i].second;
 
     if (incoming >= delegate_degree_threshold) {
@@ -588,7 +620,7 @@ initialize_low_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 
   for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
     uint64_t t_local_id = vec_sorted_hubs[i] / uint64_t(m_mpi_size);
-    uint32_t t_owner = uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size));
+    int t_owner = uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size));
     vertex_locator new_ver_loc(true, i, t_owner);
 
     m_map_delegate_locator[vec_sorted_hubs[i]] = new_ver_loc;
@@ -629,15 +661,15 @@ initialize_delegate_target(int64_t edges_high_count) {
   // subtract one. We fill it in reverse, which means we dont need the temporary
   // vector to keep track of offsets.
   m_delegate_targets.resize(edges_high_count);
-  uint64_t edge_count = 0;
-  for (int i=0; i < m_delegate_info.size(); i++) {
+  int64_t edge_count = 0;
+  for (size_t i=0; i < m_delegate_info.size(); i++) {
     uint64_t num_edges = m_delegate_info[i];
     m_delegate_info[i] = edge_count;
     edge_count += num_edges;
     assert(edge_count <= edges_high_count);
 
   }
-  assert(edges_high_count == m_delegate_targets.size());
+  assert(edges_high_count == int64_t(m_delegate_targets.size()));
 
 
 }
@@ -696,7 +728,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
           tmp_high_count_per_rank[unsorted_itr->second % mpi_size]++;
 
           // 2) Increment the owner's count of edges for this hub.
-          maps_to_send[unsorted_itr->second % mpi_size][unsorted_itr->first]++;
+          maps_to_send.at(unsorted_itr->second % mpi_size)[unsorted_itr->first]++;
         }
 
       }
@@ -714,7 +746,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
     // Sanity Check to make sure we recieve the correct edges
     for(size_t i=0; i<to_recv_edges_low.size(); ++i) {
       auto edge =  to_recv_edges_low[i];
-      assert(edge.first % mpi_size == mpi_rank);
+      assert(int(edge.first % mpi_size) == mpi_rank);
       assert(global_hub_set.count(edge.first) == 0);
     }
 
@@ -724,7 +756,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
       auto edge = *itr;
       uint64_t new_vertex_id = local_source_id(m_mpi_size)(edge);
-      assert(m_mpi_rank == edge.first % m_mpi_size);
+      assert(m_mpi_rank == int(edge.first % m_mpi_size));
 
       uint64_t temp_offset = (m_owned_info_tracker[new_vertex_id])++;
       uint64_t loc = temp_offset + m_owned_info[new_vertex_id].low_csr_idx;
@@ -751,7 +783,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
   edges_high_count = high_count_per_rank[m_mpi_rank];
   uint64_t sanity_check_high_edge_count = 0;
-  for (int i = 0; i < m_delegate_info.size(); i++) {
+  for (size_t i = 0; i < m_delegate_info.size(); i++) {
     sanity_check_high_edge_count += m_delegate_info[i];
   }
   assert(edges_high_count == sanity_check_high_edge_count);
@@ -764,7 +796,7 @@ delegate_partitioned_graph<SegementManager>::
 partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
     InputIterator unsorted_itr_end,
     boost::unordered_set<uint64_t>& global_hub_set,
-    std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > &transfer_info) {
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
   double time_start = MPI_Wtime();
   int mpi_rank(0), mpi_size(0);
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
@@ -772,9 +804,19 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
 
   high_edge_partitioner paritioner(mpi_size, mpi_rank, &transfer_info);
+  std::vector<uint64_t> delegate_info_offset(m_delegate_info.size(), 0);
 
-  std::vector<uint64_t> m_delegate_info_offset(m_delegate_info.size(), 0);
 
+  std::vector<uint64_t> delegate_send_count(m_delegate_info.size(), 0);
+  for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++) {
+    auto list = (*itr).second;
+    for (size_t i = 0; i < list.size(); i++) {
+      delegate_send_count[(*itr).first] += list[i].to_send_count;
+    }
+
+  }
+
+  std::vector<uint64_t> delegate_recieve_count(m_delegate_info.size(), 0);
 
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
   to_send_edges_high.reserve(16*1024);
@@ -783,66 +825,128 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
 
-    {  // send/recv block
-      while (unsorted_itr != unsorted_itr_end &&
-             to_send_edges_high.size()<16*1024) {
-        const auto edge = *unsorted_itr;
-        ++unsorted_itr;
-        if (global_hub_set.count(edge.first) == 1) {
-          // If it is a hub node
-          const uint64_t source_id = edge.first;
-          uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
+    while (unsorted_itr != unsorted_itr_end &&
+           to_send_edges_high.size()<16*1024) {
+      const auto edge = *unsorted_itr;
+      ++unsorted_itr;
 
-          if (owner_dest_id(m_mpi_size)(edge) == m_mpi_rank) {
-            uint64_t place_pos = m_delegate_info_offset[new_source_id];
-            place_pos += m_delegate_info[new_source_id];
+      if (global_hub_set.count(edge.first) == 1) {
+        // If it is a hub node
+        const uint64_t source_id = edge.first;
+        uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
+        assert(new_source_id >=0 && new_source_id < m_delegate_info.size());
 
-            if (place_pos < m_delegate_info[new_source_id+1]) {
-              assert(place_pos < m_delegate_targets.size());
+        if (owner_dest_id(m_mpi_size)(edge) == m_mpi_rank) {
+          uint64_t place_pos = delegate_info_offset[new_source_id];
+          place_pos += m_delegate_info[new_source_id];
 
-              auto new_target_label = label_to_locator(edge.second);
-              m_delegate_targets[place_pos] = new_target_label;
-              m_delegate_info_offset[new_source_id]++;
-              m_delegate_degree[new_source_id]++;
+          if (place_pos < m_delegate_info[new_source_id+1]) {
+            assert(place_pos < m_delegate_targets.size());
 
-              continue;
-            }
-            // Else we don't need this one, so add it to the send list
+            auto new_target_label = label_to_locator(edge.second);
+            m_delegate_targets[place_pos] = new_target_label;
+
+            delegate_info_offset[new_source_id]++;
+            m_delegate_degree[new_source_id]++;
+            continue;
           }
-          // Send the edge if we don't own it or if we own it but have no room.
-          assert(edge.second != 0);
-          to_send_edges_high.push_back(
-              std::make_pair(new_source_id, edge.second));
+          // Else we don't need this one, so add it to the send list
+          assert(transfer_info.size() > 0);
+
+          {
+            const uint64_t temp = delegate_send_count[new_source_id];
+            if (temp == 0) {
+              std::cout << "Temp is : " << temp << std::endl;
+            }
+            assert(temp > 0 );
+          }
+          (delegate_send_count[new_source_id])--;
+          assert(delegate_send_count[new_source_id] > 0);
+
+
         }
+        // Send the edge if we don't own it or if we own it but have no room.
+        assert(edge.second != 0);
+        to_send_edges_high.push_back(
+              std::make_pair(new_source_id, edge.second));
+      }  // end if is a hub
+    }  // end while
+    mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
+        mpi_comm);
 
-      }
-      mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
-          mpi_comm);
-
-      to_send_edges_high.clear();
-      assert(to_send_edges_high.size() == 0);
-
-    }  // end send/recv block
+    to_send_edges_high.clear();
+    assert(to_send_edges_high.size() == 0);
 
     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
+      const auto edge = to_recv_edges_high[i];
+      const uint64_t new_source_id = edge.first;
+      assert(new_source_id >=0 && new_source_id < m_delegate_info.size());
 
-      uint64_t new_source_id = to_recv_edges_high[i].first;
-
-      uint64_t place_pos = m_delegate_info_offset[new_source_id];
+      uint64_t place_pos = delegate_info_offset[new_source_id];
       place_pos += m_delegate_info[new_source_id];
+
+      for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++){
+        assert(transfer_info[(*itr).first].size() != 0);
+
+        auto list = (*itr).second;
+        assert(list.size() != 0);
+      }
 
       if (place_pos == m_delegate_info[new_source_id+1]) {
         // We have no room for this node, so lets send it off.
-        assert(to_recv_edges_high[i].second != 0);
-        to_send_edges_high.push_back(to_recv_edges_high[i]);
+        assert(transfer_info.size() > 0);
+        assert(edge.second != 0);
+        to_send_edges_high.push_back(edge);
+
+        if (edge.first == 10 && edge.second == 110155) {
+          std::cout << "Gotcha!" <<std::endl;
+        }
+
+        const uint64_t tem1 = transfer_info[10].size();
+        uint64_t tem2 = -1, tem3 = -1, tem1a = -1;
+        if (tem1) {
+          tem2 = transfer_info[10].front().to_send_count;
+          tem3 = transfer_info[10].front().to_send_id;
+          tem1a = transfer_info[10].size();
+        }
+        if (edge.first == 10 && edge.second == 110155) {
+          std::cout << "Gotcha!" <<std::endl;
+        }
+        const uint64_t dest = paritioner(edge);
+        paritioner.reset(edge);
+
+        assert(tem1 == transfer_info[10].size());
+
+        const uint64_t tema1 = transfer_info[10].size();
+        uint64_t tema2 = -1, tema3 = -1;
+        if (tem1) {
+          tema2 = transfer_info[10].front().to_send_count;
+          tema3 = transfer_info[10].front().to_send_id;
+        }
+
+        const uint64_t tem4 = delegate_send_count[new_source_id];
+        if (tem4 == 0) {
+          std::cout << "Temp is : " << tem4 << std::endl;
+        }
+        assert(tem4 > 0 );
+
+        (delegate_send_count[new_source_id])--;
+        assert(delegate_send_count[new_source_id] > 0);
+
+
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
         assert(place_pos < m_delegate_targets.size());
-        uint64_t new_target_label = to_recv_edges_high[i].second;
+        uint64_t new_target_label = edge.second;
 
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
-        m_delegate_info_offset[new_source_id]++;
+        delegate_info_offset[new_source_id]++;
+
+        if (owner_dest_id(m_mpi_size)(edge) != m_mpi_rank) {
+          delegate_recieve_count[new_source_id]++;
+          assert(transfer_info.size() == 0);
+        }
         m_delegate_degree[new_source_id]++;
       }
     }  // for edges recieved
@@ -879,14 +983,15 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       m_local_degree_count(seg_allocator),
       m_owned_info(seg_allocator),
       m_owned_targets(seg_allocator),
+      m_delegate_degree_threshold(delegate_degree_threshold),
       m_delegate_info(seg_allocator),
       m_delegate_degree(seg_allocator),
       m_delegate_label(seg_allocator),
+      m_delegate_targets(seg_allocator),
       m_map_delegate_locator(100, boost::hash<uint64_t>(),
           std::equal_to<uint64_t>(), seg_allocator),
-      m_controller_locators(seg_allocator),
-      m_delegate_targets(seg_allocator),
-      m_delegate_degree_threshold(delegate_degree_threshold) {
+      m_controller_locators(seg_allocator)
+       {
 
   MPI_Barrier(mpi_comm);
   double time_start = MPI_Wtime();
@@ -926,7 +1031,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
 
 
-#if 0
+#if 1
   #define DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS 1
   std::string temp = "[" + std::to_string(m_mpi_rank)+ "]\n";
   // for (int i = 0; i < m_delegate_info.size(); i++) {
@@ -939,7 +1044,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 //  std::cout << temp;
 #endif
 
-std::map< uint64_t, std::deque<std::pair<int, uint64_t>> > transfer_info;
+std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
 
 calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
     transfer_info);
@@ -960,8 +1065,8 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   for (; itr != itr_end; itr++) {
     auto list = (*itr).second;
     temp += "\t" + std::to_string((*itr).first) + ": ";
-    for (int i = 0; i < list.size(); i++) {
-      temp += "[" + std::to_string(list[i].first) + ", " + std::to_string(list[i].second) + "] ";
+    for (size_t i = 0; i < list.size(); i++) {
+      temp += "[" + std::to_string(list[i].to_send_id) + ", " + std::to_string(list[i].to_send_count) + "] ";
     }
     temp += "\n";
   }
@@ -1024,7 +1129,7 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
     vertex_locator locator = itr->second;
 
     uint64_t local_id = label / uint64_t(m_mpi_size);
-    if (label % uint64_t(m_mpi_size) == m_mpi_rank) {
+    if (label % uint64_t(m_mpi_size) == uint64_t(m_mpi_rank)) {
       assert(m_owned_info[local_id].is_delegate == 1);
       assert(m_owned_info[local_id].delegate_id == locator.local_id());
     }
@@ -1034,7 +1139,7 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   //
   // Build controller lists
   for (size_t i=0; i < m_delegate_degree.size(); ++i) {
-    if (i % m_mpi_size == m_mpi_rank) {
+    if (int(i % m_mpi_size) == m_mpi_rank) {
       m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
     }
   }

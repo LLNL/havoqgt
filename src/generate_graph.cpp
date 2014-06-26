@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
               " )." << std::endl;
     exit(-1);
   } else {
-    size_t pos = 1;
+    int pos = 1;
     type = argv[pos++];
     vert_scale    = boost::lexical_cast<uint64_t>(argv[pos++]);
     pa_beta       = boost::lexical_cast<double>(argv[pos++]);
