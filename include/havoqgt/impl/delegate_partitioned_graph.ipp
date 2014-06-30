@@ -13,6 +13,101 @@
 namespace havoqgt {
 namespace mpi {
 
+class DebugOverFlow {
+ public:
+  DebugOverFlow(int mpi_size, int mpi_rank, int num_delgates)
+    : m_mpi_size(mpi_size)
+    , m_mpi_rank(mpi_rank)
+    , m_num_delgates(num_delgates) {
+      sent_to.resize(num_delgates, std::vector<int>(mpi_size, 0));
+      recieved_from.resize(num_delgates, std::vector<int>(mpi_size, 0));
+      sent_to_of.resize(num_delgates, std::vector<int>(mpi_size, 0));
+      recieved_from_of.resize(num_delgates, std::vector<int>(mpi_size, 0));
+    }
+
+  void send_delegate(uint64_t delegate_id, int dest) {
+    assert(dest < m_mpi_size);
+    assert(dest >= 0);
+    assert(delegate_id < m_num_delgates);
+    assert(delegate_id >= 0);
+
+    sent_to[delegate_id][dest]++;
+  }
+
+  void recv_delegate(uint64_t delegate_id, int source) {
+    assert(source < m_mpi_size);
+    assert(source >= 0);
+    assert(delegate_id < m_num_delgates);
+    assert(delegate_id >= 0);
+
+    recieved_from[delegate_id][source]++;
+  }
+
+  void send_of_delegate(uint64_t delegate_id, int dest) {
+    assert(dest < m_mpi_size);
+    assert(dest >= 0);
+    assert(delegate_id < m_num_delgates);
+    assert(delegate_id >= 0);
+
+    sent_to_of[delegate_id][dest]++;
+  }
+
+  void recv_of_delegate(uint64_t delegate_id, int source) {
+    assert(source < m_mpi_size);
+    assert(source >= 0);
+    assert(delegate_id < m_num_delgates);
+    assert(delegate_id >= 0);
+
+    recieved_from_of[delegate_id][source]++;
+  }
+
+  std::string log() {
+    std::string temp = "[" + std::to_string(m_mpi_rank) + "]\n";
+
+    temp += "\tExchanged Delegates:";
+    for (size_t i = 0; i < m_num_delgates; i++) {
+      temp += "\t\t" + std::to_string(i) + ": [";
+      for (size_t j =0; j < m_mpi_size; j++) {
+        temp += std::to_string(sent_to[i][j]) + ", ";
+      }
+      temp += "\n";
+    }
+
+    temp += "\tRecieved Delegates:";
+    for (size_t i = 0; i < m_num_delgates; i++) {
+      temp += "\t\t" + std::to_string(i) + ": [";
+      for (size_t j =0; j < m_mpi_size; j++) {
+        temp += std::to_string(recieved_from[i][j]) + ", ";
+      }
+      temp += "\n";
+    }
+
+    temp += "\t Sent overflow delegates:";
+    for (size_t i = 0; i < m_num_delgates; i++) {
+      temp += "\t\t" + std::to_string(i) + ": [";
+      for (size_t j =0; j < m_mpi_size; j++) {
+        temp += std::to_string(sent_to_of[i][j]) + ", ";
+      }
+      temp += "\n";
+    }
+
+    temp += "\t Recv overflow delegates:";
+    for (size_t i = 0; i < m_num_delgates; i++) {
+      temp += "\t\t" + std::to_string(i) + ": [";
+      for (size_t j =0; j < m_mpi_size; j++) {
+        temp += std::to_string(recieved_from_of[i][j]) + ", ";
+      }
+      temp += "\n";
+    }
+
+    return temp;
+  }
+
+  const int m_mpi_rank, m_mpi_size, m_num_delgates;
+  std::vector< std::vector<int> > sent_to, recieved_from;
+  std::vector< std::vector<int> > sent_to_of, recieved_from_of;
+
+};
 
 /**
  * @class delegate_partitioned_graph
@@ -53,65 +148,65 @@ class edge_target_partitioner {
 class high_edge_partitioner {
  public:
   explicit high_edge_partitioner(int s, int r,
-    std::map<uint64_t, std::deque<OverflowSendInfo>> *transfer_info)
+    std::map<uint64_t, std::deque<OverflowSendInfo>> *transfer_info
+    /*, DebugOverFlow *dof */)
     : m_mpi_size(s)
     , m_mpi_rank(r)
-    , m_transfer_info(transfer_info) { }
+    , m_transfer_info(transfer_info)
+    /*, m_dof(dof)*/ { }
   int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting = true) {
     const uint64_t delegate_id = i.first;
 
     int dest = int(i.second % m_mpi_size);
     if (dest == m_mpi_rank) {
       assert(m_transfer_info->count(delegate_id) == 1);
-      auto list = m_transfer_info->at(delegate_id);
-      assert(list.size() > 0);
+      assert(m_transfer_info->at(delegate_id).size() > 0);
 
       if (is_counting) {
-        for (size_t j = 0; j < list.size(); j++) {
-          if (list[j].temp_to_send_count < list[j].to_send_count) {
-            (list[j].temp_to_send_count)++;
-            dest = list[j].to_send_id;
-            break;
+        for (size_t j = 0; j < m_transfer_info->at(delegate_id).size(); j++) {
+          if (m_transfer_info->at(delegate_id)[j].temp_to_send_count <
+                m_transfer_info->at(delegate_id)[j].to_send_count) {
+            (m_transfer_info->at(delegate_id)[j].temp_to_send_count)++;
+
+
+            return m_transfer_info->at(delegate_id)[j].to_send_id;
           }
         }
+        assert(false);
       } else {
-        dest = list.front().to_send_id;
 
-        list.front().to_send_count--;
-        if (list.front().to_send_count == 0) {
-          list.pop_front();
-          if (list.size() == 0) {
+        dest = m_transfer_info->at(delegate_id).front().to_send_id;
+        //m_dof->send_of_delegate(delegate_id, dest);
+
+        const int to_send_count =
+          m_transfer_info->at(delegate_id).front().to_send_count--;
+        assert(m_transfer_info->at(delegate_id).front().to_send_count >= 0);
+
+        if (m_transfer_info->at(delegate_id).front().to_send_count == 0) {
+          m_transfer_info->at(delegate_id).pop_front();
+          if (m_transfer_info->at(delegate_id).size() == 0) {
             m_transfer_info->erase(delegate_id);
           }
         } else {
-          list.front().temp_to_send_count = 0;
+          m_transfer_info->at(delegate_id).front().temp_to_send_count = 0;
         }
       }  // else not counting
-    }  // if dest == rank
 
-    assert (dest >= 0);
+    } else {  // if dest == rank
+      // m_dof->send_delegate(delegate_id, dest);
+    }
+
+    assert(dest >= 0);
+    assert(dest != m_mpi_rank);
+
     return dest;
-  }
-
-  void reset(std::pair<uint64_t, uint64_t> i) {
-    const uint64_t delegate_id = i.first;
-    int dest = int(i.second % m_mpi_size);
-
-    if (dest == m_mpi_rank) {
-      assert(m_transfer_info->count(delegate_id) == 1);
-      auto list = m_transfer_info->at(delegate_id);
-      assert(list.size() > 0);
-
-      for (size_t j = 0; j < list.size(); j++) {
-        list[j].temp_to_send_count =0;
-      }
-    }  // if dest == rank
   }
 
  private:
   const int m_mpi_size;
   const int m_mpi_rank;
   std::map<uint64_t, std::deque<OverflowSendInfo>> * m_transfer_info;
+  //DebugOverFlow *m_dof;
 };
 
 
@@ -330,8 +425,9 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
 template <typename SegementManager>
 void
 delegate_partitioned_graph<SegementManager>::
-generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
+generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
+    int send_id,
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info ) {
   uint64_t send_count = 0;
   uint64_t ver_count = 0;
   for (uint64_t i = 0; i < m_delegate_info.size() && send_count <  num_send; i++) {
@@ -419,11 +515,9 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
         assert(heavy_idx != light_idx);
         if (heavy_idx == m_mpi_rank) {
           std::vector<uint64_t> send_list;
-
-
           generate_send_list(send_list, to_move, light_idx, transfer_info);
 
-          int64_t send_len = send_list.size();
+          int64_t send_len = send_list.size(); // todo mpi_type
           CHK_MPI(MPI_Send(&send_len, 1, MPI_LONG, light_idx, 0, mpi_comm));
 
           CHK_MPI(MPI_Send(send_list.data(), send_len, MPI_UNSIGNED_LONG,
@@ -462,9 +556,12 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     }  // While
   }  // For
 
-  uint64_t sanity_global_edge_count = mpi_all_reduce(owned_total_edges,
+#ifdef DEBUG
+  const uint64_t owned_total_edges2 = owned_high_count + owned_low_count;
+  uint64_t sanity_global_edge_count = mpi_all_reduce(owned_total_edges2,
       std::plus<uint64_t>(), mpi_comm);
   assert(sanity_global_edge_count == global_edge_count);
+#endif
 
 }  // calculate overflow
 
@@ -578,7 +675,7 @@ count_degrees(MPI_Comm mpi_comm,
 template <typename SegementManager>
 void
 delegate_partitioned_graph<SegementManager>::
-initialize_low_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
+initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   uint64_t delegate_degree_threshold) {
   //
   // Setup Low CSR
@@ -634,19 +731,11 @@ initialize_low_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
       m_owned_info[t_local_id].delegate_id = i;
     }
   }  // for items in vec_sorted_hubs
-}
-
-template <typename SegementManager>
-void
-delegate_partitioned_graph<SegementManager>::
-allocate_delegate_info() {
-  //
-  // Setup High CSR
-  //
 
   m_delegate_info.resize(m_map_delegate_locator.size()+1, 0);
 
 }
+
 
 template <typename SegementManager>
 void
@@ -656,11 +745,11 @@ initialize_delegate_target(int64_t edges_high_count) {
   // Setup High CSR
   // Currently each position holds the number of edges.
   // But we need to turn that into index, so we replace it with a rolling total
-  // then increment it by the num of edes
+  // then increment it by the num of edges
   // TODO(optimization): just add rolling total, then when filliung the targets
   // subtract one. We fill it in reverse, which means we dont need the temporary
   // vector to keep track of offsets.
-  m_delegate_targets.resize(edges_high_count);
+
   int64_t edge_count = 0;
   for (size_t i=0; i < m_delegate_info.size(); i++) {
     uint64_t num_edges = m_delegate_info[i];
@@ -669,6 +758,7 @@ initialize_delegate_target(int64_t edges_high_count) {
     assert(edge_count <= edges_high_count);
 
   }
+  m_delegate_targets.resize(edges_high_count);
   assert(edges_high_count == int64_t(m_delegate_targets.size()));
 
 
@@ -734,8 +824,9 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       }
 
       // Exchange Edges/Recieve edges
+      edge_source_partitioner paritioner(mpi_size);
       mpi_all_to_all_better(to_send_edges_low, to_recv_edges_low,
-            edge_source_partitioner(mpi_size), mpi_comm);
+            paritioner, mpi_comm);
 
       // Send the hub edge count to the relevent nodes.
       send_high_info(mpi_comm, maps_to_send);
@@ -789,6 +880,236 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   assert(edges_high_count == sanity_check_high_edge_count);
 }  // partition_low_degree
 
+// template <typename SegementManager>
+// template <typename InputIterator>
+// void
+// delegate_partitioned_graph<SegementManager>::
+// partition_high_degree_fake(MPI_Comm mpi_comm, InputIterator unsorted_itr,
+//     InputIterator unsorted_itr_end,
+//     boost::unordered_set<uint64_t>& global_hub_set,
+//     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info_orig) {
+
+
+//   double time_start = MPI_Wtime();
+//   int mpi_rank(0), mpi_size(0);
+//   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
+//   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
+
+//   DebugOverFlow dof(mpi_size, mpi_rank, m_delegate_info.size());
+
+//   std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
+//   transfer_info = transfer_info_orig;
+//   assert(transfer_info.size() == transfer_info_orig.size());
+//   for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++) {
+//     auto key = (*itr).first;
+//     assert(transfer_info[key].size() == transfer_info_orig[key].size());
+//   }
+
+//   high_edge_partitioner paritioner(mpi_size, mpi_rank, &transfer_info, &dof);
+
+//   std::vector<uint64_t> delegate_info_offset(m_delegate_info.size(), 0);
+//   std::vector<uint64_t> delegate_info_error_count(m_delegate_info.size(), 0);
+
+
+//   uint64_t t_kept_count = 0;
+//   uint64_t t_kept_error_count = 0;
+//   uint64_t t_sent_count = 0;
+//   uint64_t t_got_count =0;
+//   uint64_t t_resent_count = 0;
+//   uint64_t t_resent_error_count = 0;
+//   uint64_t t_gen_count = 0;
+//   const size_t inital_tansfer_info_size = transfer_info.size();
+//   std::vector<int64_t> delegate_recieve_count(m_delegate_info.size(), 0);
+
+//   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
+//   to_send_edges_high.reserve(16*1024);
+
+//   size_t exchange_counter(0);
+//   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
+//         mpi_comm)) {
+//     std::vector<int64_t> delegate_step_send_count(m_delegate_info.size(), 0);
+//     std::vector<int64_t> delegate_step_recieve_count(m_delegate_info.size(), 0);
+
+//     exchange_counter++;
+//     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
+
+//     while (unsorted_itr != unsorted_itr_end &&
+//            to_send_edges_high.size()<16*1024) {
+//       const auto edge = *unsorted_itr;
+//       ++unsorted_itr;
+
+//       if (global_hub_set.count(edge.first) == 1) {
+//         t_gen_count++;
+//         // If it is a hub node
+//         const uint64_t source_id = edge.first;
+//         uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
+//         assert(new_source_id >=0 && new_source_id < m_delegate_info.size());
+
+//         if (owner_dest_id(m_mpi_size)(edge) == m_mpi_rank) {
+//           uint64_t place_pos = delegate_info_offset[new_source_id];
+//           place_pos += m_delegate_info[new_source_id];
+
+//           if (place_pos < m_delegate_info[new_source_id+1]) {
+//             delegate_info_offset[new_source_id]++;
+//             t_kept_count++;
+//             dof.send_delegate(new_source_id, m_mpi_rank);
+//             continue;
+//           } else if (transfer_info.size() == 0 ||
+//               transfer_info.count(new_source_id) == 0) {
+//             // delegate_info_error_count[new_source_id]++;
+//             // t_kept_error_count++;
+//             // continue;
+//             std::cout << dof.log() << std::endl << std::flush;
+//             assert(false);
+//           }
+
+
+//           // Else we don't need this one, so add it to the send list
+//           assert(transfer_info.count(new_source_id) != 0);
+//         }
+//         // Send the edge if we don't own it or if we own it but have no room.
+//         assert(edge.second != 0);
+//         to_send_edges_high.push_back(
+//               std::make_pair(new_source_id, edge.second));
+//         t_sent_count++;
+//         delegate_step_send_count[new_source_id]++;
+
+//       }  // end if is a hub
+//     }  // end while
+//     mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
+//         mpi_comm);
+
+//     to_send_edges_high.clear();
+//     assert(to_send_edges_high.size() == 0);
+
+//     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
+//       const auto edge = to_recv_edges_high[i];
+//       const uint64_t new_source_id = edge.first;
+//       assert(new_source_id >=0 && new_source_id < m_delegate_info.size());
+
+//       uint64_t place_pos = delegate_info_offset[new_source_id];
+//       place_pos += m_delegate_info[new_source_id];
+
+//       for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++){
+//         assert(transfer_info[(*itr).first].size() != 0);
+
+//         auto list = (*itr).second;
+//         assert(list.size() != 0);
+//       }
+
+
+//       if (m_mpi_rank == int(edge.second % m_mpi_size)) {
+//         const int temp = int(edge.second % m_mpi_size);
+//         dof.recv_delegate(new_source_id, temp);
+//       } else {
+//         const int temp = int(edge.second % m_mpi_size);
+//         dof.recv_of_delegate(new_source_id, temp);
+//       }
+
+//       delegate_step_recieve_count[new_source_id]++;
+//       if (place_pos == m_delegate_info[new_source_id+1]) {
+//         if (transfer_info.size() == 0 ||
+//             transfer_info.count(new_source_id) == 0) {
+//           // delegate_info_error_count[new_source_id]++;
+//           // t_resent_error_count++;
+//           assert(false);
+//         } else {
+//           // We have no room for this node, so send it off
+//           assert(edge.second != 0);
+//           to_send_edges_high.push_back(edge);
+//           t_resent_count++;
+//         }
+//       } else {
+//         assert(place_pos < m_delegate_info[new_source_id+1]);
+//         assert(place_pos < m_delegate_targets.size());
+//         uint64_t new_target_label = edge.second;
+
+//         delegate_info_offset[new_source_id]++;
+
+//         if (owner_dest_id(m_mpi_size)(edge) != m_mpi_rank) {
+//           delegate_recieve_count[new_source_id]++;
+//           assert(transfer_info.size() == 0);
+//         }
+//         t_got_count++;
+//       }
+//     }  // for edges recieved
+
+//     // std::string str = "[" + std::to_string(m_mpi_rank) + "(" +
+//     //                   std::to_string(exchange_counter) +")] \n";
+
+
+//     // for (int i = 0; i < m_mpi_size; i++) {
+
+//     //   MPI_Barrier(MPI_COMM_WORLD);
+
+//     //   if (i == m_mpi_rank) {
+//     //     std::cout << str << std::flush;
+//     //   }
+//     //   for (int j = 0; j < m_mpi_size; j++) {
+//     //     MPI_Barrier(MPI_COMM_WORLD);
+//     //     if (j == m_mpi_rank) {
+//     //       std::cout << std::flush;
+//     //     }
+//     //   }
+//     // }
+
+//     // MPI_Barrier(MPI_COMM_WORLD);
+
+//   }  // end while get next edge
+//   double time_end = MPI_Wtime();
+
+//   MPI_Barrier(mpi_comm);
+
+//   if (mpi_rank == 0) {
+//     std::cout << "partition_high_degree fake time = " << time_end - time_start
+//         << std::endl;
+//   }
+
+//   std::string str = "[" + std::to_string(m_mpi_rank) + "] " +
+//           " Edges Generated: " + std::to_string(t_gen_count) + ".\n";
+//   str += "\tKept: " + std::to_string(t_kept_count) +
+//           " Sent: " + std::to_string(t_sent_count) +
+//           " Kept-Error: " + std::to_string(t_kept_error_count) +
+//           "\n\tRecieved: " + std::to_string(t_got_count) +
+//           " Resent : " + std::to_string(t_resent_count) +
+//           " Resent-Error : " + std::to_string(t_resent_error_count) +
+//           "\n\tKept+Got = "+ std::to_string(t_kept_count + t_got_count) +
+//           "\n\tKeptError+GotError = "+ std::to_string(t_kept_error_count + t_resent_error_count) +
+//           "\n";
+
+//   std::string  temp = "\tEC(" + std::to_string(m_mpi_rank) + "):";
+//   bool found = false;
+//   for (size_t i = 0; i < delegate_info_error_count.size(); i++) {
+//     if (delegate_info_error_count[i] != 0) {
+//       temp += " [" + std::to_string(i) + ", " +
+//              std::to_string(delegate_info_error_count[i]) + "]";
+//       found = true;
+//     }
+//   }
+//   temp += "\n";
+//   if (found) {
+//     str += temp;
+//   }
+
+
+//   for (int i = 0; i < m_mpi_size; i++) {
+
+//     MPI_Barrier(MPI_COMM_WORLD);
+
+//     if (i == m_mpi_rank) {
+//       std::cout << str << std::flush;
+//     }
+//     for (int j = 0; j < 1000; j++) {
+//       MPI_Barrier(MPI_COMM_WORLD);
+//       std::cout << std::flush;
+//     }
+//   }
+
+//   // Output Debugging Infor!
+//   // print
+
+// }  // partition_high_degre
+
 template <typename SegementManager>
 template <typename InputIterator>
 void
@@ -802,27 +1123,15 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
-
   high_edge_partitioner paritioner(mpi_size, mpi_rank, &transfer_info);
   std::vector<uint64_t> delegate_info_offset(m_delegate_info.size(), 0);
 
 
-  std::vector<uint64_t> delegate_send_count(m_delegate_info.size(), 0);
-  for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++) {
-    auto list = (*itr).second;
-    for (size_t i = 0; i < list.size(); i++) {
-      delegate_send_count[(*itr).first] += list[i].to_send_count;
-    }
-
-  }
-
-  std::vector<uint64_t> delegate_recieve_count(m_delegate_info.size(), 0);
-
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
   to_send_edges_high.reserve(16*1024);
+
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
         mpi_comm)) {
-
     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
 
     while (unsorted_itr != unsorted_itr_end &&
@@ -852,23 +1161,12 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
           }
           // Else we don't need this one, so add it to the send list
           assert(transfer_info.size() > 0);
-
-          {
-            const uint64_t temp = delegate_send_count[new_source_id];
-            if (temp == 0) {
-              std::cout << "Temp is : " << temp << std::endl;
-            }
-            assert(temp > 0 );
-          }
-          (delegate_send_count[new_source_id])--;
-          assert(delegate_send_count[new_source_id] > 0);
-
-
+          assert(transfer_info.count(new_source_id) != 0);
         }
         // Send the edge if we don't own it or if we own it but have no room.
-        assert(edge.second != 0);
         to_send_edges_high.push_back(
               std::make_pair(new_source_id, edge.second));
+
       }  // end if is a hub
     }  // end while
     mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
@@ -885,55 +1183,11 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
       uint64_t place_pos = delegate_info_offset[new_source_id];
       place_pos += m_delegate_info[new_source_id];
 
-      for (auto itr = transfer_info.begin(); itr != transfer_info.end(); itr++){
-        assert(transfer_info[(*itr).first].size() != 0);
-
-        auto list = (*itr).second;
-        assert(list.size() != 0);
-      }
-
       if (place_pos == m_delegate_info[new_source_id+1]) {
         // We have no room for this node, so lets send it off.
         assert(transfer_info.size() > 0);
-        assert(edge.second != 0);
+        assert(transfer_info.count(new_source_id) != 0);
         to_send_edges_high.push_back(edge);
-
-        if (edge.first == 10 && edge.second == 110155) {
-          std::cout << "Gotcha!" <<std::endl;
-        }
-
-        const uint64_t tem1 = transfer_info[10].size();
-        uint64_t tem2 = -1, tem3 = -1, tem1a = -1;
-        if (tem1) {
-          tem2 = transfer_info[10].front().to_send_count;
-          tem3 = transfer_info[10].front().to_send_id;
-          tem1a = transfer_info[10].size();
-        }
-        if (edge.first == 10 && edge.second == 110155) {
-          std::cout << "Gotcha!" <<std::endl;
-        }
-        const uint64_t dest = paritioner(edge);
-        paritioner.reset(edge);
-
-        assert(tem1 == transfer_info[10].size());
-
-        const uint64_t tema1 = transfer_info[10].size();
-        uint64_t tema2 = -1, tema3 = -1;
-        if (tem1) {
-          tema2 = transfer_info[10].front().to_send_count;
-          tema3 = transfer_info[10].front().to_send_id;
-        }
-
-        const uint64_t tem4 = delegate_send_count[new_source_id];
-        if (tem4 == 0) {
-          std::cout << "Temp is : " << tem4 << std::endl;
-        }
-        assert(tem4 > 0 );
-
-        (delegate_send_count[new_source_id])--;
-        assert(delegate_send_count[new_source_id] > 0);
-
-
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
@@ -944,7 +1198,6 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
         delegate_info_offset[new_source_id]++;
 
         if (owner_dest_id(m_mpi_size)(edge) != m_mpi_rank) {
-          delegate_recieve_count[new_source_id]++;
           assert(transfer_info.size() == 0);
         }
         m_delegate_degree[new_source_id]++;
@@ -1020,10 +1273,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   //
   // Using the above information construct the hub information, allocate space
   // for the low CSR
-  initialize_low_edge_storage(global_hubs, delegate_degree_threshold);
-
-  allocate_delegate_info();
-
+  initialize_edge_storage(global_hubs, delegate_degree_threshold);
 
   uint64_t edges_high_count;
   partition_low_degree_count_high(mpi_comm, edges.begin(), edges.end(),
@@ -1031,17 +1281,17 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
 
 
-#if 1
+#if 0
   #define DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS 1
   std::string temp = "[" + std::to_string(m_mpi_rank)+ "]\n";
-  // for (int i = 0; i < m_delegate_info.size(); i++) {
-  //   temp +=  std::to_string(m_delegate_info[i]) + ", ";
-  // }
-  temp += "\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
+  for (int i = 0; i < m_delegate_info.size(); i++) {
+     temp += "[" + std::to_string(i) + ", "
+            + std::to_string(m_delegate_info[i]) + "] ";
+  }
+  temp += "\n\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
   temp += "\tHigh Edge Count:\t" + std::to_string(edges_high_count);
   temp += "\tTotal:\t" + std::to_string(edges_high_count+m_owned_targets.size());
   temp += "\n";
-//  std::cout << temp;
 #endif
 
 std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
@@ -1051,10 +1301,11 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
 
 
 #ifdef DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS
-  // for (int i = 0; i < m_delegate_info.size(); i++) {
-  //   temp +=  std::to_string(m_delegate_info[i]) + ", ";
-  // }
-  temp += "\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
+  for (int i = 0; i < m_delegate_info.size(); i++) {
+    temp += "[" + std::to_string(i) + ", "
+            + std::to_string(m_delegate_info[i]) + "] ";
+  }
+  temp += "\n\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
   temp += "\tHigh Edge Count:\t" + std::to_string(edges_high_count);
   temp += "\tTotal:\t" + std::to_string(edges_high_count+m_owned_targets.size());
   temp += "\n";
@@ -1075,17 +1326,22 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
     if (i == m_mpi_rank) {
       std::cout << temp << std::flush;
     }
-    MPI_Barrier(mpi_comm);
+    for (int j = 0; j < 1000; j++) {
+      if (i == m_mpi_rank) {
+        std::cout << std::flush;
+      }
+      MPI_Barrier(mpi_comm);
+    }
   }
-  for (int i = 0; i < m_mpi_size; i++) {
-    MPI_Barrier(mpi_comm);
-  }
+
 
 #endif
 
 
   initialize_delegate_target(edges_high_count);
 
+  // partition_high_degree_fake(mpi_comm, edges.begin(), edges.end(), global_hubs,
+  //   transfer_info);
   //
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,

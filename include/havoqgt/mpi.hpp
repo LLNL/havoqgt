@@ -224,7 +224,8 @@ void mpi_all_to_all(std::vector<T>& in_vec, std::vector<int>& in_sendcnts,
 
 
 template <typename T, typename Partitioner>
-void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partitioner owner, MPI_Comm mpi_comm) {
+void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec,
+      Partitioner &owner, MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
@@ -286,7 +287,7 @@ void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partiti
 
 template <typename T, typename Partitioner>
 void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
-      Partitioner owner, MPI_Comm mpi_comm) {
+      Partitioner &owner, MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
@@ -304,8 +305,9 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
     send_counts[owner(in_vec[i], true)] += sizeof(T); //sizeof(t) lets us use PODS
     //if(i>0) {
     //  assert(owner(inout_vec[i-1]) <= owner(inout_vec[i]));
-    //}
+    //
   }
+
 
   //cacl send disps
   std::partial_sum(send_counts.begin(), send_counts.end(), send_disps.begin());
@@ -334,6 +336,7 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
   CHK_MPI( MPI_Alltoall( (void*) &(send_counts[0]), sizeof(int), MPI_BYTE,
                          (void*) &(recv_counts[0]), sizeof(int), MPI_BYTE,
                          mpi_comm ) );
+
 
   //Allocate recv vector
   int total_recv = std::accumulate(recv_counts.begin(), recv_counts.end(), 0);

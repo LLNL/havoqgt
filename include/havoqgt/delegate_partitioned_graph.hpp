@@ -81,8 +81,8 @@ typedef struct OverflowSendInfo{
     , temp_to_send_count(0) {}
 
   int to_send_id;
-  uint64_t to_send_count;
-  uint64_t temp_to_send_count;
+  int64_t to_send_count;
+  int64_t temp_to_send_count;
 }OverflowSendInfo;
 
 /**
@@ -402,13 +402,12 @@ class delegate_partitioned_graph {
                            boost::unordered_set<uint64_t>& global_hubs,
                            bool local_change, MPI_Comm mpi_comm);
 
-  void initialize_low_edge_storage(
+  void initialize_edge_storage(
       boost::unordered_set<uint64_t>& global_hub_set,
       uint64_t delegate_degree_threshold);
 
   void initialize_delegate_target(int64_t edges_high_count);
 
-  void allocate_delegate_info();
 
   template <typename InputIterator>
   void partition_low_degree_count_high(MPI_Comm mpi_comm,
@@ -420,6 +419,12 @@ class delegate_partitioned_graph {
 
   template <typename InputIterator>
   void partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
+      InputIterator unsorted_itr_end,
+      boost::unordered_set<uint64_t>& global_hub_set,
+      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
+
+  template <typename InputIterator>
+  void partition_high_degree_fake(MPI_Comm mpi_comm, InputIterator unsorted_itr,
       InputIterator unsorted_itr_end,
       boost::unordered_set<uint64_t>& global_hub_set,
       std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);

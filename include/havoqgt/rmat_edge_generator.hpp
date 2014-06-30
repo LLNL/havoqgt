@@ -160,7 +160,21 @@ public:
       , m_rmat_a(a)
       , m_rmat_b(b)
       , m_rmat_c(c)
-      , m_rmat_d(d) { }
+      , m_rmat_d(d) {
+
+
+        // #ifdef DEBUG
+        //   auto itr1 = begin();
+        //   auto itr2 = begin();
+        //   while (itr1 != end()) {
+        //     assert(itr2 != end());
+        //     assert(*itr1 == *itr2);
+        //     assert(itr1 == itr2);
+        //     itr1++;
+        //     itr2++;
+        //   }
+        // #endif
+      }
 
 
   /// Returns the begin of the input iterator
