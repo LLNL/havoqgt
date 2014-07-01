@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #ifndef _HAVOQGT_MPI_HPP_
@@ -154,7 +154,7 @@ private:
 };
 
 
-//no std:: equivalent for MPI_BAND, MPI_BOR, MPI_LXOR, MPI_BXOR, MPI_MAXLOC, MPI_MINLOC 
+//no std:: equivalent for MPI_BAND, MPI_BOR, MPI_LXOR, MPI_BXOR, MPI_MAXLOC, MPI_MINLOC
 
 template <typename T, typename Op>
 T mpi_all_reduce(T in_d, Op in_op, MPI_Comm mpi_comm) {
@@ -184,8 +184,8 @@ private:
 };
 
 template <typename T>
-void mpi_all_to_all(std::vector<T>& in_vec, std::vector<int>& in_sendcnts, 
-                    std::vector<T>& out_vec, std::vector<int>& out_recvcnts, 
+void mpi_all_to_all(std::vector<T>& in_vec, std::vector<int>& in_sendcnts,
+                    std::vector<T>& out_vec, std::vector<int>& out_recvcnts,
                     MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
@@ -216,22 +216,23 @@ void mpi_all_to_all(std::vector<T>& in_vec, std::vector<int>& in_sendcnts,
   out_vec.resize(std::accumulate(out_recvcnts.begin(), out_recvcnts.end(), 0));
 
   int* send_displs =  sdispls.size() > 0 ? &sdispls[0] : NULL;
-  CHK_MPI( MPI_Alltoallv(send_vec, send_cnts, send_displs, 
-                  mpi_typeof(T()), &(out_vec[0]), &(out_recvcnts[0]), 
+  CHK_MPI( MPI_Alltoallv(send_vec, send_cnts, send_displs,
+                  mpi_typeof(T()), &(out_vec[0]), &(out_recvcnts[0]),
                   &(rdispls[0]), mpi_typeof(T()), mpi_comm) );
-  
+
 }
 
 
 template <typename T, typename Partitioner>
-void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partitioner owner, MPI_Comm mpi_comm) {
+void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec,
+      Partitioner &owner, MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
 
   std::vector<int> send_counts(mpi_size,0);
   std::vector<int> send_disps(mpi_size,0);
-  
+
   std::vector<int> recv_counts(mpi_size,0);
   std::vector<int> recv_disps(mpi_size,0);
 
@@ -251,7 +252,7 @@ void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partiti
   for(size_t i=0; i<send_disps.size(); ++i) {
     send_disps[i] -= send_counts[i]; //set to 0 offset
   }
-  
+
   temp_vec.resize(inout_vec.size());
   for(size_t i=0; i<inout_vec.size(); ++i) {
     std::vector<int> temp_arrange(mpi_size,0);
@@ -259,7 +260,7 @@ void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partiti
     size_t dest_offset = send_disps[dest_rank] + temp_arrange[dest_rank];
     temp_arrange[dest_rank] += sizeof(T);
     dest_offset /= sizeof(T);
-    temp_vec[dest_offset] = inout_vec[i]; 
+    temp_vec[dest_offset] = inout_vec[i];
   }
 
 
@@ -282,10 +283,11 @@ void mpi_all_to_all(std::vector<T>& inout_vec, std::vector<T>& temp_vec, Partiti
   CHK_MPI( MPI_Alltoallv( (void*) &(temp_vec[0]), &(send_counts[0]), &(send_disps[0]), MPI_BYTE,
                           (void*) &(inout_vec[0]),&(recv_counts[0]), &(recv_disps[0]), MPI_BYTE,
                           mpi_comm) );
-} 
+}
 
 template <typename T, typename Partitioner>
-void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Partitioner owner, MPI_Comm mpi_comm) {
+void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec,
+      Partitioner &owner, MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
@@ -300,28 +302,31 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Part
 
   //calc send counts
   for(size_t i=0; i<in_vec.size(); ++i) {
-    send_counts[owner(in_vec[i])] += sizeof(T); //sizeof(t) lets us use PODS
+    send_counts[owner(in_vec[i], true)] += sizeof(T); //sizeof(t) lets us use PODS
     //if(i>0) {
     //  assert(owner(inout_vec[i-1]) <= owner(inout_vec[i]));
-    //}
+    //
   }
+
 
   //cacl send disps
   std::partial_sum(send_counts.begin(), send_counts.end(), send_disps.begin());
   for(size_t i=0; i<send_disps.size(); ++i) {
     send_disps[i] -= send_counts[i]; //set to 0 offset
   }
-  
+
 
   { //rearrange instead of sorting
     std::vector<T> order_vec(in_vec.size());
     std::vector<int> temp_arrange(mpi_size,0);
     for(size_t i=0; i<in_vec.size(); ++i) {
-      int dest_rank = owner(in_vec[i]);
+      int dest_rank = owner(in_vec[i], false);
+      assert (dest_rank >=0 && dest_rank < mpi_size);
+
       size_t dest_offset = send_disps[dest_rank] + temp_arrange[dest_rank];
       temp_arrange[dest_rank] += sizeof(T);
       dest_offset /= sizeof(T);
-      order_vec[dest_offset] = in_vec[i]; 
+      order_vec[dest_offset] = in_vec[i];
     }
     in_vec.swap(order_vec);
   }
@@ -331,6 +336,7 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Part
   CHK_MPI( MPI_Alltoall( (void*) &(send_counts[0]), sizeof(int), MPI_BYTE,
                          (void*) &(recv_counts[0]), sizeof(int), MPI_BYTE,
                          mpi_comm ) );
+
 
   //Allocate recv vector
   int total_recv = std::accumulate(recv_counts.begin(), recv_counts.end(), 0);
@@ -348,10 +354,10 @@ void mpi_all_to_all_better(std::vector<T>& in_vec, std::vector<T>& out_vec, Part
   CHK_MPI( MPI_Alltoallv( send_ptr, &(send_counts[0]), &(send_disps[0]), MPI_BYTE,
                           recv_ptr, &(recv_counts[0]), &(recv_disps[0]), MPI_BYTE,
                           mpi_comm) );
-} 
+}
 
 
-//This code is very similar to that of: 
+//This code is very similar to that of:
 //http://trac.mcs.anl.gov/projects/mpich2/browser/mpich2/trunk/src/mpi/coll/alltoall.c
 //
 // It is re-implemted here because <cough> BG/P doesn't support mpi-2.2 which
@@ -370,19 +376,19 @@ void mpi_all_to_all_in_place(std::vector<T>& in_out_vec, size_t count,
     for(int j=i; j<mpi_size; ++j) {
       if( mpi_rank == i) {
         MPI_Status status;
-        CHK_MPI( MPI_Sendrecv_replace(&(in_out_vec[j*count]), count, 
-                                      mpi_typeof(T()), 
-                                      j, HAVOQGT_TAG, 
+        CHK_MPI( MPI_Sendrecv_replace(&(in_out_vec[j*count]), count,
+                                      mpi_typeof(T()),
                                       j, HAVOQGT_TAG,
-                                      mpi_comm, &status) ); 
+                                      j, HAVOQGT_TAG,
+                                      mpi_comm, &status) );
 
       } else if(mpi_rank == j) {
         MPI_Status status;
-        CHK_MPI( MPI_Sendrecv_replace(&(in_out_vec[i*count]), count, 
-                                      mpi_typeof(T()), 
-                                      i, HAVOQGT_TAG, 
+        CHK_MPI( MPI_Sendrecv_replace(&(in_out_vec[i*count]), count,
+                                      mpi_typeof(T()),
                                       i, HAVOQGT_TAG,
-                                      mpi_comm, &status) ); 
+                                      i, HAVOQGT_TAG,
+                                      mpi_comm, &status) );
 
 
       }
@@ -403,20 +409,20 @@ void mpi_all_gather(T _t, std::vector<T>& out_p_vec, MPI_Comm mpi_comm) {
 
 /// TODO:  Add tests, especially with non mpi types, POD
 template <typename T>
-void mpi_all_gather(std::vector<T>& in_send, 
+void mpi_all_gather(std::vector<T>& in_send,
                     std::vector<T>& out_recv_gather, MPI_Comm mpi_comm) {
 
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
-  
+
   int my_size = in_send.size();
   std::vector<int> recv_counts(mpi_size,0);
   std::vector<int> recv_disps(mpi_size,0);
-  
+
   //Gather recv counts for all ranks
   mpi_all_gather(my_size, recv_counts, mpi_comm);
-  
+
   //Allocate recv vector
   int total_recv = std::accumulate(recv_counts.begin(), recv_counts.end(), 0);
   if(total_recv > 0) {
@@ -428,8 +434,8 @@ void mpi_all_gather(std::vector<T>& in_send,
     recv_disps[i] -= recv_counts[i]; //set to 0 offset
   }
 
-  void* send_buff = in_send.size() == 0 ? NULL : &(in_send[0]);  
-  CHK_MPI( MPI_Allgatherv( send_buff, my_size, mpi_typeof(T()), 
+  void* send_buff = in_send.size() == 0 ? NULL : &(in_send[0]);
+  CHK_MPI( MPI_Allgatherv( send_buff, my_size, mpi_typeof(T()),
                            &(out_recv_gather[0]), &(recv_counts[0]), &(recv_disps[0]),
                            mpi_typeof(T()), mpi_comm));
   }
@@ -447,14 +453,14 @@ void mpi_all_gather(std::vector<T>& in_send,
 ///       objects into a resizing vecor to be skipped for 0 byte
 ///       send/recvs
 template <typename T>
-void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec, 
+void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
                     std::vector< std::vector<T> >& out_p_vec,
                     MPI_Comm mpi_comm) {
   int mpi_size(0), mpi_rank(0);
   CHK_MPI( MPI_Comm_size( mpi_comm, &mpi_size) );
   CHK_MPI( MPI_Comm_rank( mpi_comm, &mpi_rank) );
   assert( mpi_size == (int) in_p_vec.size() );
-  
+
   std::vector<size_t> per_rank_send_counts(mpi_size);
   std::vector<size_t> per_rank_recv_counts(mpi_size);
 
@@ -472,7 +478,7 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
   }
 
 /*
- *  //Aggregisive method, good for small-med p? 
+ *  //Aggregisive method, good for small-med p?
  *  std::vector<MPI_Request> vec_req;
  *  for(int i=0; i<mpi_size; ++i) {
  *    int send_to_rank   = (mpi_rank + i) % mpi_size;
@@ -490,8 +496,8 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
  *    //Post Isends
  *    if(in_p_vec[send_to_rank].size() > 0) {
  *      MPI_Request req;
- *      CHK_MPI( MPI_Isend( &(in_p_vec[send_to_rank][0]), 
- *                          (in_p_vec[send_to_rank].size() * sizeof(T)), 
+ *      CHK_MPI( MPI_Isend( &(in_p_vec[send_to_rank][0]),
+ *                          (in_p_vec[send_to_rank].size() * sizeof(T)),
  *                          MPI_BYTE,
  *                          send_to_rank, 0, mpi_comm, &req) );
  *      vec_req.push_back(req);
@@ -499,15 +505,15 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
  *  }
  *  CHK_MPI( MPI_Waitall(vec_req.size(), &(vec_req[0]), MPI_STATUSES_IGNORE) );
  */
-  
-  //Basic method -- good for large p? 
+
+  //Basic method -- good for large p?
   //For each rank, in parallel do:
   for(int i=0; i<mpi_size; ++i) {
     MPI_Request request[2];
     int send_to_rank   = (mpi_rank + i) % mpi_size;
     int recv_from_rank = (mpi_rank - i + mpi_size) % mpi_size;
-    CHK_MPI( MPI_Isend( &(in_p_vec[send_to_rank][0]), 
-                        (in_p_vec[send_to_rank].size() * sizeof(T)), 
+    CHK_MPI( MPI_Isend( &(in_p_vec[send_to_rank][0]),
+                        (in_p_vec[send_to_rank].size() * sizeof(T)),
                         MPI_BYTE,
                         send_to_rank, 0, mpi_comm, &(request[0]) ) );
     CHK_MPI( MPI_Irecv( &(out_p_vec[recv_from_rank][0]),

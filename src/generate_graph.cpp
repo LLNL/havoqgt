@@ -51,6 +51,7 @@
 
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
 #include <iostream>
@@ -121,9 +122,11 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
-	typedef bip::managed_mapped_file mapped_t;
+
+  typedef bip::managed_mapped_file mapped_t;
   typedef mapped_t::segment_manager segment_manager_t;
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+
 
   CHK_MPI(MPI_Init(&argc, &argv));
   {
@@ -133,6 +136,7 @@ int main(int argc, char** argv) {
   havoqgt::get_environment();
 
   if (mpi_rank == 0) {
+
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -156,24 +160,27 @@ int main(int argc, char** argv) {
   double   pa_beta;
   uint64_t hub_threshold;
   uint32_t load_from_disk;
+  uint32_t delete_file;
   std::string type;
   std::string fname_output;
   std::string fname_compare = "";
-  if (argc < 7) {
+  if (argc < 8) {
     std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
-    					<< " <load_from_disk> <file to compare to> (argc:" << argc <<
-    					" )." << std::endl;
+              << " <load_from_disk> <delete file on exit> <file to compare to> (argc:" << argc <<
+              " )." << std::endl;
     exit(-1);
   } else {
-  	size_t pos = 1;
+    int pos = 1;
     type = argv[pos++];
     vert_scale    = boost::lexical_cast<uint64_t>(argv[pos++]);
     pa_beta       = boost::lexical_cast<double>(argv[pos++]);
     hub_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
     fname_output = argv[pos++];
+    delete_file  = boost::lexical_cast<uint32_t>(argv[pos++]);
     load_from_disk = boost::lexical_cast<uint32_t>(argv[pos++]);
+
     if (pos < argc) {
-    	fname_compare = argv[pos++];
+      fname_compare = argv[pos++];
     }
   }
   num_vertices <<= vert_scale;
@@ -184,8 +191,9 @@ int main(int argc, char** argv) {
     std::cout << "PA-beta = " << pa_beta << std::endl;
     std::cout << "File name = " << fname_output << std::endl;
     std::cout << "Load from disk = " << load_from_disk << std::endl;
+    std::cout << "Delete on Exit = " << delete_file << std::endl;
     if (fname_compare != "") {
-    	std::cout << "Comparing graph to " << fname_compare << std::endl;
+      std::cout << "Comparing graph to " << fname_compare << std::endl;
     }
   }
 
@@ -193,92 +201,112 @@ int main(int argc, char** argv) {
   std::stringstream fname;
   fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
 
-	if (load_from_disk  == 0) {
-  	remove(fname.str().c_str());
+  if (load_from_disk  == 0) {
+    remove(fname.str().c_str());
   }
 
 
   mapped_t  asdf(bip::open_or_create, fname.str().c_str(), 1024ULL*1024*1024*16);
   segment_manager_t* segment_manager = asdf.get_segment_manager();
- 	bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
+  bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
   graph_type *graph;
 
 
   if (load_from_disk  == 0) {
 
-	  if(type == "RMAT") {
-	    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
-	    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-	                                      vert_scale, num_edges_per_rank,
-	                                      0.57, 0.19, 0.19, 0.05, true, false);
+    if(type == "UPTRI") {
+      uint64_t num_edges = num_vertices * 16;
+      havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
+           false);
 
-	    graph = segment_manager->construct<graph_type>
-  		("graph_obj")
-  		(alloc_inst, MPI_COMM_WORLD, rmat, hub_threshold);
-
-
-	  } else if(type == "PA") {
-	  	std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-
-	    gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
-
-	    graph = segment_manager->construct<graph_type>
-  				("graph_obj")
-  				(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
-
-	    {
-    		std::vector< std::pair<uint64_t, uint64_t> > empty(0);
-    		input_edges.swap(empty);
-    	}
-	  } else {
-	    std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
-	  }
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
 
 
+    } else if(type == "RMAT") {
+      uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
+      havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
+                                        vert_scale, num_edges_per_rank,
+                                        0.57, 0.19, 0.19, 0.05, true, true);
+
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
 
 
-	} else {
-		graph = segment_manager->find<graph_type>("graph_obj").first;
-	}
+    } else if(type == "PA") {
+      std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+
+      gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
+
+      graph = segment_manager->construct<graph_type>
+          ("graph_obj")
+          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold);
+
+      {
+        std::vector< std::pair<uint64_t, uint64_t> > empty(0);
+        input_edges.swap(empty);
+      }
+    } else {
+      std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
+    }
+
+
+
+
+  } else {
+    if (mpi_rank == 0) {
+      std::cout << "Loading Graph from file." << std::endl;
+    }
+
+    graph = segment_manager->find<graph_type>("graph_obj").first;
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) {
+    std::cout << "Graph Generated, Running Tests." << std::endl;
+  }
 
 
   //
   // Calculate max degree
   uint64_t max_degree(0);
-  for(auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
-    max_degree = std::max(max_degree, graph->degree(*vitr));
-  }
-  for(auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
+  for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
     max_degree = std::max(max_degree, graph->degree(*citr));
   }
+
   uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
-  if(mpi_rank == 0) {
+  if (mpi_rank == 0) {
     std::cout << "Max Degree = " << global_max_degree << std::endl;
   }
 
   if (fname_compare != "") {
-  	std::stringstream fname2;
-  	fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
+    std::stringstream fname2;
+    fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
 
-  	mapped_t  asdf2(bip::open_or_create, fname2.str().c_str(), 1024ULL*1024*1024*16);
-  	segment_manager_t* segment_manager2 = asdf2.get_segment_manager();
+    mapped_t  asdf2(bip::open_or_create, fname2.str().c_str(), 1024ULL*1024*1024*16);
+    segment_manager_t* segment_manager2 = asdf2.get_segment_manager();
 
-  	graph_type *graph_other =
-  			segment_manager2->find<graph_type>("graph_obj").first;
+    graph_type *graph_other =
+        segment_manager2->find<graph_type>("graph_obj").first;
 
-  	std::cout << "[" << mpi_rank << "]Comparing member variables of the two graphs";
-  	if (graph != nullptr && graph_other != nullptr && *graph == *graph_other) {
-  		std::cout << "...they are equivelent" << std::endl;
-  	} else {
-  		std::cout << "...they are different." << std::endl;
-  	}
+    std::cout << "[" << mpi_rank << "]Comparing member variables of the two graphs";
+    if (graph != nullptr && graph_other != nullptr && *graph == *graph_other) {
+      std::cout << "...they are equivelent" << std::endl;
+    } else {
+      std::cout << "...they are different." << std::endl;
+    }
   }
 
-
+  if (delete_file) {
+    bip::file_mapping::remove(fname.str().c_str());
+  }
 
   } //END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());
   return 0;
 }
+

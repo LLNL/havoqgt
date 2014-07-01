@@ -133,6 +133,8 @@ public:
         ++m_count;
         m_make_undirected = true;
       }
+      assert(m_current.first <= m_ptr_rmat->max_vertex_id());
+      assert(m_current.second <= m_ptr_rmat->max_vertex_id());
     }
 
     rmat_edge_generator* m_ptr_rmat;
@@ -158,7 +160,21 @@ public:
       , m_rmat_a(a)
       , m_rmat_b(b)
       , m_rmat_c(c)
-      , m_rmat_d(d) { }
+      , m_rmat_d(d) {
+
+
+        // #ifdef DEBUG
+        //   auto itr1 = begin();
+        //   auto itr2 = begin();
+        //   while (itr1 != end()) {
+        //     assert(itr2 != end());
+        //     assert(*itr1 == *itr2);
+        //     assert(itr1 == itr2);
+        //     itr1++;
+        //     itr2++;
+        //   }
+        // #endif
+      }
 
 
   /// Returns the begin of the input iterator
@@ -169,6 +185,10 @@ public:
   /// Returns the end of the input iterator
   input_iterator_type end() {
     return input_iterator_type(this, m_edge_count);
+  }
+
+  uint64_t max_vertex_id() {
+  	return (0x1 << m_vertex_scale);
   }
 
   size_t size() {

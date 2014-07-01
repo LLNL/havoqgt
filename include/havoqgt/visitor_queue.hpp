@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #ifndef HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
@@ -63,14 +63,14 @@ namespace havoqgt { namespace mpi {
 class oned_blocked_partitioned_t { };
 class el_partitioned_t { };
 
-template <typename TVisitor, template<typename T> class Queue, typename TGraph> 
+template <typename TVisitor, template<typename T> class Queue, typename TGraph>
 class visitor_queue {
   typedef TVisitor              visitor_type;
 
   typedef termination_detection<uint64_t> termination_detection_type;
   typedef TGraph                graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
-  //typedef typename havoqgt::detail::reservable_priority_queue<visitor_type, 
+  //typedef typename havoqgt::detail::reservable_priority_queue<visitor_type,
   //    std::vector<visitor_type>, std::greater<visitor_type> > local_queue_type;
   typedef  Queue<visitor_type> local_queue_type;
 
@@ -116,12 +116,12 @@ public:
   public:
     visitor_queue_inserter(visitor_queue* _vq):m_vq(_vq) { }
     visitor_queue_inserter& operator=(const visitor_wrapper& __value) {
-      m_vq->handle_mailbox_receive(__value);      
-      return *this;                                                                 
-    }                         
+      m_vq->handle_mailbox_receive(__value);
+      return *this;
+    }
 
     bool intercept(const visitor_wrapper& __value) {
-      assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != m_vq->m_mailbox.comm_rank());
+      assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
       bool ret = __value.m_visitor.pre_visit();
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
@@ -129,20 +129,20 @@ public:
       return ret;
     }
 
-    /// Simply returns *this.                                                 
-    visitor_queue_inserter&                                          
-    operator*()                                                               
-    { return *this; }     
-                                                                                 
-    /// Simply returns *this.  (This %iterator does not "move".)              
-    visitor_queue_inserter&                                                     
-    operator++()                                                              
-    { return *this; }                                                         
-                                                                                 
-    /// Simply returns *this.  (This %iterator does not "move".)              
-    visitor_queue_inserter                                                      
+    /// Simply returns *this.
+    visitor_queue_inserter&
+    operator*()
+    { return *this; }
+
+    /// Simply returns *this.  (This %iterator does not "move".)
+    visitor_queue_inserter&
+    operator++()
+    { return *this; }
+
+    /// Simply returns *this.  (This %iterator does not "move".)
+    visitor_queue_inserter
     operator++(int)
-    { return *this; }   
+    { return *this; }
 
   private:
     visitor_queue* m_vq;
@@ -222,7 +222,7 @@ public:
     if(v.vertex.is_delegate()) {
       local_delegate_visit(v);
     } else {
-      if(v.vertex.owner() == m_mailbox.comm_rank()) {
+      if(v.vertex.owner() == uint32_t(m_mailbox.comm_rank())) {
         if(v.pre_visit()) {
           push(v);
           m_termination_detection.inc_queued();
@@ -241,7 +241,7 @@ private:
   // This occurs when the local process first encounters a delegate
   void local_delegate_visit(const visitor_type& v) {
     if(v.pre_visit()) {
-      if(m_ptr_graph->master(v.vertex) == m_mailbox.comm_rank()) {
+      if(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank())) {
         //delegate_bcast(v);
         push(v);
         m_termination_detection.inc_queued();
@@ -276,12 +276,12 @@ private:
 
   /*void delegate_bcast(const visitor_type& v) {
     uint32_t root = m_ptr_graph->master(v.vertex);
-    uint32_t num_bcast_children = offset_tree_num_children(m_mailbox.comm_size(), 
-                                                           2, root, 
+    uint32_t num_bcast_children = offset_tree_num_children(m_mailbox.comm_size(),
+                                                           2, root,
                                                            m_mailbox.comm_rank());
     if(num_bcast_children > 0) {
-      uint32_t first_bcast_child = offset_tree_first_child(m_mailbox.comm_size(), 
-                                                           2, root, 
+      uint32_t first_bcast_child = offset_tree_first_child(m_mailbox.comm_size(),
+                                                           2, root,
                                                            m_mailbox.comm_rank());
       for(uint32_t i=0; i<num_bcast_children; ++i) {
         uint32_t child = (first_bcast_child + i)%m_mailbox.comm_size();
@@ -290,7 +290,7 @@ private:
         vw.m_visitor.vertex.set_dest(child);
         vw.m_visitor.vertex.set_bcast(true);
         m_mailbox.send(child, vw, visitor_queue_inserter(this));
-      } 
+      }
     }
   }*/
 
@@ -308,10 +308,10 @@ private:
     if(vw.m_visitor.vertex.is_delegate()) {
       if(vw.m_visitor.vertex.get_bcast()) {
         //delegate_bcast(vw.m_visitor);
-        if(m_ptr_graph->master(vw.m_visitor.vertex) == m_mailbox.comm_rank()) {
+        if(m_ptr_graph->master(vw.m_visitor.vertex) == uint32_t(m_mailbox.comm_rank())) {
           //This is because the mailbox bcast returns to self -- this should be fixed!
           m_termination_detection.inc_completed();
-        } else { 
+        } else {
           //vw.m_visitor.pre_visit();
           //push(vw.m_visitor);
           /*  2013.10.11 -- this causes too much recursion in mailbox, trying something new....
@@ -321,7 +321,7 @@ private:
           m_local_controller_queue.push(vw.m_visitor);
         }
       } else {
-        assert(m_ptr_graph->master(vw.m_visitor.vertex) == m_mailbox.comm_rank());
+        assert(m_ptr_graph->master(vw.m_visitor.vertex) == uint32_t(m_mailbox.comm_rank()));
         if(vw.m_visitor.pre_visit()) {
           //if(m_ptr_graph->master(vw.m_visitor.vertex) == m_mailbox.comm_rank()) {
             //delegate_bcast(vw.m_visitor);
@@ -333,15 +333,15 @@ private:
             m_termination_detection.inc_queued(m_mailbox.comm_size());*/
           //} else {
           //  delegate_parent(vw.m_visitor);
-          //} 
+          //}
         } else {
           m_termination_detection.inc_completed();
-        } 
+        }
       }
     } else {
-      assert(vw.m_visitor.vertex.owner() == m_mailbox.comm_rank());
+      assert(vw.m_visitor.vertex.owner() == uint32_t(m_mailbox.comm_rank()));
       //
-      // Now handle owned vertices 
+      // Now handle owned vertices
       if(vw.m_visitor.pre_visit()) {
         push(vw.m_visitor);
       } else {
@@ -438,6 +438,6 @@ private:
 };
 
 
-}} //namespace havoqgt::mpi 
+}} //namespace havoqgt::mpi
 
 #endif //HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED

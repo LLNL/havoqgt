@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #ifndef HAVOQGT_MPI_MAILBOX_ROUTED_HPP_INCLUDED
@@ -148,7 +148,7 @@ class mailbox_routed {
     void clear() { m_size = 0; m_ptr = NULL; }
     bool is_init() const {return m_ptr != NULL; }
     void* get_ptr() const {return m_ptr; }
-    
+
 
   private:
     size_t m_size;
@@ -165,7 +165,7 @@ public:
     m_num_pending_isend = 0;
 
     m_last_recv_count = 0;
-    
+
     //statistics
     m_mpi_send_counter  = 0;
     m_tree_send_counter = 0;
@@ -188,7 +188,7 @@ public:
 
     for(size_t i=0; i<get_environment().mailbox_num_irecv(); ++i) {
       void* irecv_buff = NULL;
-      int ret = posix_memalign(&irecv_buff, 32, 
+      int ret = posix_memalign(&irecv_buff, 32,
                      get_environment().mailbox_aggregation() * sizeof(routed_msg_type));
       if(ret !=0) {
         perror("posix_memalign-irecv"); exit(-1);
@@ -230,7 +230,7 @@ public:
         std::cout << "route_counter     = " << g_route_counter     << std::endl;
         std::cout << "send_counter      = " << g_send_counter      << std::endl;
         std::cout << "recv_counter      = " << g_recv_counter      << std::endl;
-        std::cout << "Average send size = " << double(g_send_counter + g_route_counter) / double(g_mpi_send_counter) << std::endl; 
+        std::cout << "Average send size = " << double(g_send_counter + g_route_counter) / double(g_mpi_send_counter) << std::endl;
         std::cout << "***********************************************************" << std::endl;
       }
     }
@@ -289,8 +289,8 @@ public:
     assert(_raw_msg.get_bcast());
     _raw_msg.set_dest(m_mpi_size+1);
     for(uint32_t i=0; i<m_2d_comm.bcast_proxies().size(); ++i) {
-      uint32_t proxy_rank = m_2d_comm.bcast_proxies()[i]; 
-      if(proxy_rank == m_mpi_rank) {
+      uint32_t proxy_rank = m_2d_comm.bcast_proxies()[i];
+      if(proxy_rank == uint32_t(m_mpi_rank)) {
         bcast_to_targets(_raw_msg);
       } else {
         route_fast_path(proxy_rank, _raw_msg);
@@ -299,7 +299,7 @@ public:
     if(m_receiving) return;   //prevent receive recursion @todo, make this a function called wait
     do {
       cleanup_pending_isend_requests();
-      receive(_oitr); 
+      receive(_oitr);
     } while(m_num_pending_isend > get_environment().mailbox_num_isend());
   }
 
@@ -371,14 +371,14 @@ public:
         m_list_irecv_request.pop_front();
         MPI_Request* request_ptr = &(pair_req.first);
         MPI_Status status;
-        CHK_MPI( MPI_Test( request_ptr, &flag, &status) ); 
+        CHK_MPI( MPI_Test( request_ptr, &flag, &status) );
         if(flag) {
           routed_msg_type* recv_ptr = static_cast<routed_msg_type*> (
                            pair_req.second );
           int count(0);
           CHK_MPI( MPI_Get_count(&status, MPI_BYTE, &count) );
           for(size_t i=0; i<count/sizeof(routed_msg_type); ++i) {
-            if(recv_ptr[i].dest() == m_mpi_rank /*|| recv_ptr[i].is_tree_op()*/) {
+            if(recv_ptr[i].dest() == uint32_t(m_mpi_rank) /*|| recv_ptr[i].is_tree_op()*/) {
               *_oitr = recv_ptr[i];//.msg;
               ++_oitr;
               ++m_recv_counter;
@@ -386,7 +386,7 @@ public:
               bcast_to_targets(recv_ptr[i]);
             } else if(recv_ptr[i].is_intercept()) {
               if( _oitr.intercept(recv_ptr[i]) ) {
-                route_fast_path(recv_ptr[i].dest(), recv_ptr[i]);  
+                route_fast_path(recv_ptr[i].dest(), recv_ptr[i]);
               }
             } else {
               route_fast_path(recv_ptr[i].dest(), recv_ptr[i]);
@@ -424,7 +424,7 @@ private:
   msg_buffer allocate_msg_buffer() {
     if(m_vec_free_buffers.empty()) {
       void* buff = NULL;
-      int ret = posix_memalign(&buff, 32, 
+      int ret = posix_memalign(&buff, 32,
                       get_environment().mailbox_aggregation() * sizeof(routed_msg_type));
       if(ret !=0) {
         perror("posix_memalign"); exit(-1);
@@ -524,7 +524,7 @@ private:
   int m_mpi_tag;
   int m_mpi_rank;
   int m_mpi_size;
-  
+
   size_t m_pending_partial_buffers;
   size_t m_num_pending_isend;
   size_t                  m_last_recv_count;

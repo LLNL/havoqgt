@@ -1,43 +1,43 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
- * Produced at the Lawrence Livermore National Laboratory. 
- * Written by Roger Pearce <rpearce@llnl.gov>. 
- * LLNL-CODE-644630. 
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
  * All rights reserved.
- * 
- * This file is part of HavoqGT, Version 0.1. 
+ *
+ * This file is part of HavoqGT, Version 0.1.
  * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- * 
+ *
  * Please also read this link – Our Notice and GNU Lesser General Public License.
  *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License (as published by the Free
  * Software Foundation) version 2.1 dated February 1999.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
  * License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc., 
+ * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- * 
+ *
  * Our Preamble Notice
- * 
+ *
  * A. This notice is required to be provided under our contract with the
  * U.S. Department of Energy (DOE). This work was produced at the Lawrence
  * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- * 
+ *
  * B. Neither the United States Government nor Lawrence Livermore National
  * Security, LLC nor any of their employees, makes any warranty, express or
  * implied, or assumes any liability or responsibility for the accuracy,
  * completeness, or usefulness of any information, apparatus, product, or process
  * disclosed, or represents that its use would not infringe privately-owned rights.
- * 
+ *
  * C. Also, reference herein to any specific commercial products, process, or
  * services by trade name, trademark, manufacturer or otherwise does not
  * necessarily constitute or imply its endorsement, recommendation, or favoring by
@@ -46,7 +46,7 @@
  * reflect those of the United States Government or Lawrence Livermore National
  * Security, LLC, and shall not be used for advertising or product endorsement
  * purposes.
- * 
+ *
  */
 
 #ifndef HAVOQGT_MPI_GEN_PREFERENTIAL_ATTACHMENT_EDGE_LIST_HPP_INCLUDED
@@ -62,13 +62,13 @@ namespace havoqgt { namespace mpi {
 
 
 template <typename EdgeType>
-void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges, 
+void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
                                            uint64_t in_base_seed,
-                                           uint64_t in_node_scale, 
+                                           uint64_t in_node_scale,
                                            uint64_t in_edge_scale,
                                            double in_beta,
-                                           double in_prob_rewire, 
-                                           MPI_Comm in_comm) 
+                                           double in_prob_rewire,
+                                           MPI_Comm in_comm)
 {
   namespace ad = havoqgt::detail;
   int mpi_rank, mpi_size;
@@ -82,7 +82,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
   uint64_t k = global_num_edges / global_num_nodes;
   uint64_t edges_per_rank = global_num_edges / mpi_size;
 
-  ad::preferential_attachment_helper<uint64_t> pa(k, global_num_edges, in_beta, 
+  ad::preferential_attachment_helper<uint64_t> pa(k, global_num_edges, in_beta,
                                              in_base_seed*mpi_rank + mpi_rank);
 
   //
@@ -129,11 +129,11 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
     //
     // Combine send/recv vectors
     std::vector<uint64_t> to_send(count_to_send); to_send.reserve(1);
-    std::vector<uint64_t> mark_to_send(count_to_send); 
+    std::vector<uint64_t> mark_to_send(count_to_send);
     std::vector<int>      sendcnts(mpi_size,0); sendcnts.reserve(1);
     to_send.clear(); mark_to_send.clear();
-    for(int i=0; i<mpi_size; ++i) {
-      for(int j=0; j<tmp_send_to_rank[i].size(); ++j) {
+    for(int i = 0; i < mpi_size; ++i) {
+      for(size_t j = 0; j < tmp_send_to_rank[i].size(); ++j) {
         to_send.push_back(tmp_send_to_rank[i][j]);
         mark_to_send.push_back(tmp_mark_send_to_rank[i][j]);
       }

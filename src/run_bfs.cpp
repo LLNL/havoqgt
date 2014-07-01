@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
 
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
   bip::allocator<void, segment_manager_t> alloc_inst (asdf.get_segment_manager());
-  graph_type graph(alloc_inst, MPI_COMM_WORLD, input_edges, hub_threshold);
+  graph_type graph(alloc_inst, MPI_COMM_WORLD,  input_edges, uint64_t(5489), hub_threshold);
 
   //arena.print_info();
 
@@ -245,12 +245,12 @@ int main(int argc, char** argv) {
         uint64_t local_degree = 0;
         source = graph.label_to_locator(isource++);
         if(source.is_delegate()) break;
-        if(mpi_rank == source.owner()) {
+        if(uint32_t(mpi_rank) == source.owner()) {
           local_degree = graph.degree(source);
         }
         global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
       } while(global_degree == 0);
-      if(mpi_rank == source.owner()) {
+      if(uint32_t(mpi_rank) == source.owner()) {
         std::cout << "Starting vertex = " << isource << std::endl;
         std::cout << "delegate? = " << source.is_delegate() << std::endl;
         std::cout << "local_id = " << source.local_id() << std::endl;
@@ -377,12 +377,12 @@ int main(int argc, char** argv) {
         uint64_t local_degree = 0;
         source = graph.label_to_locator(isource++);
         if(source.is_delegate()) break;
-        if(mpi_rank == source.owner()) {
+        if(uint32_t(mpi_rank) == source.owner()) {
           local_degree = graph.degree(source);
         }
         global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
       } while(global_degree == 0);
-      if(mpi_rank == source.owner()) {
+      if(uint32_t(mpi_rank) == source.owner()) {
         std::cout << "Starting vertex = " << isource << std::endl;
         std::cout << "delegate? = " << source.is_delegate() << std::endl;
         std::cout << "local_id = " << source.local_id() << std::endl;
