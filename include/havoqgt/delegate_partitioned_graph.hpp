@@ -430,7 +430,7 @@ class delegate_partitioned_graph {
       std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
 
   template <typename InputIterator>
-  void count_degrees(MPI_Comm mpi_comm,
+  void count_edge_degrees(MPI_Comm mpi_comm,
                  InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
@@ -443,7 +443,7 @@ class delegate_partitioned_graph {
 
   void send_vertex_info(MPI_Comm mpi_comm, uint64_t &high_vertex_count,
       uint64_t delegate_degree_threshold,
-      std::vector<boost::container::map< uint64_t,
+      std::vector<boost::container::map< int,
         std::pair<uint64_t, uint64_t> >  >& maps_to_send);
 
 
