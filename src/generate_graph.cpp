@@ -160,12 +160,13 @@ int main(int argc, char** argv) {
   double   pa_beta;
   uint64_t hub_threshold;
   uint32_t load_from_disk;
+  uint32_t delete_file;
   std::string type;
   std::string fname_output;
   std::string fname_compare = "";
-  if (argc < 7) {
+  if (argc < 8) {
     std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
-              << " <load_from_disk> <file to compare to> (argc:" << argc <<
+              << " <load_from_disk> <delete file on exit> <file to compare to> (argc:" << argc <<
               " )." << std::endl;
     exit(-1);
   } else {
@@ -175,7 +176,9 @@ int main(int argc, char** argv) {
     pa_beta       = boost::lexical_cast<double>(argv[pos++]);
     hub_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
     fname_output = argv[pos++];
+    delete_file  = boost::lexical_cast<uint32_t>(argv[pos++]);
     load_from_disk = boost::lexical_cast<uint32_t>(argv[pos++]);
+
     if (pos < argc) {
       fname_compare = argv[pos++];
     }
@@ -188,6 +191,7 @@ int main(int argc, char** argv) {
     std::cout << "PA-beta = " << pa_beta << std::endl;
     std::cout << "File name = " << fname_output << std::endl;
     std::cout << "Load from disk = " << load_from_disk << std::endl;
+    std::cout << "Delete on Exit = " << delete_file << std::endl;
     if (fname_compare != "") {
       std::cout << "Comparing graph to " << fname_compare << std::endl;
     }
@@ -253,17 +257,26 @@ int main(int argc, char** argv) {
 
 
   } else {
+    if (mpi_rank == 0) {
+      std::cout << "Loading Graph from file." << std::endl;
+    }
+
     graph = segment_manager->find<graph_type>("graph_obj").first;
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) {
+    std::cout << "Graph Generated, Running Tests." << std::endl;
   }
 
 
   //
   // Calculate max degree
   uint64_t max_degree(0);
- for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
-
+  for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
     max_degree = std::max(max_degree, graph->degree(*citr));
   }
+
   uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
   if (mpi_rank == 0) {
     std::cout << "Max Degree = " << global_max_degree << std::endl;
@@ -285,6 +298,10 @@ int main(int argc, char** argv) {
     } else {
       std::cout << "...they are different." << std::endl;
     }
+  }
+
+  if (delete_file) {
+    bip::file_mapping::remove(fname.str().c_str());
   }
 
   } //END Main MPI

@@ -346,7 +346,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
     > maps_to_send(m_mpi_size);
 
     // Generate Enough information to send
-    const size_t threshold = 1024;
+    const size_t threshold = 32768;
     for (size_t i = 0; i < threshold && unsorted_itr != unsorted_itr_end; i++) {
       // Update this vertex's outgoing edge count (first member of the pair)
       uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
@@ -520,7 +520,10 @@ delegate_partitioned_graph<SegementManager>::
 calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
-
+  double time_start = MPI_Wtime();
+  if (m_mpi_rank == 0) {
+    std::cout << "Starting:  calculate_overflow" << std::endl;
+  }
   //
   // Get the number of high and low edges for each node.
   //
@@ -534,16 +537,16 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
       std::plus<uint64_t>(), mpi_comm);
 
   // Determine the desired number of edges at each node.
-  uint64_t target_edges_per_rank = global_edge_count / m_mpi_size;
+  const uint64_t target_edges_per_rank = global_edge_count / m_mpi_size;
 
   //
   // Compure the edge count exchange
   //
   int heavy_idx(0), light_idx(0);
   for(; heavy_idx < m_mpi_size && light_idx < m_mpi_size; ++heavy_idx) {
-    const int64_t total_edges_heavy_idx = low_count_per_rank[heavy_idx]
-                                  + high_count_per_rank[heavy_idx];
-    while(total_edges_heavy_idx > target_edges_per_rank) {
+
+    while(low_count_per_rank[heavy_idx] + high_count_per_rank[heavy_idx]
+            > target_edges_per_rank) {
       // while heavy_idx has edges to give
       const int64_t total_edges_low_idx = low_count_per_rank[light_idx]
                                   + high_count_per_rank[light_idx];
@@ -566,6 +569,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
         // Determine the most that can be moved
         uint64_t to_move = std::min(max_to_offload, max_to_receive);
 
+        assert(to_move != 0);
         // Update the local count variables
         high_count_per_rank[heavy_idx]-=to_move;
         high_count_per_rank[light_idx]+=to_move;
@@ -608,6 +612,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
           owned_high_count += to_move;
           assert(sanity_count == to_move);
         } // else this node is not involved.
+        MPI_Barrier(mpi_comm);
       } else {
         ++light_idx;
         if (light_idx == m_mpi_size) {
@@ -624,6 +629,11 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
   assert(sanity_global_edge_count == global_edge_count);
 #endif
 
+  double time_end = MPI_Wtime();
+  if (m_mpi_rank == 0) {
+    const double total_time = time_end-time_start;
+    std::cout << "calculate_overflow time = " << total_time << std::endl;
+  }
 }  // calculate overflow
 
 /**
@@ -905,12 +915,6 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
   }  // while global iterator range not empty
 
-  double time_end = MPI_Wtime();
-  if (mpi_rank == 0) {
-    std::cout << "partition_low_degree time = " << time_end - time_start
-        << std::endl;
-  }
-
   edges_high_count = 0;
   for (size_t i = 0; i < m_delegate_info.size(); i++) {
     edges_high_count += m_delegate_info[i];
@@ -925,6 +929,12 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   uint64_t sanity_check_high_edge_count = high_count_per_rank[m_mpi_rank];
   assert(edges_high_count == sanity_check_high_edge_count);
 #endif
+
+  double time_end = MPI_Wtime();
+  if (mpi_rank == 0) {
+    std::cout << "partition_low_degree time = " << time_end - time_start
+        << std::endl;
+  }
 }  // partition_low_degree
 
 /**
@@ -1257,6 +1267,9 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
+  if (mpi_rank == 0) {
+    std::cout << "Starting partition_high_degree" << std::endl;
+  }
   // Initates the paritioner, which determines where overflowed edges go
   high_edge_partitioner paritioner(mpi_size, mpi_rank, &transfer_info);
 
