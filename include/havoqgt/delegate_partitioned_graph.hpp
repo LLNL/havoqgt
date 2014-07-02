@@ -382,6 +382,11 @@ class delegate_partitioned_graph {
     return m_owned_info.size();
   }
 
+  uint64_t max_vertex_id() {
+    return m_max_vertex;
+  }
+
+
   size_t num_delegates() const { return m_delegate_degree.size(); }
 
   uint32_t master(const vertex_locator& locator) const {

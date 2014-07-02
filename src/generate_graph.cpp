@@ -206,7 +206,8 @@ int main(int argc, char** argv) {
   }
 
 
-  mapped_t  asdf(bip::open_or_create, fname.str().c_str(), 1024ULL*1024*1024*512);
+  mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
+      1024ULL*1024*1024*512);
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
@@ -252,10 +253,6 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
-
-
-
-
   } else {
     if (mpi_rank == 0) {
       std::cout << "Loading Graph from file." << std::endl;

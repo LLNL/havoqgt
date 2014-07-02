@@ -203,7 +203,7 @@ public:
 
   }
   uint64_t max_vertex_id() {
-    return uint64_t(1) << uint64_t(m_vertex_scale);
+    return (uint64_t(1) << uint64_t(m_vertex_scale)) - 1;
   }
 
   size_t size() {
