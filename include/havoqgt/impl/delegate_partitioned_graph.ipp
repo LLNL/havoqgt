@@ -1416,7 +1416,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
-
+  if (m_mpi_rank == 0) {
+    std::cout << "Starting delegate_partitioned_graph: " << std::endl;
+  }
   boost::unordered_set<uint64_t> global_hubs;
 
   assert(sizeof(vertex_locator) == 8);
@@ -1425,7 +1427,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // Convert it max local id.
   m_max_vertex = std::ceil(double(max_vertex) / double(m_mpi_size));
   // Allocate incoming/outgoing degree tracking
+
   m_local_degree_count.resize(m_max_vertex+1, std::make_pair(0,0));
+
 
   // Count Degree Information
   // For each owned vertex
@@ -1519,7 +1523,7 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   MPI_Barrier(mpi_comm);
   double time_end = MPI_Wtime();
   if(m_mpi_rank == 0) {
-    std::cout << "Partition time = " << time_end - time_start << std::endl;
+    std::cout << "delegate_partitioned_graph time = " << time_end - time_start << std::endl;
   }
 
   // We don't need this anymore, so free the resource

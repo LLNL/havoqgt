@@ -162,6 +162,7 @@ public:
       , m_rmat_c(c)
       , m_rmat_d(d) {
 
+      //  sanity_max_vertex_id();
 
         // #ifdef DEBUG
         //   auto itr1 = begin();
@@ -187,8 +188,22 @@ public:
     return input_iterator_type(this, m_edge_count);
   }
 
+  void sanity_max_vertex_id() {
+    auto itr = begin();
+    auto itr_end = end();
+
+    uint64_t value = 0;
+    while (itr != itr_end) {
+      value = std::max(value, (*itr).first);
+      value = std::max(value, (*itr).second);
+    }
+
+    std::cout << " value: " << value << std::endl;
+    assert(max_vertex_id() == value);
+
+  }
   uint64_t max_vertex_id() {
-  	return (0x1 << m_vertex_scale);
+    return uint64_t(1) << uint64_t(m_vertex_scale);
   }
 
   size_t size() {
