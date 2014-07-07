@@ -129,12 +129,15 @@ class bfs_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
   bfs_visitor(): m_level(std::numeric_limits<uint64_t>::max())  { }
-  bfs_visitor(vertex_locator _vertex, uint64_t _level,
-              uint64_t _parent):
-              vertex(_vertex), m_parent(_parent), m_level(_level) { }
+  bfs_visitor(vertex_locator _vertex, uint64_t _level, uint64_t _parent)
+    : vertex(_vertex)
+    , m_parent(_parent)
+    , m_level(_level) { }
 
-  bfs_visitor(vertex_locator _vertex) :
-              vertex(_vertex), m_parent(0), m_level(0) { }
+  bfs_visitor(vertex_locator _vertex)
+    : vertex(_vertex)
+    , m_parent(0)
+    , m_level(0) { }
 
 
   bool pre_visit() const {
@@ -155,7 +158,8 @@ public:
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
         //std::cout << "Visiting neighbor: " << g.locator_to_label(neighbor) << std::endl;
-        bfs_visitor new_visitor( neighbor, level() + 1, g.locator_to_label(vertex));
+        bfs_visitor new_visitor(neighbor, level() + 1,
+            g.locator_to_label(vertex));
         vis_queue->queue_visitor(new_visitor);
       }
       return true;
@@ -163,8 +167,8 @@ public:
     return false;
   }
 
-  uint64_t         level() const {  return m_level; }
-  uint64_t  parent() const  { return m_parent; }
+  uint64_t level() const {  return m_level; }
+  uint64_t parent() const  { return m_parent; }
 
   friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
     return v1.level() > v2.level();
