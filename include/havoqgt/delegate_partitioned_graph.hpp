@@ -382,6 +382,11 @@ class delegate_partitioned_graph {
     return m_owned_info.size();
   }
 
+  uint64_t max_vertex_id() {
+    return m_max_vertex;
+  }
+
+
   size_t num_delegates() const { return m_delegate_degree.size(); }
 
   uint32_t master(const vertex_locator& locator) const {
@@ -438,13 +443,13 @@ class delegate_partitioned_graph {
 
 
   void send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
-      uint64_t, uint64_t> >&maps_to_send);
+      uint64_t, uint64_t> >&maps_to_send, int maps_to_send_element_count);
 
 
   void send_vertex_info(MPI_Comm mpi_comm, uint64_t &high_vertex_count,
       uint64_t delegate_degree_threshold,
       std::vector<boost::container::map< int,
-        std::pair<uint64_t, uint64_t> >  >& maps_to_send);
+        std::pair<uint64_t, uint64_t> >  >& maps_to_send, int maps_to_send_element_count);
 
 
   void calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,

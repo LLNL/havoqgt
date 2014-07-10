@@ -205,8 +205,11 @@ int main(int argc, char** argv) {
     remove(fname.str().c_str());
   }
 
-
-  mapped_t  asdf(bip::open_or_create, fname.str().c_str(), 1024ULL*1024*1024*16);
+  // TODO change to (2^34 + 2^33 + 2^32 )
+  uint64_t graph_capacity = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
+  assert (graph_capacity <= (751619276800.0/24.0));
+  mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
+      graph_capacity);
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
@@ -252,10 +255,6 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
-
-
-
-
   } else {
     if (mpi_rank == 0) {
       std::cout << "Loading Graph from file." << std::endl;
@@ -266,8 +265,19 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
-    std::cout << "Graph Generated, Running Tests." << std::endl;
+    std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
   }
+
+  for (int i = 0; i < mpi_size; i++) {
+    if (i == mpi_rank) {
+      double percent = double(segment_manager->get_free_memory()) /
+        double(segment_manager->get_size());
+      std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
+      << "/" << segment_manager->get_size() << " = " << percent << std::endl;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
+
 
 
   //
