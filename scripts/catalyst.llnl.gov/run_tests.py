@@ -1,43 +1,16 @@
+import sys
 import atexit
 import time
 import subprocess
 import os.path
 
-time_stamp = time.time()
-base_string =  "gen_results_"
-log_file = base_string + str(time_stamp) + ".out"
-log_file_csv = base_string + str(time_stamp) + ".csv"
-while os.path.isfile(log_file):
-	log_file = base_string+ str(time_stamp) + ".out"
-	log_file_csv = base_string + str(time_stamp) + ".csv"
+headers = ["Process", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "BFS Time", "Count BFS", "AVERAGE BFS", "Visited total", "Error"]
 
-out_file = open(log_file, 'w')
-csv_file = open(log_file_csv, 'w')
-
-
-test_count = 0
-running_process = []
-def kill_jobs():
-	global running_process
-	for values in running_process:
-		values[0].kill()
-		while (values[0].poll() == None):
-			pass
-		log_output(values)
-
-	subprocess.Popen(["scancel", "-u mrdalek"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-	print ("Canceling jobs, wait 60 seconds")
-	time.sleep(60)
-	print ("Exitd")
-
-atexit.register(kill_jobs)
-
-headers = ["Process", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "Error"]
-
-header = ", ".join(headers)
-csv_file.write(header+"\n")
+csv_file = ""
+out_file = ""
 
 def log_output(values):
+	global out_file
 	p = values[0]
 	out, err = p.communicate()
 	out_file.write("=====================================================================\n")
@@ -54,11 +27,15 @@ def log_output(values):
 	out_file.write("=====================================================================\n")
 	out_file.flush()
 
-	log_output_csv(p.returncode, out, err, values[3], values[4])
+	try:
+		log_output_csv(out, values[3], values[4])
+	except:
+		print "Exception 3: ", sys.exc_info()[0]
 
 
 
-def log_output_csv(exit_code, string, string_err, processes, nodes):
+def log_output_csv(string, processes, nodes):
+	global csv_file
 	lines = string.split('\n')
 
 	temp = []
@@ -76,10 +53,98 @@ def log_output_csv(exit_code, string, string_err, processes, nodes):
 				temp[h] = words[len(words)-1]
 				break
 
-	csv_file.write(",".join(temp)+"\n")
+	csv_file.write("\t".join(temp)+"\n")
 	csv_file.flush()
 
-executable = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/src/generate_graph"
+def generate_csv(ifile_name):
+	global csv_file
+	try:
+		fin = open(ifile_name, 'r')
+		csv_file = open(ifile_name + "_gen.csv", 'w')
+
+		header = "\t, ".join(headers)
+		csv_file.write(header+"\n")
+
+
+
+		while True:
+			fin.readline()
+			fin.readline()
+
+			line = fin.readline().strip()
+			words = line.split(' ')
+			exit_code = words[len(words)-1]
+
+			line = fin.readline().strip()
+
+			words = line.split(' ')
+			nodes = words[len(words)-1]
+			processes = words[len(words)-3]
+
+			line = fin.readline().strip()
+			string = ""
+			while True:
+				if "Error:" in line:
+					break
+				else:
+					string += line + "\n"
+					line = fin.readline().strip()
+
+			while True:
+				if "=====================================================================" in line:
+					break
+				else:
+					line = fin.readline().strip()
+
+			log_output_csv(exit_code, string, "", processes, nodes)
+	except:
+		print "Exception Gen: ", sys.exc_info()[0]
+
+if False:
+	generate_csv("gen_results_1404839527.99.out")
+	exit(0)
+
+
+time_stamp = time.time()
+base_string =  "gen_results_"
+log_file = base_string + str(time_stamp) + ".out"
+log_file_csv = base_string + str(time_stamp) + ".csv"
+while os.path.isfile(log_file):
+	log_file = base_string+ str(time_stamp) + ".out"
+	log_file_csv = base_string + str(time_stamp) + ".csv"
+
+out_file = open(log_file, 'w')
+csv_file = open(log_file_csv, 'w')
+
+
+test_count = 0
+running_process = []
+def kill_jobs():
+	global running_process
+	print ("Canceling Remaining jobs and Exiting")
+	try:
+		for values in running_process:
+			values[0].kill()
+			while (values[0].poll() == None):
+				pass
+			log_output(values)
+	except:
+		print "Exception 4: ", sys.exc_info()[0]
+
+
+
+atexit.register(kill_jobs)
+
+
+
+
+header = "\t ".join(headers)
+csv_file.write(header+"\n")
+
+
+
+executable_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/src/"
+executable = executable_dir+"run_bfs"
 graph_file = "out.graph"
 save_file = 0
 compare_files = 0
@@ -144,23 +209,40 @@ def spawn_weak_scaling(initial_scale, scale_increments, inital_nodes, node_multi
 
 
 #Data Scaling test spawning
-spawn_data_scaling(25, 1, 29, 1024, 1)
-spawn_data_scaling(25, 1, 29, 1024, 2)
+test_script = False
+if test_script:
+	sleep_time = 5
+	spawn_data_scaling(17, 1, 20, 1024, 1)
+else:
+	sleep_time = 120
+	spawn_data_scaling(25, 1, 32, 1024, 1)
+	spawn_data_scaling(26, 1, 30, 2048, 2)
 
 #Weak Scaling test spawning
-spawn_weak_scaling(28, 1, 2, 2, 32, 1024, 1)
-spawn_weak_scaling(28, 1, 2, 2, 16, 1024, 2)
+if test_script:
+	spawn_weak_scaling(25, 1, 1, 2, 8, 1024, 1)
+else:
+	spawn_weak_scaling(25, 1, 1, 2, 64, 1024, 1)
+	spawn_weak_scaling(26, 1, 2, 2, 64, 2048, 2) # skips first one, which is done above
 
 print "Generated %d Srun Tasks" %(test_count)
 
 i = 0
 while (len(running_process) != 0):
-	time.sleep(120)
+	try:
+		time.sleep(sleep_time)
+	except:
+		print "Exception 1: ", sys.exc_info()[0]
+
 	if (i >= len(running_process)):
 		i = 0
 
 	values = running_process[i]
 	if (values[0].poll() != None):
-		log_output(values)
-		running_process.remove(values)
+		try:
+			log_output(values)
+			running_process.remove(values)
+		except:
+			print "Exception 2: ", sys.exc_info()[0]
+
 	i += 1

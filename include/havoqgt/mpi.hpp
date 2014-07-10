@@ -426,18 +426,18 @@ void mpi_all_gather(std::vector<T>& in_send,
   //Allocate recv vector
   int total_recv = std::accumulate(recv_counts.begin(), recv_counts.end(), 0);
   if(total_recv > 0) {
-  out_recv_gather.resize(total_recv);
+    out_recv_gather.resize(total_recv);
 
-  //cacl recv disps
-  std::partial_sum(recv_counts.begin(), recv_counts.end(), recv_disps.begin());
-  for(size_t i=0; i<recv_disps.size(); ++i) {
-    recv_disps[i] -= recv_counts[i]; //set to 0 offset
-  }
+    //cacl recv disps
+    std::partial_sum(recv_counts.begin(), recv_counts.end(), recv_disps.begin());
+    for(size_t i=0; i<recv_disps.size(); ++i) {
+      recv_disps[i] -= recv_counts[i]; //set to 0 offset
+    }
 
-  void* send_buff = in_send.size() == 0 ? NULL : &(in_send[0]);
-  CHK_MPI( MPI_Allgatherv( send_buff, my_size, mpi_typeof(T()),
-                           &(out_recv_gather[0]), &(recv_counts[0]), &(recv_disps[0]),
-                           mpi_typeof(T()), mpi_comm));
+    void* send_buff = in_send.size() == 0 ? NULL : &(in_send[0]);
+    CHK_MPI( MPI_Allgatherv( send_buff, my_size, mpi_typeof(T()),
+                             &(out_recv_gather[0]), &(recv_counts[0]), &(recv_disps[0]),
+                             mpi_typeof(T()), mpi_comm));
   }
 }
 
