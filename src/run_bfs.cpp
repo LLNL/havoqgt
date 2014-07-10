@@ -66,7 +66,7 @@
 
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
-
+#include <boost/interprocess/mapped_region.hpp>
 
 // class heap_arena
 // {
@@ -199,8 +199,13 @@ int main(int argc, char** argv) {
   uint64_t file_size = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
   assert (file_size <= (751619276800.0/24.0));
 
-  mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
+  mapped_t asdf(bip::open_or_create, fname.str().c_str(),
       file_size);
+
+  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
+  bool r = asdf.advise(advise);
+  assert(r);
+
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 

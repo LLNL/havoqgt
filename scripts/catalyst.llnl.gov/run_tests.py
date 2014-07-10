@@ -4,6 +4,8 @@ import time
 import subprocess
 import os.path
 
+
+
 headers = ["Process", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "BFS Time", "Count BFS", "AVERAGE BFS", "Visited total", "Error"]
 
 csv_file = ""
@@ -11,26 +13,28 @@ out_file = ""
 
 def log_output(values):
 	global out_file
-	p = values[0]
-	out, err = p.communicate()
-	out_file.write("=====================================================================\n")
-	temp = "Test number: %d\n" %(values[2])
-	out_file.write(temp)
-	temp = "Exit Code: %s\n" %(p.returncode)
-	out_file.write(temp)
-	temp = "SRun Args: %s\n" %(values[1])
-	out_file.write(temp)
-	temp = "Output: %s\n" %(out)
-	out_file.write(temp)
-	temp = "Error: %s\n\n" %(err)
-	out_file.write(temp)
-	out_file.write("=====================================================================\n")
-	out_file.flush()
-
+	try:
+		p = values[0]
+		out, err = p.communicate()
+		out_file.write("=====================================================================\n")
+		temp = "Test number: %d\n" %(values[2])
+		out_file.write(temp)
+		temp = "Exit Code: %s\n" %(p.returncode)
+		out_file.write(temp)
+		temp = "SRun Args: %s\n" %(values[1])
+		out_file.write(temp)
+		temp = "Output: %s\n" %(out)
+		out_file.write(temp)
+		temp = "Error: %s\n\n" %(err)
+		out_file.write(temp)
+		out_file.write("=====================================================================\n")
+		out_file.flush()
+	except:
+		print "Exception 3.1: ", sys.exc_info()[0]
 	try:
 		log_output_csv(out, values[3], values[4])
 	except:
-		print "Exception 3: ", sys.exc_info()[0]
+		print "Exception 3.2: ", sys.exc_info()[0]
 
 
 
@@ -209,7 +213,7 @@ def spawn_weak_scaling(initial_scale, scale_increments, inital_nodes, node_multi
 
 
 #Data Scaling test spawning
-test_script = False
+test_script = True
 if test_script:
 	sleep_time = 5
 	spawn_data_scaling(17, 1, 20, 1024, 1)
@@ -220,7 +224,7 @@ else:
 
 #Weak Scaling test spawning
 if test_script:
-	spawn_weak_scaling(25, 1, 1, 2, 8, 1024, 1)
+	spawn_weak_scaling(17, 1, 1, 2, 8, 1024, 1)
 else:
 	spawn_weak_scaling(25, 1, 1, 2, 64, 1024, 1)
 	spawn_weak_scaling(26, 1, 2, 2, 64, 2048, 2) # skips first one, which is done above
@@ -242,6 +246,8 @@ while (len(running_process) != 0):
 		try:
 			log_output(values)
 			running_process.remove(values)
+		except ValueError as e:
+			print "ValueError ({0}): {1}".format(e.errno, e.strerror)
 		except:
 			print "Exception 2: ", sys.exc_info()[0]
 
