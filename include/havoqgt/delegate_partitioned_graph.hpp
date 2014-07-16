@@ -98,7 +98,7 @@ typedef struct OverflowSendInfo{
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
-
+   const static uint64_t edge_chunk_size = 1024*1024;
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 

@@ -5,8 +5,10 @@ import subprocess
 import os.path
 
 
+VERBOSE = False
+EXECUTE = True
 
-headers = ["Process", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "BFS Time", "Count BFS", "AVERAGE BFS", "Visited total", "Error"]
+headers = ["Process", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Total MB Written:", "Total MB Read:" ,"Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "BFS Time", "Count BFS", "AVERAGE BFS", "Visited total", "Error"]
 
 csv_file = ""
 out_file = ""
@@ -109,16 +111,30 @@ if False:
 	exit(0)
 
 
-time_stamp = time.time()
-base_string =  "gen_results_"
-log_file = base_string + str(time_stamp) + ".out"
-log_file_csv = base_string + str(time_stamp) + ".csv"
-while os.path.isfile(log_file):
-	log_file = base_string+ str(time_stamp) + ".out"
-	log_file_csv = base_string + str(time_stamp) + ".csv"
+log_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/logs/"
+executable_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/src/"
+executable = "run_bfs"
+
+
+time_stamp = str(time.time())
+log_file = executable + "_" + str(time_stamp) + ".out"
+while os.path.isfile(log_dir+log_file):
+	time_stamp = time.time()
+	log_file = executable + "_" + str(time_stamp) + ".out"
+
+log_file_csv = log_dir + executable + "_" + str(time_stamp) + ".csv"
+log_file = log_dir + log_file
 
 out_file = open(log_file, 'w')
 csv_file = open(log_file_csv, 'w')
+
+
+cmd = ['cp', executable_dir+executable, log_dir+executable+"_"+time_stamp]
+p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+while (p.poll() == None):
+	pass
+
+executable = log_dir+executable+"_"+time_stamp
 
 
 test_count = 0
@@ -134,27 +150,26 @@ def kill_jobs():
 			log_output(values)
 	except:
 		print "Exception 4: ", sys.exc_info()[0]
-
-
-
 atexit.register(kill_jobs)
-
-
 
 
 header = "\t ".join(headers)
 csv_file.write(header+"\n")
 
-
-
-executable_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/src/"
-executable = executable_dir+"run_bfs"
 graph_file = "out.graph"
 save_file = 0
 compare_files = 0
 test_type = "RMAT"
 
-def spawn_data_scaling(initial_scale, scale_increments, max_scale, intial_threshold, threshold_multiplier):
+def run_cmd(cmd):
+	if VERBOSE:
+		print " ".join(cmd)
+	if EXECUTE:
+		p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+		return p
+	return None
+
+def spawn_data_scaling(initial_scale, scale_increments, max_scale, intial_threshold, threshold_multiplier, nodes):
 	global test_count
 	global running_process
 	global executable
@@ -163,8 +178,7 @@ def spawn_data_scaling(initial_scale, scale_increments, max_scale, intial_thresh
 	global compare_files
 	global test_type
 
-	nodes = 1
-	processes = 24
+	processes = 24 * nodes
 	scale = initial_scale
 	degree_threshold = intial_threshold
 
@@ -172,9 +186,11 @@ def spawn_data_scaling(initial_scale, scale_increments, max_scale, intial_thresh
 
 		str_processes = "-n %d" %(processes)
 		str_nodes = "-N %d" %(nodes)
-		cmd = ['srun', "--clear-ssd", str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
-		p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-		running_process.append([p, str_processes + " " + str_nodes, test_count, processes, nodes])
+		cmd = ['srun', "--clear-ssd", "-di-mmap=" + str(96*1024*256) , str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
+
+		p = run_cmd(cmd)
+		if p != None:
+			running_process.append([p, str_processes + " " + str_nodes, test_count, processes, nodes])
 
 		scale += scale_increments
 		degree_threshold *= threshold_multiplier
@@ -200,9 +216,12 @@ def spawn_weak_scaling(initial_scale, scale_increments, inital_nodes, node_multi
 
 		str_processes = "-n %d" %(processes)
 		str_nodes = "-N %d" %(nodes)
-		cmd = ['srun', "--clear-ssd", str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
-		p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-		running_process.append([p, str_processes + " " + str_nodes, test_count, processes, nodes])
+		cmd = ['srun', "--clear-ssd", "--di-mmap=" + str(96*1024*256), str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
+
+		p = run_cmd(cmd)
+		if p != None:
+			running_process.append([p, str_processes + " " + str_nodes, test_count, processes, nodes])
+
 
 		nodes *= node_multipler
 		scale += scale_increments
@@ -213,21 +232,24 @@ def spawn_weak_scaling(initial_scale, scale_increments, inital_nodes, node_multi
 
 
 #Data Scaling test spawning
-test_script = True
+test_script = False
 if test_script:
 	sleep_time = 5
-	spawn_data_scaling(17, 1, 20, 1024, 1)
+	spawn_data_scaling(17, 1, 20, 1024, 1, 1)
 else:
 	sleep_time = 120
-	spawn_data_scaling(25, 1, 32, 1024, 1)
-	spawn_data_scaling(26, 1, 30, 2048, 2)
+	#spawn_data_scaling(25, 1, 32, 1024, 1, 1)
+	#spawn_data_scaling(26, 1, 30, 2048, 2, 1)
+	spawn_data_scaling(17, 1, 30, 1024, 1, 1)
 
 #Weak Scaling test spawning
 if test_script:
-	spawn_weak_scaling(17, 1, 1, 2, 8, 1024, 1)
+	pass
+	# spawn_weak_scaling(17, 1, 1, 2, 8, 1024, 1)
 else:
-	spawn_weak_scaling(25, 1, 1, 2, 64, 1024, 1)
-	spawn_weak_scaling(26, 1, 2, 2, 64, 2048, 2) # skips first one, which is done above
+	pass
+	#spawn_weak_scaling(25, 1, 1, 2, 64, 1024, 1)
+	#spawn_weak_scaling(26, 1, 2, 2, 64, 2048, 2) # skips first one, which is done above
 
 print "Generated %d Srun Tasks" %(test_count)
 
