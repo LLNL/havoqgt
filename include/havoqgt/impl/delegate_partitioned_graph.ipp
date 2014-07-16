@@ -14,6 +14,42 @@
 
 namespace havoqgt {
 namespace mpi {
+class IOInfo {
+ public:
+  IOInfo() {
+    init(mb_read_, mb_written_);
+  }
+
+  void init(int &r, int &w) {
+    FILE *pipe;
+    char str[250];
+    pipe = popen("iostat -m | grep md0 2>&1", "r" );
+
+    float temp;
+    fscanf(pipe, "%s", str);
+    fscanf(pipe, "%f %f %f", &temp, &temp, &temp);
+    fscanf(pipe, "%d %d \n", &r, &w);
+    pclose(pipe);
+  };
+
+  void log_diff(bool final = false) {
+    int read = -1;
+    int written = -1;
+    init(read, written);
+
+    if (final) {
+      std::cout << "Total MB Read: " << (read - mb_read_) <<
+                "\nTotal MB Written: " << (written - mb_written_) << std::endl;
+    } else {
+      std::cout << "\tMB Read: " << (read - mb_read_) <<
+                "\n\tMB Written: " << (written - mb_written_) << std::endl;
+    }
+  };
+
+ private:
+  int mb_read_;
+  int mb_written_;
+};
 
 class DebugOverFlow {
  public:
@@ -184,7 +220,10 @@ class high_edge_partitioner {
       // If the current node is the destination, then determine the destination
       // by examing the transfer_info object
       const uint64_t delegate_id = i.first;
-      assert(m_transfer_info->count(delegate_id) == 1);
+      if (m_transfer_info->count(delegate_id) == 0) {
+        return m_mpi_rank;
+      }
+
       assert(m_transfer_info->at(delegate_id).size() > 0);
 
       if (is_counting) {
@@ -200,7 +239,7 @@ class high_edge_partitioner {
             return m_transfer_info->at(delegate_id)[j].to_send_id;
           }
         }
-        assert(false);
+        return m_mpi_rank;
       } else {
         // Not counting, so update the edge counts
         dest = m_transfer_info->at(delegate_id).front().to_send_id;
@@ -333,6 +372,8 @@ count_edge_degrees(MPI_Comm mpi_comm,
   int mpi_rank(0), mpi_size(0);
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+  IOInfo *io_info_temp = new IOInfo();
   if (mpi_rank == 0) {
     std::cout << "Starting:  count_edge_degrees" << std::endl;
   }
@@ -349,8 +390,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
     int maps_to_send_element_count = 0;
 
     // Generate Enough information to send
-    const size_t threshold = 32768;
-    for (size_t i = 0; i < threshold && unsorted_itr != unsorted_itr_end; i++) {
+    for (size_t i = 0; i < edge_chunk_size && unsorted_itr != unsorted_itr_end; i++) {
       // Update this vertex's outgoing edge count (first member of the pair)
       uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
       int owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
@@ -360,7 +400,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
         maps_to_send.at(owner)[local_id].first++;
       }
 
-      // Update tgus vertex's incoming edge count (second member of the pair)
+      // Update the vertex's incoming edge count (second member of the pair)
       local_id = local_dest_id(m_mpi_size)(*unsorted_itr);
       owner    = owner_dest_id(m_mpi_size)(*unsorted_itr);
       if (owner == m_mpi_rank) {
@@ -414,6 +454,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
   if (mpi_rank == 0) {
     const double total_time = time_end-time_start;
     std::cout << "count_edge_degrees time = " << total_time << std::endl;
+    io_info_temp->log_diff();
   }
 }  // count_edge_degrees
 
@@ -476,76 +517,6 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
     m_local_degree_count[local_id].second += dest_count;
   }  // for each recieved element.
 
-
-  // // Send to Each Node in turn.
-  // for (int i = 0; i < m_mpi_size; ++i) {
-  //   // start inner loop at i to avoid re-exchanging data
-  //   for (int j = i; j < m_mpi_size; ++j) {
-  //     int swap_id = -1;
-  //     // Determine who to swap woth
-  //     if (i == m_mpi_rank && j == m_mpi_rank) {
-  //       // Can not swap with ourself...
-  //       continue;
-  //     } else if (i == m_mpi_rank) {
-  //       swap_id = j;
-  //     } else if (j == m_mpi_rank) {
-  //       swap_id = i;
-  //     } else {
-  //       continue;
-  //     }
-
-  //     assert(swap_id != m_mpi_rank);
-
-  //     MPI_Status status;
-
-  //     // Track how much we are sending and will be reciving.
-  //     uint64_t send_count = maps_to_send[swap_id].size() * 3;
-  //     uint64_t recv_count = send_count;
-
-  //     // Determine the max buffer to store the information we will be sending
-  //     // and receiving.
-  //     CHK_MPI(MPI_Sendrecv_replace(&recv_count, 1,
-  //         MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status) );
-  //     std::vector<uint64_t> temp_buff(std::max(send_count, recv_count), 0);
-
-  //     // Fill the send buffer.
-  //     auto itr = maps_to_send[swap_id].begin();
-  //     for (uint64_t pos = 0; itr != maps_to_send[swap_id].end(); itr++) {
-  //       temp_buff[pos++] = (*itr).first;
-  //       temp_buff[pos++] = (*itr).second.first;
-  //       temp_buff[pos++] = (*itr).second.second;
-  //     }
-
-  //     assert(temp_buff.size() == std::max(send_count, recv_count));
-
-  //     // std::cout << "[ " << m_mpi_rank << "]" << " Sending " << send_count <<
-  //     //  " to " << swap_id << ". Recieving " << recv_count << " from " <<
-  //     //  swap_id << ". " << std::endl;
-
-  //     // Exchange our buffer with our partners buffer
-  //     CHK_MPI(MPI_Sendrecv_replace(&(temp_buff[0]), temp_buff.size(),
-  //           MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status));
-
-
-  //     //Update our local degree counts
-  //     for (size_t k = 0; k < recv_count; ) {
-  //       const uint64_t local_id = temp_buff[k++];
-  //       const uint64_t source_count = temp_buff[k++];
-  //       const uint64_t dest_count = temp_buff[k++];
-  //       assert(local_id < m_local_degree_count.size());
-
-  //       // If its not currently a high vertex but by adding this it becomes one
-  //       // then increment high_vertex_count
-  //       if (m_local_degree_count[local_id].second < delegate_degree_threshold
-  //         && m_local_degree_count[local_id].second + dest_count >=
-  //         delegate_degree_threshold) {
-  //         high_vertex_count++;
-  //       }
-  //       m_local_degree_count[local_id].first += source_count;
-  //       m_local_degree_count[local_id].second += dest_count;
-  //     }  // for each recieved element.
-  //   }  // for over nodes
-  // }  // for over nodes
 }  // send_vertex_info
 
 /**
@@ -568,6 +539,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
   double time_start = MPI_Wtime();
+  IOInfo *io_info_temp = new IOInfo();
   if (m_mpi_rank == 0) {
     std::cout << "Starting:  calculate_overflow" << std::endl;
   }
@@ -697,6 +669,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
   if (m_mpi_rank == 0) {
     const double total_time = time_end-time_start;
     std::cout << "calculate_overflow time = " << total_time << std::endl;
+    io_info_temp->log_diff();
   }
 }  // calculate overflow
 
@@ -902,6 +875,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
+  IOInfo *io_info_temp = new IOInfo();
   if (mpi_rank == 0) {
     std::cout << "Starting:  partition_low_degree" << std::endl;
   }
@@ -923,9 +897,9 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
     int maps_to_send_element_count = 0;
     {
       std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_low;
-      to_send_edges_low.reserve(16*1024);
+      to_send_edges_low.reserve(edge_chunk_size);
 
-      for (size_t i=0; unsorted_itr != unsorted_itr_end && i<16*1024;
+      for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
             ++unsorted_itr) {
         if (global_hub_set.count(unsorted_itr->first) == 0) {
           to_send_edges_low.push_back(*unsorted_itr);
@@ -939,7 +913,6 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
           const int owner = unsorted_itr->second % mpi_size;
           if (owner == mpi_rank) {
             const uint64_t ver_id = unsorted_itr->first;
-            const uint64_t delegate_dest_count = unsorted_itr->second;
 
             const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
             assert(new_source_id < m_delegate_info.size()-1);
@@ -953,7 +926,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
         } else {
           assert(false);
         }
-      }
+      }  // for
 
       // Exchange Edges/Recieve edges
       edge_source_partitioner paritioner(mpi_size);
@@ -1020,6 +993,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   if (mpi_rank == 0) {
     std::cout << "partition_low_degree time = " << time_end - time_start
         << std::endl;
+    io_info_temp->log_diff();
   }
 }  // partition_low_degree
 
@@ -1063,67 +1037,7 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
     const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
     assert(new_source_id < m_delegate_info.size()-1);
     m_delegate_info[new_source_id] += delegate_dest_count;
-
   }
-  // // Iterate over nodes
-  // for (int i = 0; i < m_mpi_size; ++i) {
-  //   // start inner loop at i to avoid re-exchanging data
-  //   for (int j = i; j < m_mpi_size; ++j) {
-  //     int swap_id = -1;
-  //     if (i == m_mpi_rank && j == m_mpi_rank) {
-  //       continue;
-  //     } else if (i == m_mpi_rank) {
-  //       swap_id = j;
-  //     } else if (j == m_mpi_rank) {
-  //       swap_id = i;
-  //     } else {
-  //       continue;
-  //     }
-
-  //     assert(swap_id != m_mpi_rank);
-
-  //     MPI_Status status;
-  //     uint64_t send_count = maps_to_send[swap_id].size() * 2;
-  //     uint64_t recv_count = send_count;
-
-  //     // Determine the number of elements we will be sending/recieving.
-  //     CHK_MPI(MPI_Sendrecv_replace(&recv_count, 1,
-  //         MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status) );
-  //     // Allocate enough space to recieve the elements
-  //     std::vector<uint64_t> temp_buff(std::max(send_count, recv_count));
-
-  //     // Fill the buffer with elements to send
-  //     auto itr = maps_to_send[swap_id].begin();
-  //     for (uint64_t pos = 0; itr != maps_to_send[swap_id].end(); itr++) {
-  //       temp_buff[pos++] = (*itr).first;  // Delegate ID
-  //       temp_buff[pos++] = (*itr).second;  // Count
-  //     }
-
-  //     // Exchange information
-  //     CHK_MPI(MPI_Sendrecv_replace(&(temp_buff[0]), temp_buff.size(),
-  //           MPI_UNSIGNED_LONG, swap_id, 0, swap_id, 0, mpi_comm, &status));
-
-  //     // Now update the m_delegate_info.
-  //     for (size_t k = 0; k < recv_count; ) {
-  //       const uint64_t ver_id = temp_buff[k++];
-  //       const uint64_t delegate_dest_count = temp_buff[k++];
-
-  //       const uint64_t source_id = m_map_delegate_locator[ver_id].local_id();
-  //       assert(source_id < m_delegate_info.size()-1);
-  //       m_delegate_info[source_id] += delegate_dest_count;
-  //     }  // for each received element.
-  //   }  // for over nodes
-  // }  // for over nodes
-
-  // auto itr = maps_to_send[m_mpi_rank].begin();
-  // for (; itr != maps_to_send[m_mpi_rank].end(); itr++) {
-  //   const uint64_t ver_id = (*itr).first;
-  //   const uint64_t delegate_dest_count = (*itr).second;
-
-  //   const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
-  //   assert(new_source_id < m_delegate_info.size()-1);
-  //   m_delegate_info[new_source_id] += delegate_dest_count;
-  // }
 }  // send_high_info
 
 
@@ -1154,6 +1068,7 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
+   IOInfo *io_info_temp = new IOInfo();
   if (mpi_rank == 0) {
     std::cout << "Starting partition_high_degree" << std::endl;
   }
@@ -1172,14 +1087,12 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
   // Scratch vector use for storing edges to send
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
-  to_send_edges_high.reserve(16*1024);
+  to_send_edges_high.reserve(edge_chunk_size);
 
-// TODO: use exisitng knowledge to replace this with counters
-// Removes a MPI_Gather
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
         mpi_comm)) {
     while (unsorted_itr != unsorted_itr_end &&
-           to_send_edges_high.size()<16*1024) {
+           to_send_edges_high.size()<edge_chunk_size) {
       // Get next edge
       const auto edge = *unsorted_itr;
       ++unsorted_itr;
@@ -1190,31 +1103,8 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
         uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
         assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 
-        if (owner_dest_id(m_mpi_size)(edge) == m_mpi_rank) {  // check if this
-                                                              // node opens it
-          uint64_t place_pos = m_delegate_degree[new_source_id];
-          place_pos += m_delegate_info[new_source_id];
-
-          if (place_pos < m_delegate_info[new_source_id+1]) { // check if this
-            assert(place_pos < m_delegate_targets.size());    // node has room
-                                                              // it
-            auto new_target_label = label_to_locator(edge.second);
-
-            // Add the edge to this node's targes and increment edge count
-            m_delegate_targets[place_pos] = new_target_label;
-            assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
-            m_delegate_degree[new_source_id]++;
-            continue;
-          }
-          // Else this node has enough edges for this delegate, so send the
-          // edge to a node that needs edges for this delegate.
-          assert(transfer_info.size() > 0);
-          assert(transfer_info.count(new_source_id) != 0);
-        }
         // Send the edge if we don't own it or if we own it but have no room.
-        to_send_edges_high.push_back(
-              std::make_pair(new_source_id, edge.second));
-
+        to_send_edges_high.push_back(std::make_pair(new_source_id, edge.second));
       }  // end if is a hub
     }  // end while
 
@@ -1226,7 +1116,11 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
         mpi_comm);
 
     // Empty the vector
-    to_send_edges_high.clear();
+    {
+      std::vector<std::pair<uint64_t, uint64_t> > temp;
+      to_send_edges_high.swap(temp);
+      to_send_edges_high.reserve(edge_chunk_size);
+    }
     assert(to_send_edges_high.size() == 0);
     std::sort(to_recv_edges_high.begin(), to_recv_edges_high.end());
 
@@ -1274,8 +1168,10 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
         mpi_comm);
 
     // Empty the vector
-    to_send_edges_high.clear();
-    assert(to_send_edges_high.size() == 0);
+    {
+      std::vector<std::pair<uint64_t, uint64_t> > temp;
+      to_send_edges_high.swap(temp);
+    }
 
     std::sort(to_recv_edges_high.begin(), to_recv_edges_high.end());
     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
@@ -1290,10 +1186,8 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
       if (place_pos == m_delegate_info[new_source_id+1]) {
         // We have no room for this node, so lets send it to a node that has
-        // room.
-        assert(transfer_info.size() > 0);
-        assert(transfer_info.count(new_source_id) != 0);
-        to_send_edges_high.push_back(edge);
+        // room. But this is the last round, so an error must have occurd
+        assert(false);
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
@@ -1308,10 +1202,8 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
           assert(transfer_info.size() == 0);
         }
 
-      }  // else we have room
+      }  // else there is have room
     }  // for edges recieved
-
-    assert(to_send_edges_high.size() == 0);
   }
 
 #ifdef DEBUG
@@ -1329,17 +1221,15 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
       assert(m_delegate_targets[j].m_local_id != 0x7FFFFFFFFF);
     }
   }
-   std::cout << "partition_high_degree debugging " << std::endl;
 #endif
 
   double time_end = MPI_Wtime();
   if (mpi_rank == 0) {
     std::cout << "partition_high_degree time = " << time_end - time_start
         << std::endl;
+    io_info_temp->log_diff();
   }
 }  // partition_high_degre
-
-
 
 /**
  * Builds a delegate_partitioned_graph with from and unsorted sequence of edges.
@@ -1376,20 +1266,19 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
+  IOInfo *io_info_temp = new IOInfo();
   if (m_mpi_rank == 0) {
     std::cout << "Starting delegate_partitioned_graph: " << std::endl;
   }
-  boost::unordered_set<uint64_t> global_hubs;
-
   assert(sizeof(vertex_locator) == 8);
-
 
   // Convert it max local id.
   m_max_vertex = std::ceil(double(max_vertex) / double(m_mpi_size));
   // Allocate incoming/outgoing degree tracking
-
   m_local_degree_count.resize(m_max_vertex+1, std::make_pair(0,0));
 
+
+  boost::unordered_set<uint64_t> global_hubs;
 
   // Count Degree Information
   // For each owned vertex
@@ -1481,9 +1370,6 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   // Allocate and initilize the delegate edge CSR table and its index.
   initialize_delegate_target(edges_high_count);
 
-  // partition_high_degree_fake(mpi_comm, edges.begin(), edges.end(), global_hubs,
-  //   transfer_info);
-
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
     transfer_info);
@@ -1492,6 +1378,7 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   double time_end = MPI_Wtime();
   if(m_mpi_rank == 0) {
     std::cout << "delegate_partitioned_graph time = " << time_end - time_start << std::endl;
+    io_info_temp->log_diff(true);
   }
 
   // We don't need this anymore, so free the resource
