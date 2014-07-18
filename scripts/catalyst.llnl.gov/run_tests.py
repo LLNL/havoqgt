@@ -7,9 +7,10 @@ import os.path
 RunTest = True
 DEBUG_SCRIPT_TESTS = False
 VERBOSE = True
+NORUN = False
 
-log_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/logs/"
-executable_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/src/"
+log_dir = "logs/"
+executable_dir = "src/"
 executable = "run_bfs"
 
 command_strings = []
@@ -65,8 +66,9 @@ def generate_shell_file():
 
 
 def execute_shell_file():
-	cmd = ['sh', sbatch_file]
-	subprocess.call(cmd)
+	if not NORUN:
+		cmd = ['sh', sbatch_file]
+		subprocess.call(cmd)
 
 def add_command(nodes, processes, cmd):
 	global test_count
@@ -100,7 +102,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
 	intial_threshold, threshold_multiplier):
 
-	graph_file = "out.graph"
+	graph_file = "/dimmap/out.graph"
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
@@ -141,7 +143,7 @@ if RunTest:
 		create_commands(17, 1, 20, 1, 1, 1, 1024, 1)
 	else:
 		#Data Scaling test spawning
-		create_commands(17, 1, 28, 1, 1, 1, 1024, 1)
+		create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
 
 		#Weak Scaling test spawning
 		#create_commands(20, 2, -1, 1, 2, 64, 1024, 2)
