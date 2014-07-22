@@ -81,8 +81,8 @@ typedef struct OverflowSendInfo{
     , temp_to_send_count(0) {}
 
   int to_send_id;
-  int64_t to_send_count;
-  int64_t temp_to_send_count;
+  int32_t to_send_count;
+  int32_t temp_to_send_count;
 }OverflowSendInfo;
 
 /**
@@ -98,7 +98,7 @@ typedef struct OverflowSendInfo{
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
-   const static uint64_t edge_chunk_size = 1024*1024;
+   const static uint64_t edge_chunk_size = 1024*64;
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 
@@ -485,11 +485,11 @@ class delegate_partitioned_graph {
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};
 
-  bip::vector< std::pair<uint64_t, uint64_t>
-      , SegmentAllocator< std::pair<uint64_t, uint64_t> >
-      > m_local_degree_count;
+  bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
+  bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;
 
   bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
+  bip::vector<uint32_t, SegmentAllocator<uint32_t>> m_owned_info_tracker;
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
 
   // Delegate Storage

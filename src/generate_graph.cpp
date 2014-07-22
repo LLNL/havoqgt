@@ -293,6 +293,7 @@ int main(int argc, char** argv) {
   }
 
   if (fname_compare != "") {
+    std::cout << "Comparing Files." << std::endl;
     std::stringstream fname2;
     fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
 
@@ -311,12 +312,19 @@ int main(int argc, char** argv) {
   }
 
   if (delete_file) {
+    std::cout << "Deleting Mapped File." << std::endl;
     bip::file_mapping::remove(fname.str().c_str());
   }
 
+
+
   } //END Main MPI
+
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
+
   CHK_MPI(MPI_Finalize());
+
+  std::cout << "FIN." << std::endl;
   return 0;
 }
 
