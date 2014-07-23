@@ -112,7 +112,7 @@ def generate_shell_file():
 			s += block_start + "echo df -h -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
 
-			s += block_start + "echo io-stats -m | grep md0 2>&1-m | grep md0 2>&1\n" + block_end
+			s += block_start + "echo io-stats -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
@@ -125,6 +125,11 @@ def generate_shell_file():
 
 			s += block_start + "echo ls /l/ssd/ \n" + block_end
 			s += "ls /l/ssd/\n"
+
+			if USE_DIMMAP:
+				s += block_start + "echo ls /dimmap/ \n" + block_end
+				s += "ls /dimmap/\n"
+
 			s += "rm /l/ssd/out.graph*\n"
 
 			s += "EOF\n\n"
