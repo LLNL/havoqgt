@@ -10,5 +10,6 @@ function(add_exe source)
 endfunction()
 
 add_exe( generate_graph )
+add_exe( generate_graph_dynamic )
 add_exe( run_bfs )
 # add_exe( edge_iter )

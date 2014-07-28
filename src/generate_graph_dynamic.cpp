@@ -120,11 +120,47 @@
 
  using namespace havoqgt::mpi;
 
- int main(int argc, char** argv) {
 
-  typedef bip::managed_mapped_file mapped_t;
-  typedef mapped_t::segment_manager segment_manager_t;
-  typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
+typedef bip::managed_mapped_file mapped_t;
+typedef mapped_t::segment_manager segment_manager_t;
+typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
+
+ template <typename Edges>
+ void add_edges_loop (
+  graph_type *graph,
+  mapped_t& asdf,
+  bip::allocator<void, segment_manager_t>& alloc_inst,
+  Edges& edges, uint64_t chunk_size) 
+ {
+
+  const uint64_t num_edges = edges.size();
+  chunk_size = std::min(chunk_size, num_edges);
+  const uint64_t num_loop  = num_edges / chunk_size;
+
+  auto edges_itr = edges.begin();
+
+  for (uint64_t i = 0; i < num_loop; i++ ) {
+    std::cout << "[" << i << " / " << num_loop << "]" << std::endl;
+
+    boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
+    const double time_start = MPI_Wtime();
+    for (uint64_t j = 0; j < chunk_size && edges_itr != edges.end(); j++, edges_itr++) {
+      onmemory_edges.push_back(*edges_itr);
+      //std::cout << onmemory_edges[j].first << " " << onmemory_edges[j].second << std::endl;
+    }
+    const double time_end = MPI_Wtime();
+    std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
+    
+    graph->add_edges_adjacency_matrix_map_vector(asdf, alloc_inst, onmemory_edges);
+  
+    std::cout << std::endl;
+  }
+
+ }
+
+
+
+ int main(int argc, char** argv) {
 
   
   CHK_MPI(MPI_Init(&argc, &argv));
@@ -160,22 +196,30 @@
     uint64_t hub_threshold;
     uint32_t load_from_disk;
     uint32_t delete_file;
+    uint64_t chunk_size_exp;
     std::string type;
     std::string fname_output;
     std::string fname_compare = "";
-    if (argc < 8) {
-      std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>" << " <load_from_disk> <delete file on exit> <file to compare to> (argc:" << argc << " )." << std::endl;
+    std::string data_structure_type;
+
+    if (argc < 10) {
+      std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
+        << " <load_from_disk> <delete file on exit>"
+        << " <chunk_size_exp> <VC_VC/MP_VC>"
+        << " <file to compare to>"
+        << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
       int pos = 1;
       type = argv[pos++];
-      vert_scale    = boost::lexical_cast<uint64_t>(argv[pos++]);
-      pa_beta       = boost::lexical_cast<double>(argv[pos++]);
-      hub_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
-      fname_output = argv[pos++];
-      delete_file  = boost::lexical_cast<uint32_t>(argv[pos++]);
-      load_from_disk = boost::lexical_cast<uint32_t>(argv[pos++]);
-
+      vert_scale      = boost::lexical_cast<uint64_t>(argv[pos++]);
+      pa_beta         = boost::lexical_cast<double>(argv[pos++]);
+      hub_threshold   = boost::lexical_cast<uint64_t>(argv[pos++]);
+      fname_output    = argv[pos++];
+      delete_file     = boost::lexical_cast<uint32_t>(argv[pos++]);
+      load_from_disk  = boost::lexical_cast<uint32_t>(argv[pos++]);
+      chunk_size_exp  = boost::lexical_cast<uint64_t>(argv[pos++]);
+      data_structure_type = argv[pos++]; 
       if (pos < argc) {
         fname_compare = argv[pos++];
       }
@@ -189,6 +233,8 @@
       std::cout << "File name = " << fname_output << std::endl;
       std::cout << "Load from disk = " << load_from_disk << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
+      std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
+      std::cout << "Data structure type: " << data_structure_type << std::endl;
       if (fname_compare != "") {
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
@@ -212,6 +258,18 @@
 
     graph_type *graph;
 
+    if (data_structure_type == "VC_VC") {
+      graph = segment_manager->construct<graph_type>
+                  ("graph_obj")
+                  (alloc_inst, graph_type::USE_VEC_VEC_MATRIX);
+    } else if (data_structure_type == "MP_VC") {
+      graph = segment_manager->construct<graph_type>
+                  ("graph_obj")
+                  (alloc_inst, graph_type::USE_MAP_VEC_MATRIX);        
+    } else {
+      std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
+      exit(-1);
+    }
 
     if (load_from_disk  == 0) {
 
@@ -220,37 +278,41 @@
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        graph = segment_manager->construct<graph_type>
-        ("graph_obj")
-        (alloc_inst, uptri.max_vertex_id());
-
-        graph->construct_adjacency_matrix_vector(asdf, uptri, uptri.max_vertex_id());
-
+        add_edges_loop(graph, asdf, alloc_inst, uptri, (uint64_t)std::pow(2, chunk_size_exp));
 
       } else if(type == "RMAT") {
         uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
-        // for (int i = 0; i < 3; i++ ) {
+
         havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
 
-        // if (i == 0) {
-        graph = segment_manager->construct<graph_type>
-        ("graph_obj")
-        (alloc_inst, rmat.max_vertex_id());
+        add_edges_loop(graph, asdf, alloc_inst, rmat, (uint64_t)std::pow(2, chunk_size_exp));
+
+        // uint64_t num_edges = rmat.size();
+        // uint64_t chunk_size = std::min((uint64_t)std::pow(2, chunk_size_exp), (uint64_t)num_edges);
+        // uint64_t num_loop  = num_edges / chunk_size;
+
+        // auto edges_itr = rmat.begin();
+
+        // for (uint64_t i = 0; i < num_loop; i++ ) {
+        //   boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
+        //   double time_start = MPI_Wtime();
+        //   for (uint64_t j = 0; j < chunk_size && edges_itr != rmat.end(); j++, edges_itr++) {
+        //     onmemory_edges.push_back(*edges_itr);
+        //     //std::cout << onmemory_edges[j].first << " " << onmemory_edges[j].second << std::endl;
+        //   }
+        //   double time_end = MPI_Wtime();
+        //   std::cout << "TIME: Generation edges into DRAM (sec.) = " << time_end - time_start << std::endl;
+        //   graph->add_edges_adjacency_matrix_map_vector(asdf, alloc_inst, onmemory_edges);
         // }
-        graph->construct_adjacency_matrix_vector(asdf, rmat, rmat.max_vertex_id());
-      // }
+
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-
         gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
 
-        graph = segment_manager->construct<graph_type>
-        ("graph_obj")
-        (alloc_inst, uint64_t(5489));
-        graph->construct_adjacency_matrix_vector(asdf, input_edges, uint64_t(5489));
+        add_edges_loop(graph, asdf, alloc_inst, input_edges, (uint64_t)std::pow(2, chunk_size_exp));
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);
@@ -323,4 +385,3 @@
   CHK_MPI(MPI_Finalize());
   return 0;
 }
-
