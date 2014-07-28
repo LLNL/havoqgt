@@ -49,7 +49,7 @@
  *
  */
 
-#include <havoqgt/construct_dynamicgraph_vec.hpp>
+#include <havoqgt/construct_dynamicgraph.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>

@@ -147,6 +147,6 @@ void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vect
 } // namespace mpi
 } // namespace havoqgt
 
-#include <havoqgt/impl/construct_dynamicgraph_vec.ipp>
+#include <havoqgt/impl/construct_dynamicgraph.ipp>
 
 #endif //HAVOQGT_MPI_CONSTRUCT_DYNAMICGRAPH_VEC_HPP_INCLUDED
