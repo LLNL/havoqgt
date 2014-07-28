@@ -63,75 +63,28 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
-
-// class heap_arena
-// {
-// public:
-//   heap_arena() { }
-//   template <typename T>
-//   struct allocator {
-//     typedef typename std::allocator<T> type;
-//   };
-
-//   template<typename T>
-//   std::allocator<T> make_allocator() {
-//     return std::allocator<T>();
-//   }
-// private:
-//   heap_arena(const heap_arena&);
-// };
-
-// class extended_memory_arena {
-//   // typedef boost::interprocess::basic_managed_mapped_file
-//   //   <char
-//   //   ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family, void*>
-//   //   ,boost::interprocess::iset_index>  managed_mapped_file;
-
-// public:
-//   template <typename T>
-//   struct allocator {
-//     typedef typename boost::interprocess::managed_mapped_file::template allocator<T>::type type;
-//   };
-
-//   template <typename T>
-//   typename allocator<T>::type make_allocator() {
-//     return m_mapped_file->template get_allocator<T>();
-//   }
-//   extended_memory_arena(const char* fname)
-//     {//: m_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128) {}
-//       m_mapped_file = new boost::interprocess::managed_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128);
-//   }
-//   void print_info()
-//   {
-//     //std::cout << "free/size = " << m_mapped_file->get_free_memory() << " / " << m_mapped_file->get_size() << std::endl;
-//     std::cout << "check_sanity() == " << m_mapped_file->check_sanity() << std::endl;
-//   }
-// private:
-//   boost::interprocess::managed_mapped_file* m_mapped_file;
-// };
-
+#ifdef PROFILE_DETAIL
+ #warning PROFILE_DETAIL is enabled.
+#endif
 
 
 // notes for how to setup a good test
 // take rank * 100 and make edges between (all local)
 // Make one vert per rank a hub.
 
- namespace hmpi = havoqgt::mpi;
-
- using namespace havoqgt::mpi;
-
-
+namespace hmpi = havoqgt::mpi;
+using namespace havoqgt::mpi;
 typedef bip::managed_mapped_file mapped_t;
 typedef mapped_t::segment_manager segment_manager_t;
-typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
+typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
- template <typename Edges>
- void add_edges_loop (
-  graph_type *graph,
+
+template <typename Edges>
+void add_edges_loop (graph_type *graph,
   mapped_t& asdf,
   bip::allocator<void, segment_manager_t>& alloc_inst,
   Edges& edges, uint64_t chunk_size) 
- {
+{
 
   const uint64_t num_edges = edges.size();
   chunk_size = std::min(chunk_size, num_edges);
@@ -140,8 +93,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
   auto edges_itr = edges.begin();
 
   for (uint64_t i = 0; i < num_loop; i++ ) {
-    std::cout << "[" << i << " / " << num_loop << "]" << std::endl;
-
+    std::cout << "\n[" << i << " / " << num_loop << "]" << std::endl;
     boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
     const double time_start = MPI_Wtime();
     for (uint64_t j = 0; j < chunk_size && edges_itr != edges.end(); j++, edges_itr++) {
@@ -150,19 +102,19 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
     }
     const double time_end = MPI_Wtime();
     std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-    
-    graph->add_edges_adjacency_matrix_map_vector(asdf, alloc_inst, onmemory_edges);
-  
-    std::cout << std::endl;
+    graph->add_edges_adjacency_matrix(asdf, alloc_inst, onmemory_edges);
+
   }
+  std::cout << "<< Results >>" << std::endl;
+  graph->print_profile();
 
- }
+}
 
 
 
- int main(int argc, char** argv) {
+int main(int argc, char** argv) {
 
-  
+
   CHK_MPI(MPI_Init(&argc, &argv));
   {
     int mpi_rank(0), mpi_size(0);
@@ -204,10 +156,10 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
 
     if (argc < 10) {
       std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
-        << " <load_from_disk> <delete file on exit>"
-        << " <chunk_size_exp> <VC_VC/MP_VC>"
-        << " <file to compare to>"
-        << " (argc:" << argc << " )." << std::endl;
+      << " <load_from_disk> <delete file on exit>"
+      << " <chunk_size_exp> <VC_VC/MP_VC>"
+      << " <file to compare to>"
+      << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
       int pos = 1;
@@ -225,6 +177,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
       }
     }
     num_vertices <<= vert_scale;
+
     if (mpi_rank == 0) {
       std::cout << "Building graph type: " << type << std::endl;
       std::cout << "Building graph Scale: " << vert_scale << std::endl;
@@ -239,7 +192,6 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
     }
-
 
     std::stringstream fname;
     fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
@@ -260,12 +212,12 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
 
     if (data_structure_type == "VC_VC") {
       graph = segment_manager->construct<graph_type>
-                  ("graph_obj")
-                  (alloc_inst, graph_type::USE_VEC_VEC_MATRIX);
+      ("graph_obj")
+      (alloc_inst, graph_type::kUseVecVecMatrix);
     } else if (data_structure_type == "MP_VC") {
       graph = segment_manager->construct<graph_type>
-                  ("graph_obj")
-                  (alloc_inst, graph_type::USE_MAP_VEC_MATRIX);        
+      ("graph_obj")
+      (alloc_inst, graph_type::kUseMapVecMatrix);        
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);
@@ -278,7 +230,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        add_edges_loop(graph, asdf, alloc_inst, uptri, (uint64_t)std::pow(2, chunk_size_exp));
+        add_edges_loop(graph, asdf, alloc_inst, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
       } else if(type == "RMAT") {
         uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
@@ -287,7 +239,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
 
-        add_edges_loop(graph, asdf, alloc_inst, rmat, (uint64_t)std::pow(2, chunk_size_exp));
+        add_edges_loop(graph, asdf, alloc_inst, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
         // uint64_t num_edges = rmat.size();
         // uint64_t chunk_size = std::min((uint64_t)std::pow(2, chunk_size_exp), (uint64_t)num_edges);
@@ -304,7 +256,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
         //   }
         //   double time_end = MPI_Wtime();
         //   std::cout << "TIME: Generation edges into DRAM (sec.) = " << time_end - time_start << std::endl;
-        //   graph->add_edges_adjacency_matrix_map_vector(asdf, alloc_inst, onmemory_edges);
+        //   graph->add_edges_adjacency_matrix_map_vec_tor(asdf, alloc_inst, onmemory_edges);
         // }
 
 
@@ -312,7 +264,7 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
         gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
 
-        add_edges_loop(graph, asdf, alloc_inst, input_edges, (uint64_t)std::pow(2, chunk_size_exp));
+        add_edges_loop(graph, asdf, alloc_inst, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);
@@ -332,16 +284,15 @@ typedef hmpi::construct_dynamicgraph_vec<segment_manager_t> graph_type;
   //   std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
   // }
 
-    std::cout << "< Usages >" << std::endl;
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
         size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
         double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());
         std::cout << "[" << mpi_rank << "] " 
-                  << usages << " "
-                  << segment_manager->get_free_memory()
-                  << "/" << segment_manager->get_size() 
-                  << " = " << percent << std::endl;
+        << usages << " "
+        << segment_manager->get_free_memory()
+        << "/" << segment_manager->get_size() 
+        << " = " << percent << std::endl;
       }
       MPI_Barrier(MPI_COMM_WORLD);
     }

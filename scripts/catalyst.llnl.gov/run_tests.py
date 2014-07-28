@@ -11,7 +11,7 @@ NORUN = False
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "run_bfs"
+executable = "generate_graph_dynamic"
 
 command_strings = []
 test_count = 0
@@ -61,7 +61,7 @@ def generate_shell_file():
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
 		for s in command_strings:
-			f.write(s + " &\n")
+			f.write(s + " \n")
 
 
 
@@ -102,11 +102,13 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
 	intial_threshold, threshold_multiplier):
 
-	graph_file = "/dimmap/out.graph"
+	graph_file = "out.graph"
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-
+	chunk_size = 20
+	data_type1 = "VC_VC"
+	data_type2 = "MP_VC"
 
 	scale = initial_scale
 	nodes = inital_nodes
@@ -114,11 +116,13 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 	while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
 
-		processes = 24 * nodes
+		processes = 1 * nodes
 		str_processes = "-n%d" %(processes)
 		str_nodes = "-N%d" %(nodes)
 
-		cmd = ['srun', "--clear-ssd", "--di-mmap=" + str(96*1024*256)]
+		cmd = ['srun', "--clear-ssd"]
+		#cmd = ['srun', "-ppdebug", "--clear-ssd"]
+		#cmd = ['srun', "--clear-ssd", "--di-mmap=" + str(96*1024*256)]
 
 		if (nodes >= 128):
 			cmd.append("-pdit128")
@@ -128,7 +132,9 @@ def create_commands(initial_scale, scale_increments, max_scale,
 			cmd.append("-pdit36")
 
 
-		cmd.extend([str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)])
+		#cmd.extend([str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type1])
+		#add_command(nodes, processes, cmd)
+		cmd.extend([str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type2])
 		add_command(nodes, processes, cmd)
 
 		nodes *= node_multipler
@@ -143,15 +149,15 @@ if RunTest:
 		create_commands(17, 1, 20, 1, 1, 1, 1024, 1)
 	else:
 		#Data Scaling test spawning
-		create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
+		create_commands(18, 1, 23, 1, 1, 1, 1024, 1)
 
 		#Weak Scaling test spawning
 		#create_commands(20, 2, -1, 1, 2, 64, 1024, 2)
 
 	#make bash file and run it
 	generate_shell_file()
-	execute_shell_file()
+	#execute_shell_file()
 
-	log("Finished after generating %d Srun Tasks\n" %(test_count))
+	#log("Finished after generating %d Srun Tasks\n" %(test_count))
 
 

@@ -68,6 +68,7 @@
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 
+
 namespace havoqgt {
   namespace mpi {
 
@@ -80,39 +81,48 @@ class IOInfo {
   void log_diff(bool final);
 
  private:
-  int read_init_mb_;
-  int written_init_mb_;
+  int read_previous_mb_;
+  int written_previous_mb_;
   int read_total_mb_;
   int written_total_mb_;
 };
 
 
-  namespace bip = boost::interprocess;
-  template <typename SegementManager>
- class construct_dynamicgraph_vec {
+namespace bip = boost::interprocess;
+template <typename SegementManager>
+class construct_dynamicgraph {
  public:
 
   template<typename T>
   using SegmentAllocator = bip::allocator<T, SegementManager>;
 
-
-  static const int USE_VEC_VEC_MATRIX;
-  static const int USE_MAP_VEC_MATRIX;
-
   // ---------  Data Structures ------------ //
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
-  typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t> > Adjacency_matrix_vec_vec_t;
+  typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t> > adjacency_matrix_vec_vec__t;
   typedef std::pair<const uint64_t, uint64_vector_t> map_value_t;
-  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_t>> Adjacency_matrix_map_vec_t;
+  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_t>> adjacency_matrix_map_vec__t;
+
 
 
   //--  Constructors -- //
   ///set segment allocator to data structures wihtout data resize.
-  construct_dynamicgraph_vec(const SegmentAllocator<void>& seg_allocator, const int mode);
+  construct_dynamicgraph(const SegmentAllocator<void>& seg_allocator, const int mode);
+
+
+  /// add edges vector-vector adjacency-matrix
+  template <typename ManagedMappedFile, typename Container>
+  void add_edges_adjacency_matrix(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
+
+  void print_profile();
 
 
 
-  // ---------- Member Functions --------- //
+  static const int kUseVecVecMatrix;
+  static const int kUseMapVecMatrix;
+
+
+ private:
+
   /// add edges vector-vector adjacency-matrix
   template <typename ManagedMappedFile, typename Container>
   void add_edges_adjacency_matrix_vector_vector(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
@@ -121,13 +131,15 @@ class IOInfo {
   template <typename ManagedMappedFile, typename Container>
   void add_edges_adjacency_matrix_map_vector(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
 
-  //void printf_io_profile (const bool isFinal = false);
 
- private:
-  Adjacency_matrix_vec_vec_t adjacency_matrix_vec_vec;
-  Adjacency_matrix_map_vec_t adjacency_matrix_map_vec;
-  const int data_structure_type;
-  IOInfo io_info;
+
+
+  adjacency_matrix_vec_vec__t adjacency_matrix_vec_vec_;
+  adjacency_matrix_map_vec__t adjacency_matrix_map_vec_;
+  const int data_structure_type_;
+
+  IOInfo io_info_;
+  double total_exectution_time_;
 };
 
 
