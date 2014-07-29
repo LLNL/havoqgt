@@ -5,9 +5,13 @@ import subprocess
 import os.path
 
 VERBOSE = True
-DEBUG = True
-USE_DIMMAP = True
-NORUN = True
+USE_PDEBUG = True
+DEBUG = False
+if DEBUG:
+	USE_PDEBUG = True
+USE_DIMMAP = False
+USE_DIMMAP_FOR_TUNE = True
+NORUN = False
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -48,6 +52,8 @@ def init_test_dir():
 	log("Test Motivation:")
 	if len(sys.argv) == 2:
 		log(str(sys.argv[1]))
+	elif DEBUG:
+		log("Debuging...")
 	else:
 		var = raw_input("Please test motivation: ")
 		log(var)
@@ -68,10 +74,12 @@ def generate_shell_file():
 	block_end = "echo -e \"------------------------------------\\n\\n\"\n"
 	i = 0
 
-	slurm_options = "--unbuffered --clear-ssd "
+	slurm_options = " --clear-ssd "
 
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(96*1024*256) + " "
+	elif USE_DIMMAP_FOR_TUNE:
+		slurm_options += "--di-mmap=" + str(10*256) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -80,7 +88,9 @@ def generate_shell_file():
 			processes = cmd[1]
 			cmd_str = cmd[2]
 
-			if (nodes >= 128):
+			if USE_PDEBUG:
+				slurm_options += "-ppdebug -w catalyst322"
+			elif (nodes >= 128):
 				slurm_options += "-pdit128"
 			elif (nodes >= 64):
 				slurm_options += "-pdit64_1"
@@ -99,10 +109,19 @@ def generate_shell_file():
 
 			s = "#!/bin/sh\n"
 
+			s += block_start + "echo Nodes: \n" + block_end
+			s += "echo \"SLURM_NODELIST = \$SLURM_NODELIST \"\n"
+
+			s += block_start + "echo Tuned Info: \n" + block_end
+			s += "echo \"/proc/sys/vm/dirty_ratio = \$(cat /proc/sys/vm/dirty_ratio)\" \n"
+			s += "echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\" \n"
+			s += "echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\" \n"
+
+
 			s += block_start + "echo df -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
 
-			s += block_start + "echo io-stats -m | grep md0 2>&1\n" + block_end
+			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
@@ -112,7 +131,7 @@ def generate_shell_file():
 			s += block_start + "echo df -h -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
 
-			s += block_start + "echo io-stats -m | grep md0 2>&1\n" + block_end
+			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
@@ -199,7 +218,13 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 init_test_dir()
 
-create_commands(17, 1, 29, 1, 1, 1, 1024, 1)
+if DEBUG:
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
+else:
+	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
+	create_commands(25, 1, 30, 1, 1, 1, 1024, 2)
+
+
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
 
