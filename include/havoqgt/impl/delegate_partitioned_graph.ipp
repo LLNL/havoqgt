@@ -11,9 +11,40 @@
  #warning Debug MACRO is enabled.
 #endif
 
+#ifndef DIRTY_THRESHOLD_GB
+  #define DIRTY_THRESHOLD_GB 70
+#endif
 
 namespace havoqgt {
 namespace mpi {
+
+template <typename SegmentManager>
+void
+delegate_partitioned_graph<SegmentManager>::
+try_flush(MPI_Comm comm) {
+  static uint64_t check_id = 0;
+
+  bool do_flush;
+  if (m_mpi_rank == 0) {
+    uint32_t dirty_kb;
+    {
+      FILE *pipe;
+      pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
+      fscanf(pipe, "%u", &dirty_kb);
+      pclose(pipe);
+    }
+    const uint32_t dirty_threshold_kb = DIRTY_THRESHOLD_GB * 1000000;
+    do_flush = (dirty_kb > dirty_threshold_kb);
+  }
+
+  MPI_Bcast(&do_flush, 1, mpi_typeof(do_flush), 0, comm);
+
+
+  if (do_flush) {
+    m_flush_func();
+  }
+}
+
 class IOInfo {
  public:
   IOInfo() {
@@ -358,10 +389,10 @@ class get_owner_id {
  *  vertex has incomming.
  *  @return n/a
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename InputIterator>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 count_edge_degrees(MPI_Comm mpi_comm,
                  InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
@@ -470,9 +501,9 @@ count_edge_degrees(MPI_Comm mpi_comm,
  * @param maps_to_send: a vector of maps of vertex ids to pairs of incoming and
  *  outgoing edge counts.
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
   uint64_t delegate_degree_threshold, std::vector<
   boost::container::map< int, std::pair<uint64_t, uint64_t> >  >&
@@ -533,9 +564,9 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
  * @param transfer_info: used to track to whome and how many edges are given
  * to another node
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
     const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
@@ -690,9 +721,9 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
  * used to track which nodes will be recieving extra high edges.
  *
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
     int send_id,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info ) {
@@ -744,9 +775,9 @@ generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
  * @param global_hubs: the set of hub vertices
  * @param delegate_degree_threshold: The edge limit when a vertex becomes a hub.
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   uint64_t delegate_degree_threshold) {
 
@@ -829,9 +860,9 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
  * This function initlizes the member variables that are used to hold the high
  * degree edges.
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 initialize_delegate_target(int64_t edges_high_count) {
   // Currently, m_delegate_info holds the count of high degree edges assigned
   // to this node for each vertex.
@@ -860,10 +891,10 @@ initialize_delegate_target(int64_t edges_high_count) {
  * vertex and exchanges that information with the other nodes.
  *
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename InputIterator>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 partition_low_degree_count_high(MPI_Comm mpi_comm,
                  InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
@@ -890,6 +921,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
           mpi_comm)) {
+    try_flush(mpi_comm);
     // Generate Edges to Send
     std::vector<std::pair<uint64_t, uint64_t> > to_recv_edges_low;
 
@@ -1006,9 +1038,9 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
  * @param mpi_comm: the mpi communication group
  * @param maps_to_send: a vector of maps that map delegate_id to edge count.
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
   uint64_t, uint64_t> >&maps_to_send, int maps_to_send_element_count) {
 
@@ -1057,10 +1089,10 @@ send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
  * @param transfer_info: A map of delegate_id to a deque of OverflowSendInfo
  * used to determine where overflowed edges go.
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename InputIterator>
 void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
     InputIterator unsorted_itr_end,
     boost::unordered_set<uint64_t>& global_hub_set,
@@ -1093,6 +1125,7 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
         mpi_comm)) {
+    try_flush(mpi_comm);
     while (unsorted_itr != unsorted_itr_end &&
            to_send_edges_high.size()<edge_chunk_size) {
       // Get next edge
@@ -1242,14 +1275,14 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
  * @param delegate_degree_threshold Threshold used to assign delegates
 */
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename Container>
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            MPI_Comm mpi_comm,
                            Container& edges, uint64_t max_vertex,
-                           uint64_t delegate_degree_threshold
-                           )
+                           uint64_t delegate_degree_threshold,
+                           boost::function<void()> flush_func)
     : m_global_edge_count(edges.size()),
       m_max_vertex(std::ceil(double(max_vertex) / double(m_mpi_size))),
       m_local_outgoing_count(seg_allocator),
@@ -1282,6 +1315,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   m_local_incoming_count.resize(m_max_vertex+1, 0);
   m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
   m_owned_info_tracker.resize(m_max_vertex+2, 0);
+
+  m_flush_func = flush_func;
 
   boost::unordered_set<uint64_t> global_hubs;
 
@@ -1476,11 +1511,11 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
  * @param  locator vertex_locator to convert
  * @return vertex label
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
 uint64_t
-delegate_partitioned_graph<SegementManager>::
-locator_to_label(delegate_partitioned_graph<SegementManager>::vertex_locator
+delegate_partitioned_graph<SegmentManager>::
+locator_to_label(delegate_partitioned_graph<SegmentManager>::vertex_locator
                   locator) const {
   uint64_t res;
   if(locator.is_delegate()) {
@@ -1499,10 +1534,10 @@ locator_to_label(delegate_partitioned_graph<SegementManager>::vertex_locator
  * @param  label vertex label to convert
  * @return locator for the label
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_locator
-delegate_partitioned_graph<SegementManager>::
+typename delegate_partitioned_graph<SegmentManager>::vertex_locator
+delegate_partitioned_graph<SegmentManager>::
 label_to_locator(uint64_t label) const {
   typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
@@ -1524,9 +1559,9 @@ label_to_locator(uint64_t label) const {
  * @param  global_hubs           set of global hubs to be updated
  * @param  found_new_hub_locally true, if new local hub has been found
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline void
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                          boost::unordered_set<uint64_t>& global_hubs,
                          bool local_change, MPI_Comm mpi_comm) {
@@ -1547,11 +1582,11 @@ sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
  * @param  locator Vertex locator
  * @return Begin Edge Iterator
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::edge_iterator
-delegate_partitioned_graph<SegementManager>::
-edges_begin(delegate_partitioned_graph<SegementManager>::vertex_locator
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator
+delegate_partitioned_graph<SegmentManager>::
+edges_begin(delegate_partitioned_graph<SegmentManager>::vertex_locator
              locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_info.size()-1);
@@ -1568,11 +1603,11 @@ edges_begin(delegate_partitioned_graph<SegementManager>::vertex_locator
  * @param  locator Vertex locator
  * @return End Edge Iterator
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::edge_iterator
-delegate_partitioned_graph<SegementManager>::
-edges_end(delegate_partitioned_graph<SegementManager>::vertex_locator
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator
+delegate_partitioned_graph<SegmentManager>::
+edges_end(delegate_partitioned_graph<SegmentManager>::vertex_locator
             locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id()+1 < m_delegate_info.size());
@@ -1587,11 +1622,11 @@ edges_end(delegate_partitioned_graph<SegementManager>::vertex_locator
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
 uint64_t
-delegate_partitioned_graph<SegementManager>::
-degree(delegate_partitioned_graph<SegementManager>::vertex_locator
+delegate_partitioned_graph<SegmentManager>::
+degree(delegate_partitioned_graph<SegmentManager>::vertex_locator
         locator) const {
   uint64_t local_id = locator.local_id();
   if(locator.is_delegate()) {
@@ -1607,11 +1642,11 @@ degree(delegate_partitioned_graph<SegementManager>::vertex_locator
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
 uint64_t
-delegate_partitioned_graph<SegementManager>::
-local_degree(delegate_partitioned_graph<SegementManager>::vertex_locator
+delegate_partitioned_graph<SegmentManager>::
+local_degree(delegate_partitioned_graph<SegmentManager>::vertex_locator
               locator) const {
   uint64_t local_id = locator.local_id();
   if(locator.is_delegate()) {
@@ -1624,39 +1659,39 @@ local_degree(delegate_partitioned_graph<SegementManager>::vertex_locator
 }
 
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_iterator
-delegate_partitioned_graph<SegementManager>::
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::
 vertices_begin() const {
   return vertex_iterator(0,this);
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_iterator
-delegate_partitioned_graph<SegementManager>::
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::
 vertices_end() const {
   return vertex_iterator(m_owned_info.size()-1,this);
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
 bool
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 is_label_delegate(uint64_t label) const {
   return m_map_delegate_locator.count(label) > 0;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegementManager>::template vertex_data<
+typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
   T, SegManagerOther>*
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 create_vertex_data(SegManagerOther* segment_manager_o,
     const char *obj_name) const {
 
-  typedef typename delegate_partitioned_graph<SegementManager>::template vertex_data<
+  typedef typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
   T, SegManagerOther> mytype;
 
   if (obj_name == nullptr) {
@@ -1671,15 +1706,15 @@ create_vertex_data(SegManagerOther* segment_manager_o,
 /**
  * @param   init initial value for each vertex
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegementManager>::template vertex_data<
+typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
   T, SegManagerOther>*
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::
 create_vertex_data(const T& init, SegManagerOther* segment_manager_o,
     const char *obj_name) const {
 
-  typedef typename delegate_partitioned_graph<SegementManager>::template vertex_data<
+  typedef typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
   T, SegManagerOther> mytype;
 
   if (obj_name == nullptr) {
@@ -1694,13 +1729,13 @@ create_vertex_data(const T& init, SegManagerOther* segment_manager_o,
 
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegementManager>::template edge_data<T, SegManagerOther>*
-delegate_partitioned_graph<SegementManager>::
+typename delegate_partitioned_graph<SegmentManager>::template edge_data<T, SegManagerOther>*
+delegate_partitioned_graph<SegmentManager>::
 create_edge_data(SegManagerOther* segment_manager_o,
     const char *obj_name) const {
-  typedef typename delegate_partitioned_graph<SegementManager>::template
+  typedef typename delegate_partitioned_graph<SegmentManager>::template
                       edge_data<T, SegManagerOther> mytype;
 
   if (obj_name == nullptr) {
@@ -1717,14 +1752,14 @@ create_edge_data(SegManagerOther* segment_manager_o,
 /**
  * @param   init initial value for each vertex
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegementManager>::edge_data<T, SegManagerOther> *
-delegate_partitioned_graph<SegementManager>::
+delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther> *
+delegate_partitioned_graph<SegmentManager>::
 create_edge_data(const T& init, SegManagerOther * segment_manager_o,
     const char *obj_name) const {
 
-  typedef delegate_partitioned_graph<SegementManager>::
+  typedef delegate_partitioned_graph<SegmentManager>::
                       edge_data<T, SegManagerOther> mytype;
 
   if (obj_name == nullptr) {
@@ -1750,9 +1785,9 @@ create_edge_data(const T& init, SegManagerOther * segment_manager_o,
 /**
  *
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-delegate_partitioned_graph<SegementManager>::vertex_locator::
+delegate_partitioned_graph<SegmentManager>::vertex_locator::
 vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest) {
   m_is_bcast     = 0;
   m_is_intercept = 0;
@@ -1774,10 +1809,10 @@ vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest) {
   }
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-delegate_partitioned_graph<SegementManager>::vertex_locator::
-is_equal(const typename delegate_partitioned_graph<SegementManager>::vertex_locator x) const {
+delegate_partitioned_graph<SegmentManager>::vertex_locator::
+is_equal(const typename delegate_partitioned_graph<SegmentManager>::vertex_locator x) const {
   return m_is_delegate  == x.m_is_delegate
       && m_is_bcast     == x.m_is_bcast
       && m_is_intercept == x.m_is_intercept
@@ -1797,9 +1832,9 @@ is_equal(const typename delegate_partitioned_graph<SegementManager>::vertex_loca
 /**
  * @
  */
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-delegate_partitioned_graph<SegementManager>::edge_iterator::
+delegate_partitioned_graph<SegmentManager>::edge_iterator::
 edge_iterator(vertex_locator source,
               uint64_t edge_offset,
               const delegate_partitioned_graph* const pgraph)
@@ -1807,51 +1842,51 @@ edge_iterator(vertex_locator source,
   , m_edge_offset(edge_offset)
   , m_ptr_graph(pgraph) { }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::edge_iterator&
-delegate_partitioned_graph<SegementManager>::edge_iterator::operator++() {
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator&
+delegate_partitioned_graph<SegmentManager>::edge_iterator::operator++() {
   ++m_edge_offset;
   return *this;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::edge_iterator
-delegate_partitioned_graph<SegementManager>::edge_iterator::operator++(int) {
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator
+delegate_partitioned_graph<SegmentManager>::edge_iterator::operator++(int) {
   edge_iterator to_return = *this;
   ++m_edge_offset;
   return to_return;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-delegate_partitioned_graph<SegementManager>::edge_iterator::
-is_equal(const typename delegate_partitioned_graph<SegementManager>::edge_iterator& x) const {
+delegate_partitioned_graph<SegmentManager>::edge_iterator::
+is_equal(const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& x) const {
     assert(m_source      == x.m_source);
     assert(m_ptr_graph   == x.m_ptr_graph);
     return m_edge_offset == x.m_edge_offset;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-operator==(const typename delegate_partitioned_graph<SegementManager>::edge_iterator& x,
-           const typename delegate_partitioned_graph<SegementManager>::edge_iterator& y) {
+operator==(const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& x,
+           const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& y) {
   return x.is_equal(y);
 
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-operator!=(const typename delegate_partitioned_graph<SegementManager>::edge_iterator& x,
-           const typename delegate_partitioned_graph<SegementManager>::edge_iterator& y) {
+operator!=(const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& x,
+           const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& y) {
   return !(x.is_equal(y));
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_locator
-delegate_partitioned_graph<SegementManager>::edge_iterator::target() const {
+typename delegate_partitioned_graph<SegmentManager>::vertex_locator
+delegate_partitioned_graph<SegmentManager>::edge_iterator::target() const {
   if(m_source.is_delegate()) {
     assert(m_edge_offset < m_ptr_graph->m_delegate_targets.size());
     assert(m_ptr_graph->m_delegate_targets[m_edge_offset].m_owner_dest <
@@ -1868,60 +1903,60 @@ delegate_partitioned_graph<SegementManager>::edge_iterator::target() const {
 //                             Vertex Iterator                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-delegate_partitioned_graph<SegementManager>::vertex_iterator::
-vertex_iterator(uint64_t index, const delegate_partitioned_graph<SegementManager>*  pgraph)
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::
+vertex_iterator(uint64_t index, const delegate_partitioned_graph<SegmentManager>*  pgraph)
   : m_ptr_graph(pgraph)
   , m_owned_vert_index(index) {
   update_locator();
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_iterator&
-delegate_partitioned_graph<SegementManager>::vertex_iterator::operator++() {
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator&
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::operator++() {
   ++m_owned_vert_index;
   update_locator();
   return *this;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-typename delegate_partitioned_graph<SegementManager>::vertex_iterator
-delegate_partitioned_graph<SegementManager>::vertex_iterator::operator++(int) {
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::operator++(int) {
   vertex_iterator to_return = *this;
   ++m_owned_vert_index;
   update_locator();
   return to_return;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-delegate_partitioned_graph<SegementManager>::vertex_iterator::
-is_equal(const typename delegate_partitioned_graph<SegementManager>::vertex_iterator& x) const {
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::
+is_equal(const typename delegate_partitioned_graph<SegmentManager>::vertex_iterator& x) const {
   assert(m_ptr_graph        == x.m_ptr_graph);
   return m_owned_vert_index == x.m_owned_vert_index;
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-operator==(const typename delegate_partitioned_graph<SegementManager>::vertex_iterator& x,
-           const typename delegate_partitioned_graph<SegementManager>::vertex_iterator& y) {
+operator==(const typename delegate_partitioned_graph<SegmentManager>::vertex_iterator& x,
+           const typename delegate_partitioned_graph<SegmentManager>::vertex_iterator& y) {
   return x.is_equal(y);
 
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline bool
-operator!=(const typename delegate_partitioned_graph<SegementManager>::vertex_iterator& x,
-           const typename delegate_partitioned_graph<SegementManager>::vertex_iterator& y) {
+operator!=(const typename delegate_partitioned_graph<SegmentManager>::vertex_iterator& x,
+           const typename delegate_partitioned_graph<SegmentManager>::vertex_iterator& y) {
   return !(x.is_equal(y));
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline void
-delegate_partitioned_graph<SegementManager>::vertex_iterator::
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::
 update_locator() {
   for(; m_owned_vert_index < m_ptr_graph->m_owned_info.size()
         && m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == true;
@@ -1937,9 +1972,9 @@ update_locator() {
 //                                vert_info                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename SegementManager>
+template <typename SegmentManager>
 inline
-delegate_partitioned_graph<SegementManager>::vert_info::
+delegate_partitioned_graph<SegmentManager>::vert_info::
 vert_info(bool in_is_delegate, uint64_t in_delegate_id, uint64_t in_low_csr_idx)
   : is_delegate(in_is_delegate)
   , delegate_id(in_delegate_id)
@@ -1953,9 +1988,9 @@ vert_info(bool in_is_delegate, uint64_t in_delegate_id, uint64_t in_low_csr_idx)
 ////////////////////////////////////////////////////////////////////////////////
 //                                vertex_data                                 //
 ////////////////////////////////////////////////////////////////////////////////
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegementManager>::vertex_data<T,SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::vertex_data<T,SegManagerOther>::
 vertex_data(uint64_t owned_data_size, uint64_t delegate_size, SegManagerOther* sm)
   : m_owned_vert_data(sm->template get_allocator<T>())
   , m_delegate_data(sm->template get_allocator<T>()) {
@@ -1963,17 +1998,17 @@ vertex_data(uint64_t owned_data_size, uint64_t delegate_size, SegManagerOther* s
   m_delegate_data.resize(delegate_size);
   }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegementManager>::vertex_data<T, SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::
 vertex_data(uint64_t owned_data_size, uint64_t delegate_size, const T& init, SegManagerOther* sm)
   : m_owned_vert_data(owned_data_size, init, sm->template get_allocator<T>())
   , m_delegate_data(delegate_size, init, sm->template get_allocator<T>()) { }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
 T&
-delegate_partitioned_graph<SegementManager>::vertex_data<T, SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::
 operator[](const vertex_locator& locator) {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_data.size());
@@ -1983,10 +2018,10 @@ operator[](const vertex_locator& locator) {
   return m_owned_vert_data[locator.local_id()];
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
 const T&
-delegate_partitioned_graph<SegementManager>::vertex_data<T, SegManagerOther>::operator[](const vertex_locator& locator) const {
+delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::operator[](const vertex_locator& locator) const {
   if(locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_data.size());
     return m_delegate_data[locator.local_id()];
@@ -1998,9 +2033,9 @@ delegate_partitioned_graph<SegementManager>::vertex_data<T, SegManagerOther>::op
 ////////////////////////////////////////////////////////////////////////////////
 //                                edge_data                                 //
 ////////////////////////////////////////////////////////////////////////////////
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegementManager>::edge_data<T,SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::edge_data<T,SegManagerOther>::
 edge_data(uint64_t owned_size, uint64_t delegate_size, SegManagerOther* sm)
   : m_owned_edge_data(sm->template get_allocator<T>())
   , m_delegate_edge_data(sm->template get_allocator<T>()) {
@@ -2008,17 +2043,17 @@ edge_data(uint64_t owned_size, uint64_t delegate_size, SegManagerOther* sm)
   m_delegate_edge_data.resize(delegate_size);
   }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegementManager>::edge_data<T, SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::
 edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, SegManagerOther* sm)
   : m_owned_edge_data(owned_size, init, sm->template get_allocator<T>())
   , m_delegate_edge_data(delegate_size, init, sm->template get_allocator<T>()) { }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
 T&
-delegate_partitioned_graph<SegementManager>::edge_data<T, SegManagerOther>::
+delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::
 operator[](const edge_iterator& itr) {
   if(itr.m_source.is_delegate()) {
     assert(itr.m_edge_offset < m_delegate_edge_data.size());
@@ -2028,10 +2063,10 @@ operator[](const edge_iterator& itr) {
   return m_owned_edge_data[itr.m_edge_offset];
 }
 
-template <typename SegementManager>
+template <typename SegmentManager>
 template<typename T, typename SegManagerOther>
 const T&
-delegate_partitioned_graph<SegementManager>::edge_data<T, SegManagerOther>::operator[](const edge_iterator& itr) const {
+delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::operator[](const edge_iterator& itr) const {
   if(itr.m_source.is_delegate()) {
     assert(itr.m_edge_offset < m_delegate_edge_data.size());
     return m_delegate_edge_data[itr.m_edge_offset];

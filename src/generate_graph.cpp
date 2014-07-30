@@ -49,11 +49,14 @@
  *
  */
 
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
+#include <havoqgt/cache_utilities.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -207,10 +210,18 @@ int main(int argc, char** argv) {
 
   uint64_t flash_capacity = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
   assert (flash_capacity <= (751619276800.0/24.0));
-  mapped_t  asdf(bip::create_only, fname.str().c_str(),
-      flash_capacity);
+  mapped_t  asdf(bip::create_only, fname.str().c_str(), flash_capacity);
+
+  boost::interprocess::mapped_region::advice_types advise;
+  advise = boost::interprocess::mapped_region::advice_types::advice_random;
+  assert(asdf.advise(advise));
+
+
+
   segment_manager_t* segment_manager = asdf.get_segment_manager();
-  bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
+  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+
+  boost::function<void()> flush_func = boost::bind(&(custom_flush<mapped_t>), &asdf);
 
   graph_type *graph;
 
@@ -224,7 +235,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, flush_func);
 
 
     } else if(type == "RMAT") {
@@ -235,7 +246,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
+      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, flush_func);
 
 
     } else if(type == "PA") {
@@ -245,7 +256,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
           ("graph_obj")
-          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold);
+          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold, flush_func);
 
       {
         std::vector< std::pair<uint64_t, uint64_t> > empty(0);

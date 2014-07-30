@@ -24,6 +24,7 @@ executable = "generate_graph" #"run_bfs"
 
 command_strings = []
 test_count = 0
+test_motivation = ""
 
 def log(s):
 	if VERBOSE:
@@ -51,12 +52,12 @@ def init_test_dir():
 	log_file_name = log_dir + "run_tests.log"
 	log("Test Motivation:")
 	if len(sys.argv) == 2:
-		log(str(sys.argv[1]))
+		test_motivation= str(sys.argv[1])
 	elif DEBUG:
-		log("Debuging...")
+		test_motivation  = "Debuging..."
 	else:
-		var = raw_input("Please test motivation: ")
-		log(var)
+		test_motivation = raw_input("Please test motivation: ")
+	log(test_motivation)
 
 	sbatch_file = log_dir + "batch.sh"
 
@@ -89,7 +90,7 @@ def generate_shell_file():
 			cmd_str = cmd[2]
 
 			if USE_PDEBUG:
-				slurm_options += "-ppdebug -w catalyst322"
+				slurm_options += "-ppdebug -w catalyst324"
 			elif (nodes >= 128):
 				slurm_options += "-pdit128"
 			elif (nodes >= 64):
@@ -182,6 +183,9 @@ def add_command(nodes, processes, cmd):
 			temp = "Nodes: %d\n" %(nodes)
 			f.write(temp)
 			temp = "Processes: %d\n" %(processes)
+			f.write(temp)
+
+			temp = "Motivation: %s\n" %(test_motivation)
 			f.write(temp)
 			f.write("\n")
 
