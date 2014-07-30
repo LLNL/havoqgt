@@ -77,6 +77,7 @@ class IOInfo {
  public:
   IOInfo();
   void init();
+  void reset_baseline();
   void get_status(int &r, int &w);
   void log_diff(bool final);
 

@@ -75,10 +75,9 @@ def add_command(nodes, processes, cmd):
 
 	cmd_log_fname = log_dir+"test_"+str(test_count)+".out"
 
-	cmd.append(">>")
+	cmd.append(" >> ")
 	cmd.append(cmd_log_fname)
-	cmd.append("2>&1")
-
+	cmd.append(" 2>&1 ")
 
 	temp = str(test_count) + ":\t" + " ".join(cmd)
 	log(temp)
@@ -106,7 +105,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-	chunk_size = 20
+	chunk_size = 25
 	data_type1 = "VC_VC"
 	data_type2 = "MP_VC"
 
@@ -133,7 +132,6 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 
 		#cmd.extend([str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type1])
-		#add_command(nodes, processes, cmd)
 		cmd.extend([str_processes, str_nodes, executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type2])
 		add_command(nodes, processes, cmd)
 
@@ -149,7 +147,7 @@ if RunTest:
 		create_commands(17, 1, 20, 1, 1, 1, 1024, 1)
 	else:
 		#Data Scaling test spawning
-		create_commands(18, 1, 23, 1, 1, 1, 1024, 1)
+		create_commands(25, 1, 27, 1, 1, 1, 1024, 1)
 
 		#Weak Scaling test spawning
 		#create_commands(20, 2, -1, 1, 2, 64, 1024, 2)

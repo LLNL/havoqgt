@@ -73,6 +73,10 @@ namespace mpi {
     get_status(read_previous_mb_, written_previous_mb_);
   }
 
+  void IOInfo::reset_baseline() {
+    get_status(read_previous_mb_, written_previous_mb_);
+  }
+
   void IOInfo::get_status(int &r, int &w) {
     FILE *pipe;
     char str[250];
@@ -166,6 +170,7 @@ add_edges_adjacency_matrix_vector_vector(
   if (adjacency_matrix_vec_vec_.size() == 0)
       adjacency_matrix_vec_vec_.resize(1, init_vec);
 
+  io_info_.reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
@@ -199,6 +204,7 @@ add_edges_adjacency_matrix_map_vector(
 
   uint64_vector_t init_vec(seg_allocator);
 
+  io_info_.reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
