@@ -377,5 +377,6 @@ int main(int argc, char** argv) {
   } //END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());
+  std::cout << "FIN." << std::endl;
   return 0;
 }

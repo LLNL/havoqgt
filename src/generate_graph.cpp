@@ -205,11 +205,10 @@ int main(int argc, char** argv) {
     remove(fname.str().c_str());
   }
 
-  // TODO change to (2^34 + 2^33 + 2^32 )
-  uint64_t graph_capacity = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
-  assert (graph_capacity <= (751619276800.0/24.0));
-  mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
-      graph_capacity);
+  uint64_t flash_capacity = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
+  assert (flash_capacity <= (751619276800.0/24.0));
+  mapped_t  asdf(bip::create_only, fname.str().c_str(),
+      flash_capacity);
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
@@ -293,6 +292,7 @@ int main(int argc, char** argv) {
   }
 
   if (fname_compare != "") {
+    std::cout << "Comparing Files." << std::endl;
     std::stringstream fname2;
     fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
 
@@ -310,13 +310,23 @@ int main(int argc, char** argv) {
     }
   }
 
+  asdf.flush();
+
   if (delete_file) {
+    std::cout << "Deleting Mapped File." << std::endl;
     bip::file_mapping::remove(fname.str().c_str());
   }
 
+
+
   } //END Main MPI
+
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
+
+  std::cout << "Before MPI_Finalize." << std::endl;
   CHK_MPI(MPI_Finalize());
+
+  std::cout << "FIN." << std::endl;
   return 0;
 }
 

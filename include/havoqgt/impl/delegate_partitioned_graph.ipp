@@ -344,8 +344,8 @@ class get_owner_id {
 /**
  * This function iterates (1) through the edges and calculates the following:
  *
- *   m_local_degree_count: For each vertedx that is assigned to this node it
- *   determines the number of incoming and outgoing edges
+ *   m_local_incoming_count: For each vertedx that is assigned to this node it
+ *   determines the number of incoming edges
  *
  *   high_vertex_count: the number of high edges generated b
  *
@@ -395,7 +395,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
       uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
       int owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
       if (owner == m_mpi_rank) {
-        m_local_degree_count[local_id].first++;
+        m_local_outgoing_count[local_id]++;
       } else {
         maps_to_send.at(owner)[local_id].first++;
       }
@@ -404,8 +404,8 @@ count_edge_degrees(MPI_Comm mpi_comm,
       local_id = local_dest_id(m_mpi_size)(*unsorted_itr);
       owner    = owner_dest_id(m_mpi_size)(*unsorted_itr);
       if (owner == m_mpi_rank) {
-        m_local_degree_count[local_id].second++;
-        if (m_local_degree_count[local_id].second == delegate_degree_threshold) {
+        m_local_incoming_count[local_id]++;
+        if (m_local_incoming_count[local_id] == delegate_degree_threshold) {
           high_vertex_count++;
         }
       } else {
@@ -426,14 +426,14 @@ count_edge_degrees(MPI_Comm mpi_comm,
   }  // while more edges
 
 
-  // Now, the m_local_degree_count contains the total incoming and outgoing
+  // Now, the m_local_incoming_count contains the total incoming and outgoing
   // edges for each vertex owned by this node.
   // Using this information we identify the hubs.
   std::vector<uint64_t> temp_hubs;
   temp_hubs.reserve(high_vertex_count);
-  for (size_t i = 0; i < m_local_degree_count.size(); i++) {
-    // const uint64_t outgoing = m_local_degree_count[i].first;
-    const uint64_t incoming = m_local_degree_count[i].second;
+  for (size_t i = 0; i < m_local_incoming_count.size(); i++) {
+    // const uint64_t outgoing = m_local_outgoing_count[i];
+    const uint64_t incoming = m_local_incoming_count[i];
 
     if (incoming >= delegate_degree_threshold) {
       const uint64_t global_id = (i * m_mpi_size) + m_mpi_rank;
@@ -504,17 +504,18 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
     const uint64_t local_id = to_recv[k++];
     const uint64_t source_count = to_recv[k++];
     const uint64_t dest_count = to_recv[k++];
-    assert(local_id < m_local_degree_count.size());
+    assert(local_id < m_local_incoming_count.size());
 
     // If its not currently a high vertex but by adding this it becomes one
     // then increment high_vertex_count
-    if (m_local_degree_count[local_id].second < delegate_degree_threshold
-      && m_local_degree_count[local_id].second + dest_count >=
+    if (m_local_incoming_count[local_id] < delegate_degree_threshold
+      && m_local_incoming_count[local_id] + dest_count >=
       delegate_degree_threshold) {
+
       high_vertex_count++;
     }
-    m_local_degree_count[local_id].first += source_count;
-    m_local_degree_count[local_id].second += dest_count;
+    m_local_outgoing_count[local_id] += source_count;
+    m_local_incoming_count[local_id] += dest_count;
   }  // for each recieved element.
 
 }  // send_vertex_info
@@ -756,7 +757,8 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   // Allocate the index into the low edge csr.
   // +2: because the m_max_vertex is indexible and the last position must hold
   // the number of low edges.
-  m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
+  //m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0)); moved to
+  //constructor
 
 
   // Initilize the m_owned_info, bny iterating through owned vertexes and
@@ -764,8 +766,8 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   //  outgoing edges.
   uint64_t edge_count = 0;
   for (uint64_t vert_id = 0; vert_id < m_owned_info.size(); vert_id++) {
-    const uint64_t outgoing = m_local_degree_count[vert_id].first;
-    const uint64_t incoming = m_local_degree_count[vert_id].second;
+    const uint64_t outgoing = m_local_outgoing_count[vert_id];
+    const uint64_t incoming = m_local_incoming_count[vert_id];
 
     m_owned_info[vert_id] = vert_info(false, 0, edge_count);
 
@@ -881,7 +883,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   }
 
   // Temp Vector for storing offsets
-  std::vector<uint64_t> m_owned_info_tracker(m_owned_info.size(), 0);
+
 
   // Used to store high_edge count
   std::vector<uint64_t> tmp_high_count_per_rank(mpi_size,0);
@@ -1249,8 +1251,11 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            uint64_t delegate_degree_threshold
                            )
     : m_global_edge_count(edges.size()),
-      m_local_degree_count(seg_allocator),
+      m_max_vertex(std::ceil(double(max_vertex) / double(m_mpi_size))),
+      m_local_outgoing_count(seg_allocator),
+      m_local_incoming_count(seg_allocator),
       m_owned_info(seg_allocator),
+      m_owned_info_tracker(seg_allocator),
       m_owned_targets(seg_allocator),
       m_delegate_degree_threshold(delegate_degree_threshold),
       m_delegate_info(seg_allocator),
@@ -1272,11 +1277,11 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   }
   assert(sizeof(vertex_locator) == 8);
 
-  // Convert it max local id.
   m_max_vertex = std::ceil(double(max_vertex) / double(m_mpi_size));
-  // Allocate incoming/outgoing degree tracking
-  m_local_degree_count.resize(m_max_vertex+1, std::make_pair(0,0));
-
+  m_local_outgoing_count.resize(m_max_vertex+1, 0);
+  m_local_incoming_count.resize(m_max_vertex+1, 0);
+  m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
+  m_owned_info_tracker.resize(m_max_vertex+2, 0);
 
   boost::unordered_set<uint64_t> global_hubs;
 
