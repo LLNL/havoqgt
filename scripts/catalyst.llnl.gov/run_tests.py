@@ -48,14 +48,24 @@ def init_test_dir():
 		os.makedirs(log_dir)
 
 	log_file_name = log_dir + "run_tests.log"
-	log("Test Motivation:")
-	if len(sys.argv) == 2:
+
+	if len(sys.argv) > 1:
 		test_motivation= str(sys.argv[1])
 	elif DEBUG:
 		test_motivation  = "Debuging..."
 	else:
 		test_motivation = raw_input("Please test motivation: ")
-	log(test_motivation)
+	log("Test Motivation:\n" + test_motivation)
+
+
+	if len(sys.argv) > 2:
+		line_name= str(sys.argv[2])
+	elif DEBUG:
+		line_name  = "Debuging..."
+	else:
+		line_name = raw_input("Please line name: ")
+
+	log("Line Name:" + line_name)
 
 	sbatch_file = log_dir + "batch.sh"
 
