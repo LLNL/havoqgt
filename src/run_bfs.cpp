@@ -209,9 +209,6 @@ int main(int argc, char** argv) {
   advise = boost::interprocess::mapped_region::advice_types::advice_random;
   assert(asdf.advise(advise));
 
-
-  boost::function<void()> flush_func = boost::bind(&(custom_flush<mapped_t>), &asdf);
-
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
 
@@ -226,7 +223,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, flush_func);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
 
 
     } else if(type == "RMAT") {
@@ -237,7 +234,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(),
-            hub_threshold, flush_func);
+            hub_threshold);
     } else if(type == "PA") {
       std::vector< std::pair<uint64_t, uint64_t> > input_edges;
 
@@ -246,7 +243,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, input_edges, uint64_t(5489),
-            hub_threshold, flush_func);
+            hub_threshold);
     } else {
       std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }

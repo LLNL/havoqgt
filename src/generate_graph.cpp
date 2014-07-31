@@ -221,8 +221,6 @@ int main(int argc, char** argv) {
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-  boost::function<void()> flush_func = boost::bind(&(custom_flush<mapped_t>), &asdf);
-
   graph_type *graph;
 
 
@@ -235,7 +233,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, flush_func);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
 
 
     } else if(type == "RMAT") {
@@ -246,7 +244,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, flush_func);
+      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
 
 
     } else if(type == "PA") {
@@ -256,7 +254,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
           ("graph_obj")
-          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold, flush_func);
+          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold);
 
       {
         std::vector< std::pair<uint64_t, uint64_t> > empty(0);

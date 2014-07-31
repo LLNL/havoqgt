@@ -53,22 +53,106 @@
 #ifndef _HAVOQGT_CACHE_UTILI_HPP
 #define _HAVOQGT_CACHE_UTILI_HPP
 
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
+// #include <boost/interprocess/managed_mapped_file.hpp>
+// #include <boost/interprocess/allocators/allocator.hpp>
 
-template<typename mapped_t>
-void custom_flush(mapped_t * mapped) {
 
-  mapped->flush();
 
-  boost::interprocess::mapped_region::advice_types advise;
-  advise = boost::interprocess::mapped_region::advice_types::advice_random;
-  assert(mapped->advise(advise));
-
-  advise = boost::interprocess::mapped_region::advice_types::advice_random;
-  assert(mapped->advise(advise));
-
+template<typename Vector>
+void advise_vector_rand(Vector vec) {
+  void * addr = vec.data();
+  size_t length = vec.size() * sizeof(vec[0]);
+  assert(madvise(addr, length, MADV_RANDOM) == 0);
 }
 
+
+template<typename Vector>
+void flush_advise_vector_dont_need(Vector vec) {
+  void * addr = vec.data();
+  size_t length = vec.size() * sizeof(vec[0]);
+  assert(msync(addr, length, MS_SYNC) == 0);
+  assert(madvise(addr, length, MADV_DONTNEED) == 0);
+}
+
+
+template<typename Vector>
+void flush_vector(Vector vec) {
+  void * addr = vec.data();
+  size_t length = vec.size() * sizeof(vec[0]);
+  assert(msync(addr, length, MS_SYNC) == 0);
+}
+
+template<typename Vector>
+void flush_advise_vector(Vector vec) {
+  void * addr = vec.data();
+  size_t length = vec.size() * sizeof(vec[0]);
+  assert(msync(addr, length, MS_SYNC) == 0);
+  assert(madvise(addr, length, MADV_DONTNEED) == 0);
+  assert(madvise(addr, length, MADV_RANDOM) == 0);
+}
+
+
+// template<typename mapped_t>
+// void custom_flush(mapped_t * mapped) {
+
+//   mapped->flush();
+
+//   boost::interprocess::mapped_region::advice_types advise;
+//   advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+//   assert(mapped->advise(advise));
+
+//   advise = boost::interprocess::mapped_region::advice_types::advice_random;
+//   assert(mapped->advise(advise));
+
+// }
+
+
+
+// template <typename SegmentManager>
+// void
+// delegate_partitioned_graph<SegmentManager>::
+// try_flush(MPI_Comm comm) {
+// #if 1
+//   static uint64_t check_id = 0;
+
+//   if ((m_mpi_rank  % 24) == (check_id++) % 24) {
+
+//     uint32_t dirty_kb;
+//     {
+//       FILE *pipe;
+//       pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
+//       fscanf(pipe, "%u", &dirty_kb);
+//       pclose(pipe);
+//     }
+//     const uint32_t dirty_threshold_kb = DIRTY_THRESHOLD_GB * 1000000;
+
+//     if (dirty_kb > dirty_threshold_kb) {
+//       m_flush_func();
+//     }
+//   }
+
+
+// #else
+//   bool do_flush;
+//   if (m_mpi_rank == 0) {
+//     uint32_t dirty_kb;
+//     {
+//       FILE *pipe;
+//       pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
+//       fscanf(pipe, "%u", &dirty_kb);
+//       pclose(pipe);
+//     }
+//     const uint32_t dirty_threshold_kb = DIRTY_THRESHOLD_GB * 1000000;
+//     do_flush = (dirty_kb > dirty_threshold_kb);
+//   }
+
+//   MPI_Bcast(&do_flush, 1, mpi_typeof(do_flush), 0, comm);
+
+
+//   if (do_flush) {
+//     m_flush_func();
+//   }
+// #endif
+// }
 #endif  // _HAVOQGT_CACHE_UTILI_HPP
 

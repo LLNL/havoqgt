@@ -5,10 +5,8 @@ import subprocess
 import os.path
 
 VERBOSE = True
-USE_PDEBUG = True
-DEBUG = False
-if DEBUG:
-	USE_PDEBUG = True
+USE_PDEBUG = False
+DEBUG = True
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
 NORUN = False
@@ -226,7 +224,8 @@ if DEBUG:
 	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(25, 1, 30, 1, 1, 1, 1024, 2)
+	create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
+	#create_commands(31, 1, 31, 1, 1, 1, 65536, 1)
 
 
 #Data Scaling test spawning

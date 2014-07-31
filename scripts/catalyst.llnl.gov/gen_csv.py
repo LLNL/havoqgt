@@ -1,23 +1,21 @@
 import sys
 import os
 
-log_dir = "/g/g17/mrdalek/havoqgt/build/catalyst.llnl.gov/logs/"
-
-
 headers = ["Processes", "Nodes", "HAVOQGT_MAILBOX_NUM_IRECV", "HAVOQGT_MAILBOX_NUM_ISEND", "HAVOQGT_MAILBOX_AGGREGATION", "HAVOQGT_MAILBOX_TREE_AGGREGATION", "HAVOQGT_MAILBOX_PRINT_STATS", "Building graph type:", "Building graph Scale", "Hub threshold", "PA-beta", "File name ", "Load from disk", "Delete on Exit", "count_edge_degrees time", "partition_low_degree time", "calculate_overflow time", "partition_high_degree time", "delegate_partitioned_graph time", "Total MB Written:", "Total MB Read:" ,"Max Vertex Id", "Count of hub vertices", "Total percentage good hub edges", "total count del target", "Total percentage of localized edges", "Global number of edges", "Number of small degree", "Number of hubs", "oned imbalance", "hubs imbalance", "TOTAL imbalance ", "Max Degree ", "BFS Time", "Count BFS", "AVERAGE BFS", "Visited total", "Error"]
 
-if len(sys.argv) == 2:
-	pass_dir = str(sys.argv[1])
-	if os.path.exists(pass_dir):
-		log_dir = pass_dir
-	elif os.path.exists(log_dir+pass_dir):
-		log_dir += pass_dir
-	else:
-		print "Specified directory " + pass_dir +" not found"+"\n\tSearched:"+pass_dir +"\n\tSearched:"+log_dir+pass_dir
-		exit(-1)
-else:
+
+
+if len(sys.argv) == 1:
 	print "No directory specified and no jobs were spawned"
 	exit(-1)
+
+pass_dir = str(sys.argv[1])
+if os.path.exists(pass_dir):
+	log_dir = pass_dir
+else:
+	print "Specified directory " + pass_dir +" not found"+"\n\tSearched:"+pass_dir +"\n\tSearched:"+log_dir+pass_dir
+	exit(-1)
+
 
 log_dir += "/"
 

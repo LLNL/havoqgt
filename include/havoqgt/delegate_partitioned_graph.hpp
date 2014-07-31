@@ -55,9 +55,7 @@
 #include <havoqgt/mpi.hpp>
 //#include <havoqgt/distributed_edge_list.hpp>
 #include <havoqgt/detail/iterator.hpp>
-
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
+#include <havoqgt/cache_utilities.hpp>
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/container/map.hpp>
@@ -325,8 +323,7 @@ class delegate_partitioned_graph {
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
-                             uint64_t delegate_degree_threshold,
-                             boost::function<void()> flush_func);
+                             uint64_t delegate_degree_threshold);
 
 
   /// Converts a vertex_locator to the vertex label
@@ -461,7 +458,6 @@ class delegate_partitioned_graph {
   void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
-  void try_flush(MPI_Comm comm);
 
   /// Stores information about owned vertices
   class vert_info {
@@ -513,8 +509,6 @@ class delegate_partitioned_graph {
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
-
-  boost::function<void()> m_flush_func;
 
   inline bool operator==(const delegate_partitioned_graph<SegementManager>&
         other)
