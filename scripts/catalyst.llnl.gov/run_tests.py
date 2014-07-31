@@ -6,7 +6,7 @@ import os.path
 
 VERBOSE = True
 USE_PDEBUG = False
-DEBUG = True
+DEBUG = False
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
 NORUN = False

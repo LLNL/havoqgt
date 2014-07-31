@@ -53,42 +53,73 @@
 #ifndef _HAVOQGT_CACHE_UTILI_HPP
 #define _HAVOQGT_CACHE_UTILI_HPP
 
-// #include <boost/interprocess/managed_mapped_file.hpp>
-// #include <boost/interprocess/allocators/allocator.hpp>
-
-
+#include <sys/mman.h>
 
 template<typename Vector>
-void advise_vector_rand(Vector vec) {
-  void * addr = vec.data();
-  size_t length = vec.size() * sizeof(vec[0]);
-  assert(madvise(addr, length, MADV_RANDOM) == 0);
+char * get_address(Vector &vec) {
+  uintptr_t temp = reinterpret_cast<uintptr_t>(&(vec[0]));
+  temp -= temp % 4096;
+  return reinterpret_cast<char *>(temp);
 }
 
 
 template<typename Vector>
-void flush_advise_vector_dont_need(Vector vec) {
-  void * addr = vec.data();
+size_t get_length(Vector &vec) {
   size_t length = vec.size() * sizeof(vec[0]);
-  assert(msync(addr, length, MS_SYNC) == 0);
-  assert(madvise(addr, length, MADV_DONTNEED) == 0);
+  length += (4096 - length%4096);
+  return length;
 }
 
 
 template<typename Vector>
-void flush_vector(Vector vec) {
-  void * addr = vec.data();
-  size_t length = vec.size() * sizeof(vec[0]);
-  assert(msync(addr, length, MS_SYNC) == 0);
+void advise_vector_rand(Vector &vec) {
+  char * addr = get_address(vec);
+  size_t length = get_length(vec);
+
+  int t = madvise(addr, length, MADV_RANDOM);
+  assert(t == 0);
+}
+
+
+template<typename Vector>
+void flush_advise_vector_dont_need(Vector &vec) {
+  char * addr = get_address(vec);
+  size_t length = get_length(vec);
+
+  int t = msync(addr, length, MS_SYNC);
+  if (t == 0) {
+    int t2 = madvise(addr, length, MADV_DONTNEED);
+    assert(t2 == 0);
+  } else {
+    assert(t == 0);
+  }
+
+}
+
+
+template<typename Vector>
+void flush_vector(Vector &vec) {
+  char * addr = get_address(vec);
+  size_t length = get_length(vec);
+
+  int t = msync(addr, length, MS_SYNC);
+  assert(t == 0);
 }
 
 template<typename Vector>
-void flush_advise_vector(Vector vec) {
-  void * addr = vec.data();
-  size_t length = vec.size() * sizeof(vec[0]);
-  assert(msync(addr, length, MS_SYNC) == 0);
-  assert(madvise(addr, length, MADV_DONTNEED) == 0);
-  assert(madvise(addr, length, MADV_RANDOM) == 0);
+void flush_advise_vector(Vector &vec) {
+  char * addr = get_address(vec);
+  size_t length = get_length(vec);
+
+  int t = msync(addr, length, MS_SYNC);
+  if (t == 0) {
+    int t2 = madvise(addr, length, MADV_DONTNEED);
+    assert(t2 == 0);
+    t2 = madvise(addr, length, MADV_RANDOM);
+    assert(t2 == 0);
+  } else {
+    assert(t == 0);
+  }
 }
 
 
