@@ -194,7 +194,8 @@ int main(int argc, char** argv) {
     }
 
     std::stringstream fname;
-    fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
+    //fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
+    fname << fname_output << "_" << mpi_rank;
 
     if (load_from_disk  == 0) {
       remove(fname.str().c_str());

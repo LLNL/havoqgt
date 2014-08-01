@@ -5,7 +5,7 @@ import subprocess
 import os.path
 
 VERBOSE = True
-USE_PDEBUG = True
+USE_PDEBUG = False
 DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
@@ -20,7 +20,8 @@ else:
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "generate_graph" #"run_bfs"
+executable = "generate_graph_dynamic"
+#executable = "generate_graph" #"run_bfs"
 
 command_strings = []
 test_count = 0
@@ -77,9 +78,9 @@ def generate_shell_file():
 	slurm_options = " --clear-ssd "
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(96*1024*256) + " "
-	elif USE_DIMMAP_FOR_TUNE:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
+	elif USE_DIMMAP_FOR_TUNE:
+		slurm_options += "--di-mmap=" + str(110*1024*256) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -117,6 +118,11 @@ def generate_shell_file():
 			s += "echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\" \n"
 			s += "echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\" \n"
 
+			s += block_start + "echo free -m \n" + block_end
+			s += "free -m \n"
+
+			s += block_start + "echo Top 10 for memory using process \n" + block_end
+			s += "ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10 \n"
 
 			s += block_start + "echo df -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
@@ -125,11 +131,19 @@ def generate_shell_file():
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
+			s += "date \n"
 			s += block_start + "echo Executable Log \n" + block_end
 			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
+			s += "date \n"
+
+			s += block_start + "echo free -m \n" + block_end
+			s += "free -m \n"
 
 			s += block_start + "echo df -h -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
+
+			s += block_start + "echo du -sh /l/ssd/* \n" + block_end
+			s += "du -sh /l/ssd/*\n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -142,14 +156,15 @@ def generate_shell_file():
 			s += block_start + "echo dmesg \n" + block_end
 			s += "dmesg\n"
 
-			s += block_start + "echo ls /l/ssd/ \n" + block_end
-			s += "ls /l/ssd/\n"
+			s += block_start + "echo ls -lst /l/ssd/ \n" + block_end
+			s += "ls -lst /l/ssd/\n"
 
 			if USE_DIMMAP:
 				s += block_start + "echo ls /dimmap/ \n" + block_end
 				s += "ls /dimmap/\n"
 
 			s += "rm /l/ssd/out.graph*\n"
+
 
 			s += "EOF\n\n"
 
@@ -191,7 +206,7 @@ def add_command(nodes, processes, cmd):
 
 def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
-	intial_threshold, threshold_multiplier):
+	intial_threshold, threshold_multiplier, data_type):
 
 
 	graph_file = graph_dir+"out.graph"
@@ -199,18 +214,16 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-	chunk_size = 25
-	data_type1 = "VC_VC"
-	data_type2 = "MP_VC"
+	chunk_size = 20
 
 	scale = initial_scale
 	nodes = inital_nodes
 	degree_threshold = intial_threshold
 
 	while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
-		processes = 24 * nodes
+		processes = 1 * nodes
 
-		cmd = [executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
+		cmd = [executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type]
 		add_command(nodes, processes, cmd)
 
 		nodes *= node_multipler
@@ -222,11 +235,13 @@ init_test_dir()
 
 
 if DEBUG:
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC")
+
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(25, 1, 30, 1, 1, 1, 1024, 2)
-
+	create_commands(25, 1, 26, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(25, 1, 26, 1, 1, 1, 1024, 1, "MP_VC")
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
