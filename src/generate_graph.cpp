@@ -130,10 +130,11 @@ int main(int argc, char** argv) {
   typedef mapped_t::segment_manager segment_manager_t;
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
+  int mpi_rank(0), mpi_size(0);
 
   CHK_MPI(MPI_Init(&argc, &argv));
   {
-  int mpi_rank(0), mpi_size(0);
+
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
   havoqgt::get_environment();
@@ -332,10 +333,11 @@ int main(int argc, char** argv) {
 
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
 
-  std::cout << "Before MPI_Finalize." << std::endl;
-  CHK_MPI(MPI_Finalize());
 
-  std::cout << "FIN." << std::endl;
+  CHK_MPI(MPI_Finalize());
+  if (mpi_rank == 0) {
+    std::cout << "FIN." << std::endl;
+  }
   return 0;
 }
 

@@ -479,8 +479,11 @@ class delegate_partitioned_graph {
     }
   };
 
+  const int processes_per_node = 24;
+  const int node_partitions = 8;
   int m_mpi_size;
   int m_mpi_rank;
+  MPI_Comm m_mpi_comm;
 
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};

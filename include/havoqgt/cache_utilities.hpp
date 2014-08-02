@@ -122,6 +122,29 @@ void flush_advise_vector(Vector &vec) {
   }
 }
 
+#ifndef DIRTY_THRESHOLD_GB
+  #define DIRTY_THRESHOLD_GB 75
+#endif
+
+uint32_t get_dirty_pages() {
+  uint32_t dirty_kb;
+
+  FILE *pipe;
+  pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
+  fscanf(pipe, "%u", &dirty_kb);
+  pclose(pipe);
+
+  return dirty_kb;
+}
+
+bool check_dirty_pages() {
+  uint32_t dirty_kb = get_dirty_pages();
+  const uint32_t dirty_threshold_kb = DIRTY_THRESHOLD_GB * 1000000;
+  return (dirty_kb > dirty_threshold_kb);
+}
+
+
+
 
 // template<typename mapped_t>
 // void custom_flush(mapped_t * mapped) {

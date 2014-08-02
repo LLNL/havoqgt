@@ -12,9 +12,8 @@
  #warning Debug MACRO is enabled.
 #endif
 
-#ifndef DIRTY_THRESHOLD_GB
-  #define DIRTY_THRESHOLD_GB 70
-#endif
+#define FLUSH_BY_DIRTY_CHECK 1
+// #define FLUSH_ROUND_ROBIN 1
 
 namespace havoqgt {
 namespace mpi {
@@ -794,8 +793,14 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
-  m_owned_targets.resize(edge_count, vertex_locator());
-  flush_vector(m_owned_targets);
+  for (int i = 0; i < m_mpi_size; i++) {
+    if (i == m_mpi_rank) {
+      m_owned_targets.resize(edge_count, vertex_locator());
+      flush_advise_vector_dont_need(m_owned_targets);
+    }
+    MPI_Barrier(m_mpi_comm);
+  }
+
 
   //
   // Setup and Compute Hub information
@@ -805,9 +810,9 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 
   // Allocates and initilize the delegate (AKA hub) vertex infromation
   m_delegate_degree.resize(vec_sorted_hubs.size(), 0);
-  flush_vector(m_delegate_degree);
+  flush_advise_vector_dont_need(m_delegate_degree);
   m_delegate_label.resize(vec_sorted_hubs.size());
-  flush_vector(m_delegate_label);
+
   // Loop over the hub vertexes, initilizing the delegate_degree tracking
   // structures
   for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
@@ -830,7 +835,8 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   // This is initlized during the paritioning of the low edges and then adjusted
   // in initialize_delegate_target
   m_delegate_info.resize(m_map_delegate_locator.size()+1, 0);
-  flush_vector(m_delegate_info);
+  flush_advise_vector_dont_need(m_delegate_info);
+  flush_advise_vector_dont_need(m_delegate_label);
 }
 
 /**
@@ -855,10 +861,17 @@ initialize_delegate_target(int64_t edges_high_count) {
 
   // Allocate space for storing high degree edges
   // This will be filled in the partion_high_degree function
-  m_delegate_targets.resize(edges_high_count);
-  flush_vector(m_delegate_targets);
-  flush_vector(m_delegate_info);
-  assert(edges_high_count == edge_count);
+  for (int i = 0; i < m_mpi_size; i++) {
+    if (i == m_mpi_rank) {
+      m_delegate_targets.resize(edges_high_count);
+      flush_vector(m_delegate_targets);
+      flush_vector(m_delegate_info);
+      assert(edges_high_count == edge_count);
+    }
+    MPI_Barrier(m_mpi_comm);
+  }
+
+
 }  // initialize_delegate_target
 
 
@@ -875,7 +888,7 @@ template <typename InputIterator>
 void
 delegate_partitioned_graph<SegmentManager>::
 partition_low_degree_count_high(MPI_Comm mpi_comm,
-                 InputIterator unsorted_itr,
+                 InputIterator orgi_unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
                  uint64_t delegate_degree_threshold,
@@ -898,13 +911,44 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   // Used to store high_edge count
   std::vector<uint64_t> tmp_high_count_per_rank(mpi_size,0);
 
+  uint64_t loop_counter = 0;
+  uint64_t edge_counter = 0;
+  double last_loop_time = MPI_Wtime();
+
+
+  for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
+    InputIterator unsorted_itr = orgi_unsorted_itr;
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
           mpi_comm)) {
-    const int processes_per_node = 24;
-    static int check_id = m_mpi_rank  % processes_per_node;
-    if (check_id-- == 0) {
+    if (m_mpi_rank == 0 && (loop_counter++ % 1000) == 0) {
+      double cur_loop_time = MPI_Wtime();
+
+      std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+        << ")Took: " << (cur_loop_time - last_loop_time) <<
+        " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+
+      last_loop_time = cur_loop_time;
+    }
+
+    bool do_flush = true;
+    #if FLUSH_ROUND_ROBIN
+      const int processes_per_node = 24;
+      static int check_id = m_mpi_rank  % processes_per_node;
+      if (check_id-- == 0) {
+        check_id = processes_per_node;
+      } else {
+        do_flush = false;
+      }
+    #elif FLUSH_BY_DIRTY_CHECK
+      if (mpi_rank == 0) {
+        do_flush = check_dirty_pages();
+      }
+      MPI_Bcast(&do_flush, 1, mpi_typeof(do_flush), 0, mpi_comm);
+    #endif
+
+    if (do_flush) {
       flush_advise_vector(m_owned_targets);
-      check_id = processes_per_node;
     }
 
     // Generate Edges to Send
@@ -918,11 +962,26 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_low;
       to_send_edges_low.reserve(edge_chunk_size);
 
-      for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-            ++unsorted_itr) {
+      // for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
+      //       ++unsorted_itr) {
+
+      while (unsorted_itr != unsorted_itr_end &&
+           to_send_edges_low.size()<edge_chunk_size) {
+        // Get next edge
+        const auto edge = *unsorted_itr;
+        ++unsorted_itr;
+        {
+          const int owner = unsorted_itr->second % mpi_size;
+          if (owner % processes_per_node % node_partitions != node_turn) {
+            continue;
+          }
+        }
+        edge_counter++;
+
+
         if (global_hub_set.count(unsorted_itr->first) == 0) {
           to_send_edges_low.push_back(*unsorted_itr);
-          ++i;
+          //++i;
         } else if(global_hub_set.count(unsorted_itr->first)) {
           // This edge's source is a hub
           // 1) Increment the high edge count for the owner of the edge's dest
@@ -935,7 +994,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
             const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
             assert(new_source_id < m_delegate_info.size()-1);
-            m_delegate_info[new_source_id] ++;
+            m_delegate_info[new_source_id]++;
           } else {
             int c = maps_to_send.at(owner)[unsorted_itr->first]++;
             if (c == 0) {
@@ -984,9 +1043,17 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       assert(!m_owned_targets[loc].is_valid());
 
       m_owned_targets[loc] = label_to_locator(edge.second);
-    }  // for over recieved eges
-
+    }  // for over recieved egdes
   }  // while global iterator range not empty
+  }  // for node partition
+
+  if (m_mpi_rank == 0) {
+    double cur_loop_time = MPI_Wtime();
+    std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+        << ")Took: " << (cur_loop_time - last_loop_time) <<
+        " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+  }
 
   edges_high_count = 0;
   for (size_t i = 0; i < m_delegate_info.size(); i++) {
@@ -1082,7 +1149,7 @@ template <typename SegmentManager>
 template <typename InputIterator>
 void
 delegate_partitioned_graph<SegmentManager>::
-partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
+partition_high_degree(MPI_Comm mpi_comm, InputIterator orgi_unsorted_itr,
     InputIterator unsorted_itr_end,
     boost::unordered_set<uint64_t>& global_hub_set,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
@@ -1107,18 +1174,51 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
 
   #endif
 
+  uint64_t loop_counter = 0;
+  uint64_t edge_counter = 0;
+  double last_loop_time = MPI_Wtime();
+
 
   // Scratch vector use for storing edges to send
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
   to_send_edges_high.reserve(edge_chunk_size);
 
+for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
+  InputIterator unsorted_itr = orgi_unsorted_itr;
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
         mpi_comm)) {
-    const int processes_per_node = 24;
-    static int check_id = m_mpi_rank  % processes_per_node;
-    if (check_id-- == 0) {
+
+    if (m_mpi_rank == 0 && (loop_counter++ % 1000) == 0) {
+      double cur_loop_time = MPI_Wtime();
+
+      std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+        << ")Took: " << (cur_loop_time - last_loop_time) <<
+        " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+
+      last_loop_time = cur_loop_time;
+    }
+
+
+
+    bool do_flush = true;
+    #ifdef FLUSH_ROUND_ROBIN
+      const int processes_per_node = 24;
+      static int check_id = m_mpi_rank  % processes_per_node;
+      if (check_id-- == 0) {
+        check_id = processes_per_node;
+      } else {
+        do_flush = false;
+      }
+    #elif defined FLUSH_BY_DIRTY_CHECK
+      if (mpi_rank == 0) {
+        do_flush = check_dirty_pages();
+      }
+      MPI_Bcast(&do_flush, 1, mpi_typeof(do_flush), 0, mpi_comm);
+    #endif
+
+    if (do_flush) {
       flush_advise_vector(m_delegate_targets);
-      check_id = processes_per_node;
     }
 
 
@@ -1128,6 +1228,15 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
       // Get next edge
       const auto edge = *unsorted_itr;
       ++unsorted_itr;
+
+      {
+          const int owner = unsorted_itr->second % mpi_size;
+          if (owner % processes_per_node % node_partitions != node_turn) {
+            continue;
+          }
+      }
+
+      edge_counter++;
 
       if (global_hub_set.count(edge.first) == 1) {
         // If the edge's source is a hub node
@@ -1190,6 +1299,14 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
     }  // for edges recieved
 
   }  // end while get next edge
+  } // For over node partitions
+  if (m_mpi_rank == 0) {
+    double cur_loop_time = MPI_Wtime();
+    std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+        << ")Took: " << (cur_loop_time - last_loop_time) <<
+        " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+  }
 
   {//
   // Exchange edges we generated that we don't need with the other nodes and
@@ -1301,6 +1418,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
        {
 
   MPI_Barrier(mpi_comm);
+  m_mpi_comm = mpi_comm;
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
@@ -1326,6 +1444,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   boost::unordered_set<uint64_t> global_hubs;
 
+  if (m_mpi_rank == 0) {
+    std::cout << "Initial Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;;
+  }
+
   // Count Degree Information
   // For each owned vertex
   //  -count number of outgoing edges
@@ -1333,6 +1455,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // Generate global hubs information
   count_edge_degrees(mpi_comm, edges.begin(), edges.end(), global_hubs,
       delegate_degree_threshold);
+
+  if (m_mpi_rank == 0) {
+    std::cout << "After Count Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+  }
 
 
   // Using the above information construct the hub information, allocate space
@@ -1345,6 +1471,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   flush_advise_vector_dont_need(m_local_outgoing_count);
   flush_advise_vector_dont_need(m_local_incoming_count);
 
+  if (m_mpi_rank == 0) {
+    std::cout << "After Initialize Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+  }
 
   MPI_Barrier(mpi_comm);
   if (m_mpi_rank == 0) {
@@ -1360,6 +1489,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   partition_low_degree_count_high(mpi_comm, edges.begin(), edges.end(),
       global_hubs, delegate_degree_threshold, edges_high_count);
 
+  if (m_mpi_rank == 0) {
+    std::cout << "After Low Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+  }
 #if 0
   #define DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS 1
   std::string temp = "[" + std::to_string(m_mpi_rank)+ "]\n";
@@ -1378,6 +1510,9 @@ std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
 calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
     transfer_info);
 
+if (m_mpi_rank == 0) {
+  std::cout << "After Low Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+}
 
 #ifdef DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS
   for (int i = 0; i < m_delegate_info.size(); i++) {
@@ -1419,10 +1554,16 @@ calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
   // Allocate and initilize the delegate edge CSR table and its index.
   initialize_delegate_target(edges_high_count); //flush/dont need the intenral vector
 
+if(m_mpi_rank == 0) {
+  std::cout << "After initilize delegate Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+}
   // Partition high degree, using overflow schedule
   partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
     transfer_info); //flush/dont need the intenral vector
 
+if(m_mpi_rank == 0) {
+  std::cout << "After partition high Pages:" <<  get_dirty_pages() << " kb" << std::endl;
+}
   MPI_Barrier(mpi_comm);
   double time_end = MPI_Wtime();
   if(m_mpi_rank == 0) {

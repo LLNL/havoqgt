@@ -26,33 +26,56 @@ def generate_csv_file(dir):
 
 
 def generate_graph_files(filename, title, x_axis, y_axis, lines):
+
+	tick_set = {}
+	for line in lines:
+		line[2].sort()
+		for p in line[2]:
+			tick_set[p[0]] = p[0]
+
+	ticks = []
+	ticks.extend(tick_set)
+	ticks.sort()
+	tick_str = "{" + ",".join(ticks) + "}"
+
+
+
+
+
 	with open(filename, "w") as fout:
 		fout.write("\\begin{tikzpicture}[font=\\bfseries]\n")
 		fout.write("\\begin{semilogxaxis}[")
 		fout.write("title=" + title + ", \n")
 		fout.write("xlabel="+ x_axis + ", \n")
+		fout.write("xtick="+ tick_str + ", \n")
+		fout.write("xticklabels="+ tick_str + ", \n")
 		fout.write("ylabel style={align=center},\n")
 		fout.write("ylabel="+ y_axis + ", \n")
-		fout.write("legend pos=south,\n")
+		fout.write("legend style={fill=none, draw=none, at={(0.5,-0.17)},anchor=north,legend cell align=left}\n")
 		fout.write("]\n")
 
 		for line in lines:
-			fout.write("\\addplot[] plot coordinates {\n")
-			fout.write(line[1] + "};\n")
+			points = ""
+			for p in line[2]:
+				points += "("+p[0]+","+p[1]+")\n"
+
+			fout.write("%" + line[1] + "\n")
+			fout.write("\\addplot plot coordinates {\n")
+			fout.write(points + "};\n")
 			fout.write("\\addlegendentry{"+line[0]+"}\n")
 
 		fout.write("\\end{semilogxaxis}\n\\end{tikzpicture}\n")
 
 
 def get_line(dir, y_str, x_str):
-	data = ""
+	comment = ""
 	line_name = "not in file"
 	with open(dir+"run_tests.log", "r") as fin:
 		next_line = False
 		for line in fin:
 			line = line.strip()
 			if next_line:
-				data += "%" + line + "\n"
+				comment = "%" + line + "\n"
 				next_line = False
 			if "Test Motivation:" in line:
 				next_line = True
@@ -60,9 +83,12 @@ def get_line(dir, y_str, x_str):
 				words = line.split(' ')
 				line_name = words[len(words)-1]
 
+	data = []
 	for fname in os.listdir(dir):
 		if fname.endswith(".out"):
 			count = 0
+			y_val = ""
+			x_val = ""
 			print "\tParsing: " + fname
 			with open(dir+fname, 'r') as fin:
 				for line in fin:
@@ -79,10 +105,10 @@ def get_line(dir, y_str, x_str):
 
 					if count == 2:
 						break
+				if count == 2:
+					data.append([y_val, x_val])
 
-				data += "(" + y_val + ", " + x_val + ")\n"
-
-	return [line_name, data]
+	return [line_name, comment, data]
 
 rmat_scaling_time = []
 def get_rmat_time_line(dir):

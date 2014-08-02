@@ -6,7 +6,7 @@ import os.path
 
 VERBOSE = True
 USE_PDEBUG = False
-DEBUG = False
+DEBUG = True
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
 NORUN = False
@@ -231,7 +231,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 init_test_dir()
 
 if DEBUG:
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
+	create_commands(27, 1, 27, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
