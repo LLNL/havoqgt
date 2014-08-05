@@ -63,7 +63,7 @@
 #include <stdint.h>
 #include <utility>
 #include <limits>
-
+#include <functional>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 
@@ -323,7 +323,8 @@ class delegate_partitioned_graph {
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
-                             uint64_t delegate_degree_threshold);
+                             uint64_t delegate_degree_threshold,
+                             std::function<void()> dont_need_graph);
 
 
   /// Converts a vertex_locator to the vertex label
@@ -480,10 +481,12 @@ class delegate_partitioned_graph {
   };
 
   const int processes_per_node = 24;
-  const int node_partitions = 8;
+  const int node_partitions = 12;
   int m_mpi_size;
   int m_mpi_rank;
   MPI_Comm m_mpi_comm;
+
+  std::function<void()> m_dont_need_graph;
 
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};

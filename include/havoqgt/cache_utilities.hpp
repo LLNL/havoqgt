@@ -54,6 +54,7 @@
 #define _HAVOQGT_CACHE_UTILI_HPP
 
 #include <sys/mman.h>
+#include <unistd.h>
 
 template<typename Vector>
 char * get_address(Vector &vec) {
@@ -123,7 +124,7 @@ void flush_advise_vector(Vector &vec) {
 }
 
 #ifndef DIRTY_THRESHOLD_GB
-  #define DIRTY_THRESHOLD_GB 75
+  #define DIRTY_THRESHOLD_GB 70
 #endif
 
 uint32_t get_dirty_pages() {

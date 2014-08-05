@@ -124,6 +124,16 @@ namespace hmpi = havoqgt::mpi;
 
 using namespace havoqgt::mpi;
 
+void temp_func(boost::interprocess::managed_mapped_file *file_mapping) {
+  file_mapping->flush(0, 0, false);
+
+  boost::interprocess::mapped_region::advice_types advice;
+  advice = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+  bool assert_res = file_mapping->advise(advice);
+  assert(assert_res);
+};
+
+
 int main(int argc, char** argv) {
 
   typedef bip::managed_mapped_file mapped_t;
@@ -213,11 +223,11 @@ int main(int argc, char** argv) {
   assert (flash_capacity <= (751619276800.0/24.0));
   mapped_t  asdf(bip::create_only, fname.str().c_str(), flash_capacity);
 
-  boost::interprocess::mapped_region::advice_types advise;
-  advise = boost::interprocess::mapped_region::advice_types::advice_random;
-  assert(asdf.advise(advise));
-
-
+  boost::interprocess::mapped_region::advice_types advice;
+  advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  bool assert_res = asdf.advise(advice);
+  assert(assert_res);
+  std::function<void()>  advice_dont_need = std::bind(temp_func, &asdf);
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -234,7 +244,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, advice_dont_need);
 
 
     } else if(type == "RMAT") {
@@ -245,7 +255,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
+      (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, advice_dont_need);
 
 
     } else if(type == "PA") {
@@ -255,7 +265,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
           ("graph_obj")
-          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold);
+          (alloc_inst, MPI_COMM_WORLD, input_edges,uint64_t(5489), hub_threshold, advice_dont_need);
 
       {
         std::vector< std::pair<uint64_t, uint64_t> > empty(0);

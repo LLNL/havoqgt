@@ -5,7 +5,7 @@ import subprocess
 import os.path
 
 VERBOSE = True
-USE_PDEBUG = False
+USE_PDEBUG = True
 DEBUG = True
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
@@ -98,7 +98,7 @@ def generate_shell_file():
 			cmd_str = cmd[2]
 
 			if USE_PDEBUG:
-				slurm_options += "-ppdebug -w catalyst324"
+				slurm_options += "-ppdebug " #-w catalyst324"
 			elif (nodes >= 128):
 				slurm_options += "-pdit128"
 			elif (nodes >= 64):
@@ -135,7 +135,7 @@ def generate_shell_file():
 			s += "iostat -m | grep md0 2>&1 \n"
 
 			s += block_start + "echo Executable Log \n" + block_end
-			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
+			s += "srun -u -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
 
 			s += block_start + "echo df -h -h /l/ssd \n" + block_end
 			s += "df -h -h /l/ssd  \n"
@@ -231,7 +231,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 init_test_dir()
 
 if DEBUG:
-	create_commands(27, 1, 27, 1, 1, 1, 1024, 1)
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
