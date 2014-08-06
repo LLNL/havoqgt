@@ -920,15 +920,19 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
     InputIterator unsorted_itr = orgi_unsorted_itr;
     if (m_mpi_rank == 0) {
+      double cur_loop_time = MPI_Wtime();
+
       std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
-        << " Node Turn: " << node_turn <<  " ): "<<
+        << " Node Turn: " << node_turn <<  " )Took: " << (cur_loop_time - last_loop_time) <<
         " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl << std::flush;
+
+      last_loop_time = cur_loop_time;
     }
-    if ( (m_mpi_rank % processes_per_node) % node_partitions == node_turn) {
-      std::cout << "\t " << m_mpi_rank << " recieving edges (" <<
-        node_turn << " % " << processes_per_node << " % " << node_partitions << " = "
-        << ((m_mpi_rank % processes_per_node) % node_partitions) << ") " << std::endl << std::flush;
-    }
+    // if ( (m_mpi_rank % processes_per_node) % node_partitions == node_turn) {
+    //   std::cout << "\t " << m_mpi_rank << " recieving edges (" <<
+    //     m_mpi_rank << " % " << processes_per_node << " % " << node_partitions << " = "
+    //     << ((m_mpi_rank % processes_per_node) % node_partitions) << ") " << std::endl << std::flush;
+    // }
 
     MPI_Barrier(mpi_comm);
     m_dont_need_graph();
@@ -937,7 +941,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
           mpi_comm)) {
 
-    if (m_mpi_rank == 0 && (loop_counter% 1000) == 0) {
+    if (m_mpi_rank == 0 && (loop_counter% 1001) == 0) {
       double cur_loop_time = MPI_Wtime();
 
       std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
@@ -990,7 +994,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
         const auto edge = *unsorted_itr;
         ++unsorted_itr;
         {
-          const int owner = unsorted_itr->second % mpi_size;
+          const int owner = unsorted_itr->first % mpi_size;
           if ( (owner % processes_per_node) % node_partitions != node_turn) {
             continue;
           }
@@ -1204,9 +1208,13 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator orgi_unsorted_itr,
 for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
 
   if (m_mpi_rank == 0) {
-    std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
-      << " Node Turn: " << node_turn <<  " ): "<<
+    double cur_loop_time = MPI_Wtime();
+
+      std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+      << " Node Turn: " << node_turn <<  " )Took: " << (cur_loop_time - last_loop_time) <<
       " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl << std::flush;
+
+    last_loop_time = cur_loop_time;
   }
 
   MPI_Barrier(mpi_comm);

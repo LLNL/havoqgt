@@ -67,6 +67,10 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 
+#ifndef EDGE_PASS_PARTITIONS
+ #define EDGE_PASS_PARTITIONS 6
+ #warning setting EDGE_PASS_PARTITIONS six
+#endif
 
 namespace havoqgt {
 namespace mpi {
@@ -481,7 +485,7 @@ class delegate_partitioned_graph {
   };
 
   const int processes_per_node = 24;
-  const int node_partitions = 12;
+  const int node_partitions = EDGE_PASS_PARTITIONS;
   int m_mpi_size;
   int m_mpi_rank;
   MPI_Comm m_mpi_comm;
