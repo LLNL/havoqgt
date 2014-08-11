@@ -6,8 +6,6 @@
  * Implementation of delegate_partitioned_graph and internal classes.
  */
 
-#include <sys/mman.h>
-
 #ifdef DEBUG
  #warning Debug MACRO is enabled.
 #endif
@@ -19,41 +17,57 @@ namespace havoqgt {
 namespace mpi {
 
 
-class IOInfo {
+class LogStep {
  public:
-  IOInfo() {
-    init(mb_read_, mb_written_);
+  LogStep(const std::string &stp_str, MPI_Comm mpi_comm, int mpi_rank)
+  : stp_str_(stp_str)
+  , mpi_comm_(mpi_comm)
+  , mpi_rank_(mpi_rank) {
+    MPI_Barrier(mpi_comm_);
+    if (mpi_rank_ == 0) {
+      time_ = MPI_Wtime();
+      get_io_stat_info(mb_read_, mb_written_);
+
+      std::cout << "Starting:  " << stp_str_ << std::endl;
+      std::cout << "\tDirty Pages: " << get_dirty_pages() << "kb" << std::endl;
+      std::cout << std::flush;
+    }
+    MPI_Barrier(mpi_comm_);
+
   }
 
-  void init(int &r, int &w) {
-    FILE *pipe;
-    char str[250];
-    pipe = popen("iostat -m | grep md0 2>&1", "r" );
+  ~LogStep() {
+    MPI_Barrier(mpi_comm_);
 
-    float temp;
-    fscanf(pipe, "%s", str);
-    fscanf(pipe, "%f %f %f", &temp, &temp, &temp);
-    fscanf(pipe, "%d %d \n", &r, &w);
-    pclose(pipe);
-  };
+    if (mpi_rank_ == 0) {
+      int read = -1;
+      int written = -1;
+      get_io_stat_info(read, written);
+      time_ = MPI_Wtime() - time_;
 
-  void log_diff(bool final = false) {
-    int read = -1;
-    int written = -1;
-    init(read, written);
-
-    if (final) {
-      std::cout << "Total MB Read: " << (read - mb_read_) <<
-                "\nTotal MB Written: " << (written - mb_written_) << std::endl << std::flush;
-    } else {
-      std::cout << "\tMB Read: " << (read - mb_read_) <<
-                "\n\tMB Written: " << (written - mb_written_) << std::endl << std::flush;
+      std::cout << "Finished: " << stp_str_ << std::endl;
+      std::cout << "\tSpace used: " << get_disk_utilization() << "gB." << std::endl;
+      std::cout << "\tDirty Pages: " << get_dirty_pages() << "kB." << std::endl;
+      std::cout << "\tMB Read: " << (read - mb_read_) << std::endl;
+      std::cout << "\tMB Written: " << (written - mb_written_) << std::endl;
+      std::cout << "\tTime: " << time_ << std::endl;
+      std::cout << std::flush;
     }
-  };
+    MPI_Barrier(mpi_comm_);
+
+  }
+
+
+
 
  private:
+  double time_;
   int mb_read_;
   int mb_written_;
+
+  std::string stp_str_;
+  MPI_Comm mpi_comm_;
+  int mpi_rank_;
 };
 
 class DebugOverFlow {
@@ -378,10 +392,6 @@ count_edge_degrees(MPI_Comm mpi_comm,
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  IOInfo *io_info_temp = new IOInfo();
-  if (mpi_rank == 0) {
-    std::cout << "Starting:  count_edge_degrees" << std::endl << std::flush;
-  }
 
 
   uint64_t high_vertex_count(0);
@@ -455,12 +465,7 @@ count_edge_degrees(MPI_Comm mpi_comm,
   // Insert gathered global hubs to set
   global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
 
-  double time_end = MPI_Wtime();
-  if (mpi_rank == 0) {
-    const double total_time = time_end-time_start;
-    std::cout << "count_edge_degrees time = " << total_time << std::endl << std::flush;
-    io_info_temp->log_diff();
-  }
+
 }  // count_edge_degrees
 
 /**
@@ -541,28 +546,27 @@ send_vertex_info(MPI_Comm mpi_comm, uint64_t& high_vertex_count,
 template <typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
-calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
-    const uint64_t owned_low_count,
+calculate_overflow(MPI_Comm mpi_comm, const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
-  double time_start = MPI_Wtime();
-  IOInfo *io_info_temp = new IOInfo();
-  if (m_mpi_rank == 0) {
-    std::cout << "Starting:  calculate_overflow" << std::endl << std::flush;
-  }
+
   //
   // Get the number of high and low edges for each node.
   //
   std::vector<uint64_t> low_count_per_rank, high_count_per_rank;
   mpi_all_gather(uint64_t(owned_low_count), low_count_per_rank, mpi_comm);
-  mpi_all_gather(owned_high_count, high_count_per_rank, mpi_comm);
+  mpi_all_gather(m_edges_high_count, high_count_per_rank, mpi_comm);
 
   // Determine the total of edges accorss all nodes.
-  const uint64_t owned_total_edges = owned_high_count + owned_low_count;
+  const uint64_t owned_total_edges = m_edges_high_count + owned_low_count;
   uint64_t global_edge_count = mpi_all_reduce(owned_total_edges,
       std::plus<uint64_t>(), mpi_comm);
 
   // Determine the desired number of edges at each node.
   const uint64_t target_edges_per_rank = global_edge_count / m_mpi_size;
+
+  uint64_t gave_edge_counter = 0;
+  uint64_t recieve_edge_counter = 0;
+
 
   //
   // Compure the edge count exchange
@@ -605,14 +609,25 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
           // Generate a list of [delegate_ids, edge_counts] to send
           generate_send_list(send_list, to_move, light_idx, transfer_info);
 
+          for (int i = 0; i < send_list.size();) {
+            const uint64_t vert_id = send_list[i++];
+            const uint64_t count = send_list[i++];
+            #if 0
+              std::cout << "[" << m_mpi_rank << "] giving " << vert_id << " +" << count
+              << " to " << light_idx << ". "<< std::endl << std::flush;
+            #endif
+
+          }
+
           // Send the information
           int64_t send_len = send_list.size();
           CHK_MPI(MPI_Send(&send_len, 1, mpi_typeof(send_len), light_idx, 0, mpi_comm));
           CHK_MPI(MPI_Send(send_list.data(), send_len, mpi_typeof(to_move),
               light_idx, 0, mpi_comm));
 
-          // Adjust the owned_high_count info.
-          owned_high_count -= to_move;
+          // Adjust the m_edges_high_count info.
+          m_edges_high_count -= to_move;
+          gave_edge_counter += to_move;
         } else if (light_idx == m_mpi_rank) {  // This node is reciving
           MPI_Status status;
           int64_t recv_length;
@@ -624,6 +639,7 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
           CHK_MPI(MPI_Recv(recv_list.data(), recv_length, mpi_typeof(to_move),
                heavy_idx, 0, mpi_comm, &status));
 
+
           // Update my delagate edge counts.
           uint64_t sanity_count = 0;
           for (int i = 0; i < recv_length;) {
@@ -631,10 +647,17 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
             const uint64_t count = recv_list[i++];
             m_delegate_info[vert_id] += count;
             sanity_count += count;
+
+            #if 0
+              std::cout << "[" << m_mpi_rank << "] recieved " << vert_id <<
+               ", now has " << count << " edges for it." << std::endl << std::flush;
+            #endif
+
           }
 
-          // Adjust the owned_high_count info.
-          owned_high_count += to_move;
+          // Adjust the m_edges_high_count info.
+          m_edges_high_count += to_move;
+          recieve_edge_counter += to_move;
           assert(sanity_count == to_move);
         } // else this node is not involved.
         MPI_Barrier(mpi_comm);
@@ -648,35 +671,41 @@ calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
   }  // For
 
 #ifdef DEBUG
-  const uint64_t owned_total_edges2 = owned_high_count + owned_low_count;
+  const uint64_t owned_total_edges2 = m_edges_high_count + owned_low_count;
   uint64_t sanity_global_edge_count = mpi_all_reduce(owned_total_edges2,
       std::plus<uint64_t>(), mpi_comm);
   assert(sanity_global_edge_count == global_edge_count);
-  assert(owned_high_count == high_count_per_rank[m_mpi_rank]);
+  assert(m_edges_high_count == high_count_per_rank[m_mpi_rank]);
   uint64_t high_count_2 = 0;
   for (size_t i = 0; i < m_delegate_info.size()-1; i++) {
     high_count_2 += m_delegate_info[i];
   }
 
-  assert(owned_high_count == high_count_2);
+  assert(m_edges_high_count == high_count_2);
 
   std::vector<uint64_t> low_count_per_rank2, high_count_per_rank2;
   mpi_all_gather(uint64_t(owned_low_count), low_count_per_rank2, mpi_comm);
-  mpi_all_gather(owned_high_count, high_count_per_rank2, mpi_comm);
+  mpi_all_gather(m_edges_high_count, high_count_per_rank2, mpi_comm);
 
   for (size_t i = 0; i < m_mpi_size; i++) {
     assert(low_count_per_rank2[i] == low_count_per_rank[i]);
     assert(high_count_per_rank2[i] == high_count_per_rank[i]);
   }
 
+  #if 0
+  for (int i = 0; i < m_mpi_size; i++) {
+    if (i == m_mpi_rank) {
+      std::cout << i << " has " << ((int64_t)owned_total_edges - (int64_t)target_edges_per_rank)
+      << " extra edges. Givng:" << gave_edge_counter << " Recieving: "
+      << recieve_edge_counter << "." << std::endl;
+    }
+    MPI_Barrier(mpi_comm);
+  }
+  #endif
+
+
 #endif
 
-  double time_end = MPI_Wtime();
-  if (m_mpi_rank == 0) {
-    const double total_time = time_end-time_start;
-    std::cout << "calculate_overflow time = " << total_time << std::endl << std::flush;
-    io_info_temp->log_diff();
-  }
 }  // calculate overflow
 
 /**
@@ -814,7 +843,7 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   m_delegate_label.resize(vec_sorted_hubs.size());
 
   // Loop over the hub vertexes, initilizing the delegate_degree tracking
-  // structures
+  // structuress
   for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
     uint64_t t_local_id = vec_sorted_hubs[i] / uint64_t(m_mpi_size);
     int t_owner = uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size));
@@ -846,7 +875,7 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 template <typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
-initialize_delegate_target(int64_t edges_high_count) {
+initialize_delegate_target() {
   // Currently, m_delegate_info holds the count of high degree edges assigned
   // to this node for each vertex.
   // Below converts it into an index into the m_delegate_targets array
@@ -856,17 +885,21 @@ initialize_delegate_target(int64_t edges_high_count) {
     uint64_t num_edges = m_delegate_info[i];
     m_delegate_info[i] = edge_count;
     edge_count += num_edges;
-    assert(edge_count <= edges_high_count);
+    assert(edge_count <= m_edges_high_count);
   }
 
   // Allocate space for storing high degree edges
   // This will be filled in the partion_high_degree function
-  for (int i = 0; i < m_mpi_size; i++) {
-    if (i == m_mpi_rank) {
-      m_delegate_targets.resize(edges_high_count);
+  for (int i = 0; i < processes_per_node; i++) {
+    if (i == m_mpi_rank % processes_per_node) {
+      std::cout << i << ": resizing m_delegate_targets to "
+        << m_edges_high_count << "." << std::endl << std::flush;
+
+      m_delegate_targets.resize(m_edges_high_count);
       flush_vector(m_delegate_targets);
       flush_vector(m_delegate_info);
-      assert(edges_high_count == edge_count);
+      assert(m_edges_high_count == edge_count);
+
     }
     MPI_Barrier(m_mpi_comm);
   }
@@ -891,19 +924,13 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
                  InputIterator orgi_unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold,
-                 uint64_t &edges_high_count) {
+                 uint64_t delegate_degree_threshold) {
 
-  double time_start = MPI_Wtime();
   int mpi_rank(0), mpi_size(0);
 
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
-  IOInfo *io_info_temp = new IOInfo();
-  if (mpi_rank == 0) {
-    std::cout << "Starting:  partition_low_degree" << std::endl << std::flush;
-  }
 
   // Temp Vector for storing offsets
 
@@ -941,7 +968,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
           mpi_comm)) {
 
-    if (m_mpi_rank == 0 && (loop_counter% 1001) == 0) {
+    if (m_mpi_rank == 0 && (loop_counter% 1000) == 0) {
       double cur_loop_time = MPI_Wtime();
 
       std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
@@ -985,14 +1012,12 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_low;
       to_send_edges_low.reserve(edge_chunk_size);
 
-      // for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-      //       ++unsorted_itr) {
+      for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
+           ++unsorted_itr) {
 
-      while (unsorted_itr != unsorted_itr_end &&
-           to_send_edges_low.size()<edge_chunk_size) {
         // Get next edge
         const auto edge = *unsorted_itr;
-        ++unsorted_itr;
+
         {
           const int owner = unsorted_itr->first % mpi_size;
           if ( (owner % processes_per_node) % node_partitions != node_turn) {
@@ -1004,7 +1029,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
 
         if (global_hub_set.count(unsorted_itr->first) == 0) {
           to_send_edges_low.push_back(*unsorted_itr);
-          //++i;
+          ++i;
         } else if(global_hub_set.count(unsorted_itr->first)) {
           // This edge's source is a hub
           // 1) Increment the high edge count for the owner of the edge's dest
@@ -1062,7 +1087,11 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       uint64_t loc = temp_offset + m_owned_info[new_vertex_id].low_csr_idx;
 
 
-      assert(loc <  m_owned_info[new_vertex_id+1].low_csr_idx);
+      if (!(loc <  m_owned_info[new_vertex_id+1].low_csr_idx)) {
+        std::cout << loc << " < " <<  m_owned_info[new_vertex_id+1].low_csr_idx
+        << std::endl << std::flush;
+        assert(false);
+      }
       assert(!m_owned_targets[loc].is_valid());
 
       m_owned_targets[loc] = label_to_locator(edge.second);
@@ -1077,9 +1106,9 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
         " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl << std::flush;
   }
 
-  edges_high_count = 0;
+  m_edges_high_count = 0;
   for (size_t i = 0; i < m_delegate_info.size(); i++) {
-    edges_high_count += m_delegate_info[i];
+    m_edges_high_count += m_delegate_info[i];
   }
 
 
@@ -1092,7 +1121,7 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
       std::plus<uint64_t>(), mpi_comm);
 
   uint64_t sanity_check_high_edge_count = high_count_per_rank[m_mpi_rank];
-  assert(edges_high_count == sanity_check_high_edge_count);
+  assert(m_edges_high_count == sanity_check_high_edge_count);
 
 
 #endif
@@ -1100,13 +1129,6 @@ partition_low_degree_count_high(MPI_Comm mpi_comm,
   flush_advise_vector_dont_need(m_owned_targets);
   flush_advise_vector_dont_need(m_owned_info);
   flush_advise_vector_dont_need(m_owned_info_tracker);
-
-  double time_end = MPI_Wtime();
-  if (mpi_rank == 0) {
-    std::cout << "partition_low_degree time = " << time_end - time_start
-        << std::endl << std::flush;
-    io_info_temp->log_diff();
-  }
 }  // partition_low_degree
 
 /**
@@ -1173,17 +1195,12 @@ void
 delegate_partitioned_graph<SegmentManager>::
 partition_high_degree(MPI_Comm mpi_comm, InputIterator orgi_unsorted_itr,
     InputIterator unsorted_itr_end,
-    boost::unordered_set<uint64_t>& global_hub_set,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
   double time_start = MPI_Wtime();
   int mpi_rank(0), mpi_size(0);
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) );
 
-   IOInfo *io_info_temp = new IOInfo();
-  if (mpi_rank == 0) {
-    std::cout << "Starting partition_high_degree" << std::endl << std::flush;
-  }
   // Initates the paritioner, which determines where overflowed edges go
   high_edge_partitioner paritioner(mpi_size, mpi_rank, &transfer_info);
 
@@ -1199,7 +1216,7 @@ partition_high_degree(MPI_Comm mpi_comm, InputIterator orgi_unsorted_itr,
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
   double last_loop_time = MPI_Wtime();
-
+  uint64_t gave_edge_counter = 0;
 
   // Scratch vector use for storing edges to send
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
@@ -1210,7 +1227,7 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
   if (m_mpi_rank == 0) {
     double cur_loop_time = MPI_Wtime();
 
-      std::cout << "\t( Loops: " << loop_counter << "Edges: " << edge_counter
+      std::cout << "\tNode Partition Iteration: ( Loops: " << loop_counter << "Edges: " << edge_counter
       << " Node Turn: " << node_turn <<  " )Took: " << (cur_loop_time - last_loop_time) <<
       " Dirty Pages: " << get_dirty_pages() << "kb." << std::endl << std::flush;
 
@@ -1239,29 +1256,6 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
     loop_counter++;
 
 
-#if 0
-    bool do_flush = true;
-    #ifdef FLUSH_ROUND_ROBIN
-      const int processes_per_node = 24;
-      static int check_id = m_mpi_rank  % processes_per_node;
-      if (check_id-- == 0) {
-        check_id = processes_per_node;
-      } else {
-        do_flush = false;
-      }
-    #elif defined FLUSH_BY_DIRTY_CHECK
-      if (mpi_rank == 0) {
-        do_flush = check_dirty_pages();
-      }
-      MPI_Bcast(&do_flush, 1, mpi_typeof(do_flush), 0, mpi_comm);
-    #endif
-
-    if (do_flush) {
-      flush_advise_vector(m_delegate_targets);
-    }
-#endif
-
-
     while (unsorted_itr != unsorted_itr_end &&
            to_send_edges_high.size()<edge_chunk_size) {
       // Get next edge
@@ -1277,7 +1271,8 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
 
       edge_counter++;
 
-      if (global_hub_set.count(edge.first) == 1) {
+      if (m_map_delegate_locator.count(edge.first) == 1) {
+        // assert(global_hub_set.count(edge.first) > 0);
         // If the edge's source is a hub node
         const uint64_t source_id = edge.first;
         uint64_t new_source_id = m_map_delegate_locator[source_id].local_id();
@@ -1286,6 +1281,10 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
         // Send the edge if we don't own it or if we own it but have no room.
         to_send_edges_high.push_back(std::make_pair(new_source_id, edge.second));
       }  // end if is a hub
+      else {
+        // assert(global_hub_set.count(edge.first) == 0);
+      }
+
     }  // end while
 
     // Exchange edges we generated that we don't need with the other nodes and
@@ -1320,6 +1319,7 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
         assert(transfer_info.size() > 0);
         assert(transfer_info.count(new_source_id) != 0);
         to_send_edges_high.push_back(edge);
+        gave_edge_counter++;
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
@@ -1347,8 +1347,7 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
   }
 
   {//
-  // Exchange edges we generated that we don't need with the other nodes and
-    // recieve edges we may need
+  // Exchange edges we generated  with the other nodes and recieve edges we may need
     // // Scratch vector use for storing recieved edges.
     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
     mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
@@ -1414,12 +1413,6 @@ for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
   flush_advise_vector_dont_need(m_delegate_info);
   flush_advise_vector_dont_need(m_delegate_degree);
 
-  double time_end = MPI_Wtime();
-  if (mpi_rank == 0) {
-    std::cout << "partition_high_degree time = " << time_end - time_start
-        << std::endl << std::flush;
-    io_info_temp->log_diff();
-  }
 }  // partition_high_degre
 
 /**
@@ -1462,10 +1455,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   double time_start = MPI_Wtime();
   CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
-  IOInfo *io_info_temp = new IOInfo();
-  if (m_mpi_rank == 0) {
-    std::cout << "Starting delegate_partitioned_graph: " << std::endl << std::flush;
-  }
+
+
+  LogStep logstep_main("Delegate Paritioning", m_mpi_comm, m_mpi_rank);
+
   assert(sizeof(vertex_locator) == 8);
 
   m_max_vertex = std::ceil(double(max_vertex) / double(m_mpi_size));
@@ -1484,136 +1477,132 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   boost::unordered_set<uint64_t> global_hubs;
 
-  if (m_mpi_rank == 0) {
-    std::cout << "Initial Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;;
-  }
-
   // Count Degree Information
   // For each owned vertex
   //  -count number of outgoing edges
   //  -count number of incoming edges
   // Generate global hubs information
-  count_edge_degrees(mpi_comm, edges.begin(), edges.end(), global_hubs,
+  //
+
+  MPI_Barrier(mpi_comm);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
+
+  {
+    LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
+    count_edge_degrees(mpi_comm, edges.begin(), edges.end(), global_hubs,
       delegate_degree_threshold);
-
-  if (m_mpi_rank == 0) {
-    std::cout << "After Count Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
   }
 
 
-  // Using the above information construct the hub information, allocate space
-  // for the low CSR
-  if (m_mpi_rank == 0) {
-    std::cout << "initialize_edge_storage " << std::endl << std::flush;
-  }
+  MPI_Barrier(mpi_comm);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
 
-  initialize_edge_storage(global_hubs, delegate_degree_threshold);
-  flush_advise_vector_dont_need(m_local_outgoing_count);
-  flush_advise_vector_dont_need(m_local_incoming_count);
 
-  if (m_mpi_rank == 0) {
-    std::cout << "After Initialize Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
+
+  {
+    LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
+    initialize_edge_storage(global_hubs, delegate_degree_threshold);
+    flush_advise_vector_dont_need(m_local_outgoing_count);
+    flush_advise_vector_dont_need(m_local_incoming_count);
   }
 
   MPI_Barrier(mpi_comm);
-  if (m_mpi_rank == 0) {
-    std::cout << "initialize_edge_storage complete" << std::endl << std::flush;
-  }
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
 
+  { // check to insure the set of global hubs and m_map_delegate_locator are the
+    // same set of keys.
+    for (auto itr = global_hubs.begin(); itr != global_hubs.end(); itr++) {
+      const uint64_t temp = *itr;
+      assert(m_map_delegate_locator.count(temp) > 0);
+    }
+    for (auto itr = m_map_delegate_locator.begin();
+          itr != m_map_delegate_locator.end(); itr++) {
+      const uint64_t temp = itr->first;
+      assert(global_hubs.count(temp) > 0);
+    }
+
+
+  }
 
   // Iterate (1) through the edges, sending all edges with a low degree source
   // vertex to the node that owns thats vertex
   // At the same time count the number of high edges and exchange that
   // information with the releveant node's owner.
-  uint64_t edges_high_count;
-  partition_low_degree_count_high(mpi_comm, edges.begin(), edges.end(),
-      global_hubs, delegate_degree_threshold, edges_high_count);
 
-  if (m_mpi_rank == 0) {
-    std::cout << "After Low Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
-  }
-#if 0
-  #define DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS 1
-  std::string temp = "[" + std::to_string(m_mpi_rank)+ "]\n";
-  for (int i = 0; i < m_delegate_info.size(); i++) {
-     temp += "[" + std::to_string(i) + ", "
-            + std::to_string(m_delegate_info[i]) + "] ";
-  }
-  temp += "\n\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
-  temp += "\tHigh Edge Count:\t" + std::to_string(edges_high_count);
-  temp += "\tTotal:\t" + std::to_string(edges_high_count+m_owned_targets.size());
-  temp += "\n";
-#endif
-
-// Calculate the overflow schedule, storing it into the transfer_info object
-std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
-calculate_overflow(mpi_comm, edges_high_count, m_owned_targets.size(),
-    transfer_info);
-
-if (m_mpi_rank == 0) {
-  std::cout << "After Low Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
-}
-
-#ifdef DELEGATE_PARTITION_GRAPH_IPP_PRINT_EDGE_COUNTS_TRANSFERS
-  for (int i = 0; i < m_delegate_info.size(); i++) {
-    temp += "[" + std::to_string(i) + ", "
-            + std::to_string(m_delegate_info[i]) + "] ";
-  }
-  temp += "\n\tLow Edge Count:\t" + std::to_string(m_owned_targets.size());
-  temp += "\tHigh Edge Count:\t" + std::to_string(edges_high_count);
-  temp += "\tTotal:\t" + std::to_string(edges_high_count+m_owned_targets.size());
-  temp += "\n";
-
-  // auto itr = transfer_info.begin();
-  // auto itr_end = transfer_info.end();
-
-  // for (; itr != itr_end; itr++) {
-  //   auto list = (*itr).second;
-  //   temp += "\t" + std::to_string((*itr).first) + ": ";
-  //   for (size_t i = 0; i < list.size(); i++) {
-  //     temp += "[" + std::to_string(list[i].to_send_id) + ", " + std::to_string(list[i].to_send_count) + "] ";
-  //   }
-  //   temp += "\n";
-  // }
-
-  for (int i = 0; i < m_mpi_size; i++) {
-    if (i == m_mpi_rank) {
-      std::cout << temp << std::flush;
-    }
-    for (int j = 0; j < 1000; j++) {
-      if (i == m_mpi_rank) {
-        std::cout << std::flush;
-      }
-      MPI_Barrier(mpi_comm);
-    }
+  {
+    LogStep logstep("partition_low_degree_count_high", m_mpi_comm, m_mpi_rank);
+    partition_low_degree_count_high(mpi_comm, edges.begin(), edges.end(),
+      global_hubs, delegate_degree_threshold);
   }
 
-
-#endif
-
-  // Allocate and initilize the delegate edge CSR table and its index.
-  initialize_delegate_target(edges_high_count); //flush/dont need the intenral vector
-
-if(m_mpi_rank == 0) {
-  std::cout << "After initilize delegate Dirty Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
-}
-  // Partition high degree, using overflow schedule
-  partition_high_degree(mpi_comm, edges.begin(), edges.end(), global_hubs,
-    transfer_info); //flush/dont need the intenral vector
-
-if(m_mpi_rank == 0) {
-  std::cout << "After partition high Pages:" <<  get_dirty_pages() << " kb" << std::endl << std::flush;
-}
   MPI_Barrier(mpi_comm);
-  double time_end = MPI_Wtime();
-  if(m_mpi_rank == 0) {
-    std::cout << "delegate_partitioned_graph time = " << time_end - time_start << std::endl << std::flush;
-    io_info_temp->log_diff(true);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
+
+  if (true) {
+    resume_construction<Container>(seg_allocator, mpi_comm, edges,
+      dont_need_graph);
+  } else {
+    assert(false);
+  }
+};
+
+
+template <typename SegmentManager>
+template <typename Container>
+void
+delegate_partitioned_graph<SegmentManager>::
+resume_construction(const SegmentAllocator<void>& seg_allocator,
+                           MPI_Comm mpi_comm,
+                           Container& edges,
+                           std::function<void()> dont_need_graph) {
+
+  MPI_Barrier(mpi_comm);
+  m_mpi_comm = mpi_comm;
+  m_dont_need_graph = dont_need_graph;
+  double time_start = MPI_Wtime();
+  CHK_MPI( MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size) );
+  CHK_MPI( MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank) );
+
+  LogStep logstep_main("Resume Delegate Partitioning", mpi_comm, m_mpi_rank);
+
+
+  // Calculate the overflow schedule, storing it into the transfer_info object
+  std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
+
+  {
+    LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+    calculate_overflow(mpi_comm, m_owned_targets.size(), transfer_info);
   }
 
-  // We don't need this anymore, so free the resource
-  free_edge_container<Container>(edges);
+  MPI_Barrier(mpi_comm);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
 
+  {
+    LogStep logstep("initialize_delegate_target", m_mpi_comm, m_mpi_rank);
+    // Allocate and initilize the delegate edge CSR table and its index.
+    initialize_delegate_target(); //flush/dont need the intenral vector
+  }
+
+  MPI_Barrier(mpi_comm);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
+
+  {
+    LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
+    // Partition high degree, using overflow schedule
+    partition_high_degree(mpi_comm, edges.begin(), edges.end(), transfer_info);
+     //flush/dont need the intenral vector
+  }
+
+
+  MPI_Barrier(mpi_comm);
+  m_dont_need_graph();
+  MPI_Barrier(mpi_comm);
 
   uint64_t low_local_size      = m_owned_targets.size();
   uint64_t high_local_size     = m_delegate_targets.size();
@@ -1624,7 +1613,7 @@ if(m_mpi_rank == 0) {
     std::vector<uint64_t> my_hub_degrees(m_delegate_degree.begin(), m_delegate_degree.end());
     std::vector<uint64_t> tmp_hub_degrees;
     if(my_hub_degrees.size() > 0) {
-      mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), mpi_comm);
+      mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), m_mpi_comm);
       m_delegate_degree.clear();
       m_delegate_degree.insert(m_delegate_degree.end(),tmp_hub_degrees.begin(), tmp_hub_degrees.end());
     }
@@ -1679,8 +1668,8 @@ if(m_mpi_rank == 0) {
   uint64_t total_count_del_target = mpi_all_reduce(local_count_del_target, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
   if(m_mpi_rank == 0) {
-    std::cout << "Max Vertex Id = " << max_vertex << std::endl << std::flush;
-    std::cout << "Count of hub vertices = " << global_hubs.size() << std::endl << std::flush;
+    std::cout << "Max Local Vertex Id = " << m_max_vertex << std::endl << std::flush;
+    std::cout << "Count of hub vertices = " << m_map_delegate_locator.size() << std::endl << std::flush;
     std::cout << "Total percentage good hub edges = " << double(high_sum_size) / double(total_sum_size) * 100.0 << std::endl << std::flush;
     std::cout << "total count del target = " << total_count_del_target << std::endl << std::flush;
     std::cout << "Total percentage of localized edges = " << double(high_sum_size + total_count_del_target) / double(total_sum_size) * 100.0 << std::endl << std::flush;

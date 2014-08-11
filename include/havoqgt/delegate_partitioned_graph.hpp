@@ -68,8 +68,8 @@
 #include <boost/interprocess/containers/vector.hpp>
 
 #ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 6
- #warning setting EDGE_PASS_PARTITIONS six
+ #define EDGE_PASS_PARTITIONS 3
+ #warning setting EDGE_PASS_PARTITIONS Theree
 #endif
 
 namespace havoqgt {
@@ -330,6 +330,11 @@ class delegate_partitioned_graph {
                              uint64_t delegate_degree_threshold,
                              std::function<void()> dont_need_graph);
 
+  template <typename Container>
+  void resume_construction(const SegmentAllocator<void>& seg_allocator,
+                             MPI_Comm mpi_comm,
+                             Container& edges,
+                             std::function<void()> dont_need_graph);
 
   /// Converts a vertex_locator to the vertex label
   uint64_t locator_to_label(vertex_locator locator) const;
@@ -415,7 +420,7 @@ class delegate_partitioned_graph {
       boost::unordered_set<uint64_t>& global_hub_set,
       uint64_t delegate_degree_threshold);
 
-  void initialize_delegate_target(int64_t edges_high_count);
+  void initialize_delegate_target();
 
 
   template <typename InputIterator>
@@ -423,20 +428,13 @@ class delegate_partitioned_graph {
                  InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold,
-                 uint64_t &edges_high_count);
+                 uint64_t delegate_degree_threshold);
 
   template <typename InputIterator>
-  void partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
-      InputIterator unsorted_itr_end,
-      boost::unordered_set<uint64_t>& global_hub_set,
-      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
+  void partition_high_degree(MPI_Comm mpi_comm, InputIterator orgi_unsorted_itr,
+    InputIterator unsorted_itr_end,
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
-  template <typename InputIterator>
-  void partition_high_degree_fake(MPI_Comm mpi_comm, InputIterator unsorted_itr,
-      InputIterator unsorted_itr_end,
-      boost::unordered_set<uint64_t>& global_hub_set,
-      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
 
   template <typename InputIterator>
   void count_edge_degrees(MPI_Comm mpi_comm,
@@ -456,8 +454,7 @@ class delegate_partitioned_graph {
         std::pair<uint64_t, uint64_t> >  >& maps_to_send, int maps_to_send_element_count);
 
 
-  void calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
-    const uint64_t owned_low_count,
+  void calculate_overflow(MPI_Comm mpi_comm, const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
   void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
@@ -494,6 +491,7 @@ class delegate_partitioned_graph {
 
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};
+  uint64_t m_edges_high_count;
 
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;

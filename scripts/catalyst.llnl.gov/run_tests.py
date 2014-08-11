@@ -18,7 +18,7 @@ else:
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "generate_graph" #"run_bfs"
+executable = "run_bfs" #"generate_graph"
 
 command_strings = []
 test_count = 0
@@ -234,8 +234,14 @@ if DEBUG:
 	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	#create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
-	create_commands(31, 1, 31, 1, 1, 1, 65536, 1)
+	# #create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
+	# create_commands(31, 1, 31, 1, 1, 1, 65536*2, 1)
+	# create_commands(31, 1, 31, 1, 1, 1, 65536*4, 1)
+	# create_commands(31, 1, 31, 1, 1, 1, 65536*8, 1)
+	create_commands(31, 1, 31, 1, 1, 1, 65536*16, 1)
+	create_commands(31, 1, 31, 1, 1, 1, 65536*32, 1)
+	create_commands(31, 1, 31, 1, 1, 1, 65536*64, 1)
+	create_commands(31, 1, 31, 1, 1, 1, 65536*128, 1)
 
 
 #Data Scaling test spawning
