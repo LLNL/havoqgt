@@ -892,7 +892,7 @@ initialize_delegate_target() {
   // This will be filled in the partion_high_degree function
   for (int i = 0; i < processes_per_node; i++) {
     if (i == m_mpi_rank % processes_per_node) {
-      std::cout << i << ": resizing m_delegate_targets to "
+      std::cout << m_mpi_rank << ": resizing m_delegate_targets to "
         << m_edges_high_count << "." << std::endl << std::flush;
 
       m_delegate_targets.resize(m_edges_high_count);
@@ -1542,12 +1542,15 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   m_dont_need_graph();
   MPI_Barrier(mpi_comm);
 
-  if (true) {
-    resume_construction<Container>(seg_allocator, mpi_comm, edges,
+  #if 0
+    #warning skipping partition_high_degree
+    std::cout << "Returning with out performing resume_construction" << std::endl;
+    return;
+  #else
+      resume_construction<Container>(seg_allocator, mpi_comm, edges,
       dont_need_graph);
-  } else {
-    assert(false);
-  }
+  #endif
+
 };
 
 
