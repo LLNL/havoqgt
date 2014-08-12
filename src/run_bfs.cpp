@@ -57,6 +57,7 @@
 #include <havoqgt/single_source_shortest_path.hpp>
 #include <havoqgt/page_rank.hpp>
 #include <havoqgt/environment.hpp>
+ #include <havoqgt/cache_utilities.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -64,6 +65,8 @@
 #include <algorithm>
 #include <functional>
 
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/mapped_region.hpp>
@@ -122,6 +125,16 @@
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
+
+void temp_func(boost::interprocess::managed_mapped_file *file_mapping) {
+  file_mapping->flush(0, 0, false);
+
+  boost::interprocess::mapped_region::advice_types advice;
+  advice = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+  bool assert_res = file_mapping->advise(advice);
+  assert(assert_res);
+};
+
 
 int main(int argc, char** argv) {
   typedef bip::managed_mapped_file mapped_t;
@@ -202,9 +215,14 @@ int main(int argc, char** argv) {
   mapped_t asdf(bip::open_or_create, fname.str().c_str(),
       file_size);
 
-  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
-  bool r = asdf.advise(advise);
-  assert(r);
+  boost::interprocess::mapped_region::advice_types advice;
+  advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  bool assert_res = asdf.advise(advice);
+  assert(assert_res);
+
+
+  std::function<void()>  advice_dont_need = std::bind(temp_func, &asdf);
+
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
@@ -220,7 +238,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, advice_dont_need);
 
 
     } else if(type == "RMAT") {
@@ -231,7 +249,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(),
-            hub_threshold);
+            hub_threshold, advice_dont_need);
     } else if(type == "PA") {
       std::vector< std::pair<uint64_t, uint64_t> > input_edges;
 
@@ -240,7 +258,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, input_edges, uint64_t(5489),
-            hub_threshold);
+            hub_threshold, advice_dont_need);
     } else {
       std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
@@ -257,6 +275,7 @@ int main(int argc, char** argv) {
     std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
   }
 
+
   for (int i = 0; i < mpi_size; i++) {
     if (i == mpi_rank) {
       double percent = double(segment_manager->get_free_memory()) /
@@ -267,6 +286,7 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
+  graph->print_graph_statistics();
 
   //
   // Calculate max degree

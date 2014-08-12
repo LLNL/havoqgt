@@ -52,38 +52,50 @@
 #ifndef HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 #define HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 
-#include <havoqgt/mpi.hpp>
-//#include <havoqgt/distributed_edge_list.hpp>
-#include <havoqgt/detail/iterator.hpp>
+
+#include <limits>
+#include <utility>
+#include <stdint.h>
+#include <functional>
 
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/container/map.hpp>
 #include <boost/interprocess/containers/map.hpp>
-#include <stdint.h>
-#include <utility>
-#include <limits>
-
-#include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
 
+#include <havoqgt/mpi.hpp>
+#include <havoqgt/utilities.hpp>
+#include <havoqgt/cache_utilities.hpp>
+#include <havoqgt/detail/iterator.hpp>
+#include <havoqgt/delegate_partitioned_graph/edge_partitioner.hpp>
+#include <havoqgt/delegate_partitioned_graph/edge_node_identifier.hpp>
+
+#ifndef PROCESSES_PER_NODE
+ #define PROCESSES_PER_NODE 24
+ #warning using default processer node of 24.
+#endif
+
+#ifndef EDGE_PASS_PARTITIONS
+ #define EDGE_PASS_PARTITIONS 3
+ #warning using default edge pass partitions of three.
+#endif
+
+#ifndef EDGE_CHUNK_SIZE
+ #define EDGE_CHUNK_SIZE 1024*64
+ #warning using default send chunk size of 2^16
+#endif
+
+#ifdef DEBUG
+ #warning Debug MACRO is for delegate_partitioned_graph.
+ #define IS_DEBUGING true
+#endif
 
 namespace havoqgt {
 namespace mpi {
 
 namespace bip = boost::interprocess;
-
-
-typedef struct OverflowSendInfo{
-  OverflowSendInfo(int sid, int count)
-    : to_send_id(sid)
-    , to_send_count(count)
-    , temp_to_send_count(0) {}
-
-  int to_send_id;
-  int32_t to_send_count;
-  int32_t temp_to_send_count;
-}OverflowSendInfo;
 
 /**
  * Delegate partitioned graph using MPI for communication.
@@ -98,234 +110,45 @@ typedef struct OverflowSendInfo{
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
-   const static uint64_t edge_chunk_size = 1024*64;
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 
+  //////////////////////////////////////////////////////////////////////////////
+  // Class Objects
+  //////////////////////////////////////////////////////////////////////////////
   /// Object that uniquely locates a vertex, both MPI rank and local offset.
-  class vertex_locator {
-
-   public:
-    vertex_locator() {
-      m_is_delegate  = 0;
-      m_is_bcast     = 0;
-      m_is_intercept = 0;
-      m_owner_dest   = std::numeric_limits<uint32_t>::max();
-      m_local_id     = std::numeric_limits<uint64_t>::max();
-    }
-
-    bool is_valid() {
-      struct Temp {
-        uint64_t local_id : 39;
-        uint32_t owner_dest : 20;
-      };
-
-      Temp conv;
-      conv.local_id = std::numeric_limits<uint64_t>::max();
-      conv.owner_dest = std::numeric_limits<uint64_t>::max();
-
-
-      return (m_local_id != conv.local_id || m_owner_dest != conv.owner_dest);
-    }
-
-    bool is_delegate() const { return m_is_delegate == 1;}
-    uint32_t owner() const { return m_owner_dest; }
-    void set_dest(uint32_t dest) { m_owner_dest = dest; assert(m_owner_dest == dest);}
-    uint64_t local_id() const { return m_local_id;}
-    bool is_equal(const vertex_locator x) const;
-    uint32_t get_bcast() const { return m_is_bcast ; }
-    void set_bcast(uint32_t bcast) { m_is_bcast = bcast; }
-    bool is_intercept() const { return m_is_intercept == 1;}
-    void set_intercept(bool intercept) { m_is_intercept = intercept; }
-
-    friend bool operator==(const vertex_locator& x,
-                           const vertex_locator& y) {return x.is_equal(y); }
-    friend bool operator<(const vertex_locator& x,
-                           const vertex_locator& y) {
-      if (x.m_is_delegate == y.m_is_delegate) {
-        if (x.m_owner_dest == y.m_owner_dest) {
-          return x.m_local_id < y.m_local_id;
-        }
-        else {
-          return x.m_owner_dest < y.m_owner_dest;
-        }
-
-      } else {
-        return x.m_is_delegate < y.m_is_delegate;
-      }
-    }
-
-
-    friend bool operator!=(const vertex_locator& x,
-                           const vertex_locator& y) {return !(x.is_equal(y)); }
-   private:
-    friend class delegate_partitioned_graph;
-    unsigned int m_is_delegate  : 1;
-
-    unsigned int m_is_bcast     : 3;
-    unsigned int m_is_intercept : 1;
-    unsigned int m_owner_dest   : 20;
-    uint64_t     m_local_id     : 39;
-
-    vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
-  };
-
+  class vertex_locator;
   /// Edge Iterator class for delegate partitioned graph
-  class edge_iterator {
-   public:
-    edge_iterator()
-      : m_ptr_graph(NULL) {};
-
-    edge_iterator& operator++();
-    edge_iterator operator++(int);
-
-    bool is_equal(const edge_iterator& x) const;
-
-    friend bool operator==(const edge_iterator& x,
-                           const edge_iterator& y) {return x.is_equal(y); }
-
-    friend bool operator!=(const edge_iterator& x,
-                           const edge_iterator& y) {return !(x.is_equal(y)); }
-
-    vertex_locator source() const { return m_source; }
-    vertex_locator target() const;
-
-   protected:
-    friend class delegate_partitioned_graph;
-    template <typename T1, typename T2> friend class edge_data;
-    edge_iterator(vertex_locator source, uint64_t edge_offset,
-                  const delegate_partitioned_graph* const pgraph);
-
-    vertex_locator                          m_source;
-    uint64_t                                m_edge_offset;
-    const delegate_partitioned_graph* const m_ptr_graph;
-  };
-
+  class edge_iterator;
   /// Vertex Iterator class for delegate partitioned graph
-  class vertex_iterator
-    : public std::iterator<std::input_iterator_tag, vertex_locator, ptrdiff_t,
-                           const vertex_locator* const, const vertex_locator&> {
-   public:
-    vertex_iterator()
-      : m_ptr_graph(NULL) {};
-    vertex_iterator& operator++();
-    vertex_iterator operator++(int);
-
-    bool is_equal(const vertex_iterator& x) const;
-
-    friend bool operator==(const vertex_iterator& x,
-                           const vertex_iterator& y) { return x.is_equal(y); }
-
-    friend bool operator!=(const vertex_iterator& x,
-                           const vertex_iterator& y) { return !(x.is_equal(y)); }
-
-
-    const vertex_locator& operator*()        const { return m_locator; }
-    const vertex_locator* const operator->() const { return &m_locator; }
-
-   private:
-    friend class delegate_partitioned_graph;
-
-    vertex_iterator(uint64_t index, const delegate_partitioned_graph*  pgraph);
-    void update_locator();
-
-    const delegate_partitioned_graph*  m_ptr_graph;
-    uint64_t                                m_owned_vert_index;
-    vertex_locator                          m_locator;
-  };
-
+  class vertex_iterator;
   /// Vertex Data storage
-
   template <typename T, typename SegManagerOther>
-  class vertex_data {
-   public:
-     typedef T value_type;
-    vertex_data() {}
-
-    T&       operator[] (const vertex_locator& locator);
-    const T& operator[] (const vertex_locator& locator) const;
-
-    void reset(const T& r) {
-      for(size_t i=0; i<m_owned_vert_data.size(); ++i) {
-        m_owned_vert_data[i] = r;
-      }
-      for(size_t i=0; i<m_delegate_data.size(); ++i) {
-        m_delegate_data[i] = r;
-      }
-    }
-
-    void all_reduce() {
-      std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
-      std::vector<T> tmp_out(tmp_in.size(), 0);
-      mpi_all_reduce(tmp_in, tmp_out, std::plus<T>(), MPI_COMM_WORLD);
-      std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
-    }
-
-  //private:
-  //  friend class delegate_partitioned_graph;
-    vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-      SegManagerOther* segment_manager);
-    vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-      const T& init, SegManagerOther* segment_manager);
-
-   private:
-    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_owned_vert_data;
-    bip::vector<T, bip::allocator<T, SegManagerOther>  > m_delegate_data;
-  };
-
+  class vertex_data;
   /// Edge Data storage
-
   template <typename T, typename SegManagerOther>
-  class edge_data {
-   public:
-     typedef typename bip::vector< T, bip::allocator<T, SegManagerOther> >
-         ::iterator iterator;
-    typedef T value_type;
-
-    edge_data() {}
-
-    T&       operator[] (const edge_iterator& itr);
-    const T& operator[] (const edge_iterator& itr) const;
-
-    void reset(const T& r) {
-      for(size_t i=0; i<m_owned_edge_data.size(); ++i) {
-        m_owned_edge_data[i] = r;
-      }
-      for(size_t i=0; i<m_delegate_edge_data.size(); ++i) {
-        m_delegate_edge_data[i] = r;
-      }
-    }
-
-    iterator delegate_begin() { return m_delegate_edge_data.begin(); }
-    iterator delegate_end()   { return m_delegate_edge_data.end(); }
-    iterator owned_begin()    { return m_owned_edge_data.begin(); }
-    iterator owned_end()      { return m_owned_edge_data.end(); }
-
-  //private:
-  //  friend class delegate_partitioned_graph;
-    edge_data(uint64_t owned_size, uint64_t delegate_size,
-        SegManagerOther* sm);
-    edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
-        SegManagerOther* sm);
-
-   private:
-    bip::vector< T, bip::allocator<T, SegManagerOther> >
-        m_owned_edge_data;
-    bip::vector< T, bip::allocator<T, SegManagerOther> >
-        m_delegate_edge_data;
-  };
+  class edge_data;
+  /// Stores information about owned vertices
+  class vert_info;
 
 
-  typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
-      ::const_iterator controller_iterator;
-
+  //////////////////////////////////////////////////////////////////////////////
+  // Public Member Functions
+  //////////////////////////////////////////////////////////////////////////////
   /// Constructor that initializes given and unsorted sequence of edges
   template <typename Container>
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
-                             uint64_t delegate_degree_threshold);
+                             uint64_t delegate_degree_threshold,
+                             std::function<void()> dont_need_graph);
 
+  template <typename Container>
+  void build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
+                             MPI_Comm mpi_comm, Container& edges,
+                             std::function<void()> dont_need_graph);
+
+  void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
   uint64_t locator_to_label(vertex_locator locator) const;
@@ -387,11 +210,16 @@ class delegate_partitioned_graph {
   }
 
 
-  size_t num_delegates() const { return m_delegate_degree.size(); }
+  size_t num_delegates() const {
+    return m_delegate_degree.size();
+  }
 
   uint32_t master(const vertex_locator& locator) const {
     return locator.m_local_id % m_mpi_size;
   }
+
+  typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
+      ::const_iterator controller_iterator;
 
   controller_iterator controller_begin() const {
     return m_controller_locators.begin();
@@ -401,89 +229,97 @@ class delegate_partitioned_graph {
     return m_controller_locators.end();
   }
 
-//private:
+  inline bool operator==(delegate_partitioned_graph<SegementManager>&
+      other) {
+    return (m_mpi_size == other.m_mpi_size) &&
+          (m_mpi_rank == other.m_mpi_rank) &&
+          (m_owned_info == other.m_owned_info) &&
+          (m_owned_targets == other.m_owned_targets) &&
+          (m_delegate_info == other.m_delegate_info) &&
+          (m_delegate_degree == other.m_delegate_degree) &&
+          (m_delegate_label == other.m_delegate_label) &&
+          (m_delegate_targets == other.m_delegate_targets) &&
+          (m_map_delegate_locator != other.m_map_delegate_locator) &&
+          (m_delegate_degree_threshold == other.m_delegate_degree_threshold) &&
+          (m_controller_locators == other.m_controller_locators) &&
+          (m_local_outgoing_count == other.m_local_outgoing_count) &&
+          (m_local_incoming_count == other.m_local_incoming_count);
+  }
+
+  inline bool operator!=(delegate_partitioned_graph<SegementManager>&
+      other) {
+    return !(*this == other);
+  }
+
+ private:
+  //////////////////////////////////////////////////////////////////////////////
+  // Private Member Functions
+  //////////////////////////////////////////////////////////////////////////////
   /// Synchronizes hub set amongst all processes.
   void sync_global_hub_set(const boost::unordered_set<uint64_t>& local_hubs,
                            boost::unordered_set<uint64_t>& global_hubs,
-                           bool local_change, MPI_Comm mpi_comm);
+                           bool local_change);
 
   void initialize_edge_storage(
       boost::unordered_set<uint64_t>& global_hub_set,
       uint64_t delegate_degree_threshold);
 
-  void initialize_delegate_target(int64_t edges_high_count);
+  void initialize_delegate_target();
 
 
   template <typename InputIterator>
-  void partition_low_degree_count_high(MPI_Comm mpi_comm,
-                 InputIterator unsorted_itr,
+  void partition_low_degree_count_high(InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold,
-                 uint64_t &edges_high_count);
+                 uint64_t delegate_degree_threshold);
 
   template <typename InputIterator>
-  void partition_high_degree(MPI_Comm mpi_comm, InputIterator unsorted_itr,
-      InputIterator unsorted_itr_end,
-      boost::unordered_set<uint64_t>& global_hub_set,
-      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
+  void partition_high_degree(InputIterator orgi_unsorted_itr,
+    InputIterator unsorted_itr_end,
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
+
 
   template <typename InputIterator>
-  void partition_high_degree_fake(MPI_Comm mpi_comm, InputIterator unsorted_itr,
-      InputIterator unsorted_itr_end,
-      boost::unordered_set<uint64_t>& global_hub_set,
-      std::map<uint64_t, std::deque<OverflowSendInfo>> &transfer_info);
-
-  template <typename InputIterator>
-  void count_edge_degrees(MPI_Comm mpi_comm,
-                 InputIterator unsorted_itr,
+  void count_edge_degrees(InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set,
                  uint64_t delegate_degree_threshold);
 
 
-  void send_high_info(MPI_Comm mpi_comm, std::vector< boost::container::map<
-      uint64_t, uint64_t> >&maps_to_send, int maps_to_send_element_count);
+  void send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
+      maps_to_send, int maps_to_send_element_count);
 
 
-  void send_vertex_info(MPI_Comm mpi_comm, uint64_t &high_vertex_count,
+  void send_vertex_info(uint64_t &high_vertex_count,
       uint64_t delegate_degree_threshold,
-      std::vector<boost::container::map< int,
-        std::pair<uint64_t, uint64_t> >  >& maps_to_send, int maps_to_send_element_count);
+      std::vector<  boost::container::map<
+          int, std::pair<uint64_t, uint64_t> >  >& maps_to_send,
+      int maps_to_send_element_count);
 
 
-  void calculate_overflow(MPI_Comm mpi_comm, uint64_t &owned_high_count,
-    const uint64_t owned_low_count,
+  void calculate_overflow(const uint64_t owned_low_count,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
-  void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send, int send_id,
+  void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
+    int send_id,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
-  /// Stores information about owned vertices
-  class vert_info {
-  public:
-    vert_info(bool in_is_delegate, uint64_t in_delegate_id,
-              uint64_t in_low_csr_idx);
 
-    uint32_t is_delegate :  1;
-    uint32_t delegate_id : 24;
-    uint64_t low_csr_idx : 39;
-
-    inline bool operator==(const vert_info& other){
-      return (is_delegate == other.is_delegate && delegate_id == other.delegate_id
-        && low_csr_idx == other.low_csr_idx);
-    }
-
-    inline bool operator!=(const vert_info& other){
-      return !(*this == other);
-    }
-  };
-
+  //////////////////////////////////////////////////////////////////////////////
+  // Private Data Members
+  //////////////////////////////////////////////////////////////////////////////
+  const static uint64_t edge_chunk_size = EDGE_CHUNK_SIZE;
+  const int processes_per_node = PROCESSES_PER_NODE;
+  const int node_partitions = EDGE_PASS_PARTITIONS;
   int m_mpi_size;
   int m_mpi_rank;
+  MPI_Comm m_mpi_comm;
+
+  std::function<void()> m_dont_need_graph;
 
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};
+  uint64_t m_edges_high_count;
 
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;
@@ -509,147 +345,22 @@ class delegate_partitioned_graph {
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
+};  // class delegate_partitioned_graph
 
-
-
-
-  inline bool operator==(const delegate_partitioned_graph<SegementManager>&
-        other)
-  {
-    if (m_mpi_size != other.m_mpi_size) {
-      return false;
-    } else if (m_mpi_rank != other.m_mpi_rank) {
-      return false;
-    } else if (m_delegate_degree_threshold != other.m_delegate_degree_threshold) {
-      return false;
-    }
-
-    {
-      size_t size = m_owned_info.size();
-      if (size != other.m_owned_info.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_owned_info[i] != other.m_owned_info[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-    {
-      size_t size = m_owned_targets.size();
-      if (size != other.m_owned_targets.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_owned_targets[i] != other.m_owned_targets[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-
-    {
-      size_t size = m_delegate_info.size();
-      if (size != other.m_delegate_info.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_delegate_info[i] != other.m_delegate_info[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-
-
-    {
-      size_t size = m_delegate_degree.size();
-      if (size != other.m_delegate_degree.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_delegate_degree[i] != other.m_delegate_degree[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-
-    {
-      size_t size = m_delegate_label.size();
-      if (size != other.m_delegate_label.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_delegate_label[i] != other.m_delegate_label[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-    {
-      size_t size = m_delegate_targets.size();
-      if (size != other.m_delegate_targets.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_delegate_targets[i] != other.m_delegate_targets[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-
-    {
-      size_t size = m_controller_locators.size();
-      if (size != other.m_controller_locators.size()) {
-        return false;
-      } else {
-        for (size_t i = 0; i < size; i++) {
-          if (m_controller_locators[i] != other.m_controller_locators[i]) {
-            return false;
-          }
-        }
-      }
-    }
-
-    {
-      if (m_map_delegate_locator != other.m_map_delegate_locator) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  inline bool operator!=(const delegate_partitioned_graph<SegementManager>&
-        other){
-    return !(*this == other);
-  }
-};
-
-/// Frees the container of edges
-template <typename Container>
-void free_edge_container(Container &edges) {};
-
-
-template<>
-void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
-  std::vector< std::pair<uint64_t, uint64_t> >empty(0);
-  edges.swap(empty);
-};
 
 
 } // namespace mpi
 } // namespace havoqgt
 
-#include <havoqgt/impl/delegate_partitioned_graph.ipp>
+
+#include <havoqgt/delegate_partitioned_graph/log_step.hpp>
+#include <havoqgt/delegate_partitioned_graph/vert_info.hpp>
+#include <havoqgt/delegate_partitioned_graph/edge_data.hpp>
+#include <havoqgt/delegate_partitioned_graph/edge_iterator.hpp>
+#include <havoqgt/delegate_partitioned_graph/vertex_data.hpp>
+#include <havoqgt/delegate_partitioned_graph/vertex_locator.hpp>
+#include <havoqgt/delegate_partitioned_graph/vertex_iterator.hpp>
+
+#include <havoqgt/delegate_partitioned_graph/delegate_partitioned_graph.ipp>
 
 #endif //HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
