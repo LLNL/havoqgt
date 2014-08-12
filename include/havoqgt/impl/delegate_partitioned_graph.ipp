@@ -223,6 +223,9 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
   {
     LogStep logstep("all-reduce hub degree", m_mpi_comm, m_mpi_rank);
     std::vector<uint64_t> my_hub_degrees(m_delegate_degree.begin(), m_delegate_degree.end());
+    std::cout << "Debuging:: m_delegate_degree.size() = " <<
+        m_delegate_degree.size() << std::endl;
+
     std::vector<uint64_t> tmp_hub_degrees;
     if(my_hub_degrees.size() > 0) {
       mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), m_mpi_comm);
