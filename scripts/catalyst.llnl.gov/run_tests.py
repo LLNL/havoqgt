@@ -231,10 +231,10 @@ def create_commands(initial_scale, scale_increments, max_scale,
 init_test_dir()
 
 if DEBUG:
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1)
+	create_commands(20, 1, 20, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	# #create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
+	#create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
 	# create_commands(31, 1, 31, 1, 1, 1, 65536*2, 1)
 	# create_commands(31, 1, 31, 1, 1, 1, 65536*4, 1)
 	# create_commands(31, 1, 31, 1, 1, 1, 65536*8, 1)

@@ -275,6 +275,7 @@ int main(int argc, char** argv) {
     std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
   }
 
+
   for (int i = 0; i < mpi_size; i++) {
     if (i == mpi_rank) {
       double percent = double(segment_manager->get_free_memory()) /
@@ -285,6 +286,7 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
+  graph->print_graph_statistics();
 
   //
   // Calculate max degree
