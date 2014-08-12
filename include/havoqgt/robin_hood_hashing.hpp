@@ -99,7 +99,7 @@ public:
     return const_cast<hash_table*>(this)->lookup(key);
   }
 
-  bool erase(const Key& key)
+  inline bool erase(const Key& key)
   {
     const int64_t ix = lookup_index(key);
 
@@ -244,7 +244,7 @@ private:
     mask_ = capacity_ - 1;
   }
 
-  void free_buffer(elem* buf, size_t capacity)
+  inline void free_buffer(elem* buf, size_t capacity)
   {
     allocator_.deallocate(buf, capacity * sizeof(elem));
   }

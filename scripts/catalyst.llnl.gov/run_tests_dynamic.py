@@ -7,22 +7,29 @@ import os.path
 VERBOSE = True
 USE_PDEBUG = False
 DEBUG = False
+if DEBUG:
+	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = True
-NORUN = False
+USE_DIMMAP_FOR_TUNE = False
+NORUN = True
+
+USE_CATALYST = False
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
 else:
-	graph_dir = "/l/ssd/"
+	if USE_CATALYST:
+		graph_dir = "/l/ssd/"
+	else:
+		graph_dir = "/usr/localdisk/fusion/"
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "run_bfs" #"generate_graph"
+executable = "generate_graph_dynamic"
+#executable = "generate_graph" #"run_bfs"
 
 command_strings = []
 test_count = 0
-test_motivation = ""
 
 def log(s):
 	if VERBOSE:
@@ -48,24 +55,14 @@ def init_test_dir():
 		os.makedirs(log_dir)
 
 	log_file_name = log_dir + "run_tests.log"
-
-	if len(sys.argv) > 1:
-		test_motivation= str(sys.argv[1])
+	log("Test Motivation:")
+	if len(sys.argv) == 2:
+		log(str(sys.argv[1]))
 	elif DEBUG:
-		test_motivation  = "Debuging..."
+		log("Debuging...")
 	else:
-		test_motivation = raw_input("Please test motivation: ")
-	log("Test Motivation:\n" + test_motivation)
-
-
-	if len(sys.argv) > 2:
-		line_name= str(sys.argv[2])
-	elif DEBUG:
-		line_name  = "Debuging..."
-	else:
-		line_name = raw_input("Please line name: ")
-
-	log("Line Name:" + line_name)
+		var = raw_input("Please test motivation: ")
+		log(var)
 
 	sbatch_file = log_dir + "batch.sh"
 
@@ -83,12 +80,15 @@ def generate_shell_file():
 	block_end = "echo -e \"------------------------------------\\n\\n\"\n"
 	i = 0
 
-	slurm_options = " --clear-ssd "
-
+	if USE_CATALYST:
+		slurm_options = " --clear-ssd "
+	else:
+		slurm_options = ""
+	
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(96*1024*256) + " "
-	elif USE_DIMMAP_FOR_TUNE:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
+	elif USE_DIMMAP_FOR_TUNE:
+		slurm_options += "--di-mmap=" + str(110*1024*256) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -98,7 +98,7 @@ def generate_shell_file():
 			cmd_str = cmd[2]
 
 			if USE_PDEBUG:
-				slurm_options += "-ppdebug " #-w catalyst324"
+				slurm_options += "-ppdebug -w catalyst322"
 			elif (nodes >= 128):
 				slurm_options += "-pdit128"
 			elif (nodes >= 64):
@@ -126,19 +126,43 @@ def generate_shell_file():
 			s += "echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\" \n"
 			s += "echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\" \n"
 
+			s += block_start + "echo free -m \n" + block_end
+			s += "free -m \n"
 
-			s += block_start + "echo df -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
+			s += block_start + "echo Top 10 for memory using process \n" + block_end
+			s += "ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10 \n"
+			if USE_CATALYST:
+				s += block_start + "echo df -h /l/ssd \n" + block_end
+				s += "df -h -h /l/ssd  \n"
+			else:
+				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
+				s += "df -h /usr/localdisk/fusion \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
+			s += "date \n"
 			s += block_start + "echo Executable Log \n" + block_end
-			s += "srun -u -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
+			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
+			s += "date \n"
 
-			s += block_start + "echo df -h -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
+			s += block_start + "echo free -m \n" + block_end
+			s += "free -m \n"
+
+			if USE_CATALYST:
+				s += block_start + "echo df -h /l/ssd \n" + block_end
+				s += "df -h /l/ssd  \n"
+			else:
+				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
+				s += "df -h /usr/localdisk/fusion \n"
+
+			if USE_CATALYST:
+				s += block_start + "echo du -sh /l/ssd/out.graph* \n" + block_end
+				s += "du -sh /l/ssd/out.graph* \n"
+			else:
+				s += block_start + "echo du -sh /usr/localdisk/fusion/out.graph* \n" + block_end
+				s += "du -sh /usr/localdisk/fusion/out.graph* \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -148,17 +172,24 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-			s += block_start + "echo dmesg \n" + block_end
-			s += "dmesg\n"
+#			s += block_start + "echo dmesg \n" + block_end
+#			s += "dmesg\n"
 
-			s += block_start + "echo ls /l/ssd/ \n" + block_end
-			s += "ls /l/ssd/\n"
+			if USE_CATALYST:
+				s += block_start + "echo ls -lst /l/ssd/ \n" + block_end
+				s += "ls -lst /l/ssd/\n"
+			else:
+				s += block_start + "echo ls -lst /usr/localdisk/fusion/ \n" + block_end
+				s += "ls -lst /usr/localdisk/fusion/ \n"
 
 			if USE_DIMMAP:
 				s += block_start + "echo ls /dimmap/ \n" + block_end
 				s += "ls /dimmap/\n"
 
-			s += "rm /l/ssd/out.graph*\n"
+			if USE_CATALYST:
+				s += "rm /l/ssd/out.graph*\n"
+			else:
+				s += "rm /usr/localdisk/fusion/out.graph*\n"
 
 			s += "EOF\n\n"
 
@@ -192,9 +223,6 @@ def add_command(nodes, processes, cmd):
 			f.write(temp)
 			temp = "Processes: %d\n" %(processes)
 			f.write(temp)
-
-			temp = "Motivation: %s\n" %(test_motivation)
-			f.write(temp)
 			f.write("\n")
 
 	test_count += 1
@@ -203,7 +231,7 @@ def add_command(nodes, processes, cmd):
 
 def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
-	intial_threshold, threshold_multiplier):
+	intial_threshold, threshold_multiplier, data_type):
 
 
 	graph_file = graph_dir+"out.graph"
@@ -211,16 +239,16 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-
-
+	chunk_size = 15
+	edges_factor = 16
 	scale = initial_scale
 	nodes = inital_nodes
 	degree_threshold = intial_threshold
 
 	while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
-		processes = 24 * nodes
+		processes = 1 * nodes
 
-		cmd = [executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files)]
+		cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type]
 		add_command(nodes, processes, cmd)
 
 		nodes *= node_multipler
@@ -230,22 +258,21 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 init_test_dir()
 
+
 if DEBUG:
-	create_commands(20, 1, 20, 1, 1, 1, 1024, 1)
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
+
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	#create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
-	# create_commands(31, 1, 31, 1, 1, 1, 65536*2, 1)
-	# create_commands(31, 1, 31, 1, 1, 1, 65536*4, 1)
-	# create_commands(31, 1, 31, 1, 1, 1, 65536*8, 1)
-	create_commands(31, 1, 31, 1, 1, 1, 65536*16, 1)
-	create_commands(31, 1, 31, 1, 1, 1, 65536*32, 1)
-	create_commands(31, 1, 31, 1, 1, 1, 65536*64, 1)
-	create_commands(31, 1, 31, 1, 1, 1, 65536*128, 1)
-
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
+
 
 #Weak Scaling test spawning
 #create_commands(20, 2, -1, 1, 2, 64, 1024, 2)
