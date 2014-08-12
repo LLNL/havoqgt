@@ -101,16 +101,20 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   assert(sizeof(vertex_locator) == 8);
 
 
-  m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
-  // flush dont need
-  flush_advise_vector_dont_need(m_owned_info);
-  m_owned_info_tracker.resize(m_max_vertex+2, 0);
-  flush_advise_vector_dont_need(m_owned_info_tracker);
+  {
+    LogStep logstep("Allocating 4 Arrays of length max local vertex.",
+      m_mpi_comm, m_mpi_rank);
+    m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
+    // flush dont need
+    flush_advise_vector_dont_need(m_owned_info);
+    m_owned_info_tracker.resize(m_max_vertex+2, 0);
+    flush_advise_vector_dont_need(m_owned_info_tracker);
 
-  m_local_outgoing_count.resize(m_max_vertex+1, 0);
-  flush_vector(m_local_outgoing_count);
-  m_local_incoming_count.resize(m_max_vertex+1, 0);
-  flush_vector(m_local_incoming_count);
+    m_local_outgoing_count.resize(m_max_vertex+1, 0);
+    flush_vector(m_local_outgoing_count);
+    m_local_incoming_count.resize(m_max_vertex+1, 0);
+    flush_vector(m_local_incoming_count);
+  }
 
 
   boost::unordered_set<uint64_t> global_hubs;
@@ -130,6 +134,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
     count_edge_degrees(edges.begin(), edges.end(), global_hubs,
       delegate_degree_threshold);
+    std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
   }
 
 
@@ -216,6 +221,7 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
 
   // all-reduce hub degree
   {
+    LogStep logstep("all-reduce hub degree", m_mpi_comm, m_mpi_rank);
     std::vector<uint64_t> my_hub_degrees(m_delegate_degree.begin(), m_delegate_degree.end());
     std::vector<uint64_t> tmp_hub_degrees;
     if(my_hub_degrees.size() > 0) {
@@ -228,23 +234,32 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
 
   //
   // Build controller lists
-  for (size_t i=0; i < m_delegate_degree.size(); ++i) {
-    if (int(i % m_mpi_size) == m_mpi_rank) {
-      m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
+  {
+    LogStep logstep("Build controller lists", m_mpi_comm, m_mpi_rank);
+    const int controllers = m_delegate_degree.size() / m_mpi_rank;
+
+    for (size_t i=0; i < m_delegate_degree.size(); ++i) {
+      if (int(i % m_mpi_size) == m_mpi_rank) {
+        m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
+      }
     }
+    std::cout << "Debuging:: " << m_controller_locators.size() << "  " << controllers << std::endl;
   }
 
   //
   // Verify CSR integration properlly tagged owned delegates
-  for (auto itr = m_map_delegate_locator.begin();
-      itr != m_map_delegate_locator.end(); ++itr) {
-    uint64_t label = itr->first;
-    vertex_locator locator = itr->second;
+  {
+    LogStep logstep("Verify CSR integration", m_mpi_comm, m_mpi_rank);
+    for (auto itr = m_map_delegate_locator.begin();
+        itr != m_map_delegate_locator.end(); ++itr) {
+      uint64_t label = itr->first;
+      vertex_locator locator = itr->second;
 
-    uint64_t local_id = label / uint64_t(m_mpi_size);
-    if (label % uint64_t(m_mpi_size) == uint64_t(m_mpi_rank)) {
-      assert(m_owned_info[local_id].is_delegate == 1);
-      assert(m_owned_info[local_id].delegate_id == locator.local_id());
+      uint64_t local_id = label / uint64_t(m_mpi_size);
+      if (label % uint64_t(m_mpi_size) == uint64_t(m_mpi_rank)) {
+        assert(m_owned_info[local_id].is_delegate == 1);
+        assert(m_owned_info[local_id].delegate_id == locator.local_id());
+      }
     }
   }
 };
@@ -277,9 +292,32 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
 
   uint64_t high_vertex_count(0);
 
+  uint64_t loop_counter = 0;
+  uint64_t edge_counter = 0;
+
+  double start_time, last_loop_time;
+  start_time = last_loop_time = MPI_Wtime();
+
+
   // Loop until no processor is producing edges
   while (!detail::global_iterator_range_empty(unsorted_itr,
         unsorted_itr_end, m_mpi_comm)) {
+    if (m_mpi_rank == 0 && (loop_counter% 1000) == 0) {
+      double curr_time = MPI_Wtime();
+
+      std::cout << "\t["
+        << "Total Loops: " << loop_counter << ", "
+        << "Total Edges: " << edge_counter
+        <<  "] Time " << (curr_time - last_loop_time) << " second, "
+        << " Total Time " << (curr_time - start_time) << " second, "
+        << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+
+
+      last_loop_time = curr_time;
+    }
+    loop_counter++;
+
     std::vector<
       boost::container::map< int, std::pair<uint64_t, uint64_t> >
     > maps_to_send(m_mpi_size);
@@ -287,6 +325,8 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
 
     // Generate Enough information to send
     for (size_t i = 0; i < edge_chunk_size && unsorted_itr != unsorted_itr_end; i++) {
+      edge_counter++;
+
       // Update this vertex's outgoing edge count (first member of the pair)
       uint64_t local_id = local_source_id(m_mpi_size)(*unsorted_itr);
       int owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
@@ -320,6 +360,17 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
         maps_to_send, maps_to_send_element_count);
 
   }  // while more edges
+  if (m_mpi_rank == 0 ) {
+    double curr_time = MPI_Wtime();
+    loop_counter++;
+    std::cout << "\t["
+      << "Total Loops: " << loop_counter << ", "
+      << "Total Edges: " << edge_counter
+      <<  "] Time " << (curr_time - last_loop_time) << " second, "
+      << " Total Time " << (curr_time - start_time) << " second, "
+      << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+      << std::flush;
+  }
 
 
   // Now, the m_local_incoming_count contains the total incoming and outgoing
@@ -461,8 +512,8 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
 
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
-  for (int i = 0; i < m_mpi_size; i++) {
-    if (i == m_mpi_rank) {
+  for (int i = 0; i < processes_per_node; i++) {
+    if (i == m_mpi_rank % processes_per_node) {
       m_owned_targets.resize(edge_count, vertex_locator());
       flush_advise_vector_dont_need(m_owned_targets);
     }
@@ -593,7 +644,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
       std::cout << "\t***["
         << "Partition Number: " << node_turn << ", "
         << "Total Loops: " << loop_counter << ", "
-        << "Total Edges: " << edge_counter << ", "
+        << "Total Edges: " << edge_counter
         <<  "] Time " << (curr_time - last_part_time) << " second, "
         << " Total Time " << (curr_time - start_time) << " second, "
         << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
@@ -613,7 +664,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
         std::cout << "\t["
           << "Partition Number: " << node_turn << ", "
           << "Total Loops: " << loop_counter << ", "
-          << "Total Edges: " << edge_counter << ", "
+          << "Total Edges: " << edge_counter
           <<  "] Time " << (curr_time - last_loop_time) << " second, "
           << " Total Time " << (curr_time - start_time) << " second, "
           << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
@@ -726,7 +777,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
     double curr_time = MPI_Wtime();
     std::cout << "\t["
       << "Total Loops: " << loop_counter << ", "
-      << "Total Edges: " << edge_counter << ", "
+      << "Total Edges: " << edge_counter
       <<  "] Time " << (curr_time - last_loop_time) << " second, "
       << " Total Time " << (curr_time - start_time) << " second, "
       << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
@@ -1043,7 +1094,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       std::cout << "\t***["
         << "Partition Number: " << node_turn << ", "
         << "Total Loops: " << loop_counter << ", "
-        << "Total Edges: " << edge_counter << ", "
+        << "Total Edges: " << edge_counter
         <<  "] Time " << (curr_time - last_part_time) << " second, "
         << " Total Time " << (curr_time - start_time) << " second, "
         << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
@@ -1066,7 +1117,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
         std::cout << "\t["
           << "Partition Number: " << node_turn << ", "
           << "Total Loops: " << loop_counter << ", "
-          << "Total Edges: " << edge_counter << ", "
+          << "Total Edges: " << edge_counter
           <<  "] Time " << (curr_time - last_loop_time) << " second, "
           << " Total Time " << (curr_time - start_time) << " second, "
           << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
@@ -1165,7 +1216,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
     double curr_time = MPI_Wtime();
     std::cout << "\t["
       << "Total Loops: " << loop_counter << ", "
-      << "Total Edges: " << edge_counter << ", "
+      << "Total Edges: " << edge_counter
       <<  "] Time " << (curr_time - last_loop_time) << " second, "
       << " Total Time " << (curr_time - start_time) << " second, "
       << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl

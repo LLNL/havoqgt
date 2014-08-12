@@ -90,6 +90,8 @@
 #ifdef DEBUG
  #warning Debug MACRO is for delegate_partitioned_graph.
  #define IS_DEBUGING true
+#else
+ #define IS_DEBUGING false
 #endif
 
 namespace havoqgt {
