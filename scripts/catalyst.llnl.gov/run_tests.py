@@ -266,9 +266,9 @@ if DEBUG:
 
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "MP_VC")
-	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "RB_HS")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

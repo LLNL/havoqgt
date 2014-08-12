@@ -96,7 +96,7 @@ namespace bip = boost::interprocess;
 
 
 #ifndef WITHOUT_DUPLICATE_INSERTION
-  #define WITHOUT_DUPLICATE_INSERTION 0
+  #define WITHOUT_DUPLICATE_INSERTION 1
 #endif
 
 #ifndef DEBUG_INSERTEDEDGES

@@ -248,8 +248,7 @@ add_edges_robin_hood_hash(Container& edges)
     fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
 #endif
 #if WITHOUT_DUPLICATE_INSERTION == 1
-    std::cerr << "Currentory, robin-hood-hash model isn't supporting without-dupulocate-insertion.";
-    exit(-1);
+    rbh_.insert_unique(edge.first, edge.second);
 #else
     rbh_.insert(edge.first, edge.second);
 #endif

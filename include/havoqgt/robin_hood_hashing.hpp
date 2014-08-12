@@ -77,22 +77,23 @@ public:
 
   inline void insert_unique(Key key, Value val)
   {
-    if (is_duplicated(key, val)) return;
+    if (has_edges(key, val)) return;
     insert(key, val);
   }
 
-  inline bool is_duplicated(const Key& key, const Value& value)
+  inline bool has_edges(const Key& key, const Value& val)
   {
-    const int64_t ix = lookup_index(key);
-    return (ix != -1) && (buffer_[ix].value == value);
+    const int64_t ix = lookup_index(key, val);
+    return (ix != -1);
   }
 
+  /// FIXME: this function is not supporting duplicated-key mdoel
   inline Value* find(const Key& key)
   {
     const int64_t ix = lookup_index(key);
     return ix != -1 ? &buffer_[ix].value : nullptr;
   }
-
+  /// FIXME: this function is not supporting duplicated-key mdoel
   inline const Value* find(const Key& key) const
   {
     return const_cast<hash_table*>(this)->lookup(key);
@@ -282,14 +283,35 @@ private:
 
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  int64_t lookup_index(const Key& key) const
+  inline int64_t lookup_index(const Key& key, const Value& val) const
+  {
+    int64_t pos = lookup_first_index(key);
+    if (pos == -1) return -1;
+
+    int64_t dist = 0;
+
+    while(true) {
+      if (buffer_[pos].key == key && buffer_[pos].value == val)
+        return pos;
+      if (dist > probe_distance(elem_hash(pos), pos))
+        return -1;
+
+      pos = (pos+1) & mask_;
+      ++dist;
+    }
+
+    return -1;
+  }
+
+  /// FIXME: this function is not supporting duplicated-key mdoel
+  inline int64_t lookup_index(const Key& key) const
   {
     const uint64_t hash = hash_key(key);
     int64_t pos = desired_pos(hash);
     int64_t dist = 0;
     for(;;)
     {             
-      if (elem_hash(pos) == 0) 
+      if (elem_hash(pos) == 0) // free space is found
         return -1;
       else if (dist > probe_distance(elem_hash(pos), pos)) 
         return -1;
@@ -299,6 +321,26 @@ private:
       pos = (pos+1) & mask_;
       ++dist;
     }
+    return -1;
+  }
+
+  inline int64_t lookup_first_index(const Key& key) const
+  {
+    const uint64_t hash = hash_key(key);
+    int64_t pos = desired_pos(hash);
+    int64_t dist = 0;
+    for(;;)
+    {             
+      if (elem_hash(pos) == 0) // free space is found
+        return -1;
+      else if (dist > probe_distance(elem_hash(pos), pos)) 
+        return -1;
+      else if (elem_hash(pos) == hash && buffer_[pos].key == key) 
+        return pos;       
+
+      pos = (pos+1) & mask_;
+      ++dist;
+    }    
   }
 
   inline static bool is_deleted(uint64_t hash)
