@@ -80,10 +80,7 @@ typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
 
 template <typename Edges>
-void add_edges_loop (graph_type *graph,
-  mapped_t& asdf,
-  bip::allocator<void, segment_manager_t>& alloc_inst,
-  Edges& edges, uint64_t chunk_size) 
+void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size) 
 {
 
   const uint64_t num_edges = edges.size();
@@ -93,16 +90,16 @@ void add_edges_loop (graph_type *graph,
   auto edges_itr = edges.begin();
 
   for (uint64_t i = 0; i < num_loop; i++ ) {
-    std::cout << "\n[" << i << " / " << num_loop << "]" << std::endl;
+    std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
     boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
     const double time_start = MPI_Wtime();
     for (uint64_t j = 0; j < chunk_size && edges_itr != edges.end(); j++, edges_itr++) {
       onmemory_edges.push_back(*edges_itr);
-      //std::cout << onmemory_edges[j].first << " " << onmemory_edges[j].second << std::endl;
+      //std::cerr << onmemory_edges[j].first << "\t" << onmemory_edges[j].second << std::endl;
     }
     const double time_end = MPI_Wtime();
     std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-    graph->add_edges_adjacency_matrix(asdf, alloc_inst, onmemory_edges);
+    graph->add_edges_adjacency_matrix(onmemory_edges);
 
   }
   std::cout << "<< Results >>" << std::endl;
@@ -144,6 +141,7 @@ int main(int argc, char** argv) {
 
     uint64_t num_vertices = 1;
     uint64_t vert_scale;
+    uint64_t edge_factor;
     double   pa_beta;
     uint64_t hub_threshold;
     uint32_t load_from_disk;
@@ -154,10 +152,10 @@ int main(int argc, char** argv) {
     std::string fname_compare = "";
     std::string data_structure_type;
 
-    if (argc < 10) {
-      std::cerr << "usage: <RMAT/PA> <Scale> <PA-beta> <hub_threshold> <file name>"
+    if (argc < 11) {
+      std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
       << " <load_from_disk> <delete file on exit>"
-      << " <chunk_size_exp> <VC_VC/MP_VC>"
+      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS>"
       << " <file to compare to>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -165,6 +163,7 @@ int main(int argc, char** argv) {
       int pos = 1;
       type = argv[pos++];
       vert_scale      = boost::lexical_cast<uint64_t>(argv[pos++]);
+      edge_factor     = boost::lexical_cast<uint64_t>(argv[pos++]);
       pa_beta         = boost::lexical_cast<double>(argv[pos++]);
       hub_threshold   = boost::lexical_cast<uint64_t>(argv[pos++]);
       fname_output    = argv[pos++];
@@ -181,6 +180,7 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Building graph type: " << type << std::endl;
       std::cout << "Building graph Scale: " << vert_scale << std::endl;
+      std::cout << "Building graph Edge factor: " << edge_factor << std::endl;
       std::cout << "Hub threshold = " << hub_threshold << std::endl;
       std::cout << "PA-beta = " << pa_beta << std::endl;
       std::cout << "File name = " << fname_output << std::endl;
@@ -214,11 +214,15 @@ int main(int argc, char** argv) {
     if (data_structure_type == "VC_VC") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, graph_type::kUseVecVecMatrix);
+      (asdf, alloc_inst, graph_type::kUseVecVecMatrix);
     } else if (data_structure_type == "MP_VC") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, graph_type::kUseMapVecMatrix);        
+      (asdf, alloc_inst, graph_type::kUseMapVecMatrix);
+    } else if (data_structure_type == "RB_HS") {
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (asdf, alloc_inst, graph_type::kUseRobinHoodHash);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);
@@ -227,45 +231,26 @@ int main(int argc, char** argv) {
     if (load_from_disk  == 0) {
 
       if(type == "UPTRI") {
-        uint64_t num_edges = num_vertices * 16;
+        uint64_t num_edges = num_vertices * edge_factor * 2ULL;
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        add_edges_loop(graph, asdf, alloc_inst, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+        add_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
       } else if(type == "RMAT") {
-        uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
+        uint64_t num_edges_per_rank = num_vertices * edge_factor * 2ULL / mpi_size;
 
         havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
 
-        add_edges_loop(graph, asdf, alloc_inst, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
-        // uint64_t num_edges = rmat.size();
-        // uint64_t chunk_size = std::min((uint64_t)std::pow(2, chunk_size_exp), (uint64_t)num_edges);
-        // uint64_t num_loop  = num_edges / chunk_size;
-
-        // auto edges_itr = rmat.begin();
-
-        // for (uint64_t i = 0; i < num_loop; i++ ) {
-        //   boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
-        //   double time_start = MPI_Wtime();
-        //   for (uint64_t j = 0; j < chunk_size && edges_itr != rmat.end(); j++, edges_itr++) {
-        //     onmemory_edges.push_back(*edges_itr);
-        //     //std::cout << onmemory_edges[j].first << " " << onmemory_edges[j].second << std::endl;
-        //   }
-        //   double time_end = MPI_Wtime();
-        //   std::cout << "TIME: Generation edges into DRAM (sec.) = " << time_end - time_start << std::endl;
-        //   graph->add_edges_adjacency_matrix_map_vec_tor(asdf, alloc_inst, onmemory_edges);
-        // }
-
+        add_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+4, pa_beta, 0.0, MPI_COMM_WORLD);
+        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1ULL, pa_beta, 0.0, MPI_COMM_WORLD);
 
-        add_edges_loop(graph, asdf, alloc_inst, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+        add_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);

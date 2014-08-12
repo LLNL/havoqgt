@@ -61,6 +61,8 @@
 namespace havoqgt {
 namespace mpi {
 
+  static const std::string kDeviceName = "md0";
+
   IOInfo::IOInfo()
   : read_total_mb_(0.0), written_total_mb_(0.0)
   {
@@ -80,7 +82,8 @@ namespace mpi {
   void IOInfo::get_status(int &r, int &w) {
     FILE *pipe;
     char str[250];
-    pipe = popen("iostat -m | grep md0 2>&1", "r" );
+    std::string fname = "iostat -m | grep " + kDeviceName + " 2>&1";
+    pipe = popen(fname.c_str(), "r" );
 
     float temp;
     fscanf(pipe, "%s", str);
@@ -120,33 +123,31 @@ namespace mpi {
  */
 template <typename SegementManager>
 construct_dynamicgraph<SegementManager>::
-construct_dynamicgraph(const SegmentAllocator<void>& seg_allocator, const int mode)
-  : adjacency_matrix_vec_vec_(seg_allocator)
+construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const int mode)
+  : asdf_(asdf)
+  , seg_allocator_(seg_allocator)
+  , adjacency_matrix_vec_vec_(seg_allocator)
   , adjacency_matrix_map_vec_(seg_allocator)
   , data_structure_type_(mode)
-  , io_info_() 
+  , io_info_()
+  , rbh_(seg_allocator)
 {
   total_exectution_time_  = 0.0;
-}
+
+    if (mode == kUseVecVecMatrix) {
+      init_vec = new uint64_vector_t(seg_allocator);
+    }   else if (mode == kUseMapVecMatrix) {
+    } else if (mode == kUseRobinHoodHash) {
+    } else {
+      std::cerr << "Unknown data structure type" << std::endl;
+      exit(-1);
+    }
 
 
+#if DEBUG_INSERTEDEDGES == 1
+  fout_debug_insertededges_.open(kFnameDebugInsertedEdges+"_raw");
+#endif
 
-template <typename SegementManager>
-template <typename ManagedMappedFile, typename Container>
-void construct_dynamicgraph<SegementManager>::
-add_edges_adjacency_matrix(
-  ManagedMappedFile& asdf,
-  const SegmentAllocator<void>& seg_allocator,
-  Container& edges)
-{
-  if (data_structure_type_ == kUseVecVecMatrix) {
-    add_edges_adjacency_matrix_vector_vector(asdf, seg_allocator, edges);
-  } else if (data_structure_type_ == kUseMapVecMatrix) {
-    add_edges_adjacency_matrix_map_vector(asdf, seg_allocator, edges);    
-  } else {
-    std::cerr << "Unknown data structure type" << std::endl;
-    exit(-1);
-  }
 }
 
 
@@ -155,20 +156,16 @@ add_edges_adjacency_matrix(
  * boost:interprocess:vector with from and unsorted sequence of edges.
  *
  * @param edges               input edges to partition
- * @param max_vertex          Max vertex ID
 */
 template <typename SegementManager>
-template <typename ManagedMappedFile, typename Container>
+template <typename Container>
 void construct_dynamicgraph<SegementManager>::
-add_edges_adjacency_matrix_vector_vector(
-  ManagedMappedFile& asdf,
-  const SegmentAllocator<void>& seg_allocator,
-  Container& edges)
+add_edges_adjacency_matrix_vector_vector(Container& edges)
 {
-  // XXX: make initializer
-  uint64_vector_t init_vec(seg_allocator);
-  if (adjacency_matrix_vec_vec_.size() == 0)
-      adjacency_matrix_vec_vec_.resize(1, init_vec);
+  // TODO: make initializer
+  if (adjacency_matrix_vec_vec_.size() == 0) {
+      adjacency_matrix_vec_vec_.resize(1, *init_vec);
+  }
 
   io_info_.reset_baseline();
   double time_start = MPI_Wtime();
@@ -176,12 +173,19 @@ add_edges_adjacency_matrix_vector_vector(
     const auto edge = *itr;
 
     while (adjacency_matrix_vec_vec_.size() <= edge.first) {
-      adjacency_matrix_vec_vec_.resize(adjacency_matrix_vec_vec_.size() * 2, init_vec);
+      adjacency_matrix_vec_vec_.resize(adjacency_matrix_vec_vec_.size() * 2, *init_vec);
     }
-    
-    adjacency_matrix_vec_vec_[edge.first].push_back(edge.second);
-  } 
-  asdf.flush();
+    uint64_vector_t& adjacency_list_vec = adjacency_matrix_vec_vec_[edge.first];
+#if WITHOUT_DUPLICATE_INSERTION == 1
+    // add a edge without duplication
+    if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) == adjacency_list_vec.end()) {
+      adjacency_list_vec.push_back(edge.second);
+    }
+#else
+    adjacency_list_vec.push_back(edge.second);
+#endif
+  }
+  flush_pagecache();
   double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;  
@@ -194,30 +198,32 @@ add_edges_adjacency_matrix_vector_vector(
 
 
 template <typename SegmentManager>
-template <typename ManagedMappedFile, typename Container>
+template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_adjacency_matrix_map_vector(
-  ManagedMappedFile& asdf, 
-  const SegmentAllocator<void>& seg_allocator, 
-  Container& edges)
+add_edges_adjacency_matrix_map_vector(Container& edges)
 {
-
-  uint64_vector_t init_vec(seg_allocator);
 
   io_info_.reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
     auto value = adjacency_matrix_map_vec_.find(edge.first);
-    if (value == adjacency_matrix_map_vec_.end()) {
-      uint64_vector_t vec(1, edge.second, seg_allocator);
+    if (value == adjacency_matrix_map_vec_.end()) { // new vertex
+      uint64_vector_t vec(1, edge.second, seg_allocator_);
       adjacency_matrix_map_vec_.insert(map_value_t(edge.first, vec));
     } else {
-      uint64_vector_t *adjacency_list_vec = &value->second;
-      adjacency_list_vec->push_back(edge.second);
+      uint64_vector_t& adjacency_list_vec = value->second;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+      // add a edge without duplication
+      if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) == adjacency_list_vec.end() ) {
+        adjacency_list_vec.push_back(edge.second);
+      }
+#else
+        adjacency_list_vec.push_back(edge.second);
+#endif     
     }
   }  
-  asdf.flush();
+  flush_pagecache();
   double time_end = MPI_Wtime();  
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
@@ -227,12 +233,49 @@ add_edges_adjacency_matrix_map_vector(
 
 }
 
+
+template <typename SegmentManager>
+template <typename Container>
+void construct_dynamicgraph<SegmentManager>::
+add_edges_robin_hood_hash(Container& edges)
+{
+
+  io_info_.reset_baseline();
+  double time_start = MPI_Wtime();
+  for (auto itr = edges.begin(); itr != edges.end(); itr++) {
+    const auto edge = *itr;
+#if DEBUG_INSERTEDEDGES == 1
+    fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
+#endif
+#if WITHOUT_DUPLICATE_INSERTION == 1
+    std::cerr << "Currentory, robin-hood-hash model isn't supporting without-dupulocate-insertion.";
+    exit(-1);
+#else
+    rbh_.insert(edge.first, edge.second);
+#endif
+  }  
+  flush_pagecache();
+  double time_end = MPI_Wtime();  
+
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+
+  total_exectution_time_ += time_end - time_start;
+  io_info_.log_diff();
+  //rbh_.disp_elements();
+
+}
+
 template <typename SegmentManager>
 void construct_dynamicgraph<SegmentManager>::
 print_profile()
 {
   std::cout << "TIME: Total Execution time (sec.) =\t" << total_exectution_time_ << std::endl;
   io_info_.log_diff(true);
+
+#if DEBUG_INSERTEDEDGES == 1
+  rbh_.dump_elements(kFnameDebugInsertedEdges+"_graph");
+  fout_debug_insertededges_.close();
+#endif
 }
 
 
@@ -240,6 +283,8 @@ template <typename SegementManager>
 const int construct_dynamicgraph<SegementManager>::kUseVecVecMatrix = 1;
 template <typename SegementManager>
 const int construct_dynamicgraph<SegementManager>::kUseMapVecMatrix = 2;
+template <typename SegementManager>
+const int construct_dynamicgraph<SegementManager>::kUseRobinHoodHash = 3;
 
 
 } // namespace mpi

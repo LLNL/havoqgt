@@ -60,87 +60,132 @@
 #include <boost/unordered_map.hpp>
 #include <boost/container/map.hpp>
 #include <boost/interprocess/containers/map.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/managed_mapped_file.hpp>
+#include <boost/interprocess/offset_ptr.hpp>
+#include <boost/range/algorithm.hpp>
+ 
 #include <stdint.h>
 #include <utility>
 #include <limits>
 
-#include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/interprocess/containers/vector.hpp>
-#include <boost/interprocess/managed_mapped_file.hpp>
+#include <havoqgt/robin_hood_hashing.hpp>
 
-
-namespace havoqgt {
+ namespace havoqgt {
   namespace mpi {
 
 
 class IOInfo {
- public:
-  IOInfo();
-  void init();
-  void reset_baseline();
-  void get_status(int &r, int &w);
-  void log_diff(bool final);
+  public:
+    IOInfo();
+    void init();
+    void reset_baseline();
+    void get_status(int &r, int &w);
+    void log_diff(bool final);
 
- private:
-  int read_previous_mb_;
-  int written_previous_mb_;
-  int read_total_mb_;
-  int written_total_mb_;
+  private:
+    int read_previous_mb_;
+    int written_previous_mb_;
+    int read_total_mb_;
+    int written_total_mb_;
 };
 
 
 namespace bip = boost::interprocess;
-template <typename SegementManager>
+
+
+#ifndef WITHOUT_DUPLICATE_INSERTION
+  #define WITHOUT_DUPLICATE_INSERTION 0
+#endif
+
+#ifndef DEBUG_INSERTEDEDGES
+  #define DEBUG_INSERTEDEDGES 0
+  #warning DEBUG_INSERTEDEDGES is enabled.
+#endif
+#if DEBUG_INSERTEDEDGES == 1
+  static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug";
+#endif
+
+
+template <typename SegmentManager>
 class construct_dynamicgraph {
- public:
+public:
 
   template<typename T>
-  using SegmentAllocator = bip::allocator<T, SegementManager>;
+  using SegmentAllocator = bip::allocator<T, SegmentManager>;
 
+  typedef bip::managed_mapped_file mapped_t;
   // ---------  Data Structures ------------ //
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
-  typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t> > adjacency_matrix_vec_vec__t;
+  typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
   typedef std::pair<const uint64_t, uint64_vector_t> map_value_t;
-  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_t>> adjacency_matrix_map_vec__t;
+  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_t>> adjacency_matrix_map_vec_t;
 
 
 
   //--  Constructors -- //
   ///set segment allocator to data structures wihtout data resize.
-  construct_dynamicgraph(const SegmentAllocator<void>& seg_allocator, const int mode);
+  construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const int mode);
 
 
-  /// add edges vector-vector adjacency-matrix
-  template <typename ManagedMappedFile, typename Container>
-  void add_edges_adjacency_matrix(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
+  /// add edges
+  template <typename Container>
+  inline void add_edges_adjacency_matrix(Container& edges)
+  {
+    if (data_structure_type_ == kUseVecVecMatrix) {
+      add_edges_adjacency_matrix_vector_vector(edges);
+    }   else if (data_structure_type_ == kUseMapVecMatrix) {
+      add_edges_adjacency_matrix_map_vector(edges);    
+    } else if (data_structure_type_ == kUseRobinHoodHash) {
+      add_edges_robin_hood_hash(edges);
+    } else {
+      std::cerr << "Unknown data structure type" << std::endl;
+      exit(-1);
+    }
+  };
 
   void print_profile();
 
-
-
   static const int kUseVecVecMatrix;
   static const int kUseMapVecMatrix;
+  static const int kUseRobinHoodHash;
 
-
- private:
+private:
 
   /// add edges vector-vector adjacency-matrix
-  template <typename ManagedMappedFile, typename Container>
-  void add_edges_adjacency_matrix_vector_vector(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
+  template <typename Container>
+  void add_edges_adjacency_matrix_vector_vector(Container& edges);
 
   /// add edges unsorted_map-vector adjacency-matrix
-  template <typename ManagedMappedFile, typename Container>
-  void add_edges_adjacency_matrix_map_vector(ManagedMappedFile& asdf, const SegmentAllocator<void>& seg_allocator, Container& edges);
+  template <typename Container>
+  void add_edges_adjacency_matrix_map_vector(Container& edges);
 
+  /// add edges array by using robin hood hash
+  template <typename Container>
+  void add_edges_robin_hood_hash(Container& edges);
 
+  inline void flush_pagecache() {
+    asdf_.flush();
+  }
 
+  mapped_t& asdf_;
+  const SegmentAllocator<void>& seg_allocator_;
 
-  adjacency_matrix_vec_vec__t adjacency_matrix_vec_vec_;
-  adjacency_matrix_map_vec__t adjacency_matrix_map_vec_;
+  adjacency_matrix_vec_vec_t adjacency_matrix_vec_vec_;
+  adjacency_matrix_map_vec_t adjacency_matrix_map_vec_;
   const int data_structure_type_;
 
   IOInfo io_info_;
+  hash_table<int64_t, int64_t, SegmentManager> rbh_;
+
+  uint64_vector_t *init_vec;
   double total_exectution_time_;
+
+#if DEBUG_INSERTEDEDGES == 1
+  std::ofstream fout_debug_insertededges_;
+#endif
+
 };
 
 

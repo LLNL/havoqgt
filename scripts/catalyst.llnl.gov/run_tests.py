@@ -10,13 +10,18 @@ DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = True
-NORUN = False
+USE_DIMMAP_FOR_TUNE = False
+NORUN = True
+
+USE_CL = False
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
 else:
-	graph_dir = "/l/ssd/"
+	if USE_CL:
+		graph_dir = "/l/ssd/"
+	else:
+		graph_dir = "/usr/localdisk/fusion/"
 
 log_dir = "logs/"
 executable_dir = "src/"
@@ -75,8 +80,11 @@ def generate_shell_file():
 	block_end = "echo -e \"------------------------------------\\n\\n\"\n"
 	i = 0
 
-	slurm_options = " --clear-ssd "
-
+	if USE_CL:
+		slurm_options = " --clear-ssd "
+	else:
+		slurm_options = ""
+	
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
 	elif USE_DIMMAP_FOR_TUNE:
@@ -123,9 +131,12 @@ def generate_shell_file():
 
 			s += block_start + "echo Top 10 for memory using process \n" + block_end
 			s += "ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10 \n"
-
-			s += block_start + "echo df -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
+			if USE_CL:
+				s += block_start + "echo df -h /l/ssd \n" + block_end
+				s += "df -h -h /l/ssd  \n"
+			else:
+				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
+				s += "df -h /usr/localdisk/fusion \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -139,11 +150,19 @@ def generate_shell_file():
 			s += block_start + "echo free -m \n" + block_end
 			s += "free -m \n"
 
-			s += block_start + "echo df -h -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
+			if USE_CL:
+				s += block_start + "echo df -h /l/ssd \n" + block_end
+				s += "df -h /l/ssd  \n"
+			else:
+				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
+				s += "df -h /usr/localdisk/fusion \n"
 
-			s += block_start + "echo du -sh /l/ssd/* \n" + block_end
-			s += "du -sh /l/ssd/*\n"
+			if USE_CL:
+				s += block_start + "echo du -sh /l/ssd/out.graph* \n" + block_end
+				s += "du -sh /l/ssd/out.graph* \n"
+			else:
+				s += block_start + "echo du -sh /usr/localdisk/fusion/out.graph* \n" + block_end
+				s += "du -sh /usr/localdisk/fusion/out.graph* \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -153,18 +172,24 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-			s += block_start + "echo dmesg \n" + block_end
-			s += "dmesg\n"
+#			s += block_start + "echo dmesg \n" + block_end
+#			s += "dmesg\n"
 
-			s += block_start + "echo ls -lst /l/ssd/ \n" + block_end
-			s += "ls -lst /l/ssd/\n"
+			if USE_CL:
+				s += block_start + "echo ls -lst /l/ssd/ \n" + block_end
+				s += "ls -lst /l/ssd/\n"
+			else:
+				s += block_start + "echo ls -lst /usr/localdisk/fusion/ \n" + block_end
+				s += "ls -lst /usr/localdisk/fusion/ \n"
 
 			if USE_DIMMAP:
 				s += block_start + "echo ls /dimmap/ \n" + block_end
 				s += "ls /dimmap/\n"
 
-			s += "rm /l/ssd/out.graph*\n"
-
+			if USE_CL:
+				s += "rm /l/ssd/out.graph*\n"
+			else:
+				s += "rm /usr/localdisk/fusion/out.graph*\n"
 
 			s += "EOF\n\n"
 
@@ -214,8 +239,8 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-	chunk_size = 20
-
+	chunk_size = 15
+	edges_factor = 16
 	scale = initial_scale
 	nodes = inital_nodes
 	degree_threshold = intial_threshold
@@ -223,7 +248,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
 		processes = 1 * nodes
 
-		cmd = [executable, test_type, str(scale), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type]
+		cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type]
 		add_command(nodes, processes, cmd)
 
 		nodes *= node_multipler
@@ -237,11 +262,13 @@ init_test_dir()
 if DEBUG:
 	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
 	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
 
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(25, 1, 26, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(25, 1, 26, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(15, 1, 16, 1, 1, 1, 1024, 1, "RB_HS")
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
