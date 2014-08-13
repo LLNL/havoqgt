@@ -105,15 +105,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     LogStep logstep("Allocating 4 Arrays of length max local vertex.",
       m_mpi_comm, m_mpi_rank);
     m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
-    // flush dont need
-    flush_advise_vector_dont_need(m_owned_info);
     m_owned_info_tracker.resize(m_max_vertex+2, 0);
-    flush_advise_vector_dont_need(m_owned_info_tracker);
-
     m_local_outgoing_count.resize(m_max_vertex+1, 0);
-    flush_vector(m_local_outgoing_count);
     m_local_incoming_count.resize(m_max_vertex+1, 0);
-    flush_vector(m_local_incoming_count);
   }
 
 
@@ -134,7 +128,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
     count_edge_degrees(edges.begin(), edges.end(), global_hubs,
       delegate_degree_threshold);
-    std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
+    if (m_mpi_rank == 0)
+      std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
   }
 
 
@@ -222,15 +217,8 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
   // all-reduce hub degree
   {
     LogStep logstep("all-reduce hub degree", m_mpi_comm, m_mpi_rank);
-    std::vector<uint64_t> my_hub_degrees(m_delegate_degree.begin(), m_delegate_degree.end());
-    std::cout << "Debuging:: m_delegate_degree.size() = " <<
-        m_delegate_degree.size() << std::endl;
-
-    std::vector<uint64_t> tmp_hub_degrees;
-    if(my_hub_degrees.size() > 0) {
-      mpi_all_reduce(my_hub_degrees, tmp_hub_degrees, std::plus<uint64_t>(), m_mpi_comm);
-      m_delegate_degree.clear();
-      m_delegate_degree.insert(m_delegate_degree.end(),tmp_hub_degrees.begin(), tmp_hub_degrees.end());
+    if(m_delegate_degree.size() > 0) {
+      mpi_all_reduce_inplace(m_delegate_degree, std::plus<uint64_t>(), m_mpi_comm);
     }
   }
   assert(m_delegate_degree.size() == m_delegate_label.size());
@@ -239,14 +227,13 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
   // Build controller lists
   {
     LogStep logstep("Build controller lists", m_mpi_comm, m_mpi_rank);
-    const int controllers = m_delegate_degree.size() / m_mpi_rank;
-
+    const int controllers = (m_delegate_degree.size() / m_mpi_size) + 1;
+    m_controller_locators.reserve(controllers);
     for (size_t i=0; i < m_delegate_degree.size(); ++i) {
       if (int(i % m_mpi_size) == m_mpi_rank) {
         m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
       }
     }
-    std::cout << "Debuging:: " << m_controller_locators.size() << "  " << controllers << std::endl;
   }
 
   //
@@ -512,13 +499,34 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
       #endif
     }
   }  // for over m_owned_info
+  m_dont_need_graph();
 
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
   for (int i = 0; i < processes_per_node; i++) {
+    if (m_mpi_rank == 0) {
+      std::cout << "\tResizing m_owned_targets: " << i << "/"
+        << processes_per_node << "." << std::endl << std::flush;
+    }
+
     if (i == m_mpi_rank % processes_per_node) {
-      m_owned_targets.resize(edge_count, vertex_locator());
-      flush_advise_vector_dont_need(m_owned_targets);
+      m_owned_targets.reserve(edge_count);
+      {
+        size_t  loop_limit = m_edges_high_count;
+        for (size_t j = 0; j < loop_limit; ) {
+          for (size_t k = 0; k < 10000000; k++) {
+            m_owned_targets.emplace_back();
+            j++;
+            if (j >= loop_limit) {
+              break;
+            }
+          }
+          flush_vector(m_owned_targets);
+
+        }
+        // flush_advise_vector_dont_need(m_owned_targets);
+        m_dont_need_graph();
+      }
     }
     MPI_Barrier(m_mpi_comm);
   }
@@ -527,38 +535,82 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
   //
   // Setup and Compute Hub information
   //
-  std::vector<uint64_t> vec_sorted_hubs(global_hubs.begin(), global_hubs.end());
-  std::sort(vec_sorted_hubs.begin(), vec_sorted_hubs.end());
-
-  // Allocates and initilize the delegate (AKA hub) vertex infromation
-  m_delegate_degree.resize(vec_sorted_hubs.size(), 0);
-  flush_advise_vector_dont_need(m_delegate_degree);
-  m_delegate_label.resize(vec_sorted_hubs.size());
-
-  // Loop over the hub vertexes, initilizing the delegate_degree tracking
-  // structuress
-  for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
-    uint64_t t_local_id = vec_sorted_hubs[i] / uint64_t(m_mpi_size);
-    int t_owner = uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size));
-    vertex_locator new_ver_loc(true, i, t_owner);
-
-    m_map_delegate_locator[vec_sorted_hubs[i]] = new_ver_loc;
-    m_delegate_label[i] = vec_sorted_hubs[i];
-
-    //
-    // Tag owned delegates
-    //
-    if (t_owner == m_mpi_rank) {
-      m_owned_info[t_local_id].is_delegate = 1;
-      m_owned_info[t_local_id].delegate_id = i;
+  for (int i = 0; i < processes_per_node; i++) {
+    if (m_mpi_rank == 0) {
+      std::cout << "\t Setup and Compute Hub information: " << i << "/"
+        << processes_per_node << "." << std::endl << std::flush;
     }
-  }  // for over vec_sorted_hubs
-  // Allocate space for the delegate csr index.
-  // This is initlized during the paritioning of the low edges and then adjusted
-  // in initialize_delegate_target
-  m_delegate_info.resize(m_map_delegate_locator.size()+1, 0);
-  flush_advise_vector_dont_need(m_delegate_info);
-  flush_advise_vector_dont_need(m_delegate_label);
+    if (i == m_mpi_rank % processes_per_node) {
+      std::vector<uint64_t> vec_sorted_hubs(global_hubs.begin(), global_hubs.end());
+      std::sort(vec_sorted_hubs.begin(), vec_sorted_hubs.end());
+
+      // Allocates and initilize the delegate (AKA hub) vertex infromation
+      m_delegate_degree.reserve(vec_sorted_hubs.size());
+      {
+        size_t loop_limit = vec_sorted_hubs.size();
+        for (size_t j = 0; j < loop_limit; ) {
+          for (size_t k = 0; k < 10000000; k++) {
+            m_delegate_degree.emplace_back();
+            j++;
+            if (j >= loop_limit) {
+              break;
+            }
+          }
+          flush_vector(m_delegate_degree);
+        }
+        // flush_advise_vector_dont_need(m_delegate_degree);
+        m_dont_need_graph();
+      }
+
+
+
+      // Loop over the hub vertexes, initilizing the delegate_degree tracking
+      // structuress
+      for(size_t i=0; i<vec_sorted_hubs.size(); ++i) {
+        uint64_t t_local_id = vec_sorted_hubs[i] / uint64_t(m_mpi_size);
+        int t_owner = uint32_t(vec_sorted_hubs[i] % uint32_t(m_mpi_size));
+        vertex_locator new_ver_loc(true, i, t_owner);
+
+        m_map_delegate_locator[vec_sorted_hubs[i]] = new_ver_loc;
+
+        m_delegate_label.push_back(vec_sorted_hubs[i]);
+
+        //
+        // Tag owned delegates
+        //
+        if (t_owner == m_mpi_rank) {
+          m_owned_info[t_local_id].is_delegate = 1;
+          m_owned_info[t_local_id].delegate_id = i;
+        }
+      }  // for over vec_sorted_hubs
+
+      // Allocate space for the delegate csr index.
+      // This is initlized during the paritioning of the low edges and then adjusted
+      // in initialize_delegate_target
+      m_delegate_info.reserve(m_map_delegate_locator.size()+1);
+      {
+        size_t loop_limit = m_map_delegate_locator.size()+1;
+        for (size_t j = 0; j < loop_limit; ) {
+          for (size_t k = 0; k < 10000000; k++) {
+            m_delegate_info.emplace_back();
+            j++;
+            if (j >= loop_limit) {
+              break;
+            }
+          }
+          flush_vector(m_delegate_info);
+        }
+      }
+
+      // flush_advise_vector_dont_need(m_delegate_info);
+      // flush_advise_vector_dont_need(m_delegate_label);
+      m_dont_need_graph();
+
+    }
+    MPI_Barrier(m_mpi_comm);
+  }
+
+
 }
 
 /**
@@ -604,7 +656,7 @@ initialize_delegate_target() {
 
       }
       assert(m_edges_high_count == edge_count);
-
+      m_dont_need_graph();
     }
     MPI_Barrier(m_mpi_comm);
   }
@@ -806,10 +858,10 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
 
 
 #endif
-
-  flush_advise_vector_dont_need(m_owned_targets);
-  flush_advise_vector_dont_need(m_owned_info);
-  flush_advise_vector_dont_need(m_owned_info_tracker);
+  m_dont_need_graph();
+  // flush_advise_vector_dont_need(m_owned_targets);
+  // flush_advise_vector_dont_need(m_owned_info);
+  // flush_advise_vector_dont_need(m_owned_info_tracker);
 }  // partition_low_degree
 
 
@@ -1288,10 +1340,11 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
     }
   }
 #endif
+  m_dont_need_graph();
 
-  flush_advise_vector_dont_need(m_delegate_targets);
-  flush_advise_vector_dont_need(m_delegate_info);
-  flush_advise_vector_dont_need(m_delegate_degree);
+  // flush_advise_vector_dont_need(m_delegate_targets);
+  // flush_advise_vector_dont_need(m_delegate_info);
+  // flush_advise_vector_dont_need(m_delegate_degree);
 
 }  // partition_high_degre
 
@@ -1644,7 +1697,11 @@ print_graph_statistics() {
     std::plus<uint64_t>(), m_mpi_comm);
 
   if (m_mpi_rank == 0) {
-    std::cout << "Graph Statistics" << std::endl
+
+    std::cout
+      << "========================================================" << std::endl
+      << "Graph Statistics" << std::endl
+      << "========================================================" << std::endl
       << "\tMax Local Vertex Id = " << m_max_vertex << std::endl
       << "\tHub vertices = " << m_map_delegate_locator.size() << std::endl
       << "\tTotal percentage good hub edges = " <<
@@ -1666,6 +1723,9 @@ print_graph_statistics() {
       << "\tEdge Chunk Size = " << edge_chunk_size << std::endl
       << "\tProcesses_per_node = " << processes_per_node << std::endl
       << "\tDebuging = " << IS_DEBUGING << std::endl
+      << "========================================================" << std::endl
+      << "End Graph Statistics" << std::endl
+      << "========================================================" << std::endl
       << std::flush;
   }
 }

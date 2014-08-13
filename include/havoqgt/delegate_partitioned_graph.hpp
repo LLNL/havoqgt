@@ -69,8 +69,8 @@
 #include <havoqgt/utilities.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/detail/iterator.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_partitioner.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_node_identifier.hpp>
+#include <havoqgt/impl/edge_partitioner.hpp>
+#include <havoqgt/impl/edge_node_identifier.hpp>
 
 #ifndef PROCESSES_PER_NODE
  #define PROCESSES_PER_NODE 24
@@ -355,14 +355,14 @@ class delegate_partitioned_graph {
 } // namespace havoqgt
 
 
-#include <havoqgt/delegate_partitioned_graph/log_step.hpp>
-#include <havoqgt/delegate_partitioned_graph/vert_info.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_data.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_iterator.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_data.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_locator.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_iterator.hpp>
+#include <havoqgt/impl/log_step.hpp>
+#include <havoqgt/impl/vert_info.hpp>
+#include <havoqgt/impl/edge_data.hpp>
+#include <havoqgt/impl/edge_iterator.hpp>
+#include <havoqgt/impl/vertex_data.hpp>
+#include <havoqgt/impl/vertex_locator.hpp>
+#include <havoqgt/impl/vertex_iterator.hpp>
 
-#include <havoqgt/delegate_partitioned_graph/delegate_partitioned_graph.ipp>
+#include <havoqgt/impl/delegate_partitioned_graph.ipp>
 
 #endif //HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED

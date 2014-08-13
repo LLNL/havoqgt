@@ -63,35 +63,39 @@ class LogStep {
     MPI_Barrier(mpi_comm_);
     if (mpi_rank_ == 0) {
       time_ = MPI_Wtime();
+      std::cout << "Starting:  " << stp_str_ << std::endl << std::flush;
+    }
+    if (mpi_rank_%PROCESSES_PER_NODE == 0) {
       get_io_stat_info(mb_read_, mb_written_);
-
-      std::cout << "Starting:  " << stp_str_ << std::endl;
-      std::cout << "\tDirty Pages: " << get_dirty_pages() << "kb" << std::endl;
-      std::cout << std::flush;
+      std::cout << "\t[" << mpi_rank_ << "] Dirty Pages: " << get_dirty_pages()
+        << "kb." << std::endl << std::flush;
     }
     MPI_Barrier(mpi_comm_);
-
   }
 
   ~LogStep() {
     MPI_Barrier(mpi_comm_);
 
     if (mpi_rank_ == 0) {
+      time_ = MPI_Wtime() - time_;
+
+      std::cout << "Finished: " << stp_str_ <<  " in " << time_ << " seconds."
+        << std::endl << std::flush;
+    }
+    if (mpi_rank_%PROCESSES_PER_NODE == 0) {
       int read = -1;
       int written = -1;
       get_io_stat_info(read, written);
-      time_ = MPI_Wtime() - time_;
 
-      std::cout << "Finished: " << stp_str_ << std::endl;
-      std::cout << "\tSpace used: " << get_disk_utilization() << "gB." << std::endl;
-      std::cout << "\tDirty Pages: " << get_dirty_pages() << "kB." << std::endl;
-      std::cout << "\tMB Read: " << (read - mb_read_) << std::endl;
-      std::cout << "\tMB Written: " << (written - mb_written_) << std::endl;
-      std::cout << "\tTime: " << time_ << std::endl;
-      std::cout << std::flush;
+      std::cout
+        << "\t[" << mpi_rank_ << "]" << std::endl
+        << "\tSpace used: " << get_disk_utilization() << "gB." << std::endl
+        << "\tDirty Pages: " << get_dirty_pages() << "kB." << std::endl
+        << "\tMB Read: " << (read - mb_read_) << std::endl
+        << "\tMB Written: " << (written - mb_written_) << std::endl
+        << std::flush;
     }
     MPI_Barrier(mpi_comm_);
-
   }
 
  private:

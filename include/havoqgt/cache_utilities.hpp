@@ -138,6 +138,58 @@ uint32_t get_disk_utilization() {
   return dirty_kb;
 }
 
+void print_system_info() {
+  printf("#################################################################\n");
+  printf("System Information\n");
+  printf("#################################################################\n");
+
+
+  printf("\n-----------------------------------------------------------------\n");
+  system("echo \"SLURM_NODELIST = $SLURM_NODELIST \"");
+  printf("-----------------------------------------------------------------\n");
+
+  printf("\n-----------------------------------------------------------------\n");
+  printf("Tuned Info:\n");
+  printf("-----------------------------------------------------------------\n");
+  system("echo \"/proc/sys/vm/dirty_ratio = $(cat /proc/sys/vm/dirty_ratio)\"");
+  system("echo \"/proc/sys/vm/dirty_background_ratio = $(cat /proc/sys/vm/dirty_background_ratio)\"");
+  system("echo \"/proc/sys/vm/dirty_expire_centisecs = $(cat /proc/sys/vm/dirty_expire_centisecs)\"");
+
+  printf("\n-----------------------------------------------------------------\n");
+  printf("echo df -h /l/ssd\n");
+  printf("-----------------------------------------------------------------\n");
+  system("df -h /l/ssd");
+
+
+
+  printf("\n-----------------------------------------------------------------\n");
+  printf("io-stat -m | grep md0 2>&1\n");
+  printf("-----------------------------------------------------------------\n");
+  system("iostat -m | grep Device 2>&1");
+  system("iostat -m | grep md0 2>&1");
+
+
+
+  printf("\n-----------------------------------------------------------------\n");
+  system("echo \"/proc/di-mmap-runtimeA-stats = $(cat /proc/di-mmap-runtimeA-stats)\"");
+  printf("-----------------------------------------------------------------\n");
+
+
+
+  printf("\n\n");
+
+}
+
+void print_dmesg() {
+  printf("\n-----------------------------------------------------------------\n");
+  printf("dmesg\n");
+  printf("-----------------------------------------------------------------\n");
+
+  system("dmesg");
+
+  printf("\n\n");
+}
+
 uint32_t get_dirty_pages() {
   uint32_t dirty_kb;
 

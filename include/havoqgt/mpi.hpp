@@ -159,14 +159,29 @@ private:
 template <typename T, typename Op>
 T mpi_all_reduce(T in_d, Op in_op, MPI_Comm mpi_comm) {
   T to_return;
-  CHK_MPI( MPI_Allreduce( &in_d, &to_return, 1, mpi_typeof(T()), mpi_typeof(in_op), mpi_comm));
+  CHK_MPI(
+    MPI_Allreduce( &in_d, &to_return, 1, mpi_typeof(T()), mpi_typeof(in_op),
+      mpi_comm)
+  );
   return to_return;
 }
 
+template <typename Vec, typename Op>
+void mpi_all_reduce_inplace(Vec &vec, Op in_op, MPI_Comm mpi_comm) {
+  CHK_MPI(
+    MPI_Allreduce(MPI_IN_PLACE, &(vec[0]), vec.size(),
+      mpi_typeof(typename Vec::value_type()), mpi_typeof(in_op), mpi_comm)
+  );
+}
+
 template <typename T, typename Op>
-void mpi_all_reduce(std::vector<T>& in_vec, std::vector<T>& out_vec, Op in_op, MPI_Comm mpi_comm) {
+void mpi_all_reduce(std::vector<T>& in_vec, std::vector<T>& out_vec, Op in_op,
+    MPI_Comm mpi_comm) {
   out_vec.resize(in_vec.size());
-  CHK_MPI( MPI_Allreduce( &(in_vec[0]), &(out_vec[0]), in_vec.size(), mpi_typeof(in_vec[0]), mpi_typeof(in_op), mpi_comm));
+  CHK_MPI(
+    MPI_Allreduce( &(in_vec[0]), &(out_vec[0]), in_vec.size(),
+      mpi_typeof(in_vec[0]), mpi_typeof(in_op), mpi_comm)
+  );
 }
 
 

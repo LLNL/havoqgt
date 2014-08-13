@@ -4,9 +4,9 @@ import time
 import subprocess
 import os.path
 
-VERBOSE = True
 USE_PDEBUG = False
 DEBUG = False
+
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
 NORUN = False
@@ -24,9 +24,17 @@ command_strings = []
 test_count = 0
 test_motivation = ""
 
+
+slurm_options = "-u --clear-ssd "
+if USE_DIMMAP:
+	slurm_options += "--di-mmap=" + str(96*1024*256) + " "
+elif USE_DIMMAP_FOR_TUNE:
+	slurm_options += "--di-mmap=" + str(10*256) + " "
+
+
+
 def log(s):
-	if VERBOSE:
-		print s
+	print s
 	with open(log_file_name, 'a') as f:
 		f.write(s + "\n")
 
@@ -79,96 +87,39 @@ def init_test_dir():
 		executable = log_dir+executable
 
 def generate_shell_file():
-	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
-	block_end = "echo -e \"------------------------------------\\n\\n\"\n"
-	i = 0
-
-	slurm_options = " --clear-ssd "
-
-	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(96*1024*256) + " "
-	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(10*256) + " "
-
+	global slurm_options
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
+		i = 0
 		for cmd in command_strings:
 			nodes = cmd[0]
 			processes = cmd[1]
 			cmd_str = cmd[2]
 
+			l_slurm_options = slurm_options
 			if USE_PDEBUG:
-				slurm_options += "-ppdebug " #-w catalyst324"
+				l_slurm_options += "-ppdebug " #-w catalyst324"
 			elif (nodes >= 128):
-				slurm_options += "-pdit128"
+				l_slurm_options += "-pdit128"
 			elif (nodes >= 64):
-				slurm_options += "-pdit64_1"
+				l_slurm_options += "-pdit64_1"
 			elif (nodes >= 32):
-				slurm_options += "-pdit36"
-
+				l_slurm_options += "-pdit36"
 
 			if DEBUG:
-				cmd_log_fname = log_dir+"test_%j.out"
-				cmd_error_log_fname = log_dir+"test_%j.out"
+				time.sleep(.01)
+				cmd_log_fname = log_dir + "test_" + str(time.time()) + "_" + str(i) + ".out"
 			else:
-				cmd_log_fname = log_dir+"test_"+str(i)+".out"
-				cmd_error_log_fname = log_dir+"test_"+str(i)+".out"
+				cmd_log_fname = log_dir  +"test_" + str(i) + ".out"
 
-			sbatch = "sbatch " + slurm_options + " -N" +str(nodes) + " -o" + cmd_log_fname + " -e" + cmd_error_log_fname + " << EOF \n"
+			srun_cmd = "srun " + l_slurm_options \
+				+ " -N" +str(nodes) + " -n" + str(processes) + " " \
+				+ cmd_str  + " 2>&1 >> " + cmd_log_fname + "& \n"
 
-			s = "#!/bin/sh\n"
-
-			s += block_start + "echo Nodes: \n" + block_end
-			s += "echo \"SLURM_NODELIST = \$SLURM_NODELIST \"\n"
-
-			s += block_start + "echo Tuned Info: \n" + block_end
-			s += "echo \"/proc/sys/vm/dirty_ratio = \$(cat /proc/sys/vm/dirty_ratio)\" \n"
-			s += "echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\" \n"
-			s += "echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\" \n"
-
-
-			s += block_start + "echo df -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
-
-			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
-			s += "iostat -m | grep Device 2>&1 \n"
-			s += "iostat -m | grep md0 2>&1 \n"
-
-			s += block_start + "echo Executable Log \n" + block_end
-			s += "srun -u -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
-
-			s += block_start + "echo df -h -h /l/ssd \n" + block_end
-			s += "df -h -h /l/ssd  \n"
-
-			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
-			s += "iostat -m | grep Device 2>&1 \n"
-			s += "iostat -m | grep md0 2>&1 \n"
-
-			if USE_DIMMAP:
-				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
-				s += "cat /proc/di-mmap-runtimeA-stats \n"
-
-			s += block_start + "echo dmesg \n" + block_end
-			s += "dmesg\n"
-
-			s += block_start + "echo ls /l/ssd/ \n" + block_end
-			s += "ls /l/ssd/\n"
-
-			if USE_DIMMAP:
-				s += block_start + "echo ls /dimmap/ \n" + block_end
-				s += "ls /dimmap/\n"
-
-			s += "rm /l/ssd/out.graph*\n"
-
-			s += "EOF\n\n"
-
-
-
-			f.write(sbatch + s+ "\n\n")
+			log(str(i) + ": " + srun_cmd)
+			f.write(srun_cmd)
 
 			i +=1
-
-
 
 def execute_shell_file():
 	if not NORUN:
@@ -231,7 +182,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 init_test_dir()
 
 if DEBUG:
-	create_commands(20, 1, 20, 1, 1, 1, 1024, 1)
+	create_commands(17, 1, 21, 1, 1, 1, 1024, 1)
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	#create_commands(25, 1, 31, 1, 1, 1, 1024, 2)

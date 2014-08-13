@@ -141,9 +141,11 @@ int main(int argc, char** argv) {
   typedef mapped_t::segment_manager segment_manager_t;
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
+  int mpi_rank(0), mpi_size(0);
+
   CHK_MPI(MPI_Init(&argc, &argv));
   {
-  int mpi_rank(0), mpi_size(0);
+
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
   havoqgt::get_environment();
@@ -156,6 +158,7 @@ int main(int argc, char** argv) {
     }
     std::cout << std::endl;
     havoqgt::get_environment().print();
+    print_system_info();
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -274,7 +277,7 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
   }
-
+  MPI_Barrier(MPI_COMM_WORLD);
 
   for (int i = 0; i < mpi_size; i++) {
     if (i == mpi_rank) {
@@ -286,8 +289,9 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
   graph->print_graph_statistics();
-
+  MPI_Barrier(MPI_COMM_WORLD);
   //
   // Calculate max degree
   uint64_t max_degree = graph->max_vertex_id();
@@ -397,6 +401,10 @@ int main(int argc, char** argv) {
   } //END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());
-  std::cout << "FIN." << std::endl;
+  if (mpi_rank == 0) {
+    std::cout << "FIN." << std::endl;
+    print_system_info();
+    print_dmesg();
+  }
   return 0;
 }
