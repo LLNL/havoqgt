@@ -59,13 +59,16 @@
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/container/map.hpp>
-#include <boost/interprocess/containers/map.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/interprocess/containers/vector.hpp>
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/offset_ptr.hpp>
 #include <boost/range/algorithm.hpp>
- 
+
+#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/interprocess/managed_mapped_file.hpp>
+
+#include <boost/interprocess/containers/map.hpp>
+#include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/offset_ptr.hpp>
+#include <boost/interprocess/containers/set.hpp>
+
 #include <stdint.h>
 #include <utility>
 #include <limits>
@@ -104,7 +107,7 @@ namespace bip = boost::interprocess;
   #warning DEBUG_INSERTEDEDGES is enabled.
 #endif
 #if DEBUG_INSERTEDEDGES == 1
-  static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug";
+  static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
 
@@ -114,42 +117,71 @@ public:
 
   template<typename T>
   using SegmentAllocator = bip::allocator<T, SegmentManager>;
-
   typedef bip::managed_mapped_file mapped_t;
+  
   // ---------  Data Structures ------------ //
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
   typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
-  typedef std::pair<const uint64_t, uint64_vector_t> map_value_t;
-  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_t>> adjacency_matrix_map_vec_t;
+  
+  typedef std::pair<const uint64_t, uint64_vector_t> map_value_vec_t;
+  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_vec_t>> adjacency_matrix_map_vec_t;
+
+  typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
+
+  // typedef std::pair<uint64_t, uint64_t> uint64_pair_t;
+  // typedef bip::vector<uint64_pair_t, SegmentAllocator<uint64_pair_t>> vec_pair_t;
+  // typedef bip::set<uint64_pair_t, SegmentAllocator<uint64_pair_t>> set_pair_t;
 
 
+  enum DataStructureMode {
+    kUseVecVecMatrix,
+    kUseMapVecMatrix,
+    kUseRobinHoodHash
+    // kUseVectorPair,
+    // kUseMapPair
+  };
 
   //--  Constructors -- //
-  ///set segment allocator to data structures wihtout data resize.
-  construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const int mode);
+  construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const DataStructureMode mode);
+
+  //--  Deconstructors -- //
+  ~construct_dynamicgraph();
 
 
   /// add edges
   template <typename Container>
   inline void add_edges_adjacency_matrix(Container& edges)
   {
-    if (data_structure_type_ == kUseVecVecMatrix) {
-      add_edges_adjacency_matrix_vector_vector(edges);
-    }   else if (data_structure_type_ == kUseMapVecMatrix) {
-      add_edges_adjacency_matrix_map_vector(edges);    
-    } else if (data_structure_type_ == kUseRobinHoodHash) {
-      add_edges_robin_hood_hash(edges);
-    } else {
-      std::cerr << "Unknown data structure type" << std::endl;
-      exit(-1);
+    switch(data_structure_type_) {
+      case kUseVecVecMatrix:
+        add_edges_adjacency_matrix_vector_vector(edges);
+        break;
+
+      case kUseMapVecMatrix:
+        add_edges_adjacency_matrix_map_vector(edges);
+        break;
+
+      case kUseRobinHoodHash:
+        add_edges_robin_hood_hash(edges);
+        break;
+
+      // case kUseVectorPair:
+      //   add_edges_list_vector_pair(edges);
+      //   break;
+
+      // case kUseMapPair:
+      //   add_edges_list_map_pair(edges);
+      //   break;
+
+      default:
+        std::cerr << "Unknown data structure type" << std::endl;
+        exit(-1);
     }
+
   };
 
   void print_profile();
 
-  static const int kUseVecVecMatrix;
-  static const int kUseMapVecMatrix;
-  static const int kUseRobinHoodHash;
 
 private:
 
@@ -165,21 +197,31 @@ private:
   template <typename Container>
   void add_edges_robin_hood_hash(Container& edges);
 
+  // template <typename Container>
+  // void add_edges_list_vector_pair(Container& edges);
+
+  // template <typename Container>
+  // void add_edges_list_map_pair(Container& edges);
+
   inline void flush_pagecache() {
     asdf_.flush();
   }
 
   mapped_t& asdf_;
   const SegmentAllocator<void>& seg_allocator_;
+  const DataStructureMode data_structure_type_;
 
-  adjacency_matrix_vec_vec_t adjacency_matrix_vec_vec_;
-  adjacency_matrix_map_vec_t adjacency_matrix_map_vec_;
-  const int data_structure_type_;
-
-  IOInfo io_info_;
-  hash_table<int64_t, int64_t, SegmentManager> rbh_;
-
+  adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
   uint64_vector_t *init_vec;
+
+  adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
+
+  robin_hood_hashing_t *robin_hood_hashing_;
+
+  // vec_pair_t *list_vector_pair_;
+  // set_pair_t *list_set_pair_;
+
+  IOInfo *io_info_;
   double total_exectution_time_;
 
 #if DEBUG_INSERTEDEDGES == 1

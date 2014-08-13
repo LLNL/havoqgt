@@ -117,32 +117,47 @@ namespace mpi {
 
 
 /**
- * Constructor : sets secment allocator
+ * Constructor
  *
  * @param seg_allocator       Reference to segment allocator
  */
 template <typename SegementManager>
 construct_dynamicgraph<SegementManager>::
-construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const int mode)
+construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const DataStructureMode mode)
   : asdf_(asdf)
   , seg_allocator_(seg_allocator)
-  , adjacency_matrix_vec_vec_(seg_allocator)
-  , adjacency_matrix_map_vec_(seg_allocator)
   , data_structure_type_(mode)
-  , io_info_()
-  , rbh_(seg_allocator)
 {
-  total_exectution_time_  = 0.0;
-
-    if (mode == kUseVecVecMatrix) {
+  
+  switch(data_structure_type_) {
+    case kUseVecVecMatrix:
+      adjacency_matrix_vec_vec_ = new adjacency_matrix_vec_vec_t(seg_allocator);
       init_vec = new uint64_vector_t(seg_allocator);
-    }   else if (mode == kUseMapVecMatrix) {
-    } else if (mode == kUseRobinHoodHash) {
-    } else {
+      break;
+
+    case kUseMapVecMatrix:
+      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator);
+      break;
+
+    case kUseRobinHoodHash:
+      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator);
+      break;
+
+    // case kUseVectorPair:
+    //   list_vector_pair_ = new vec_pair_t(seg_allocator);
+    //   break;
+
+    // case kUseMapPair:
+    //   list_set_pair_ = new set_pair_t(seg_allocator);
+    //   break;
+
+    default:
       std::cerr << "Unknown data structure type" << std::endl;
       exit(-1);
-    }
+  }
 
+  io_info_ = new IOInfo();
+  total_exectution_time_  = 0.0;
 
 #if DEBUG_INSERTEDEDGES == 1
   fout_debug_insertededges_.open(kFnameDebugInsertedEdges+"_raw");
@@ -150,6 +165,19 @@ construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, co
 
 }
 
+/**
+ * Deconstructor
+ */
+template <typename SegementManager>
+construct_dynamicgraph<SegementManager>::
+~construct_dynamicgraph()
+{
+  if (adjacency_matrix_vec_vec_ != NULL) delete(adjacency_matrix_vec_vec_);
+  if (init_vec != NULL) delete(init_vec);
+  if (adjacency_matrix_map_vec_ != NULL) delete(adjacency_matrix_map_vec_);
+  if (robin_hood_hashing_ != NULL) delete(robin_hood_hashing_);
+  if (io_info_ != NULL) delete(io_info_);
+}
 
 /**
  * Add edges into vector-vector adjacency matrix using
@@ -163,19 +191,19 @@ void construct_dynamicgraph<SegementManager>::
 add_edges_adjacency_matrix_vector_vector(Container& edges)
 {
   // TODO: make initializer
-  if (adjacency_matrix_vec_vec_.size() == 0) {
-      adjacency_matrix_vec_vec_.resize(1, *init_vec);
+  if (adjacency_matrix_vec_vec_->size() == 0) {
+      adjacency_matrix_vec_vec_->resize(1, *init_vec);
   }
 
-  io_info_.reset_baseline();
+  io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
 
-    while (adjacency_matrix_vec_vec_.size() <= edge.first) {
-      adjacency_matrix_vec_vec_.resize(adjacency_matrix_vec_vec_.size() * 2, *init_vec);
+    while (adjacency_matrix_vec_vec_->size() <= edge.first) {
+      adjacency_matrix_vec_vec_->resize(adjacency_matrix_vec_vec_->size() * 2, *init_vec);
     }
-    uint64_vector_t& adjacency_list_vec = adjacency_matrix_vec_vec_[edge.first];
+    uint64_vector_t& adjacency_list_vec = adjacency_matrix_vec_vec_->at(edge.first);
 #if WITHOUT_DUPLICATE_INSERTION == 1
     // add a edge without duplication
     if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) == adjacency_list_vec.end()) {
@@ -191,7 +219,7 @@ add_edges_adjacency_matrix_vector_vector(Container& edges)
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;  
   total_exectution_time_ += time_end - time_start;
 
-  io_info_.log_diff();
+  io_info_->log_diff();
 
   //free_edge_container(edges);
 }
@@ -203,24 +231,25 @@ void construct_dynamicgraph<SegmentManager>::
 add_edges_adjacency_matrix_map_vector(Container& edges)
 {
 
-  io_info_.reset_baseline();
+  io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
-    auto value = adjacency_matrix_map_vec_.find(edge.first);
-    if (value == adjacency_matrix_map_vec_.end()) { // new vertex
+    auto value = adjacency_matrix_map_vec_->find(edge.first);
+    if (value == adjacency_matrix_map_vec_->end()) { // new vertex
       uint64_vector_t vec(1, edge.second, seg_allocator_);
-      adjacency_matrix_map_vec_.insert(map_value_t(edge.first, vec));
+      adjacency_matrix_map_vec_->insert(map_value_vec_t(edge.first, vec));
     } else {
       uint64_vector_t& adjacency_list_vec = value->second;
+
 #if WITHOUT_DUPLICATE_INSERTION == 1
       // add a edge without duplication
-      if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) == adjacency_list_vec.end() ) {
-        adjacency_list_vec.push_back(edge.second);
-      }
-#else
-        adjacency_list_vec.push_back(edge.second);
-#endif     
+      if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() )
+        continue;
+#endif
+
+      adjacency_list_vec.push_back(edge.second);
+
     }
   }  
   flush_pagecache();
@@ -229,7 +258,7 @@ add_edges_adjacency_matrix_map_vector(Container& edges)
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
   total_exectution_time_ += time_end - time_start;
-  io_info_.log_diff();
+  io_info_->log_diff();
 
 }
 
@@ -240,7 +269,7 @@ void construct_dynamicgraph<SegmentManager>::
 add_edges_robin_hood_hash(Container& edges)
 {
 
-  io_info_.reset_baseline();
+  io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
     const auto edge = *itr;
@@ -248,9 +277,9 @@ add_edges_robin_hood_hash(Container& edges)
     fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
 #endif
 #if WITHOUT_DUPLICATE_INSERTION == 1
-    rbh_.insert_unique(edge.first, edge.second);
+    robin_hood_hashing_->insert_unique(edge.first, edge.second);
 #else
-    rbh_.insert(edge.first, edge.second);
+    robin_hood_hashing_->insert(edge.first, edge.second);
 #endif
   }  
   flush_pagecache();
@@ -259,31 +288,79 @@ add_edges_robin_hood_hash(Container& edges)
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
   total_exectution_time_ += time_end - time_start;
-  io_info_.log_diff();
-  //rbh_.disp_elements();
+  io_info_->log_diff();
+  //robin_hood_hashing_->disp_elements();
 
 }
+
+
+// template <typename SegementManager>
+// template <typename Container>
+// void construct_dynamicgraph<SegementManager>::
+// add_edges_list_vector_pair(Container& edges)
+// {
+
+//   io_info_->reset_baseline();
+//   double time_start = MPI_Wtime();
+//   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
+//     uint64_pair_t edge = *itr;
+
+// #if WITHOUT_DUPLICATE_INSERTION == 1
+//     // add a edge without duplication
+//     // if (std::find<vec_pair_t, uint64_pair_t>(list_vector_pair_, edge) != list_vector_pair_->end())
+//     //   continue;
+// #endif
+
+//     list_vector_pair_->push_back(edge);
+  
+//   }
+//   flush_pagecache();
+//   double time_end = MPI_Wtime();
+
+//   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;  
+//   total_exectution_time_ += time_end - time_start;
+
+//   io_info_->log_diff();
+
+//   //free_edge_container(edges);
+// }
+
+
+// template <typename SegmentManager>
+// template <typename Container>
+// void construct_dynamicgraph<SegmentManager>::
+// add_edges_list_map_pair(Container& edges)
+// {
+
+//   io_info_->reset_baseline();
+//   double time_start = MPI_Wtime();
+//   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
+//     uint64_pair_t edge = *itr;
+//     list_set_pair_->insert(edge);
+//   }  
+//   flush_pagecache();
+//   double time_end = MPI_Wtime();  
+
+//   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+
+//   total_exectution_time_ += time_end - time_start;
+//   io_info_->log_diff();
+
+// }
+
 
 template <typename SegmentManager>
 void construct_dynamicgraph<SegmentManager>::
 print_profile()
 {
   std::cout << "TIME: Total Execution time (sec.) =\t" << total_exectution_time_ << std::endl;
-  io_info_.log_diff(true);
+  io_info_->log_diff(true);
 
 #if DEBUG_INSERTEDEDGES == 1
-  rbh_.dump_elements(kFnameDebugInsertedEdges+"_graph");
+  robin_hood_hashing_->dump_elements(kFnameDebugInsertedEdges+"_graph");
   fout_debug_insertededges_.close();
 #endif
 }
-
-
-template <typename SegementManager>
-const int construct_dynamicgraph<SegementManager>::kUseVecVecMatrix = 1;
-template <typename SegementManager>
-const int construct_dynamicgraph<SegementManager>::kUseMapVecMatrix = 2;
-template <typename SegementManager>
-const int construct_dynamicgraph<SegementManager>::kUseRobinHoodHash = 3;
 
 
 } // namespace mpi

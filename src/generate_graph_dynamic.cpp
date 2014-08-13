@@ -313,12 +313,19 @@ int main(int argc, char** argv) {
     //   // }
     // }
 
-    if (delete_file) {
-      bip::file_mapping::remove(fname.str().c_str());
-    }
+  if (delete_file) {
+    std::cout << "Deleting Mapped File." << std::endl;
+    bip::file_mapping::remove(fname.str().c_str());
+  }
 
   } //END Main MPI
+
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
+
+  std::cout << "Before MPI_Finalize." << std::endl;
   CHK_MPI(MPI_Finalize());
+
+  std::cout << "FIN." << std::endl;
+
   return 0;
 }

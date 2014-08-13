@@ -1611,7 +1611,7 @@ print_graph_statistics() {
       << "\tNode Partition = " << node_partitions << std::endl
       << "\tEdge Chunk Size = " << edge_chunk_size << std::endl
       << "\tProcesses_per_node = " << processes_per_node << std::endl
-      << "\tDebuging = " << IS_DEBUGING << std::endl
+      //<< "\tDebuging = " << IS_DEBUGING << std::endl
       << std::flush;
   }
 }

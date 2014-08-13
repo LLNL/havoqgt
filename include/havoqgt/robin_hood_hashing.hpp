@@ -1,19 +1,71 @@
-
+/*
+ * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+ * Produced at the Lawrence Livermore National Laboratory.
+ * Written by Roger Pearce <rpearce@llnl.gov>.
+ * LLNL-CODE-644630.
+ * All rights reserved.
+ *
+ * This file is part of HavoqGT, Version 0.1.
+ * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
+ *
+ * Please also read this link – Our Notice and GNU Lesser General Public License.
+ *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License (as published by the Free
+ * Software Foundation) version 2.1 dated February 1999.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *
+ * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
+ *
+ * Our Preamble Notice
+ *
+ * A. This notice is required to be provided under our contract with the
+ * U.S. Department of Energy (DOE). This work was produced at the Lawrence
+ * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
+ *
+ * B. Neither the United States Government nor Lawrence Livermore National
+ * Security, LLC nor any of their employees, makes any warranty, express or
+ * implied, or assumes any liability or responsibility for the accuracy,
+ * completeness, or usefulness of any information, apparatus, product, or process
+ * disclosed, or represents that its use would not infringe privately-owned rights.
+ *
+ * C. Also, reference herein to any specific commercial products, process, or
+ * services by trade name, trademark, manufacturer or otherwise does not
+ * necessarily constitute or imply its endorsement, recommendation, or favoring by
+ * the United States Government or Lawrence Livermore National Security, LLC. The
+ * views and opinions of authors expressed herein do not necessarily state or
+ * reflect those of the United States Government or Lawrence Livermore National
+ * Security, LLC, and shall not be used for advertising or product endorsement
+ * purposes.
+ *
+ */
+ 
 #ifndef HAVOQGT_MPI_ROBIN_HOOD_HASHING_HPP_INCLUDED
 #define HAVOQGT_MPI_ROBIN_HOOD_HASHING_HPP_INCLUDED
 
 #include <boost/interprocess/allocators/allocator.hpp>
 
 
-#define USE_SEPARATE_HASH_ARRAY 1
+#define USE_SEPARATE_HASH_ARRAY 0
 
 namespace havoqgt {
 namespace mpi {
 
 namespace bip = boost::interprocess;
 
+/// Note: since we use 0 to indicate that the elem has never been used at all,
+///       key 0 and 1 use same hash value (1).
 template <typename Key, typename Value, typename SegementManager>
-class hash_table {
+class robin_hood_hash {
 
 public:
 
@@ -33,7 +85,7 @@ public:
 
 
   ///-----  Constructors -----///
-  explicit hash_table(SegmentAllocator<void>& seg_allocator) :
+  explicit robin_hood_hash(SegmentAllocator<void>& seg_allocator) :
   buffer_(nullptr),
   allocator_(seg_allocator)
   {
@@ -42,7 +94,7 @@ public:
   }
 
   ///-----  deconstructors -----///
-  ~hash_table()
+  ~robin_hood_hash()
   {   
     for( int64_t i = 0; i < capacity_; ++i)
     {
@@ -75,6 +127,7 @@ public:
     insert_helper(hash_key(key), std::move(key), std::move(val));   
   }
 
+  /// insert a element without duplication
   inline void insert_unique(Key key, Value val)
   {
     if (has_edges(key, val)) return;
@@ -96,9 +149,9 @@ public:
   /// FIXME: this function is not supporting duplicated-key mdoel
   inline const Value* find(const Key& key) const
   {
-    return const_cast<hash_table*>(this)->lookup(key);
+    return const_cast<robin_hood_hash*>(this)->lookup(key);
   }
-
+  /// FIXME: this function is not supporting duplicated-key mdoel
   inline bool erase(const Key& key)
   {
     const int64_t ix = lookup_index(key);
@@ -116,8 +169,12 @@ public:
     return num_elems_;
   }
 
+  inline size_t count(const Key& key) const
+  {
+    return count_helper(key);
+  }
 
-  /// ----- Public member functions: debug ----- ///
+  /// ----- Public member functions for debug ----- ///
   float average_probe_count() const
   {
     if (size() == 0) {
@@ -195,7 +252,7 @@ private:
 
   inline uint64_t elem_hash(int64_t ix) const
   {
-    return const_cast<hash_table*>(this)->elem_hash(ix);
+    return const_cast<robin_hood_hash*>(this)->elem_hash(ix);
   }
 
   inline static uint64_t hash_key(const Key& key)
@@ -290,7 +347,7 @@ private:
 
     int64_t dist = 0;
 
-    while(true) {
+    for(;;) {
       if (buffer_[pos].key == key && buffer_[pos].value == val)
         return pos;
       if (dist > probe_distance(elem_hash(pos), pos))
@@ -389,6 +446,24 @@ private:
     }
   }
 
+  size_t count_helper(const Key& key) const
+  {
+    int64_t pos = lookup_first_index(key);
+    if (pos == -1) return 0;
+
+    int64_t dist = 0;
+    int64_t key_count = 0;
+
+    while(dist > probe_distance(elem_hash(pos), pos)) {
+      if (buffer_[pos].key == key)
+        key_count++;
+
+      pos = (pos+1) & mask_;
+      ++dist;
+    }
+
+    return key_count;
+  }
 
   /// ---------- private menber variavles ---------- ///
   SegmentAllocator<void> &allocator_;
