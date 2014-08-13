@@ -510,9 +510,10 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
     }
 
     if (i == m_mpi_rank % processes_per_node) {
-      m_owned_targets.reserve(edge_count);
+
       {
-        size_t  loop_limit = m_edges_high_count;
+        size_t  loop_limit = edge_count;
+        m_owned_targets.reserve(loop_limit);
         for (size_t j = 0; j < loop_limit; ) {
           for (size_t k = 0; k < 10000000; k++) {
             m_owned_targets.emplace_back();
@@ -545,9 +546,10 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
       std::sort(vec_sorted_hubs.begin(), vec_sorted_hubs.end());
 
       // Allocates and initilize the delegate (AKA hub) vertex infromation
-      m_delegate_degree.reserve(vec_sorted_hubs.size());
+
       {
         size_t loop_limit = vec_sorted_hubs.size();
+        m_delegate_degree.reserve(loop_limit);
         for (size_t j = 0; j < loop_limit; ) {
           for (size_t k = 0; k < 10000000; k++) {
             m_delegate_degree.emplace_back();
@@ -587,9 +589,10 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
       // Allocate space for the delegate csr index.
       // This is initlized during the paritioning of the low edges and then adjusted
       // in initialize_delegate_target
-      m_delegate_info.reserve(m_map_delegate_locator.size()+1);
+
       {
         size_t loop_limit = m_map_delegate_locator.size()+1;
+        m_delegate_info.reserve(loop_limit);
         for (size_t j = 0; j < loop_limit; ) {
           for (size_t k = 0; k < 10000000; k++) {
             m_delegate_info.emplace_back();
