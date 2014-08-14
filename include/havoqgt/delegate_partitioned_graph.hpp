@@ -78,8 +78,8 @@
 #endif
 
 #ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 3
- #warning using default edge pass partitions of three.
+ #define EDGE_PASS_PARTITIONS 8
+ #warning using default edge pass partitions of eight.
 #endif
 
 #ifndef EDGE_CHUNK_SIZE
@@ -306,6 +306,7 @@ class delegate_partitioned_graph {
     int send_id,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
+  void flush_graph();
 
   //////////////////////////////////////////////////////////////////////////////
   // Private Data Members

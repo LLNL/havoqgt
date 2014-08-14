@@ -120,9 +120,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // Generate global hubs information
   //
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   {
     LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
@@ -133,18 +131,14 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   }
 
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   {
     LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
     initialize_edge_storage(global_hubs, delegate_degree_threshold);
   }
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   // Iterate (1) through the edges, sending all edges with a low degree source
   // vertex to the node that owns thats vertex
@@ -157,9 +151,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       global_hubs, delegate_degree_threshold);
   }
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   build_high_degree_csr<Container>(seg_allocator, m_mpi_comm, edges, dont_need_graph);
 };
@@ -189,9 +181,7 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
     calculate_overflow(m_owned_targets.size(), transfer_info);
   }
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   {
     LogStep logstep("initialize_delegate_target", m_mpi_comm, m_mpi_rank);
@@ -199,9 +189,7 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
     initialize_delegate_target(); //flush/dont need the intenral vector
   }
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   {
     LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
@@ -210,9 +198,7 @@ build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
      //flush/dont need the intenral vector
   }
 
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   // all-reduce hub degree
   {
@@ -635,9 +621,7 @@ initialize_delegate_target() {
     edge_count += num_edges;
     assert(edge_count <= m_edges_high_count);
   }
-  MPI_Barrier(m_mpi_comm);
-  m_dont_need_graph();
-  MPI_Barrier(m_mpi_comm);
+  flush_graph();
 
   // Allocate space for storing high degree edges
   // This will be filled in the partion_high_degree function
@@ -1660,6 +1644,20 @@ create_edge_data(const T& init, SegManagerOther * segment_manager_o,
   }
 }
 
+template <typename SegmentManager>
+void
+delegate_partitioned_graph<SegmentManager>::
+flush_graph() {
+  MPI_Barrier(m_mpi_comm);
+  for (int i = 0; i < node_partitions; i++) {
+    if ( (m_mpi_rank % processes_per_node) % node_partitions == 0 ) {
+      m_dont_need_graph();
+    }
+
+    MPI_Barrier(m_mpi_comm);
+  }
+  MPI_Barrier(m_mpi_comm);
+};
 
 template <typename SegmentManager>
 void
@@ -1693,7 +1691,11 @@ print_graph_statistics() {
 
   uint64_t local_count_del_target = 0;
   for (uint64_t i = 0; i < m_owned_targets.size(); ++i) {
-    if (m_owned_targets[i].is_delegate()) ++local_count_del_target;
+    if (m_owned_targets[i].is_delegate())
+      ++local_count_del_target;
+    if ( i % 10000000) {
+      flush_advise_vector_dont_need(m_owned_targets);
+    }
   }
 
   uint64_t total_count_del_target = mpi_all_reduce(local_count_del_target,
