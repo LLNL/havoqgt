@@ -485,7 +485,8 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
       #endif
     }
   }  // for over m_owned_info
-  m_dont_need_graph();
+
+  flush_graph();
 
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
@@ -694,9 +695,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
       last_part_time = curr_time;
     }
 
-    MPI_Barrier(m_mpi_comm);
-    m_dont_need_graph();
-    MPI_Barrier(m_mpi_comm);
+    flush_graph();
 
     while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
             m_mpi_comm)) {
@@ -845,7 +844,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
 
 
 #endif
-  m_dont_need_graph();
+  flush_graph();
   // flush_advise_vector_dont_need(m_owned_targets);
   // flush_advise_vector_dont_need(m_owned_info);
   // flush_advise_vector_dont_need(m_owned_info_tracker);
@@ -1145,9 +1144,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       last_part_time = curr_time;
     }
 
-    MPI_Barrier(m_mpi_comm);
-    m_dont_need_graph();
-    MPI_Barrier(m_mpi_comm);
+    flush_graph();
 
     InputIterator unsorted_itr = orgi_unsorted_itr;
 
@@ -1327,7 +1324,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
     }
   }
 #endif
-  m_dont_need_graph();
+  flush_graph();
 
   // flush_advise_vector_dont_need(m_delegate_targets);
   // flush_advise_vector_dont_need(m_delegate_info);
