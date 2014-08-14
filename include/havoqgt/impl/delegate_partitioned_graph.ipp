@@ -684,7 +684,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
       double curr_time = MPI_Wtime();
 
       std::cout << "\t***["
-        << "Partition Number: " << node_turn << ", "
+        << "Partition Number: " << node_turn << "/" << node_partitions << ", "
         << "Total Loops: " << loop_counter << ", "
         << "Total Edges: " << edge_counter
         <<  "] Time " << (curr_time - last_part_time) << " second, "
@@ -704,7 +704,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
         double curr_time = MPI_Wtime();
 
         std::cout << "\t["
-          << "Partition Number: " << node_turn << ", "
+          << "Partition Number: " << node_turn << "/" << node_partitions << ", "
           << "Total Loops: " << loop_counter << ", "
           << "Total Edges: " << edge_counter
           <<  "] Time " << (curr_time - last_loop_time) << " second, "
@@ -1134,7 +1134,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       double curr_time = MPI_Wtime();
 
       std::cout << "\t***["
-        << "Partition Number: " << node_turn << ", "
+        << "Partition Number: " << node_turn << "/" << node_partitions << ", "
         << "Total Loops: " << loop_counter << ", "
         << "Total Edges: " << edge_counter
         <<  "] Time " << (curr_time - last_part_time) << " second, "
@@ -1157,7 +1157,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
         double curr_time = MPI_Wtime();
 
         std::cout << "\t["
-          << "Partition Number: " << node_turn << ", "
+          << "Partition Number: " << node_turn << "/" << node_partitions << ", "
           << "Total Loops: " << loop_counter << ", "
           << "Total Edges: " << edge_counter
           <<  "] Time " << (curr_time - last_loop_time) << " second, "
