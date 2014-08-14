@@ -130,6 +130,47 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
   }
 
+  {
+      LogStep logstep("allocate and initlize high csr", m_mpi_comm, m_mpi_rank);
+      // Allocate space for the delegate csr index.
+      // This is initlized during the paritioning of the low edges and then adjusted
+      // in initialize_delegate_target
+
+      {
+        size_t loop_limit = global_hubs.size()+1;
+        m_delegate_info.reserve(loop_limit);
+        for (size_t j = 0; j < loop_limit; ) {
+          for (size_t k = 0; k < 10000000; k++) {
+            m_delegate_info.emplace_back();
+            j++;
+            if (j >= loop_limit) {
+              break;
+            }
+          }
+          flush_advise_vector_dont_need(m_delegate_info);
+        }
+      }
+  }
+
+
+  flush_graph();
+
+
+  {
+    LogStep logstep("count_high_degree_edges", m_mpi_comm, m_mpi_rank);
+    count_high_degree_edges(edges.begin(), edges.end(), global_hubs);
+  }
+
+  flush_graph();
+
+  // Calculate the overflow schedule, storing it into the transfer_info object
+  std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
+
+  {
+    LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+    calculate_overflow(transfer_info);
+  }
+
 
   flush_graph();
 
@@ -146,48 +187,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   // information with the releveant node's owner.
 
   {
-    LogStep logstep("partition_low_degree_count_high", m_mpi_comm, m_mpi_rank);
-    partition_low_degree_count_high(edges.begin(), edges.end(),
-      global_hubs, delegate_degree_threshold);
+    LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
+    partition_low_degree(edges.begin(), edges.end(), global_hubs);
   }
 
-  flush_graph();
-
-  build_high_degree_csr<Container>(seg_allocator, m_mpi_comm, edges, dont_need_graph);
-};
-
-
-template <typename SegmentManager>
-template <typename Container>
-void
-delegate_partitioned_graph<SegmentManager>::
-build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
-                           MPI_Comm mpi_comm, Container& edges,
-                           std::function<void()> dont_need_graph) {
-  m_mpi_comm = mpi_comm;
-  m_dont_need_graph = dont_need_graph;
-
-  CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
-  CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
-
-  LogStep logstep_main("Resume Delegate Partitioning", m_mpi_comm, m_mpi_rank);
-
-
-  // Calculate the overflow schedule, storing it into the transfer_info object
-  std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
-
-  {
-    LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
-    calculate_overflow(m_owned_targets.size(), transfer_info);
-  }
-
-  flush_graph();
-
-  {
-    LogStep logstep("initialize_delegate_target", m_mpi_comm, m_mpi_rank);
-    // Allocate and initilize the delegate edge CSR table and its index.
-    initialize_delegate_target(); //flush/dont need the intenral vector
-  }
 
   flush_graph();
 
@@ -362,6 +365,8 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
       const uint64_t global_id = (i * m_mpi_size) + m_mpi_rank;
       assert(global_id != 0);
       temp_hubs.push_back(global_id);
+    } else {
+      m_edges_low_count +=  m_local_outgoing_count[i];
     }
   }
 
@@ -509,7 +514,7 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
               break;
             }
           }
-          flush_vector(m_owned_targets);
+          flush_advise_vector_dont_need(m_owned_targets);
 
         }
         // flush_advise_vector_dont_need(m_owned_targets);
@@ -545,7 +550,7 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
               break;
             }
           }
-          flush_vector(m_delegate_degree);
+          flush_advise_vector_dont_need(m_delegate_degree);
         }
         // flush_advise_vector_dont_need(m_delegate_degree);
         m_dont_need_graph();
@@ -573,24 +578,6 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
         }
       }  // for over vec_sorted_hubs
 
-      // Allocate space for the delegate csr index.
-      // This is initlized during the paritioning of the low edges and then adjusted
-      // in initialize_delegate_target
-
-      {
-        size_t loop_limit = m_map_delegate_locator.size()+1;
-        m_delegate_info.reserve(loop_limit);
-        for (size_t j = 0; j < loop_limit; ) {
-          for (size_t k = 0; k < 10000000; k++) {
-            m_delegate_info.emplace_back();
-            j++;
-            if (j >= loop_limit) {
-              break;
-            }
-          }
-          flush_vector(m_delegate_info);
-        }
-      }
 
       // flush_advise_vector_dont_need(m_delegate_info);
       // flush_advise_vector_dont_need(m_delegate_label);
@@ -600,22 +587,11 @@ initialize_edge_storage(boost::unordered_set<uint64_t>& global_hubs,
     MPI_Barrier(m_mpi_comm);
   }
 
-
-}
-
-/**
- * This function initlizes the member variables that are used to hold the high
- * degree edges.
- */
-template <typename SegmentManager>
-void
-delegate_partitioned_graph<SegmentManager>::
-initialize_delegate_target() {
   // Currently, m_delegate_info holds the count of high degree edges assigned
   // to this node for each vertex.
   // Below converts it into an index into the m_delegate_targets array
   assert( m_delegate_info[ m_delegate_info.size()-1] == 0);
-  int64_t edge_count = 0;
+  edge_count = 0;
   for (size_t i=0; i < m_delegate_info.size(); i++) {
     uint64_t num_edges = m_delegate_info[i];
     m_delegate_info[i] = edge_count;
@@ -640,7 +616,7 @@ initialize_delegate_target() {
             break;
           }
         }
-        flush_vector(m_delegate_targets);
+        flush_advise_vector_dont_need(m_delegate_targets);
 
       }
       assert(m_edges_high_count == edge_count);
@@ -648,7 +624,8 @@ initialize_delegate_target() {
     }
     MPI_Barrier(m_mpi_comm);
   }
-}  // initialize_delegate_target
+}
+
 
 
 /**
@@ -663,13 +640,9 @@ template <typename SegmentManager>
 template <typename InputIterator>
 void
 delegate_partitioned_graph<SegmentManager>::
-partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
+partition_low_degree(InputIterator orgi_unsorted_itr,
                  InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold) {
-  // Temp Vector for storing offsets
-  // Used to store high_edge count
-  std::vector<uint64_t> tmp_high_count_per_rank(m_mpi_size, 0);
+                 boost::unordered_set<uint64_t>& global_hub_set) {
 
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -719,10 +692,6 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
       // Generate Edges to Send
       std::vector<std::pair<uint64_t, uint64_t> > to_recv_edges_low;
 
-      // Vector used to pass number of high edges
-      std::vector<
-        boost::container::map<uint64_t, uint64_t> > maps_to_send(m_mpi_size);
-      int maps_to_send_element_count = 0;
       {
         std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_low;
         to_send_edges_low.reserve(edge_chunk_size);
@@ -741,29 +710,11 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
           }
           edge_counter++;
 
-
           if (global_hub_set.count(unsorted_itr->first) == 0) {
             to_send_edges_low.push_back(*unsorted_itr);
             ++i;
           } else if(global_hub_set.count(unsorted_itr->first)) {
-            // This edge's source is a hub
-            // 1) Increment the high edge count for the owner of the edge's dest
-            tmp_high_count_per_rank[unsorted_itr->second %m_mpi_size]++;
-
-            // 2) Increment the owner's count of edges for this hub.
-            const int owner = unsorted_itr->second %m_mpi_size;
-            if (owner ==m_mpi_rank) {
-              const uint64_t ver_id = unsorted_itr->first;
-
-              const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
-              assert(new_source_id < m_delegate_info.size()-1);
-              m_delegate_info[new_source_id]++;
-            } else {
-              int c = maps_to_send.at(owner)[unsorted_itr->first]++;
-              if (c == 0) {
-                maps_to_send_element_count++;
-              }
-            }
+            continue;
           } else {
             assert(false);
           }
@@ -773,9 +724,6 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
         edge_source_partitioner paritioner(m_mpi_size);
         mpi_all_to_all_better(to_send_edges_low, to_recv_edges_low, paritioner,
             m_mpi_comm);
-
-        // Send the hub edge count to the relevent nodes.
-        send_high_info(maps_to_send, maps_to_send_element_count);
       }
 
       std::sort(to_recv_edges_low.begin(), to_recv_edges_low.end());
@@ -814,6 +762,7 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
     }  // while global iterator range not empty
   }  // for node partition
 
+  MPI_Barrier(m_mpi_comm);
   if (m_mpi_rank == 0) {
     double curr_time = MPI_Wtime();
     std::cout << "\t["
@@ -825,24 +774,9 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
       << std::flush;
   }
 
-  m_edges_high_count = 0;
-  for (size_t i = 0; i < m_delegate_info.size(); i++) {
-    m_edges_high_count += m_delegate_info[i];
-  }
-
-
 #if DEBUG
+  std::cout << " Checking Partition Low Results" << std::endl << std::flush;
   assert(m_delegate_info[m_delegate_info.size()-1] == 0);
-
-  // Sync The high counts.
-  std::vector<uint64_t> high_count_per_rank;
-  mpi_all_reduce(tmp_high_count_per_rank, high_count_per_rank,
-      std::plus<uint64_t>(), m_mpi_comm);
-
-  uint64_t sanity_check_high_edge_count = high_count_per_rank[m_mpi_rank];
-  assert(m_edges_high_count == sanity_check_high_edge_count);
-
-
 #endif
   flush_graph();
   // flush_advise_vector_dont_need(m_owned_targets);
@@ -850,6 +784,179 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
   // flush_advise_vector_dont_need(m_owned_info_tracker);
 }  // partition_low_degree
 
+
+
+/**
+ * This function iterates (through the edges and tracks the number of
+ * outgoing edges for each delegate vertex and exchanges that information with
+ * the other nodes.
+ *
+ */
+template <typename SegmentManager>
+template <typename InputIterator>
+void
+delegate_partitioned_graph<SegmentManager>::
+count_high_degree_edges(InputIterator unsorted_itr,
+                 InputIterator unsorted_itr_end,
+                 boost::unordered_set<uint64_t>& global_hub_set) {
+  // Temp Vector for storing offsets
+  // Used to store high_edge count
+  #if DEBUG
+    std::vector<uint64_t> tmp_high_count_per_rank(m_mpi_size, 0);
+  #endif
+  m_edges_high_count = 0;
+
+  uint64_t loop_counter = 0;
+  uint64_t edge_counter = 0;
+
+  double start_time, last_loop_time;
+  start_time = last_loop_time = MPI_Wtime();
+
+
+  while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
+          m_mpi_comm)) {
+    if (m_mpi_rank == 0 && (loop_counter% 1000) == 0) {
+      double curr_time = MPI_Wtime();
+
+      std::cout << "\t["
+        << "Total Loops: " << loop_counter << ", "
+        << "Total Edges: " << edge_counter
+        <<  "] Time " << (curr_time - last_loop_time) << " second, "
+        << " Total Time " << (curr_time - start_time) << " second, "
+        << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+        << std::flush;
+
+
+      last_loop_time = curr_time;
+    }
+    loop_counter++;
+
+
+    // Vector used to pass number of high edges
+    std::vector<
+      boost::container::map<uint64_t, uint64_t> > maps_to_send(m_mpi_size);
+    int maps_to_send_element_count = 0;
+    {
+
+      for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
+           ++unsorted_itr) {
+
+        // Get next edge
+        const auto edge = *unsorted_itr;
+        edge_counter++;
+
+
+        if (global_hub_set.count(unsorted_itr->first) == 0) {
+          continue;
+        } else if(global_hub_set.count(unsorted_itr->first)) {
+          #if DEBUG
+            // This edge's source is a hub
+            // 1) Increment the high edge count for the owner of the edge's dest
+            tmp_high_count_per_rank[unsorted_itr->second %m_mpi_size]++;
+          #endif
+
+          // 2) Increment the owner's count of edges for this hub.
+          const int owner = unsorted_itr->second %m_mpi_size;
+          if (owner == m_mpi_rank) {
+            const uint64_t ver_id = unsorted_itr->first;
+
+            const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
+            assert(new_source_id < m_delegate_info.size()-1);
+            m_delegate_info[new_source_id]++;
+            m_edges_high_count++;
+          } else {
+            int c = maps_to_send.at(owner)[unsorted_itr->first]++;
+            if (c == 0) {
+              maps_to_send_element_count++;
+              i++;
+            }
+          }
+        } else {
+          assert(false);
+        }
+      }  // for
+      // Send the hub edge count to the relevent nodes.
+      send_high_info(maps_to_send, maps_to_send_element_count);
+    }
+
+  }  // while global iterator range not empty
+
+
+  MPI_Barrier(m_mpi_comm);
+  if (m_mpi_rank == 0) {
+    double curr_time = MPI_Wtime();
+    std::cout << "\t["
+      << "Total Loops: " << loop_counter << ", "
+      << "Total Edges: " << edge_counter
+      <<  "] Time " << (curr_time - last_loop_time) << " second, "
+      << " Total Time " << (curr_time - start_time) << " second, "
+      << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
+      << std::flush;
+  }
+
+  #if DEBUG
+    std::cout << "Checking count_high_degree_edges:" << std::endl << std::flush;
+    size_t l_edges_high_count = 0;
+    for (size_t i = 0; i < m_delegate_info.size(); i++) {
+      l_edges_high_count += m_delegate_info[i];
+    }
+    assert(l_edges_high_count == m_edges_high_count);
+
+    // Sync The high counts.
+    std::vector<uint64_t> high_count_per_rank;
+    mpi_all_reduce(tmp_high_count_per_rank, high_count_per_rank,
+        std::plus<uint64_t>(), m_mpi_comm);
+
+    uint64_t sanity_check_high_edge_count = high_count_per_rank[m_mpi_rank];
+    assert(m_edges_high_count == sanity_check_high_edge_count);
+  #endif
+
+}  // count_high_degree_edges
+
+
+/**
+ * This function has each node exchange with one another their delegate vertex
+ * incoming edge count.
+ *
+ * @paramm_mpi_comm: the mpi communication group
+ * @param maps_to_send: a vector of maps that map delegate_id to edge count.
+ */
+template <typename SegmentManager>
+void
+delegate_partitioned_graph<SegmentManager>::
+send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
+  maps_to_send, int maps_to_send_element_count) {
+
+  int to_send_pos = 0;
+  std::vector<uint64_t> to_send(maps_to_send_element_count*2, 0);
+  std::vector<int> to_send_count(m_mpi_size, 0);
+
+  assert(maps_to_send.size() == m_mpi_size);
+  for (size_t i = 0; i < maps_to_send.size(); i++) {
+    for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
+      assert(to_send_pos < to_send.size());
+      to_send[to_send_pos++] = itr->first;
+      to_send[to_send_pos++] = itr->second;
+    }
+    to_send_count[i] = maps_to_send[i].size()*2;
+  }
+
+  std::vector<uint64_t> to_recv;
+  std::vector<int> out_recvcnts;
+
+  mpi_all_to_all(to_send, to_send_count,to_recv, out_recvcnts, m_mpi_comm);
+
+  for (size_t i = 0; i < to_recv.size(); i++) {
+    const uint64_t ver_id = to_recv[i++];
+    const uint64_t delegate_dest_count = to_recv[i];
+
+    const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
+    assert(new_source_id < m_delegate_info.size()-1);
+    m_delegate_info[new_source_id] += delegate_dest_count;
+    m_edges_high_count += delegate_dest_count;
+  }
+}  // send_high_info
+   //
 
 /**
  * This function initlizes the transfer_info object by determining which nodes
@@ -860,25 +967,24 @@ partition_low_degree_count_high(InputIterator orgi_unsorted_itr,
  * @paramm_mpi_comm: the mpi communication group
  * @param &owned_high_count: tracks the number of high edges owned by this node
  * it is updated when we give to or recieve edges from another node.
- * @param owned_low_count: The number of low edges owened by this node
  * @param transfer_info: used to track to whome and how many edges are given
  * to another node
  */
 template <typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
-calculate_overflow(const uint64_t owned_low_count,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
+calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
+    &transfer_info) {
 
   //
   // Get the number of high and low edges for each node.
   //
   std::vector<uint64_t> low_count_per_rank, high_count_per_rank;
-  mpi_all_gather(uint64_t(owned_low_count), low_count_per_rank, m_mpi_comm);
+  mpi_all_gather(m_edges_low_count, low_count_per_rank, m_mpi_comm);
   mpi_all_gather(m_edges_high_count, high_count_per_rank, m_mpi_comm);
 
   // Determine the total of edges accorss all nodes.
-  const uint64_t owned_total_edges = m_edges_high_count + owned_low_count;
+  const uint64_t owned_total_edges = m_edges_high_count + m_edges_low_count;
   uint64_t global_edge_count = mpi_all_reduce(owned_total_edges,
       std::plus<uint64_t>(), m_mpi_comm);
 
@@ -992,7 +1098,7 @@ calculate_overflow(const uint64_t owned_low_count,
   }  // For
 
 #ifdef DEBUG
-  const uint64_t owned_total_edges2 = m_edges_high_count + owned_low_count;
+  const uint64_t owned_total_edges2 = m_edges_high_count + m_edges_low_count;
   uint64_t sanity_global_edge_count = mpi_all_reduce(owned_total_edges2,
       std::plus<uint64_t>(), m_mpi_comm);
   assert(sanity_global_edge_count == global_edge_count);
@@ -1005,7 +1111,7 @@ calculate_overflow(const uint64_t owned_low_count,
   assert(m_edges_high_count == high_count_2);
 
   std::vector<uint64_t> low_count_per_rank2, high_count_per_rank2;
-  mpi_all_gather(uint64_t(owned_low_count), low_count_per_rank2, m_mpi_comm);
+  mpi_all_gather(m_edges_low_count, low_count_per_rank2, m_mpi_comm);
   mpi_all_gather(m_edges_high_count, high_count_per_rank2, m_mpi_comm);
 
   for (size_t i = 0; i < m_mpi_size; i++) {
@@ -1332,48 +1438,6 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
 
 }  // partition_high_degre
 
-/**
- * This function has each node exchange with one another their delegate vertex
- * incoming edge count.
- *
- * @paramm_mpi_comm: the mpi communication group
- * @param maps_to_send: a vector of maps that map delegate_id to edge count.
- */
-template <typename SegmentManager>
-void
-delegate_partitioned_graph<SegmentManager>::
-send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
-  maps_to_send, int maps_to_send_element_count) {
-
-  int to_send_pos = 0;
-  std::vector<uint64_t> to_send(
-      maps_to_send_element_count*2, 0);
-  std::vector<int> to_send_count(m_mpi_size, 0);
-
-  assert(maps_to_send.size() == m_mpi_size);
-  for (size_t i = 0; i < maps_to_send.size(); i++) {
-    for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
-      assert(to_send_pos < to_send.size());
-      to_send[to_send_pos++] = itr->first;
-      to_send[to_send_pos++] = itr->second;
-    }
-    to_send_count[i] = maps_to_send[i].size()*2;
-  }
-
-  std::vector<uint64_t> to_recv;
-  std::vector<int> out_recvcnts;
-
-  mpi_all_to_all(to_send, to_send_count,to_recv, out_recvcnts, m_mpi_comm);
-
-  for (size_t i = 0; i < to_recv.size(); i++) {
-    const uint64_t ver_id = to_recv[i++];
-    const uint64_t delegate_dest_count = to_recv[i];
-
-    const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
-    assert(new_source_id < m_delegate_info.size()-1);
-    m_delegate_info[new_source_id] += delegate_dest_count;
-  }
-}  // send_high_info
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// MISC FUNCTIONS ////////////////////////////////
@@ -1690,7 +1754,7 @@ print_graph_statistics() {
   for (uint64_t i = 0; i < m_owned_targets.size(); ++i) {
     if (m_owned_targets[i].is_delegate())
       ++local_count_del_target;
-    if ( i % 10000000) {
+    if ( i % 10000000 == 0) {
       flush_advise_vector_dont_need(m_owned_targets);
     }
   }

@@ -145,11 +145,6 @@ class delegate_partitioned_graph {
                              uint64_t delegate_degree_threshold,
                              std::function<void()> dont_need_graph);
 
-  template <typename Container>
-  void build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
-                             MPI_Comm mpi_comm, Container& edges,
-                             std::function<void()> dont_need_graph);
-
   void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
@@ -266,14 +261,17 @@ class delegate_partitioned_graph {
       boost::unordered_set<uint64_t>& global_hub_set,
       uint64_t delegate_degree_threshold);
 
-  void initialize_delegate_target();
-
 
   template <typename InputIterator>
-  void partition_low_degree_count_high(InputIterator unsorted_itr,
+  void partition_low_degree(InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold);
+                 boost::unordered_set<uint64_t>& global_hub_set);
+
+  template <typename InputIterator>
+  void count_high_degree_edges(InputIterator unsorted_itr,
+                 InputIterator unsorted_itr_end,
+                 boost::unordered_set<uint64_t>& global_hub_set);
+
 
   template <typename InputIterator>
   void partition_high_degree(InputIterator orgi_unsorted_itr,
@@ -299,8 +297,8 @@ class delegate_partitioned_graph {
       int maps_to_send_element_count);
 
 
-  void calculate_overflow(const uint64_t owned_low_count,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
+  void calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
+    &transfer_info);
 
   void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
     int send_id,
@@ -322,7 +320,8 @@ class delegate_partitioned_graph {
 
   uint64_t m_max_vertex {0};
   uint64_t m_global_edge_count {0};
-  uint64_t m_edges_high_count;
+  uint64_t m_edges_high_count {0};
+  uint64_t m_edges_low_count {0};
 
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;
