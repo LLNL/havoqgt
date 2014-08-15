@@ -138,7 +138,7 @@ uint32_t get_disk_utilization() {
   return dirty_kb;
 }
 
-void print_system_info() {
+void print_system_info(bool print_dimmap) {
   printf("#################################################################\n");
   printf("System Information\n");
   printf("#################################################################\n");
@@ -169,10 +169,11 @@ void print_system_info() {
   system("iostat -m | grep md0 2>&1");
 
 
-
-  printf("\n-----------------------------------------------------------------\n");
-  system("echo \"/proc/di-mmap-runtimeA-stats = $(cat /proc/di-mmap-runtimeA-stats)\"");
-  printf("-----------------------------------------------------------------\n");
+  if (print_dimmap) {
+    printf("\n-----------------------------------------------------------------\n");
+    system("echo \"/proc/di-mmap-runtimeA-stats = $(cat /proc/di-mmap-runtimeA-stats)\"");
+    printf("-----------------------------------------------------------------\n");
+  }
 
 
 

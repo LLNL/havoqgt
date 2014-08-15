@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
     }
     std::cout << std::endl;
     havoqgt::get_environment().print();
-    print_system_info();
+    print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -403,8 +403,8 @@ int main(int argc, char** argv) {
   CHK_MPI(MPI_Finalize());
   if (mpi_rank == 0) {
     std::cout << "FIN." << std::endl;
-    print_system_info();
-    print_dmesg();
+    print_system_info(false);
+    //print_dmesg();
   }
   return 0;
 }

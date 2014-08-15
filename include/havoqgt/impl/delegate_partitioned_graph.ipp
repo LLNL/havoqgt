@@ -72,7 +72,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            MPI_Comm mpi_comm,
                            Container& edges, uint64_t max_vertex,
                            uint64_t delegate_degree_threshold,
-                           std::function<void()> dont_need_graph)
+                           std::function<void()> dont_need_graph,
+                           ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_dont_need_graph(dont_need_graph),
       m_global_edge_count(edges.size()),
@@ -100,6 +101,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 ////////////////////////////////////////////////////////////////////////////////
 /// Meta data phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
+
   assert(sizeof(vertex_locator) == 8);
 
   {
@@ -143,93 +145,112 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   }
 
   m_graph_state = MetaDataGenerated;
+  if (m_graph_state == stop_after) {
+    return;
+  } else {
+    complete_construction(mpi_comm, edges, dont_need_graph);
+  }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Edge storage allocation  phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
+template <typename SegmentManager>
+template <typename Container>
+void
+delegate_partitioned_graph<SegmentManager>::
+complete_construction(MPI_Comm mpi_comm, Container& edges,
+                        std::function<void()> dont_need_graph) {
+  m_mpi_comm = mpi_comm;
+  CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
+  CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
+  m_dont_need_graph = dont_need_graph;
 
-  // Calculate the overflow schedule, storing it into the transfer_info object
   std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
+  switch (m_graph_state) {
+    case MetaDataGenerated:
+      {
+        LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+        calculate_overflow(transfer_info);
+        flush_graph();
+      }
 
-  {
-    LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
-    calculate_overflow(transfer_info);
-    flush_graph();
-  }
+      {
+        LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
+        initialize_edge_storage();
+        flush_graph();
+      }
 
-  {
-    LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
-    initialize_edge_storage();
-    flush_graph();
-  }
-
-  m_graph_state = EdgeStorageAllocated;
+      m_graph_state = EdgeStorageAllocated;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Edge partitioning phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
+  case EdgeStorageAllocated:
+    {
+      LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
+      partition_low_degree(edges.begin(), edges.end());
+      flush_graph();
+    }
+    m_graph_state = LowEdgesPartitioned;
 
-  {
-    LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
-    partition_low_degree(edges.begin(), edges.end(), global_hubs);
-    flush_graph();
-  }
-  m_graph_state = LowEdgesPartitioned;
-
-  {
-    LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
-    partition_high_degree(edges.begin(), edges.end(), transfer_info);
-    flush_graph();
-  }
-  m_graph_state = HighEdgesPartitioned;
-
+    {
+      LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
+      partition_high_degree(edges.begin(), edges.end(), transfer_info);
+      flush_graph();
+    }
+    m_graph_state = HighEdgesPartitioned;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Controller construction phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
   // all-reduce hub degree
-  {
-    LogStep logstep("all-reduce hub degree", m_mpi_comm, m_mpi_rank);
-    if(m_delegate_degree.size() > 0) {
-      mpi_all_reduce_inplace(m_delegate_degree, std::plus<uint64_t>(), m_mpi_comm);
-    }
-    flush_graph();
-  }
-  assert(m_delegate_degree.size() == m_delegate_label.size());
-
-  //
-  // Build controller lists
-  {
-    LogStep logstep("Build controller lists", m_mpi_comm, m_mpi_rank);
-    const int controllers = (m_delegate_degree.size() / m_mpi_size) + 1;
-    m_controller_locators.reserve(controllers);
-    for (size_t i=0; i < m_delegate_degree.size(); ++i) {
-      if (int(i % m_mpi_size) == m_mpi_rank) {
-        m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
+  case HighEdgesPartitioned:
+    {
+      LogStep logstep("all-reduce hub degree", m_mpi_comm, m_mpi_rank);
+      if(m_delegate_degree.size() > 0) {
+        mpi_all_reduce_inplace(m_delegate_degree, std::plus<uint64_t>(), m_mpi_comm);
       }
+      flush_graph();
     }
-    flush_graph();
-  }
+    assert(m_delegate_degree.size() == m_delegate_label.size());
 
-  //
-  // Verify CSR integration properlly tagged owned delegates
-  {
-    LogStep logstep("Verify CSR integration", m_mpi_comm, m_mpi_rank);
-    for (auto itr = m_map_delegate_locator.begin();
-        itr != m_map_delegate_locator.end(); ++itr) {
-      uint64_t label = itr->first;
-      vertex_locator locator = itr->second;
-
-      uint64_t local_id = label / uint64_t(m_mpi_size);
-      if (label % uint64_t(m_mpi_size) == uint64_t(m_mpi_rank)) {
-        assert(m_owned_info[local_id].is_delegate == 1);
-        assert(m_owned_info[local_id].delegate_id == locator.local_id());
+    //
+    // Build controller lists
+    {
+      LogStep logstep("Build controller lists", m_mpi_comm, m_mpi_rank);
+      const int controllers = (m_delegate_degree.size() / m_mpi_size) + 1;
+      m_controller_locators.reserve(controllers);
+      for (size_t i=0; i < m_delegate_degree.size(); ++i) {
+        if (int(i % m_mpi_size) == m_mpi_rank) {
+          m_controller_locators.push_back(vertex_locator(true, i, m_mpi_rank));
+        }
       }
+      flush_graph();
     }
-    flush_graph();
-  }
 
-  m_graph_state = GraphReady;
+    //
+    // Verify CSR integration properlly tagged owned delegates
+    {
+      LogStep logstep("Verify CSR integration", m_mpi_comm, m_mpi_rank);
+      for (auto itr = m_map_delegate_locator.begin();
+          itr != m_map_delegate_locator.end(); ++itr) {
+        uint64_t label = itr->first;
+        vertex_locator locator = itr->second;
+
+        uint64_t local_id = label / uint64_t(m_mpi_size);
+        if (label % uint64_t(m_mpi_size) == uint64_t(m_mpi_rank)) {
+          assert(m_owned_info[local_id].is_delegate == 1);
+          assert(m_owned_info[local_id].delegate_id == locator.local_id());
+        }
+      }
+      flush_graph();
+    }
+    m_graph_state = GraphReady;
+
+  default:
+    return;
+  }  // switch
 ////////////////////////////////////////////////////////////////////////////////
 /// End of graph construction
 ////////////////////////////////////////////////////////////////////////////////
@@ -658,8 +679,7 @@ template <typename InputIterator>
 void
 delegate_partitioned_graph<SegmentManager>::
 partition_low_degree(InputIterator orgi_unsorted_itr,
-                 InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set) {
+                 InputIterator unsorted_itr_end) {
 
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -727,10 +747,10 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
           }
           edge_counter++;
 
-          if (global_hub_set.count(unsorted_itr->first) == 0) {
+          if (m_map_delegate_locator.count(unsorted_itr->first) == 0) {
             to_send_edges_low.push_back(*unsorted_itr);
             ++i;
-          } else if(global_hub_set.count(unsorted_itr->first)) {
+          } else if(m_map_delegate_locator.count(unsorted_itr->first) == 1) {
             continue;
           } else {
             assert(false);
@@ -751,7 +771,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
       for(size_t i=0; i<to_recv_edges_low.size(); ++i) {
         auto edge =  to_recv_edges_low[i];
         assert(int(edge.first %m_mpi_size) ==m_mpi_rank);
-        assert(global_hub_set.count(edge.first) == 0);
+        assert(m_map_delegate_locator.count(edge.first) == 0);
       }
   #endif
 

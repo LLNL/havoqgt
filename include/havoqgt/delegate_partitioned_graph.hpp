@@ -145,8 +145,12 @@ class delegate_partitioned_graph {
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
                              uint64_t delegate_degree_threshold,
-                             std::function<void()> dont_need_graph);
+                             std::function<void()> dont_need_graph,
+                             ConstructionState stop_after = GraphReady);
 
+  template <typename Container>
+  void complete_construction(MPI_Comm mpi_comm, Container& edges,
+                        std::function<void()> dont_need_graph);
   void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
@@ -267,8 +271,7 @@ class delegate_partitioned_graph {
 
   template <typename InputIterator>
   void partition_low_degree(InputIterator unsorted_itr,
-                 InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set);
+                 InputIterator unsorted_itr_end);
 
   template <typename InputIterator>
   void count_high_degree_edges(InputIterator unsorted_itr,
