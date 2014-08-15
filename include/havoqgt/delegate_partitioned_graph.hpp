@@ -133,6 +133,8 @@ class delegate_partitioned_graph {
   /// Stores information about owned vertices
   class vert_info;
 
+  enum ConstructionState { New, MetaDataGenerated, EdgeStorageAllocated,
+    LowEdgesPartitioned, HighEdgesPartitioned, GraphReady};
 
   //////////////////////////////////////////////////////////////////////////////
   // Public Member Functions
@@ -257,10 +259,11 @@ class delegate_partitioned_graph {
                            boost::unordered_set<uint64_t>& global_hubs,
                            bool local_change);
 
-  void initialize_edge_storage(
-      boost::unordered_set<uint64_t>& global_hub_set,
-      uint64_t delegate_degree_threshold);
 
+  void initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hub_set);
+  void initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs);
+
+  void initialize_edge_storage();
 
   template <typename InputIterator>
   void partition_low_degree(InputIterator unsorted_itr,
@@ -315,6 +318,8 @@ class delegate_partitioned_graph {
   int m_mpi_size;
   int m_mpi_rank;
   MPI_Comm m_mpi_comm;
+
+  ConstructionState m_graph_state {New};
 
   std::function<void()> m_dont_need_graph;
 
