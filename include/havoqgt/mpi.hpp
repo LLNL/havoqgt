@@ -53,7 +53,7 @@
 #define _HAVOQGT_MPI_HPP_
 
 #include <havoqgt/detail/null_ostream.hpp>
-
+#include <sched.h>
 #include <vector>
 #include <mpi.h>
 #include <assert.h>
@@ -152,6 +152,22 @@ private:
   uint32_t m_rank;
   bool init;
 };
+
+void mpi_yield_barrier(MPI_Comm mpi_comm) {
+  MPI_Request request;
+  CHK_MPI(MPI_Ibarrier(mpi_comm, &request));
+
+  for(; ;) {
+    MPI_Status status;
+    int is_done = false;
+    MPI_Test(&request, &is_done, &status);
+    if (is_done) {
+      return;
+    } else {
+      sched_yield();
+    }
+  }
+}
 
 
 //no std:: equivalent for MPI_BAND, MPI_BOR, MPI_LXOR, MPI_BXOR, MPI_MAXLOC, MPI_MINLOC

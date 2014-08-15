@@ -251,9 +251,8 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
     }
     m_graph_state = GraphReady;
 
-  default:
-    return;
   }  // switch
+  m_dont_need_graph = nullptr;
 ////////////////////////////////////////////////////////////////////////////////
 /// End of graph construction
 ////////////////////////////////////////////////////////////////////////////////
@@ -355,6 +354,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
         maps_to_send, maps_to_send_element_count);
 
   }  // while more edges
+  mpi_yield_barrier(m_mpi_comm);
   if (m_mpi_rank == 0 ) {
     double curr_time = MPI_Wtime();
     loop_counter++;
@@ -390,6 +390,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
 
   // Gather the hub lists and add them to the map,
   std::vector<uint64_t> vec_global_hubs;
+  mpi_yield_barrier(m_mpi_comm);
   mpi_all_gather(temp_hubs, vec_global_hubs, m_mpi_comm);
   // if (m_mpi_rank == 0) {
   //   std::cout << "[";
@@ -444,6 +445,7 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
   std::vector<uint64_t> to_recv;
   std::vector<int> out_recvcnts;
 
+  mpi_yield_barrier(m_mpi_comm);
   mpi_all_to_all(to_send, to_send_count,to_recv, out_recvcnts, m_mpi_comm);
 
   for (size_t k = 0; k < to_recv.size(); ) {
@@ -498,10 +500,6 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
     const uint64_t incoming = m_local_incoming_count[vert_id];
 
     m_owned_info[vert_id] = vert_info(false, 0, edge_count);
-
-    if (m_mpi_rank == 0) {
-
-    }
 
     if (incoming < m_delegate_degree_threshold) {
       edge_count += outgoing;
@@ -604,8 +602,8 @@ initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
 
       m_dont_need_graph();
 
-    }
-    MPI_Barrier(m_mpi_comm);
+    }  // if i == mpi_rank % processes_per_node
+    mpi_yield_barrier(m_mpi_comm);
   }
 
 
@@ -674,7 +672,7 @@ initialize_edge_storage() {
       flush_graph();
 
     }  // If this processes
-    MPI_Barrier(m_mpi_comm);
+    mpi_yield_barrier(m_mpi_comm);
   }  // for over processes
 
 };
@@ -774,6 +772,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
 
         // Exchange Edges/Recieve edges
         edge_source_partitioner paritioner(m_mpi_size);
+        mpi_yield_barrier(m_mpi_comm);
         mpi_all_to_all_better(to_send_edges_low, to_recv_edges_low, paritioner,
             m_mpi_comm);
       }
@@ -814,7 +813,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
     }  // while global iterator range not empty
   }  // for node partition
 
-  MPI_Barrier(m_mpi_comm);
+  mpi_yield_barrier(m_mpi_comm);
   if (m_mpi_rank == 0) {
     double curr_time = MPI_Wtime();
     std::cout << "\t["
@@ -927,7 +926,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
   }  // while global iterator range not empty
 
 
-  MPI_Barrier(m_mpi_comm);
+  mpi_yield_barrier(m_mpi_comm);
   if (m_mpi_rank == 0) {
     double curr_time = MPI_Wtime();
     std::cout << "\t["
@@ -989,6 +988,7 @@ send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
   std::vector<uint64_t> to_recv;
   std::vector<int> out_recvcnts;
 
+  mpi_yield_barrier(m_mpi_comm);
   mpi_all_to_all(to_send, to_send_count,to_recv, out_recvcnts, m_mpi_comm);
 
   for (size_t i = 0; i < to_recv.size(); i++) {
@@ -1024,6 +1024,7 @@ calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
   //
   // Get the number of high and low edges for each node.
   //
+  mpi_yield_barrier(m_mpi_comm);
   std::vector<uint64_t> low_count_per_rank, high_count_per_rank;
   mpi_all_gather(m_edges_low_count, low_count_per_rank, m_mpi_comm);
   mpi_all_gather(m_edges_high_count, high_count_per_rank, m_mpi_comm);
@@ -1132,7 +1133,7 @@ calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
           recieve_edge_counter += to_move;
           assert(sanity_count == to_move);
         } // else this node is not involved.
-        MPI_Barrier(m_mpi_comm);
+        mpi_yield_barrier(m_mpi_comm);
       } else {
         ++light_idx;
         if (light_idx == m_mpi_size) {
@@ -1353,6 +1354,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       // recieve edges we may need
       // // Scratch vector use for storing recieved edges.
       std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
+      mpi_yield_barrier(m_mpi_comm);
       mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
          m_mpi_comm);
 
@@ -1402,6 +1404,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
 
     }  // end while get next edge
   } // For over node partitions
+  mpi_yield_barrier(m_mpi_comm);
   if (m_mpi_rank == 0) {
     double curr_time = MPI_Wtime();
     std::cout << "\t["
@@ -1417,6 +1420,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
   // Exchange edges we generated  with the other nodes and recieve edges we may need
     // // Scratch vector use for storing recieved edges.
     std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
+    mpi_yield_barrier(m_mpi_comm);
     mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
        m_mpi_comm);
 
@@ -1754,15 +1758,15 @@ template <typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
 flush_graph() {
-  MPI_Barrier(m_mpi_comm);
+  mpi_yield_barrier(m_mpi_comm);
   for (int i = 0; i < node_partitions; i++) {
     if ( (m_mpi_rank % processes_per_node) % node_partitions == 0 ) {
       m_dont_need_graph();
     }
 
-    MPI_Barrier(m_mpi_comm);
+    mpi_yield_barrier(m_mpi_comm);
   }
-  MPI_Barrier(m_mpi_comm);
+  mpi_yield_barrier(m_mpi_comm);
 };
 
 template <typename SegmentManager>
