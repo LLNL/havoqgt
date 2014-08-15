@@ -145,11 +145,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   }
 
   m_graph_state = MetaDataGenerated;
-  if (m_graph_state == stop_after) {
-    return;
-  } else {
+  if (m_graph_state != stop_after) {
     complete_construction(mpi_comm, edges, dont_need_graph);
   }
+  m_dont_need_graph = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,8 +161,12 @@ delegate_partitioned_graph<SegmentManager>::
 complete_construction(MPI_Comm mpi_comm, Container& edges,
                         std::function<void()> dont_need_graph) {
   m_mpi_comm = mpi_comm;
-  CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
-  CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
+  int temp_mpi_rank, temp_mpi_size;
+  CHK_MPI( MPI_Comm_size(m_mpi_comm, &temp_mpi_size) );
+  CHK_MPI( MPI_Comm_rank(m_mpi_comm, &temp_mpi_rank) );
+  assert(temp_mpi_rank == m_mpi_rank);
+  assert(temp_mpi_size == temp_mpi_size);
+
   m_dont_need_graph = dont_need_graph;
 
   std::map< uint64_t, std::deque<OverflowSendInfo> > transfer_info;
@@ -385,9 +388,17 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
 
   assert(temp_hubs.size() == high_vertex_count);
 
-  // Gather the hub liss and add them to the map,
+  // Gather the hub lists and add them to the map,
   std::vector<uint64_t> vec_global_hubs;
   mpi_all_gather(temp_hubs, vec_global_hubs, m_mpi_comm);
+  // if (m_mpi_rank == 0) {
+  //   std::cout << "[";
+  //   for (size_t i = 0; i < vec_global_hubs.size(); i++) {
+  //     std::cout << vec_global_hubs[i] << ",";
+  //   }
+  //   std::cout << "]" << std::endl;
+
+  // }
   // Insert gathered global hubs to set
   global_hubs.insert(vec_global_hubs.begin(), vec_global_hubs.end());
 
@@ -487,6 +498,10 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
     const uint64_t incoming = m_local_incoming_count[vert_id];
 
     m_owned_info[vert_id] = vert_info(false, 0, edge_count);
+
+    if (m_mpi_rank == 0) {
+
+    }
 
     if (incoming < m_delegate_degree_threshold) {
       edge_count += outgoing;

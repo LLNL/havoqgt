@@ -232,21 +232,39 @@ class delegate_partitioned_graph {
     return m_controller_locators.end();
   }
 
-  inline bool operator==(delegate_partitioned_graph<SegementManager>&
-      other) {
-    return (m_mpi_size == other.m_mpi_size) &&
-          (m_mpi_rank == other.m_mpi_rank) &&
-          (m_owned_info == other.m_owned_info) &&
-          (m_owned_targets == other.m_owned_targets) &&
-          (m_delegate_info == other.m_delegate_info) &&
-          (m_delegate_degree == other.m_delegate_degree) &&
-          (m_delegate_label == other.m_delegate_label) &&
-          (m_delegate_targets == other.m_delegate_targets) &&
-          (m_map_delegate_locator != other.m_map_delegate_locator) &&
-          (m_delegate_degree_threshold == other.m_delegate_degree_threshold) &&
-          (m_controller_locators == other.m_controller_locators) &&
-          (m_local_outgoing_count == other.m_local_outgoing_count) &&
-          (m_local_incoming_count == other.m_local_incoming_count);
+  bool compare(delegate_partitioned_graph<SegementManager>* b) {
+    return *this==*b;
+  }
+
+  inline bool operator==(delegate_partitioned_graph<SegementManager>& other) {
+    if (m_mpi_size != other.m_mpi_size)
+      return false;
+    if (m_mpi_rank != other.m_mpi_rank)
+      return false;
+    if(m_owned_info != other.m_owned_info)
+      return false;
+    if(m_owned_targets != other.m_owned_targets)
+      return false;
+    if(m_delegate_info != other.m_delegate_info)
+      return false;
+    if(m_delegate_degree != other.m_delegate_degree)
+      return false;
+    if(m_delegate_label != other.m_delegate_label)
+      return false;
+    if(m_delegate_targets != other.m_delegate_targets)
+      return false;
+    if(m_map_delegate_locator != other.m_map_delegate_locator)
+      return false;
+    if(m_delegate_degree_threshold != other.m_delegate_degree_threshold)
+      return false;
+    if(m_controller_locators != other.m_controller_locators)
+      return false;
+    if(m_local_outgoing_count != other.m_local_outgoing_count)
+      return false;
+    if(m_local_incoming_count != other.m_local_incoming_count)
+      return false;
+
+    return true;
   }
 
   inline bool operator!=(delegate_partitioned_graph<SegementManager>&

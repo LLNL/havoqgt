@@ -209,25 +209,34 @@ int main(int argc, char** argv) {
     fin.close();
   }
 
-  if (load_from_disk == 0 && file_exists) {
-    std::cerr << "Graph file already exists." << std::endl;
-    exit(-1);
-  }
-
-  if (load_from_disk == 1 && !file_exists) {
-    std::cerr << "Load From file specified, but file not found." << std::endl;
-    exit(-1);
-  }
-
   uint64_t flash_capacity = std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
   assert (flash_capacity <= (751619276800.0/24.0));
-  mapped_t  asdf(bip::open_or_create, fname.str().c_str(), flash_capacity);
+
+  if (load_from_disk == 0) {
+    if (file_exists) {
+      std::cerr << "Graph file already exists." << std::endl;
+      exit(-1);
+    } else {
+      //std::cout << "Creating new graph file:" << fname.str().c_str() << "." << std::endl;
+    }
+  }
+
+  if (load_from_disk == 1) {
+    if(file_exists) {
+      //std::cout << "Loading from disk:" << fname.str().c_str() << "." << std::endl;
+    } else {
+      std::cerr << "Load From file specified, but file not found." << std::endl;
+      exit(-1);
+    }
+  }
+
+  mapped_t asdf(bip::open_or_create, fname.str().c_str(), flash_capacity);
 
   boost::interprocess::mapped_region::advice_types advice;
   advice = boost::interprocess::mapped_region::advice_types::advice_random;
   bool assert_res = asdf.advise(advice);
   assert(assert_res);
-  std::function<void()>  advice_dont_need = std::bind(temp_func, &asdf);
+  std::function<void()> advice_dont_need = std::bind(temp_func, &asdf);
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -270,7 +279,18 @@ int main(int argc, char** argv) {
         std::cout << "Loading graph from file." << std::endl;
       }
       graph = segment_manager->find<graph_type>("graph_obj").first;
+
+
+      // graph_type *graph_new;
+      // graph_new = segment_manager->construct<graph_type>
+      //   ("graph_obj_new")
+      //   (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold,
+      //     advice_dont_need, graph_type::MetaDataGenerated);
+
+      // assert(graph_new->compare(graph));
+
       graph->complete_construction(MPI_COMM_WORLD, rmat, advice_dont_need);
+
     } else {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
@@ -279,6 +299,7 @@ int main(int argc, char** argv) {
         ("graph_obj")
         (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold,
           advice_dont_need, graph_type::MetaDataGenerated);
+      // graph->complete_construction(MPI_COMM_WORLD, rmat, advice_dont_need);
     }
 
 
@@ -348,7 +369,6 @@ int main(int argc, char** argv) {
   }
 
   asdf.flush();
-
   } //END Main MPI
 
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
@@ -362,4 +382,3 @@ int main(int argc, char** argv) {
   }
   return 0;
 }
-
