@@ -615,15 +615,26 @@ delegate_partitioned_graph<SegmentManager>::
 initialize_edge_storage() {
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
-  for (int i = 0; i < processes_per_node; i++) {
-    if (m_mpi_rank == 0) {
-      std::cout << "\tResizing m_owned_targets and m_delegate_targets: "
-        << i << "/" << processes_per_node << "." << std::endl << std::flush;
-    }
+  // for (int i = 0; i < processes_per_node; i++) {
+  //   if (m_mpi_rank == 0) {
+  //     std::cout << "\tResizing m_owned_targets and m_delegate_targets: "
+  //       << i << "/" << processes_per_node << "." << std::endl << std::flush;
+  //   }
 
-    if (i == m_mpi_rank % processes_per_node) {
-      m_owned_targets.reserve(m_edges_low_count);
+  //   if (i == m_mpi_rank % processes_per_node) {
+  //
+
+
+      #if 1
+        m_owned_targets.resize(m_edges_low_count);
+        m_delegate_targets.resize(m_edges_high_count);
+        flush_graph();
+      #else
+      if (m_mpi_rank == 0) {
+        std::cout << "\tResizing m_delegate_targets: " << std::endl << std::flush;
+      }
       m_delegate_targets.reserve(m_edges_high_count);
+      m_owned_targets.reserve(m_edges_low_count);
 
       {
         size_t  loop_limit = m_edges_low_count;
@@ -639,6 +650,10 @@ initialize_edge_storage() {
         }
         // flush_advise_vector_dont_need(m_owned_targets);
         m_dont_need_graph();
+      }
+
+      if (m_mpi_rank == 0) {
+        std::cout << "\tResizing m_delegate_targets: " << std::endl << std::flush;
       }
 
       // hub nodes
@@ -657,6 +672,7 @@ initialize_edge_storage() {
         }
         m_dont_need_graph();
       }
+      #endif
 
       // Currently, m_delegate_info holds the count of high degree edges
       // assigned to this node for each vertex.
@@ -671,9 +687,9 @@ initialize_edge_storage() {
       }
       flush_graph();
 
-    }  // If this processes
-    mpi_yield_barrier(m_mpi_comm);
-  }  // for over processes
+  //   }  // If this processes
+  //   mpi_yield_barrier(m_mpi_comm);
+  // }  // for over processes
 
 };
 
