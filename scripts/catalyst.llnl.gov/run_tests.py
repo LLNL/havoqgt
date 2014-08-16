@@ -25,11 +25,11 @@ test_count = 0
 test_motivation = ""
 
 
-slurm_options = "-u --clear-ssd "
+slurm_options = "-u --clear-ssd  -enable-hyperthread "
 if USE_DIMMAP:
-	slurm_options += "--di-mmap=" + str(96*1024*256) + " "
+	slurm_options += " --di-mmap=" + str(96*1024*256) + " "
 elif USE_DIMMAP_FOR_TUNE:
-	slurm_options += "--di-mmap=" + str(10*256) + " "
+	slurm_options += " --di-mmap=" + str(10*256) + " "
 
 
 
@@ -98,13 +98,13 @@ def generate_shell_file():
 
 			l_slurm_options = slurm_options
 			if USE_PDEBUG:
-				l_slurm_options += "-ppdebug " #-w catalyst324"
-			elif (nodes >= 128):
-				l_slurm_options += "-pdit128"
-			elif (nodes >= 64):
-				l_slurm_options += "-pdit64_1"
-			elif (nodes >= 32):
-				l_slurm_options += "-pdit36"
+				l_slurm_options += " -ppdebug " #-w catalyst324"
+			# elif (nodes >= 128):
+			# 	l_slurm_options += "-pdit128"
+			# elif (nodes >= 64):
+			# 	l_slurm_options += "-pdit64_1"
+			# elif (nodes >= 32):
+			# 	l_slurm_options += "-pdit36"
 
 			if DEBUG:
 				time.sleep(.01)
@@ -186,7 +186,7 @@ if DEBUG:
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	#create_commands(25, 1, 31, 1, 1, 1, 1024, 2)
-	create_commands(31, 1, 37, 1, 2, 128, 65536*2, 2)
+	create_commands(31, 1, 37, 1, 2, 64, 65536*2, 2)
 
 
 #Data Scaling test spawning
