@@ -55,23 +55,25 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 
 
-#define USE_SEPARATE_HASH_ARRAY 0
+#define USE_SEPARATE_HASH_ARRAY 1
 
 namespace havoqgt {
 namespace mpi {
 
 namespace bip = boost::interprocess;
 
-/// Note: since we use 0 to indicate that the elem has never been used at all,
+/// Note: Since we use 0 to indicate that the elem has never been used at all,
 ///       key 0 and 1 use same hash value (1).
+///       This class is supporting duplicated-key, 
+///       however not supporting duplicated-element.
 template <typename Key, typename Value, typename SegementManager>
+
 class robin_hood_hash {
 
 public:
 
   template<typename T>
   using SegmentAllocator = bip::allocator<T, SegementManager>;
-
 
   struct elem
   {
@@ -82,6 +84,71 @@ public:
     uint64_t hash;        
 #endif
   };
+
+  ///
+  /// Iterator
+  ///
+  class elem_iterator : public std::iterator<std::input_iterator_tag, Value, ptrdiff_t,
+                                                const Value* const, const Value&>
+  {
+   public:
+    elem_iterator()
+      : hash_table_(nullptr), key_(NULL) { current_index_ = -1;};
+
+    const Value& operator*() const { return (*value_); }
+    elem_iterator& operator++() {
+      get_next();
+      return *this;
+    }
+
+    elem_iterator operator++(int) {
+      elem_iterator __tmp = *this;
+      get_next();
+      return __tmp;
+    }
+
+    Value *operator->() {
+      return &value_;
+    }
+
+    inline bool is_equal(const elem_iterator& x) const
+    { return (x.current_index_ == current_index_); }
+
+    ///  Return true if x and y are both end or not end, or x and y are the same.
+    friend bool
+    operator==(const elem_iterator& x, const elem_iterator& y)
+    { return x.is_equal(y); }
+
+    ///  Return false if x and y are both end or not end, or x and y are the same.
+    friend bool
+    operator!=(const elem_iterator& x, const elem_iterator& y)
+    { return !x.is_equal(y); }
+
+   private:
+    friend class robin_hood_hash;
+
+    elem_iterator(robin_hood_hash *hash_table, const Key& key)
+    : hash_table_(hash_table)
+    , key_(key)
+    {
+      current_index_ = hash_table->lookup_index(key);
+      value_ = current_index_ != -1 ? hash_table->get_value(current_index_) : nullptr;
+    }
+    
+    void get_next() {
+      current_index_ = hash_table_->get_next_index(key_, current_index_);
+      value_ = current_index_ != -1 ? hash_table_->get_value(current_index_) : NULL;
+    }
+
+    robin_hood_hash *hash_table_;
+    const Key& key_;
+    Value *value_;
+    int64_t current_index_;
+  };
+
+  friend class elem_iterator;
+
+
 
 
   ///-----  Constructors -----///
@@ -109,7 +176,6 @@ public:
 #endif
   }
 
-
   ///----- Public memober functions ----- ///
   void resize(size_t new_size)
   {
@@ -127,41 +193,55 @@ public:
     insert_helper(hash_key(key), std::move(key), std::move(val));   
   }
 
+  inline elem_iterator end()
+  {
+    return elem_iterator();
+  }
+
   /// insert a element without duplication
   inline void insert_unique(Key key, Value val)
   {
-    if (has_edges(key, val)) return;
+    if (has_data(key, val)) return;
     insert(key, val);
   }
 
-  inline bool has_edges(const Key& key, const Value& val)
+  inline bool has_data(const Key& key, const Value& val)
   {
     const int64_t ix = lookup_index(key, val);
     return (ix != -1);
   }
 
-  /// FIXME: this function is not supporting duplicated-key mdoel
-  inline Value* find(const Key& key)
+  /// FIXME: this function is not supporting duplicated mdoel
+  inline elem_iterator find(const Key& key)
   {
-    const int64_t ix = lookup_index(key);
-    return ix != -1 ? &buffer_[ix].value : nullptr;
+    return(elem_iterator(this, key));
   }
-  /// FIXME: this function is not supporting duplicated-key mdoel
-  inline const Value* find(const Key& key) const
-  {
-    return const_cast<robin_hood_hash*>(this)->lookup(key);
-  }
-  /// FIXME: this function is not supporting duplicated-key mdoel
-  inline bool erase(const Key& key)
-  {
-    const int64_t ix = lookup_index(key);
+  /// FIXME: this function is not supporting duplicated mdoel
+  // inline const Value* find(const Key& key) const
+  // {
+  //   return const_cast<robin_hood_hash*>(this)->lookup(key);
+  // }
 
-    if (ix == -1) return false;
-
-    buffer_[ix].~elem();
-    elem_hash(ix) |= 0x80000000; // mark as deleted
+  inline void erase(elem_iterator itr)
+  {
+    erase_element(itr.current_index_);
     --num_elems_;
-    return true;
+  }
+
+  inline size_t erase(const Key& key)
+  {
+    const int64_t pos = lookup_index(key);
+    if (pos == -1) return 0;
+
+    size_t erased_count = 0;
+    for(;;) {
+      int64_t pos = get_next_index(key, pos);
+      if (pos == -1) break;
+      erase_element(pos);
+      ++erased_count;
+    }
+    num_elems_ -= erased_count;
+    return erased_count;
   }
 
   inline size_t size() const
@@ -171,21 +251,24 @@ public:
 
   inline size_t count(const Key& key) const
   {
-    return count_helper(key);
+    int64_t pos = lookup_index(key);
+    if (pos == -1) return 0;
+
+    int64_t key_count = 0;
+    while (get_next_index(key, pos) != -1) { ++key_count; }
+
+    return key_count;
   }
 
   /// ----- Public member functions for debug ----- ///
   float average_probe_count() const
   {
-    if (size() == 0) {
-      return 0;
-    }
+    if (size() == 0) return 0;
+
     float probe_total = 0;
-    for(int64_t i = 0; i < capacity_; ++i)
-    {
+    for(int64_t i = 0; i < capacity_; ++i) {
       uint64_t hash = elem_hash(i);
-      if (hash != 0 && !is_deleted(hash))
-      {
+      if (hash != 0 && !is_deleted(hash)) {
         probe_total += probe_distance(hash, i);
       }
     }
@@ -196,7 +279,7 @@ public:
   {
     const size_t length = capacity_;
 
-    for (uint64_t i = 0; i < length; i++) {
+    for (uint64_t i = 0; i < length; ++i) {
       if (elem_hash(i) == 0 || is_deleted(elem_hash(i))) continue;
       std::cout << buffer_[i].key << "\t" << buffer_[i].value << std::endl;
     }
@@ -208,13 +291,12 @@ public:
     fout.open(fname);
     const size_t length = capacity_;
 
-    for (uint64_t i = 0; i < length; i++) {
+    for (uint64_t i = 0; i < length; ++i) {
       if (elem_hash(i) == 0 || is_deleted(elem_hash(i))) continue;
       fout << buffer_[i].key << "\t" << buffer_[i].value << std::endl; 
     }
     fout.close();
   }
-
 
 
 private:
@@ -228,7 +310,6 @@ private:
     resize_threshold_ = (capacity_ * LOAD_FACTOR_PERCENT) / 100LL;
     mask_ = capacity_ - 1;
   }
-
 
   /// ------ Private member functions: algorithm core ----- ///
   inline int64_t desired_pos(uint64_t hash) const
@@ -268,9 +349,13 @@ private:
     // since we use 0 to indicate that the elem has never
     // been used at all.
     h |= h==0LL;
-    return h; 
+    return h;
   }
 
+  inline void erase_element(const int64_t positon) {
+        buffer_[positon].~elem();
+        elem_hash(positon) |= 0x80000000; // mark as deleted
+  }
 
   /// ----- Private funtions: memroy management ----- ///
   // alloc buffer according to currently set capacity
@@ -282,7 +367,6 @@ private:
     typedef mapped_t::segment_manager segment_manager_t;
     segment_manager_t* segment_manager = allocator_.get_segment_manager();
     bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
-
 
     bip::offset_ptr<elem> ptr = alloc_inst.allocate(capacity_ * sizeof(elem));
     buffer_ = reinterpret_cast<elem*>(ptr.get());
@@ -338,20 +422,43 @@ private:
 #endif
   }
 
-
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  inline int64_t lookup_index(const Key& key, const Value& val) const
+  int64_t lookup_index(const Key& key) const
   {
-    int64_t pos = lookup_first_index(key);
+    const uint64_t hash = hash_key(key);
+    int64_t pos = desired_pos(hash);
+    int64_t dist = 0;
+    for(;;)
+    {             
+      if (elem_hash(pos) == 0) {// free space is found
+        return -1;
+      } else if (dist > probe_distance(elem_hash(pos), pos)) {
+        return -1;
+      } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
+        return pos;
+      }
+      pos = (pos+1) & mask_;
+      ++dist;
+    }
+    return -1;
+  }
+
+  int64_t lookup_index(const Key& key, const Value& val) const
+  {
+    const uint64_t hash = hash_key(key);
+    int64_t pos = lookup_index(key);
     if (pos == -1) return -1;
 
     int64_t dist = 0;
 
     for(;;) {
-      if (buffer_[pos].key == key && buffer_[pos].value == val)
+      if (elem_hash(pos) == 0) {// free space is found
+        return -1;
+      } else if (dist > probe_distance(elem_hash(pos), pos)) {
+        return -1;
+      } else if (elem_hash(pos) == hash && buffer_[pos].key == key && buffer_[pos].value == val) {
         return pos;
-      if (dist > probe_distance(elem_hash(pos), pos))
-        return -1;
+      }
 
       pos = (pos+1) & mask_;
       ++dist;
@@ -360,44 +467,29 @@ private:
     return -1;
   }
 
-  /// FIXME: this function is not supporting duplicated-key mdoel
-  inline int64_t lookup_index(const Key& key) const
+  /// ----- Private functions: search, delete, inset etc. ----- ///
+  int64_t get_next_index(const Key& key, int64_t pos)
   {
     const uint64_t hash = hash_key(key);
-    int64_t pos = desired_pos(hash);
     int64_t dist = 0;
     for(;;)
     {             
-      if (elem_hash(pos) == 0) // free space is found
+      if (elem_hash(pos) == 0) {// free space is found
         return -1;
-      else if (dist > probe_distance(elem_hash(pos), pos)) 
+      } else if (dist > probe_distance(elem_hash(pos), pos)) {
         return -1;
-      else if (elem_hash(pos) == hash && buffer_[pos].key == key) 
-        return pos;       
-
+      } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
+        return pos;
+      }
       pos = (pos+1) & mask_;
       ++dist;
     }
     return -1;
   }
 
-  inline int64_t lookup_first_index(const Key& key) const
+  inline Value* get_value(const int64_t pos)
   {
-    const uint64_t hash = hash_key(key);
-    int64_t pos = desired_pos(hash);
-    int64_t dist = 0;
-    for(;;)
-    {             
-      if (elem_hash(pos) == 0) // free space is found
-        return -1;
-      else if (dist > probe_distance(elem_hash(pos), pos)) 
-        return -1;
-      else if (elem_hash(pos) == hash && buffer_[pos].key == key) 
-        return pos;       
-
-      pos = (pos+1) & mask_;
-      ++dist;
-    }    
+    return &buffer_[pos].value;
   }
 
   inline static bool is_deleted(uint64_t hash)
@@ -444,25 +536,6 @@ private:
       pos = (pos+1) & mask_;
       ++dist;     
     }
-  }
-
-  size_t count_helper(const Key& key) const
-  {
-    int64_t pos = lookup_first_index(key);
-    if (pos == -1) return 0;
-
-    int64_t dist = 0;
-    int64_t key_count = 0;
-
-    while(dist > probe_distance(elem_hash(pos), pos)) {
-      if (buffer_[pos].key == key)
-        key_count++;
-
-      pos = (pos+1) & mask_;
-      ++dist;
-    }
-
-    return key_count;
   }
 
   /// ---------- private menber variavles ---------- ///

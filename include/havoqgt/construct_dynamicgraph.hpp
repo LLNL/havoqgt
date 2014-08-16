@@ -110,7 +110,6 @@ namespace bip = boost::interprocess;
   static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
-
 template <typename SegmentManager>
 class construct_dynamicgraph {
 public:
@@ -118,7 +117,72 @@ public:
   template<typename T>
   using SegmentAllocator = bip::allocator<T, SegmentManager>;
   typedef bip::managed_mapped_file mapped_t;
-  
+
+  // class DegreeTable {
+  //   public:
+  //     DegreeTable() {
+  //       max_vertex_id_ = -1;
+  //       // num_verticies_ = 0;
+  //       // num_edges_ = 0;
+  //       capacity_ = 0;
+  //     };
+
+  //     ~DegreeTable() {
+  //       if (capacity_ > 0)
+  //         delete[] degree_table_;
+  //     };
+
+  //     inline uint64_t count_up(uint64_t vertex_id) {
+  //       if (vertex_id > max_vertex_id_) {
+  //         max_vertex_id_ = vertex_id;
+  //         grow();
+  //       }
+
+  //       return ++degree_table_[vertex_id]; 
+  //     };
+
+  //     inline uint64_t count_down(uint64_t vertex_id) {
+  //       if (vertex_id > max_vertex_id_) {
+  //         return 0;
+  //       }
+  //       return --degree_table_[vertex_id];
+  //     };
+
+  //     inline uint64_t degree(uint64_t vertex_id){
+  //       if (vertex_id > max_vertex_id_) {
+  //         return 0;
+  //       } else {
+  //         return degree_table_[vertex_id];
+  //       }
+  //     };
+
+  //   private:
+  //     inline void grow() {
+  //       uint64_t old_capacity = capacity_;
+  //       uint64_t *old_table = degree_table_;
+
+  //       capacity_ |= (capacity_ == 0);
+  //       while (capacity_ < max_vertex_id_+1)
+  //         capacity_ *= 2ULL;
+
+  //       calloc();
+
+  //       std::memcpy(degree_table_, old_table, old_capacity * sizeof(int64_t));
+  //       delete[] old_table;
+  //     }
+
+  //     inline void calloc() {
+  //       degree_table_ = new uint64_t[capacity_];
+  //       std::memset(degree_table_, 0, capacity_ * sizeof(int64_t));
+  //     }
+
+  //     uint64_t *degree_table_;
+  //     int64_t max_vertex_id_;
+  //     // uint64_t num_verticies_;
+  //     // uint64_t num_edges_;
+  //     size_t capacity_;
+  // };
+
   // ---------  Data Structures ------------ //
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
   typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
@@ -128,6 +192,8 @@ public:
 
   typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
 
+  typedef boost::unordered_map<uint64_t, uint64_t> degree_map_t;
+
   // typedef std::pair<uint64_t, uint64_t> uint64_pair_t;
   // typedef bip::vector<uint64_pair_t, SegmentAllocator<uint64_pair_t>> vec_pair_t;
   // typedef bip::set<uint64_pair_t, SegmentAllocator<uint64_pair_t>> set_pair_t;
@@ -136,9 +202,8 @@ public:
   enum DataStructureMode {
     kUseVecVecMatrix,
     kUseMapVecMatrix,
-    kUseRobinHoodHash
-    // kUseVectorPair,
-    // kUseMapPair
+    kUseRobinHoodHash,
+    kUseDegreeAwareModel
   };
 
   //--  Constructors -- //
@@ -165,16 +230,13 @@ public:
         add_edges_robin_hood_hash(edges);
         break;
 
-      // case kUseVectorPair:
-      //   add_edges_list_vector_pair(edges);
-      //   break;
-
-      // case kUseMapPair:
-      //   add_edges_list_map_pair(edges);
-      //   break;
+      case kUseDegreeAwareModel:
+        add_edges_hybrid(edges);
+        break;
 
       default:
         std::cerr << "Unknown data structure type" << std::endl;
+        assert(false);
         exit(-1);
     }
 
@@ -197,11 +259,42 @@ private:
   template <typename Container>
   void add_edges_robin_hood_hash(Container& edges);
 
-  // template <typename Container>
-  // void add_edges_list_vector_pair(Container& edges);
+  /// --- TODO: This is a temporarily code ---
+  template <typename EdgeType>
+  void add_edges_adjacency_matrix_map_vector_core(const EdgeType& edge)
+  {
+#if DEBUG_INSERTEDEDGES == 1
+    fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
+#endif
+    auto value = adjacency_matrix_map_vec_->find(edge.first);
+    if (value == adjacency_matrix_map_vec_->end()) { // new vertex
+      uint64_vector_t vec(1, edge.second, seg_allocator_);
+      adjacency_matrix_map_vec_->insert(map_value_vec_t(edge.first, vec));
+    } else {
+      uint64_vector_t& adjacency_list_vec = value->second;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+      if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() )
+        return;
+#endif
+      adjacency_list_vec.push_back(edge.second);
+    }
+  }
+  /// --- TODO: This is a temporarily code ---
+  template <typename EdgeType>
+  inline void add_edges_robin_hood_hash_core(const EdgeType& edge)
+  {
+#if DEBUG_INSERTEDEDGES == 1
+    fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
+#endif
+#if WITHOUT_DUPLICATE_INSERTION == 1
+    robin_hood_hashing_->insert_unique(edge.first, edge.second);
+#else
+    robin_hood_hashing_->insert(edge.first, edge.second);
+#endif
+  }
 
-  // template <typename Container>
-  // void add_edges_list_map_pair(Container& edges);
+  template <typename Container>
+  void add_edges_hybrid(Container& edges);
 
   inline void flush_pagecache() {
     asdf_.flush();
@@ -210,16 +303,12 @@ private:
   mapped_t& asdf_;
   const SegmentAllocator<void>& seg_allocator_;
   const DataStructureMode data_structure_type_;
+  degree_map_t degree_map;
 
   adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
   uint64_vector_t *init_vec;
-
   adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
-
   robin_hood_hashing_t *robin_hood_hashing_;
-
-  // vec_pair_t *list_vector_pair_;
-  // set_pair_t *list_set_pair_;
 
   IOInfo *io_info_;
   double total_exectution_time_;

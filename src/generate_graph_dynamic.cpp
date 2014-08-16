@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     if (argc < 11) {
       std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
       << " <load_from_disk> <delete file on exit>"
-      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS>"
+      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/DG_AW>"
       << " <file to compare to>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -223,6 +223,10 @@ int main(int argc, char** argv) {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseRobinHoodHash);
+    } else if (data_structure_type == "DG_AW") {
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (asdf, alloc_inst, graph_type::kUseDegreeAwareModel);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);

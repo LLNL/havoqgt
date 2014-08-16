@@ -127,6 +127,7 @@ construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, co
   : asdf_(asdf)
   , seg_allocator_(seg_allocator)
   , data_structure_type_(mode)
+  , degree_map()
 {
   
   switch(data_structure_type_) {
@@ -143,16 +144,14 @@ construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, co
       robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator);
       break;
 
-    // case kUseVectorPair:
-    //   list_vector_pair_ = new vec_pair_t(seg_allocator);
-    //   break;
-
-    // case kUseMapPair:
-    //   list_set_pair_ = new set_pair_t(seg_allocator);
-    //   break;
+    case kUseDegreeAwareModel:
+      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator);
+      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator);
+      break;
 
     default:
       std::cerr << "Unknown data structure type" << std::endl;
+      assert(false);
       exit(-1);
   }
 
@@ -262,7 +261,6 @@ add_edges_adjacency_matrix_map_vector(Container& edges)
 
 }
 
-
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
@@ -281,7 +279,7 @@ add_edges_robin_hood_hash(Container& edges)
 #else
     robin_hood_hashing_->insert(edge.first, edge.second);
 #endif
-  }  
+  }
   flush_pagecache();
   double time_end = MPI_Wtime();  
 
@@ -294,59 +292,46 @@ add_edges_robin_hood_hash(Container& edges)
 }
 
 
-// template <typename SegementManager>
-// template <typename Container>
-// void construct_dynamicgraph<SegementManager>::
-// add_edges_list_vector_pair(Container& edges)
-// {
+template <typename SegmentManager>
+template <typename Container>
+void construct_dynamicgraph<SegmentManager>::
+add_edges_hybrid(Container& edges)
+{
+  const int64_t kDegreeThreshold = 1;
 
-//   io_info_->reset_baseline();
-//   double time_start = MPI_Wtime();
-//   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
-//     uint64_pair_t edge = *itr;
+  io_info_->reset_baseline();
+  double time_start = MPI_Wtime();
+  for (auto itr = edges.begin(); itr != edges.end(); itr++) {
+    const auto edge = *itr;
+    //std::cout << edge.first << " " << edge.second << std::endl;
+    int64_t degree = ++degree_map[edge.first];
+    //std::cout << "degree:" << degree << std::endl;
+    if (degree < kDegreeThreshold) {
+      //std::cout << "RH" << std::endl;
+      add_edges_robin_hood_hash_core(edge);
+    } else {
+      //std::cout << "Move" << std::endl;
+      auto itr = robin_hood_hashing_->find(edge.first);
+      while (itr != robin_hood_hashing_->end()) {
+        std::cout << *itr << std::endl;
+        add_edges_adjacency_matrix_map_vector_core(std::pair<uint64_t, uint64_t>(edge.first, *itr));
+        robin_hood_hashing_->erase(itr);
+        ++itr;
+      }
+      //std::cout << "Moving Done." << std::endl;
+      add_edges_adjacency_matrix_map_vector_core(edge);      
+    }
+    //std::cout << "Done." << std::endl;
+  }
+  flush_pagecache();
+  double time_end = MPI_Wtime();  
 
-// #if WITHOUT_DUPLICATE_INSERTION == 1
-//     // add a edge without duplication
-//     // if (std::find<vec_pair_t, uint64_pair_t>(list_vector_pair_, edge) != list_vector_pair_->end())
-//     //   continue;
-// #endif
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
-//     list_vector_pair_->push_back(edge);
-  
-//   }
-//   flush_pagecache();
-//   double time_end = MPI_Wtime();
+  total_exectution_time_ += time_end - time_start;
+  io_info_->log_diff();
+}
 
-//   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;  
-//   total_exectution_time_ += time_end - time_start;
-
-//   io_info_->log_diff();
-
-//   //free_edge_container(edges);
-// }
-
-
-// template <typename SegmentManager>
-// template <typename Container>
-// void construct_dynamicgraph<SegmentManager>::
-// add_edges_list_map_pair(Container& edges)
-// {
-
-//   io_info_->reset_baseline();
-//   double time_start = MPI_Wtime();
-//   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
-//     uint64_pair_t edge = *itr;
-//     list_set_pair_->insert(edge);
-//   }  
-//   flush_pagecache();
-//   double time_end = MPI_Wtime();  
-
-//   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
-
-//   total_exectution_time_ += time_end - time_start;
-//   io_info_->log_diff();
-
-// }
 
 
 template <typename SegmentManager>
