@@ -297,7 +297,7 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_hybrid(Container& edges)
 {
-  const int64_t kDegreeThreshold = 1;
+  const int64_t kDegreeThreshold = 2;
 
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();

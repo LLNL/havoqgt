@@ -354,7 +354,7 @@ private:
 
   inline void erase_element(const int64_t positon) {
         buffer_[positon].~elem();
-        elem_hash(positon) |= 0x80000000; // mark as deleted
+        elem_hash(positon) |= 0x8000000000000000ULL; // mark as deleted
   }
 
   /// ----- Private funtions: memroy management ----- ///
