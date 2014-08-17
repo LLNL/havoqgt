@@ -55,7 +55,7 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 
 
-#define USE_SEPARATE_HASH_ARRAY 1
+#define USE_SEPARATE_HASH_ARRAY 0
 
 namespace havoqgt {
 namespace mpi {
@@ -288,7 +288,7 @@ public:
   void dump_elements(const std::string& fname)
   {
     std::ofstream fout;
-    fout.open(fname);
+    fout.open(fname, std::ios::out | std::ios::app);
     const size_t length = capacity_;
 
     for (uint64_t i = 0; i < length; ++i) {

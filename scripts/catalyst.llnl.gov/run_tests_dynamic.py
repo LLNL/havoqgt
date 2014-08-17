@@ -10,10 +10,10 @@ DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = False
-NORUN = True
+USE_DIMMAP_FOR_TUNE = True
+NORUN = False
 
-USE_CATALYST = False
+USE_CATALYST = True
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -239,7 +239,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 	save_file = 0
 	compare_files = 0
 	test_type = "RMAT"
-	chunk_size = 15
+	chunk_size = 20
 	edges_factor = 16
 	scale = initial_scale
 	nodes = inital_nodes
@@ -260,15 +260,17 @@ init_test_dir()
 
 
 if DEBUG:
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
+	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
 	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC")
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
+	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "DG_AW")
 
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "MP_VC")
-	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
+	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
+	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC")
+	#create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
+	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "DG_AW")
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

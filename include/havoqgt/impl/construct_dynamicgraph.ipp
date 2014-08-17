@@ -342,7 +342,24 @@ print_profile()
   io_info_->log_diff(true);
 
 #if DEBUG_INSERTEDEDGES == 1
-  robin_hood_hashing_->dump_elements(kFnameDebugInsertedEdges+"_graph");
+  std::ofstream tmp;
+  tmp.open(kFnameDebugInsertedEdges+"_graph", std::ios::trunc);
+  tmp.close();
+
+  if (data_structure_type_ == kUseMapVecMatrix || data_structure_type_ == kUseDegreeAwareModel) {
+    std::ofstream fout;
+    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
+    for (auto itr = adjacency_matrix_map_vec_->begin(); itr != adjacency_matrix_map_vec_->end(); ++itr) {
+      uint64_vector_t& adjacency_list_vec = (*itr).second;
+      for (auto itr2 = adjacency_list_vec.begin(); itr2 != adjacency_list_vec.end(); ++itr2) {
+        fout << (*itr).first << "\t" << *itr2 << std::endl;
+      }
+    }
+    fout.close();
+  }
+  if (data_structure_type_ == kUseRobinHoodHash || data_structure_type_ == kUseDegreeAwareModel) {
+    robin_hood_hashing_->dump_elements(kFnameDebugInsertedEdges+"_graph");
+  }
   fout_debug_insertededges_.close();
 #endif
 }
