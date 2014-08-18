@@ -60,6 +60,48 @@ namespace havoqgt { namespace mpi {
 
 
 template <typename Visitor>
+class bfs_priority_queue
+{
+
+protected:
+  std::priority_queue< Visitor, std::vector<Visitor>, 
+                               std::greater<Visitor> > m_data;
+public:
+  bfs_priority_queue() { }
+
+  bool push(Visitor const & task)
+  {
+    m_data.push(task);
+    return true;
+  }
+
+  void pop()
+  {
+    m_data.pop();
+  }
+
+  Visitor const & top() //const
+  {
+    return m_data.top();
+  }
+
+  size_t size() const
+  {
+    return m_data.size();;
+  }
+
+  bool empty() const
+  {
+    return m_data.empty();
+  }
+
+  void clear()
+  {
+    m_data.clear();
+  }
+};
+
+template <typename Visitor>
 class bfs_queue
 {
 public:
@@ -172,11 +214,19 @@ public:
 
   friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
     return v1.level() > v2.level();
+    if(v1.level() > v2.level())
+    {
+      return true;
+    } else if(v1.level() < v2.level())
+    {
+      return false;
+    }
+    return v1.vertex > v2.vertex;
   }
 
-  friend inline bool operator<(const bfs_visitor& v1, const bfs_visitor& v2) {
-    return v1.level() < v2.level();
-  }
+  // friend inline bool operator<(const bfs_visitor& v1, const bfs_visitor& v2) {
+  //   return v1.level() < v2.level();
+  // }
 
   static void set_level_data(LevelData* _data) { level_data() = _data; }
 
@@ -205,7 +255,7 @@ void breadth_first_search(TGraph* g,
   typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
   visitor_type::set_level_data(&level_data);
   visitor_type::set_parent_data(&parent_data);
-  typedef visitor_queue< visitor_type, bfs_queue, TGraph >    visitor_queue_type;
+  typedef visitor_queue< visitor_type, bfs_priority_queue, TGraph >    visitor_queue_type;
 
   visitor_queue_type vq(g);
   vq.init_visitor_traversal(s);
