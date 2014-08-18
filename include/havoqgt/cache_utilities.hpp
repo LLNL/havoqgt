@@ -156,10 +156,14 @@ void print_system_info(bool print_dimmap) {
   system("echo \"/proc/sys/vm/dirty_expire_centisecs = $(cat /proc/sys/vm/dirty_expire_centisecs)\"");
 
   printf("\n-----------------------------------------------------------------\n");
-  printf("echo df -h /l/ssd\n");
+  printf("df -h /l/ssd\n");
   printf("-----------------------------------------------------------------\n");
   system("df -h /l/ssd");
 
+  printf("\n-----------------------------------------------------------------\n");
+  printf("ls /l/ssd\n");
+  printf("-----------------------------------------------------------------\n");
+  system("ls /l/ssd");
 
 
   printf("\n-----------------------------------------------------------------\n");

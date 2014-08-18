@@ -62,6 +62,7 @@
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <boost/interprocess/mapped_region.hpp>
+#include <boost/interprocess/managed_heap_memory.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
@@ -77,9 +78,9 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
-  typedef bip::managed_mapped_file mapped_t;
-  typedef mapped_t::segment_manager segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef bip::managed_mapped_file graph_mapped_t;
+  typedef graph_mapped_t::segment_manager graph_segment_manager_t;
+  typedef hmpi::delegate_partitioned_graph<graph_segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -103,33 +104,35 @@ int main(int argc, char** argv) {
 
 
   std::string graph_input;
-  std::string bfs_file;
 
-  if (argc < 3) {
-    std::cerr << "usage: <graph input file name> <bfs out file name>"
+  if (argc < 2) {
+    std::cerr << "usage: <graph input file name>"
       << " (argc:" << argc << " )." << std::endl;
     exit(-1);
   } else {
     int pos = 1;
     graph_input = argv[pos++];
-    bfs_file = argv[pos++];
   }
 
+  graph_input += "_" + std::to_string(mpi_rank);
   if (mpi_rank == 0) {
-    std::cout << "Graph input file = " << graph_input << std::endl;
-    std::cout << "BFS file name = " << bfs_file << std::endl;
+    std::cout << "[0]Graph input file = " << graph_input << std::endl;
   }
 
-  graph_input += "_" + mpi_rank;
-  mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  graph_mapped_t graph_mapped_file(bip::open_only, graph_input.c_str());
+  // graph_mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
 
   boost::interprocess::mapped_region::advice_types rand_advice;
   rand_advice = boost::interprocess::mapped_region::advice_types::advice_random;
   bool assert_res = graph_mapped_file.advise(rand_advice);
   assert(assert_res);
 
+
   graph_type *graph = graph_mapped_file.get_segment_manager()->
     find<graph_type>("graph_obj").first;
+   assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
@@ -160,19 +163,21 @@ int main(int argc, char** argv) {
 
   // BFS Experiments
   {
-    bfs_file += "_" + mpi_rank;
-    uint64_t filesize = (graph->max_vertex_id() + 1) * 10;  // Bytes
-    mapped_t bfs_mapped_file(bip::create_only, bfs_file.c_str(), filesize);
-    assert_res = bfs_mapped_file.advise(rand_advice);
-    assert(assert_res);
+  	typedef bip::managed_heap_memory bfs_mapped_t;
+	  typedef bfs_mapped_t::segment_manager bfs_segment_manager_t;
 
-    graph_type::vertex_data<uint8_t, segment_manager_t >* bfs_level_data;
-    graph_type::vertex_data<uint64_t, segment_manager_t >* bfs_parent_data;
+    uint64_t filesize = (graph->max_vertex_id()*mpi_size + 1) * 10;  // Bytes
+    bfs_mapped_t bfs_mapped_data(filesize);
+    // assert_res = bfs_mapped_data.advise(rand_advice);
+    // assert(assert_res);
 
-    bfs_level_data = graph->create_vertex_data<uint8_t, segment_manager_t>(
-          graph_mapped_file.get_segment_manager(), "bfs_level_data");
-    bfs_parent_data = graph->create_vertex_data<uint64_t, segment_manager_t>(
-          graph_mapped_file.get_segment_manager(), "bfs_parent_data");
+    graph_type::vertex_data<uint8_t, bfs_segment_manager_t >* bfs_level_data;
+    graph_type::vertex_data<uint64_t, bfs_segment_manager_t >* bfs_parent_data;
+
+    bfs_level_data = graph->create_vertex_data<uint8_t, bfs_segment_manager_t>(
+          bfs_mapped_data.get_segment_manager(), "bfs_level_data");
+    bfs_parent_data = graph->create_vertex_data<uint64_t, bfs_segment_manager_t>(
+          bfs_mapped_data.get_segment_manager(), "bfs_parent_data");
 
     //  Run BFS experiments
     double time(0);
