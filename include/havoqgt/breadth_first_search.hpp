@@ -221,7 +221,7 @@ public:
     {
       return false;
     }
-    return v1.vertex > v2.vertex;
+    return !(v1.vertex < v2.vertex);
   }
 
   // friend inline bool operator<(const bfs_visitor& v1, const bfs_visitor& v2) {
