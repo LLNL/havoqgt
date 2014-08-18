@@ -302,6 +302,9 @@ public:
 private:
   static const int64_t INITIAL_SIZE = 1; // must be 1 or more
   static const int64_t LOAD_FACTOR_PERCENT = 90LL;
+  static const uint64_t kTombstoneMask = 0x8000000000000000ULL; // mask value to mark as deleted
+  static const uint64_t kTombstoneClearMask = 0x7FFFFFFFFFFFFFFFULL;  // mask value to clear deleted flag
+  static const int64_t  kCapacityGrowingFactor = 2LL;
 
   void init()
   {
@@ -343,7 +346,7 @@ private:
 
     // MSB is used to indicate a deleted elem, so
     // clear it
-    h &= 0x7fffffff;
+    h &= kTombstoneClearMask;
 
     // Ensure that we never return 0 as a hash,
     // since we use 0 to indicate that the elem has never
@@ -354,7 +357,7 @@ private:
 
   inline void erase_element(const int64_t positon) {
         buffer_[positon].~elem();
-        elem_hash(positon) |= 0x8000000000000000ULL; // mark as deleted
+        elem_hash(positon) |= kTombstoneMask; // mark as deleted
   }
 
   /// ----- Private funtions: memroy management ----- ///
@@ -397,8 +400,8 @@ private:
 #if USE_SEPARATE_HASH_ARRAY
     auto old_hashes = hashes_;
 #endif
-    capacity_ *= 2LL;
-    capacity_ |= capacity_==0;
+    capacity_ *= kCapacityGrowingFactor;
+    capacity_ |= capacity_== 0;
     alloc();
     // now copy over old elems
     for(int64_t i = 0; i < old_capacity; ++i)

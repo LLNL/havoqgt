@@ -267,8 +267,8 @@ if DEBUG:
 
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
-	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC")
+	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
+	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC")
 	#create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
 	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "DG_AW")
 

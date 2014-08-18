@@ -306,6 +306,7 @@ add_edges_hybrid(Container& edges)
     //std::cout << edge.first << " " << edge.second << std::endl;
     int64_t degree = ++degree_map[edge.first];
     //std::cout << "degree:" << degree << std::endl;
+    //int64_t degree = 2;
     if (degree < kDegreeThreshold) {
       //std::cout << "RH" << std::endl;
       add_edges_robin_hood_hash_core(edge);
@@ -313,7 +314,7 @@ add_edges_hybrid(Container& edges)
       //std::cout << "Move" << std::endl;
       auto itr = robin_hood_hashing_->find(edge.first);
       while (itr != robin_hood_hashing_->end()) {
-        std::cout << *itr << std::endl;
+        //std::cout << *itr << std::endl;
         add_edges_adjacency_matrix_map_vector_core(std::pair<uint64_t, uint64_t>(edge.first, *itr));
         robin_hood_hashing_->erase(itr);
         ++itr;
