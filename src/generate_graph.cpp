@@ -232,10 +232,10 @@ int main(int argc, char** argv) {
 
   mapped_t asdf(bip::open_or_create, fname.str().c_str(), flash_capacity);
 
-  boost::interprocess::mapped_region::advice_types advice;
-  advice = boost::interprocess::mapped_region::advice_types::advice_random;
-  bool assert_res = asdf.advise(advice);
-  assert(assert_res);
+  // boost::interprocess::mapped_region::advice_types advice;
+  // advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  // bool assert_res = asdf.advise(advice);
+  // assert(assert_res);
   std::function<void()> advice_dont_need = std::bind(temp_func, &asdf);
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
@@ -376,6 +376,8 @@ int main(int argc, char** argv) {
 
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
 
+  if (mpi_rank == 0)
+    std::cout << "Pre Finalize." << std::endl;
 
   CHK_MPI(MPI_Finalize());
   if (mpi_rank == 0) {

@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
     graph_input = argv[pos++];
     bfs_file = argv[pos++];
   }
-  num_vertices <<= vert_scale;
+
   if (mpi_rank == 0) {
     std::cout << "Graph input file = " << graph_input << std::endl;
     std::cout << "BFS file name = " << bfs_file << std::endl;
@@ -161,6 +161,7 @@ int main(int argc, char** argv) {
   // BFS Experiments
   {
     bfs_file += "_" + mpi_rank;
+    uint64_t filesize = (graph->max_vertex_id() + 1) * 10;  // Bytes
     mapped_t bfs_mapped_file(bip::create_only, bfs_file.c_str(), filesize);
     assert_res = bfs_mapped_file.advise(rand_advice);
     assert(assert_res);
@@ -246,7 +247,7 @@ int main(int argc, char** argv) {
           std::cout
             << "Visited total = " << visited_total
             << ", percentage visited = "
-            << double(visited_total) / double(num_vertices) * 100
+            << double(visited_total) / double(graph->max_vertex_id()) * 100
             << "%" << std::endl
             << "BFS Time = " << time_end - time_start << std::endl;
           time += time_end - time_start;
