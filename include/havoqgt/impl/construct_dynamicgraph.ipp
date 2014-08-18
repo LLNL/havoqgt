@@ -297,7 +297,7 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_hybrid(Container& edges)
 {
-  const int64_t kDegreeThreshold = 2;
+  const int64_t kDegreeThreshold = 1;
 
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
@@ -305,22 +305,24 @@ add_edges_hybrid(Container& edges)
     const auto edge = *itr;
     //std::cout << edge.first << " " << edge.second << std::endl;
     int64_t degree = ++degree_map[edge.first];
+
     //std::cout << "degree:" << degree << std::endl;
-    //int64_t degree = 2;
+    //degree = 2;
     if (degree < kDegreeThreshold) {
       //std::cout << "RH" << std::endl;
       add_edges_robin_hood_hash_core(edge);
     } else {
       //std::cout << "Move" << std::endl;
       auto itr = robin_hood_hashing_->find(edge.first);
-      while (itr != robin_hood_hashing_->end()) {
+      const auto itr_end = robin_hood_hashing_->end();
+      while (itr != itr_end) {
         //std::cout << *itr << std::endl;
-        add_edges_adjacency_matrix_map_vector_core(std::pair<uint64_t, uint64_t>(edge.first, *itr));
+        add_edges_adjacency_matrix_map_vector_core(edge.first, *itr);
         robin_hood_hashing_->erase(itr);
         ++itr;
       }
       //std::cout << "Moving Done." << std::endl;
-      add_edges_adjacency_matrix_map_vector_core(edge);      
+      add_edges_adjacency_matrix_map_vector_core(edge.first, edge.second);      
     }
     //std::cout << "Done." << std::endl;
   }

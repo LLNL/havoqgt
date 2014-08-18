@@ -260,23 +260,22 @@ private:
   void add_edges_robin_hood_hash(Container& edges);
 
   /// --- TODO: This is a temporarily code ---
-  template <typename EdgeType>
-  void add_edges_adjacency_matrix_map_vector_core(const EdgeType& edge)
+  void add_edges_adjacency_matrix_map_vector_core(const int64_t& source_vtx, const int64_t& target_vtx)
   {
 #if DEBUG_INSERTEDEDGES == 1
-    fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
+    fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << std::endl;
 #endif
-    auto value = adjacency_matrix_map_vec_->find(edge.first);
+    auto value = adjacency_matrix_map_vec_->find(source_vtx);
     if (value == adjacency_matrix_map_vec_->end()) { // new vertex
-      uint64_vector_t vec(1, edge.second, seg_allocator_);
-      adjacency_matrix_map_vec_->insert(map_value_vec_t(edge.first, vec));
+      uint64_vector_t vec(1, target_vtx, seg_allocator_);
+      adjacency_matrix_map_vec_->insert(map_value_vec_t(source_vtx, vec));
     } else {
       uint64_vector_t& adjacency_list_vec = value->second;
 #if WITHOUT_DUPLICATE_INSERTION == 1
-      if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() )
+      if (boost::find<uint64_vector_t>(adjacency_list_vec, target_vtx) != adjacency_list_vec.end() )
         return;
 #endif
-      adjacency_list_vec.push_back(edge.second);
+      adjacency_list_vec.push_back(target_vtx);
     }
   }
   /// --- TODO: This is a temporarily code ---

@@ -93,9 +93,12 @@ public:
   {
    public:
     elem_iterator()
-      : hash_table_(nullptr), key_(NULL) { current_index_ = -1;};
+      : hash_table_(nullptr), key_(NULL) { current_index_ = kInvaridIndex; };
 
-    const Value& operator*() const { return (*value_); }
+    const Value& operator*() const
+    { 
+      return current_index_ != kInvaridIndex ? *hash_table_->get_value(current_index_) : NULL;
+    }
     elem_iterator& operator++() {
       get_next();
       return *this;
@@ -108,7 +111,7 @@ public:
     }
 
     Value *operator->() {
-      return &value_;
+      return current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL;
     }
 
     inline bool is_equal(const elem_iterator& x) const
@@ -132,12 +135,12 @@ public:
     , key_(key)
     {
       current_index_ = hash_table->lookup_index(key);
-      value_ = current_index_ != -1 ? hash_table->get_value(current_index_) : nullptr;
+      //value_ = current_index_ != kInvaridIndex ? hash_table->get_value(current_index_) : nullptr;
     }
     
     void get_next() {
       current_index_ = hash_table_->get_next_index(key_, current_index_);
-      value_ = current_index_ != -1 ? hash_table_->get_value(current_index_) : NULL;
+      //value_ = current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : nullptr;
     }
 
     robin_hood_hash *hash_table_;
@@ -208,10 +211,9 @@ public:
   inline bool has_data(const Key& key, const Value& val)
   {
     const int64_t ix = lookup_index(key, val);
-    return (ix != -1);
+    return (ix != kInvaridIndex);
   }
 
-  /// FIXME: this function is not supporting duplicated mdoel
   inline elem_iterator find(const Key& key)
   {
     return(elem_iterator(this, key));
@@ -222,7 +224,7 @@ public:
   //   return const_cast<robin_hood_hash*>(this)->lookup(key);
   // }
 
-  inline void erase(elem_iterator itr)
+  inline void erase(const elem_iterator& itr)
   {
     erase_element(itr.current_index_);
     --num_elems_;
@@ -230,13 +232,13 @@ public:
 
   inline size_t erase(const Key& key)
   {
-    const int64_t pos = lookup_index(key);
-    if (pos == -1) return 0;
+    int64_t pos = lookup_index(key);
+    if (pos == kInvaridIndex) return 0;
 
     size_t erased_count = 0;
     for(;;) {
       int64_t pos = get_next_index(key, pos);
-      if (pos == -1) break;
+      if (pos == kInvaridIndex) break;
       erase_element(pos);
       ++erased_count;
     }
@@ -249,13 +251,14 @@ public:
     return num_elems_;
   }
 
-  inline size_t count(const Key& key) const
+  inline size_t count(const Key& key)
   {
-    int64_t pos = lookup_index(key);
-    if (pos == -1) return 0;
 
-    int64_t key_count = 0;
-    while (get_next_index(key, pos) != -1) { ++key_count; }
+    int64_t pos = lookup_index(key);
+    if (pos == kInvaridIndex) return 0;
+
+    size_t key_count = 1;
+    while ((pos = get_next_index(key, pos)) != kInvaridIndex) { ++key_count; }
 
     return key_count;
   }
@@ -300,11 +303,18 @@ public:
 
 
 private:
+
+#define USE_TOMBSTONE 0
+#if USE_TOMBSTONE == 1
+  #warning Enable USE_TOMBSTONE
+#endif
+
   static const int64_t INITIAL_SIZE = 1; // must be 1 or more
   static const int64_t LOAD_FACTOR_PERCENT = 90LL;
   static const uint64_t kTombstoneMask = 0x8000000000000000ULL; // mask value to mark as deleted
-  static const uint64_t kTombstoneClearMask = 0x7FFFFFFFFFFFFFFFULL;  // mask value to clear deleted flag
+  static const uint64_t kClearTombstoneMask = 0x7FFFFFFFFFFFFFFFULL;  // mask value to clear deleted flag
   static const int64_t  kCapacityGrowingFactor = 2LL;
+  static const int64_t  kInvaridIndex = -1LL;
 
   void init()
   {
@@ -344,9 +354,11 @@ private:
     const std::hash<Key> hasher;
     auto h = static_cast<uint64_t>(hasher(key));
 
+#if USE_TOMBSTONE == 1
     // MSB is used to indicate a deleted elem, so
     // clear it
-    h &= kTombstoneClearMask;
+    h &= kClearTombstoneMask;
+#endif
 
     // Ensure that we never return 0 as a hash,
     // since we use 0 to indicate that the elem has never
@@ -357,7 +369,35 @@ private:
 
   inline void erase_element(const int64_t positon) {
         buffer_[positon].~elem();
-        elem_hash(positon) |= kTombstoneMask; // mark as deleted
+
+// mark as deleted
+#if USE_TOMBSTONE == 1
+        elem_hash(positon) |= kTombstoneMask;
+#else
+        elem_hash(positon) = 0ULL;
+        backshift_element(positon);
+#endif
+
+  }
+
+  void backshift_element(const int64_t init_previous_pos) {
+    int64_t previous_pos = init_previous_pos;
+    int64_t swapped_pos = (init_previous_pos+1) & mask_;
+
+    for(;;)
+    {             
+      if (elem_hash(swapped_pos) == 0) {// free space is found
+        return ;
+      } 
+      if ( probe_distance(elem_hash(swapped_pos), swapped_pos) == 0) {
+        return ;
+      }
+      std::swap(elem_hash(previous_pos), elem_hash(swapped_pos));
+      std::swap(buffer_[previous_pos].key, buffer_[swapped_pos].key);
+      std::swap(buffer_[previous_pos].value, buffer_[swapped_pos].value);
+      previous_pos = swapped_pos;
+      swapped_pos = (swapped_pos+1) & mask_;
+    } 
   }
 
   /// ----- Private funtions: memroy management ----- ///
@@ -434,31 +474,31 @@ private:
     for(;;)
     {             
       if (elem_hash(pos) == 0) {// free space is found
-        return -1;
+        return kInvaridIndex;
       } else if (dist > probe_distance(elem_hash(pos), pos)) {
-        return -1;
+        return kInvaridIndex;
       } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
         return pos;
       }
       pos = (pos+1) & mask_;
       ++dist;
     }
-    return -1;
+    return kInvaridIndex;
   }
 
   int64_t lookup_index(const Key& key, const Value& val) const
   {
     const uint64_t hash = hash_key(key);
     int64_t pos = lookup_index(key);
-    if (pos == -1) return -1;
+    if (pos == kInvaridIndex) return kInvaridIndex;
 
     int64_t dist = 0;
 
     for(;;) {
       if (elem_hash(pos) == 0) {// free space is found
-        return -1;
+        return kInvaridIndex;
       } else if (dist > probe_distance(elem_hash(pos), pos)) {
-        return -1;
+        return kInvaridIndex;
       } else if (elem_hash(pos) == hash && buffer_[pos].key == key && buffer_[pos].value == val) {
         return pos;
       }
@@ -467,7 +507,7 @@ private:
       ++dist;
     }
 
-    return -1;
+    return kInvaridIndex;
   }
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
@@ -478,16 +518,16 @@ private:
     for(;;)
     {             
       if (elem_hash(pos) == 0) {// free space is found
-        return -1;
+        return kInvaridIndex;
       } else if (dist > probe_distance(elem_hash(pos), pos)) {
-        return -1;
+        return kInvaridIndex;
       } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
         return pos;
       }
       pos = (pos+1) & mask_;
       ++dist;
     }
-    return -1;
+    return kInvaridIndex;
   }
 
   inline Value* get_value(const int64_t pos)
@@ -497,8 +537,12 @@ private:
 
   inline static bool is_deleted(uint64_t hash)
   {
+#if USE_TOMBSTONE == 1
     // MSB set indicates that this hash is a "tombstone"
-    return (hash >> 63LL) != 0;
+    return (hash >> 63ULL) != 0;
+#else
+    return (hash == 0);
+#endif
   }
 
   inline void construct(int64_t ix, uint64_t hash, Key&& key, Value&& val)
