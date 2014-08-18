@@ -78,8 +78,8 @@
 #endif
 
 #ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 4
- #warning using default edge pass partitions of four.
+ #define EDGE_PASS_PARTITIONS 8
+ #warning using default edge pass partitions of eight.
 #endif
 
 #ifndef EDGE_CHUNK_SIZE

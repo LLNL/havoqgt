@@ -364,11 +364,14 @@ int main(int argc, char** argv) {
   }
 
   uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+
+  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
+
   if (mpi_rank == 0) {
     std::cout << "Max Degree = " << global_max_degree << std::endl;
   }
 
-  asdf.flush();
+//  asdf.flush();
   } //END Main MPI
 
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));

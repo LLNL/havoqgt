@@ -310,6 +310,8 @@ int main(int argc, char** argv) {
     std::cout << "Max Degree = " << global_max_degree << std::endl;
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   //BFS Experiments
   {
     graph_type::vertex_data<uint8_t, segment_manager_t >* bfs_level_data
@@ -332,7 +334,8 @@ int main(int argc, char** argv) {
       do {
         uint64_t local_degree = 0;
         source = graph->label_to_locator(isource++);
-        if(source.is_delegate()) break;
+        if(source.is_delegate())
+          break;
         if(uint32_t(mpi_rank) == source.owner()) {
           local_degree = graph->degree(source);
         }
