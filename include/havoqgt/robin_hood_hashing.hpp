@@ -93,7 +93,7 @@ public:
   {
    public:
     elem_iterator()
-      : hash_table_(nullptr), key_(NULL) { current_index_ = kInvaridIndex; };
+      : hash_table_(nullptr), key_(NULL) { current_index_ = kInvaridIndex; dist_ = 0;};
 
     const Value& operator*() const
     { 
@@ -127,6 +127,11 @@ public:
     operator!=(const elem_iterator& x, const elem_iterator& y)
     { return !x.is_equal(y); }
 
+    inline bool is_valid_index()
+    {
+      return (current_index_ != kInvaridIndex);
+    }
+
    private:
     friend class robin_hood_hash;
 
@@ -134,17 +139,19 @@ public:
     : hash_table_(hash_table)
     , key_(key)
     {
-      current_index_ = hash_table->lookup_index(key);
+      dist_ = 0;
+      current_index_ = hash_table->lookup_index_first(key, dist_);
       //value_ = current_index_ != kInvaridIndex ? hash_table->get_value(current_index_) : nullptr;
     }
     
     void get_next() {
-      current_index_ = hash_table_->get_next_index(key_, current_index_);
+      hash_table_->get_next_index(key_, current_index_, dist_);
       //value_ = current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : nullptr;
     }
 
     robin_hood_hash *hash_table_;
     const Key& key_;
+    int64_t dist_;
     Value *value_;
     int64_t current_index_;
   };
@@ -232,12 +239,14 @@ public:
 
   inline size_t erase(const Key& key)
   {
-    int64_t pos = lookup_index(key);
+    int64_t dist = 0;
+    int64_t pos = lookup_index_first(key, dist);
     if (pos == kInvaridIndex) return 0;
 
+    pos = (pos + 1) & mask_;
     size_t erased_count = 0;
     for(;;) {
-      int64_t pos = get_next_index(key, pos);
+      get_next_index(key, pos, dist);
       if (pos == kInvaridIndex) break;
       erase_element(pos);
       ++erased_count;
@@ -253,12 +262,17 @@ public:
 
   inline size_t count(const Key& key)
   {
-
-    int64_t pos = lookup_index(key);
-    if (pos == kInvaridIndex) return 0;
-
-    size_t key_count = 1;
-    while ((pos = get_next_index(key, pos)) != kInvaridIndex) { ++key_count; }
+    int64_t dist = 0;
+    int64_t pos = lookup_index_first(key, dist);
+    pos = (pos + 1) & mask_;
+    size_t key_count = 0;
+    //std::cout << "counting\n";
+    while (pos != kInvaridIndex) { 
+      get_next_index(key, pos, dist);
+      ++key_count;
+      //std::cout << pos << " " << dist << std::endl;
+    }
+    //std::cout << "done.\n";
 
     return key_count;
   }
@@ -466,11 +480,10 @@ private:
   }
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  int64_t lookup_index(const Key& key) const
+  int64_t lookup_index_first(const Key& key, int64_t& dist) const
   {
     const uint64_t hash = hash_key(key);
     int64_t pos = desired_pos(hash);
-    int64_t dist = 0;
     for(;;)
     {             
       if (elem_hash(pos) == 0) {// free space is found
@@ -489,10 +502,9 @@ private:
   int64_t lookup_index(const Key& key, const Value& val) const
   {
     const uint64_t hash = hash_key(key);
-    int64_t pos = lookup_index(key);
-    if (pos == kInvaridIndex) return kInvaridIndex;
-
     int64_t dist = 0;
+    int64_t pos = lookup_index_first(key, dist);
+    if (pos == kInvaridIndex) return kInvaridIndex;
 
     for(;;) {
       if (elem_hash(pos) == 0) {// free space is found
@@ -511,23 +523,25 @@ private:
   }
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  int64_t get_next_index(const Key& key, int64_t pos)
+  void get_next_index(const Key& key, int64_t& pos, int64_t& dist)
   {
     const uint64_t hash = hash_key(key);
-    int64_t dist = 0;
+    //int64_t dist = 0;
+    //std::cout << pos << "-" << dist << "\n";
     for(;;)
     {             
       if (elem_hash(pos) == 0) {// free space is found
-        return kInvaridIndex;
+        pos = kInvaridIndex;
+        break;
       } else if (dist > probe_distance(elem_hash(pos), pos)) {
-        return kInvaridIndex;
+        pos = kInvaridIndex;
+        break;
       } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
-        return pos;
+        break;
       }
       pos = (pos+1) & mask_;
       ++dist;
     }
-    return kInvaridIndex;
   }
 
   inline Value* get_value(const int64_t pos)

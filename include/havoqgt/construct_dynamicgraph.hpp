@@ -108,6 +108,7 @@ namespace bip = boost::interprocess;
 #endif
 #if DEBUG_INSERTEDEDGES == 1
   static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
+  //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
 template <typename SegmentManager>
