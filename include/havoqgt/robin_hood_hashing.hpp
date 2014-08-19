@@ -95,10 +95,12 @@ public:
     elem_iterator()
       : hash_table_(nullptr), key_(NULL) { current_index_ = kInvaridIndex; dist_ = 0;};
 
-    const Value& operator*() const
+    const Value operator*() const
     { 
-      return current_index_ != kInvaridIndex ? *hash_table_->get_value(current_index_) : NULL;
+      //std::cout << (current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL);
+      return (current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL);
     }
+
     elem_iterator& operator++() {
       get_next();
       return *this;
@@ -111,7 +113,7 @@ public:
     }
 
     Value *operator->() {
-      return current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL;
+      return current_index_ != kInvaridIndex ? &hash_table_->get_value(current_index_) : NULL;
     }
 
     inline bool is_equal(const elem_iterator& x) const
@@ -241,13 +243,10 @@ public:
   {
     int64_t dist = 0;
     int64_t pos = lookup_index_first(key, dist);
-    if (pos == kInvaridIndex) return 0;
-
-    pos = (pos + 1) & mask_;
+    
     size_t erased_count = 0;
-    for(;;) {
+    while(pos != kInvaridIndex) {
       get_next_index(key, pos, dist);
-      if (pos == kInvaridIndex) break;
       erase_element(pos);
       ++erased_count;
     }
@@ -264,15 +263,12 @@ public:
   {
     int64_t dist = 0;
     int64_t pos = lookup_index_first(key, dist);
-    pos = (pos + 1) & mask_;
+    
     size_t key_count = 0;
-    //std::cout << "counting\n";
     while (pos != kInvaridIndex) { 
       get_next_index(key, pos, dist);
       ++key_count;
-      //std::cout << pos << " " << dist << std::endl;
     }
-    //std::cout << "done.\n";
 
     return key_count;
   }
@@ -318,7 +314,7 @@ public:
 
 private:
 
-#define USE_TOMBSTONE 0
+#define USE_TOMBSTONE 1
 #if USE_TOMBSTONE == 1
   #warning Enable USE_TOMBSTONE
 #endif
@@ -427,7 +423,7 @@ private:
 
     bip::offset_ptr<elem> ptr = alloc_inst.allocate(capacity_ * sizeof(elem));
     buffer_ = reinterpret_cast<elem*>(ptr.get());
-#if USE_SEPARATE_HASH_ARRAY
+#if USE_SEPARATE_HASH_ARRAY == 1
     // hashes_ = reinterpret_cast<uint64_t*>( allocator_.allocate(capacity_ * sizeof(uint64_t)) );
     hashes_ = new uint64_t[capacity_];
 #endif
@@ -480,7 +476,7 @@ private:
   }
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  int64_t lookup_index_first(const Key& key, int64_t& dist) const
+  int64_t lookup_index_first(const Key& key, int64_t& dist=0) const
   {
     const uint64_t hash = hash_key(key);
     int64_t pos = desired_pos(hash);
@@ -529,7 +525,9 @@ private:
     //int64_t dist = 0;
     //std::cout << pos << "-" << dist << "\n";
     for(;;)
-    {             
+    { 
+      pos = (pos+1) & mask_; // To prevent reference start point, we increment positon at here.
+      ++dist;
       if (elem_hash(pos) == 0) {// free space is found
         pos = kInvaridIndex;
         break;
@@ -539,14 +537,12 @@ private:
       } else if (elem_hash(pos) == hash && buffer_[pos].key == key) {
         break;
       }
-      pos = (pos+1) & mask_;
-      ++dist;
     }
   }
 
-  inline Value* get_value(const int64_t pos)
+  inline Value& get_value(const int64_t pos)
   {
-    return &buffer_[pos].value;
+    return buffer_[pos].value;
   }
 
   inline static bool is_deleted(uint64_t hash)

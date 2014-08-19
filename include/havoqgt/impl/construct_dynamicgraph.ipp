@@ -302,29 +302,37 @@ add_edges_hybrid(Container& edges)
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
-    const auto edge = *itr;
-    //std::cout << edge.first << " " << edge.second << std::endl;
-    int64_t degree = ++degree_map[edge.first];
+    //const auto edge = *itr;
+    const int64_t source_vtx = itr->first;
+    const int64_t target_vtx = itr->second;
+    //std::cout << source_vtx << " " << target_vtx << std::endl;
 
-    //std::cout << "degree:" << degree << std::endl;
-    //degree = 2;
-    if (degree < kDegreeThreshold) {
-      //std::cout << "RH" << std::endl;
-      add_edges_robin_hood_hash_core(edge);
-    } else {
-      //std::cout << "Move" << std::endl;
-      auto itr = robin_hood_hashing_->find(edge.first);
-      const auto itr_end = robin_hood_hashing_->end();
-      while (itr != itr_end) {
-        //std::cout << *itr << std::endl;
-        add_edges_adjacency_matrix_map_vector_core(edge.first, *itr);
-        robin_hood_hashing_->erase(itr);
-        ++itr;
+    auto value = adjacency_matrix_map_vec_->find(source_vtx);
+    if (value == adjacency_matrix_map_vec_->end()) {
+#if 0
+      int64_t degree = ++degree_map[edge.first];
+#else
+      int64_t degree = robin_hood_hashing_->count(source_vtx);
+      //std::cout << degree << std::endl;
+#endif
+      if (degree < kDegreeThreshold) {
+        const auto edge = *itr;
+        add_edges_robin_hood_hash_core(edge);
+      } else if (degree == kDegreeThreshold) {
+        auto itr_rb = robin_hood_hashing_->find(source_vtx);
+        //const auto itr_end = robin_hood_hashing_->end();
+        while (itr_rb.is_valid_index()) {
+          add_edges_adjacency_matrix_map_vector_core(source_vtx, *itr_rb);
+          robin_hood_hashing_->erase(itr_rb);
+          ++itr_rb;
+        }
+        add_edges_adjacency_matrix_map_vector_core(source_vtx, target_vtx);
+      } else {
+        assert(false);
       }
-      //std::cout << "Moving Done." << std::endl;
-      add_edges_adjacency_matrix_map_vector_core(edge.first, edge.second);      
+    } else {
+      add_edges_adjacency_matrix_map_vector_core(source_vtx, target_vtx);
     }
-    //std::cout << "Done." << std::endl;
   }
   flush_pagecache();
   double time_end = MPI_Wtime();  
