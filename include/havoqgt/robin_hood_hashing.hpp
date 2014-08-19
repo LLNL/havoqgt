@@ -522,8 +522,6 @@ private:
   void get_next_index(const Key& key, int64_t& pos, int64_t& dist)
   {
     const uint64_t hash = hash_key(key);
-    //int64_t dist = 0;
-    //std::cout << pos << "-" << dist << "\n";
     for(;;)
     { 
       pos = (pos+1) & mask_; // To prevent reference start point, we increment positon at here.

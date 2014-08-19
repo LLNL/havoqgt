@@ -280,16 +280,13 @@ private:
     }
   }
   /// --- TODO: This is a temporarily code ---
-  template <typename EdgeType>
-  inline void add_edges_robin_hood_hash_core(const EdgeType& edge)
+  template <typename Key, typename Value>
+  inline void add_edges_robin_hood_hash_core(const Key& source_vtx, const Value& target_vtx)
   {
-#if DEBUG_INSERTEDEDGES == 1
-    fout_debug_insertededges_  << edge.first << "\t" << edge.second << std::endl;
-#endif
 #if WITHOUT_DUPLICATE_INSERTION == 1
-    robin_hood_hashing_->insert_unique(edge.first, edge.second);
+    robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
 #else
-    robin_hood_hashing_->insert(edge.first, edge.second);
+    robin_hood_hashing_->insert(source_vtx, target_vtx);
 #endif
   }
 

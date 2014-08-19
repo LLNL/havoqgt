@@ -297,43 +297,74 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_hybrid(Container& edges)
 {
-  const int64_t kDegreeThreshold = 1;
+  const int64_t kLowDegreeThreshold = 1;
 
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
-    //const auto edge = *itr;
     const int64_t source_vtx = itr->first;
     const int64_t target_vtx = itr->second;
-    //std::cout << source_vtx << " " << target_vtx << std::endl;
 
+#if DEBUG_INSERTEDEDGES == 1
+        fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
+#endif
+
+
+    // Check whether we already have edges at adjacency-matrix
     auto value = adjacency_matrix_map_vec_->find(source_vtx);
     if (value == adjacency_matrix_map_vec_->end()) {
 #if 0
       int64_t degree = ++degree_map[edge.first];
 #else
-      int64_t degree = robin_hood_hashing_->count(source_vtx);
-      //std::cout << degree << std::endl;
+      const int64_t new_degree = robin_hood_hashing_->count(source_vtx) + 1;
 #endif
-      if (degree < kDegreeThreshold) {
-        const auto edge = *itr;
-        add_edges_robin_hood_hash_core(edge);
-      } else if (degree == kDegreeThreshold) {
-        auto itr_rb = robin_hood_hashing_->find(source_vtx);
-        //const auto itr_end = robin_hood_hashing_->end();
-        while (itr_rb.is_valid_index()) {
-          add_edges_adjacency_matrix_map_vector_core(source_vtx, *itr_rb);
-          robin_hood_hashing_->erase(itr_rb);
-          ++itr_rb;
-        }
-        add_edges_adjacency_matrix_map_vector_core(source_vtx, target_vtx);
+
+      // If new_degree is kLowDegreeThreshold or less, add the edge into robin_hood_hashing array.
+      // If new_degree is more than  kLowDegreeThreshold, move edges from robin-hood to adjacency-matrix
+      if (new_degree <= kLowDegreeThreshold) {
+
+        add_edges_robin_hood_hash_core(source_vtx, target_vtx);
+
       } else {
-        assert(false);
+        // -- move edges to adhacency-matrix -- //
+
+        // Since this is a first time to add source_vtx's edges into adjacency-matrix,
+        // allocate source_vtx's adjacency-list-vector
+        // Note: this implementation dose not care about order of edges insertion.
+        uint64_vector_t adjacency_list_vec(1, target_vtx, seg_allocator_);
+        
+
+        auto itr_rb = robin_hood_hashing_->find(source_vtx);
+        while (itr_rb.is_valid_index()) {
+           const int64_t trg_vtx = *itr_rb;
+           //std::cout << trg_vtx;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+           // Since we have already avoided duplicated edges when we add edges into robin_hood_hashing array,
+           // in this time, we only compare to the latest edge.
+           if (trg_vtx == target_vtx) goto NEXT_MOVING; // a duplicated edge
+#endif
+          adjacency_list_vec.push_back(trg_vtx);
+
+NEXT_MOVING:
+          robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
+          ++itr_rb;
+        } // End of edges moving loop
+
+        adjacency_matrix_map_vec_->insert(map_value_vec_t(source_vtx, adjacency_list_vec));
       }
-    } else {
-      add_edges_adjacency_matrix_map_vector_core(source_vtx, target_vtx);
+
+    } else { // We already have edges at adjacency-matrix
+      // If we already have edges at adjacency-matrix, 
+      // degree of the edge is more than kDegreeThreshold.
+      uint64_vector_t& adjacency_list_vec = value->second;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+      if (boost::find<uint64_vector_t>(adjacency_list_vec, target_vtx) != adjacency_list_vec.end() )
+        continue; // because this edge is duplicated, goto next edge.
+#endif
+      adjacency_list_vec.push_back(target_vtx);
     }
-  }
+
+  } // End of a edges insertion step
   flush_pagecache();
   double time_end = MPI_Wtime();  
 
@@ -342,7 +373,6 @@ add_edges_hybrid(Container& edges)
   total_exectution_time_ += time_end - time_start;
   io_info_->log_diff();
 }
-
 
 
 template <typename SegmentManager>
