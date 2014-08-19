@@ -147,15 +147,16 @@ int main(int argc, char** argv) {
     uint32_t load_from_disk;
     uint32_t delete_file;
     uint64_t chunk_size_exp;
+    uint64_t low_degree_threshold;
     std::string type;
     std::string fname_output;
     std::string fname_compare = "";
     std::string data_structure_type;
 
-    if (argc < 11) {
+    if (argc < 12) {
       std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
       << " <load_from_disk> <delete file on exit>"
-      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/DG_AW>"
+      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/DG_AW> <low_degree_threshold>"
       << " <file to compare to>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -170,7 +171,8 @@ int main(int argc, char** argv) {
       delete_file     = boost::lexical_cast<uint32_t>(argv[pos++]);
       load_from_disk  = boost::lexical_cast<uint32_t>(argv[pos++]);
       chunk_size_exp  = boost::lexical_cast<uint64_t>(argv[pos++]);
-      data_structure_type = argv[pos++]; 
+      data_structure_type = argv[pos++];
+      low_degree_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
       if (pos < argc) {
         fname_compare = argv[pos++];
       }
@@ -188,6 +190,7 @@ int main(int argc, char** argv) {
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
       std::cout << "Data structure type: " << data_structure_type << std::endl;
+      std::cout << "Low Degree Threshold = " << low_degree_threshold << std::endl;
       if (fname_compare != "") {
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
@@ -214,19 +217,19 @@ int main(int argc, char** argv) {
     if (data_structure_type == "VC_VC") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseVecVecMatrix);
+      (asdf, alloc_inst, graph_type::kUseVecVecMatrix, low_degree_threshold);
     } else if (data_structure_type == "MP_VC") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseMapVecMatrix);
+      (asdf, alloc_inst, graph_type::kUseMapVecMatrix, low_degree_threshold);
     } else if (data_structure_type == "RB_HS") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseRobinHoodHash);
+      (asdf, alloc_inst, graph_type::kUseRobinHoodHash, low_degree_threshold);
     } else if (data_structure_type == "DG_AW") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseDegreeAwareModel);
+      (asdf, alloc_inst, graph_type::kUseDegreeAwareModel, low_degree_threshold);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);

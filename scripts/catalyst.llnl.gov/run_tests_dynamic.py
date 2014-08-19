@@ -10,8 +10,8 @@ DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = True
-NORUN = False
+USE_DIMMAP_FOR_TUNE = False
+NORUN = True
 
 USE_CATALYST = True
 
@@ -231,29 +231,32 @@ def add_command(nodes, processes, cmd):
 
 def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
-	intial_threshold, threshold_multiplier, data_type):
+	intial_threshold, threshold_multiplier, data_type,
+	low_deg_tlh_s, low_deg_tlh_e):
 
 
 	graph_file = graph_dir+"out.graph"
 
-	save_file = 0
-	compare_files = 0
-	test_type = "RMAT"
-	chunk_size = 20
-	edges_factor = 16
-	scale = initial_scale
-	nodes = inital_nodes
-	degree_threshold = intial_threshold
+	for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :
 
-	while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
-		processes = 1 * nodes
+		save_file = 0
+		compare_files = 0
+		test_type = "RMAT"
+		chunk_size = 20
+		edges_factor = 16
+		scale = initial_scale
+		nodes = inital_nodes
+		degree_threshold = intial_threshold
 
-		cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type]
-		add_command(nodes, processes, cmd)
+		while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
+			processes = 1 * nodes
 
-		nodes *= node_multipler
-		scale += scale_increments
-		degree_threshold *= threshold_multiplier
+			cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type, str(i)]
+			add_command(nodes, processes, cmd)
+
+			nodes *= node_multipler
+			scale += scale_increments
+			degree_threshold *= threshold_multiplier
 
 
 init_test_dir()
@@ -261,16 +264,16 @@ init_test_dir()
 
 if DEBUG:
 	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC")
+	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC", 1, 10)
 	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
-	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "DG_AW")
+	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "DG_AW", 1, 10)
 
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
-	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC")
+	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
+	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC", 1, 10)
 	#create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
-	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "DG_AW")
+	create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "DG_AW", 1, 20)
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

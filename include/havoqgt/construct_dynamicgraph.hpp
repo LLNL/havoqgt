@@ -104,9 +104,10 @@ namespace bip = boost::interprocess;
 
 #ifndef DEBUG_INSERTEDEDGES
   #define DEBUG_INSERTEDEDGES 0
-  #warning DEBUG_INSERTEDEDGES is enabled.
 #endif
+
 #if DEBUG_INSERTEDEDGES == 1
+  #warning DEBUG_INSERTEDEDGES is enabled.
   static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
@@ -199,7 +200,7 @@ public:
   // typedef bip::vector<uint64_pair_t, SegmentAllocator<uint64_pair_t>> vec_pair_t;
   // typedef bip::set<uint64_pair_t, SegmentAllocator<uint64_pair_t>> set_pair_t;
 
-
+  const uint64_t kLowDegreeThreshold;
   enum DataStructureMode {
     kUseVecVecMatrix,
     kUseMapVecMatrix,
@@ -208,7 +209,11 @@ public:
   };
 
   //--  Constructors -- //
-  construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const DataStructureMode mode);
+  construct_dynamicgraph(
+    mapped_t& asdf,
+    SegmentAllocator<void>& seg_allocator,
+    const DataStructureMode mode,
+    const uint64_t n);
 
   //--  Deconstructors -- //
   ~construct_dynamicgraph();
@@ -300,7 +305,8 @@ private:
   mapped_t& asdf_;
   const SegmentAllocator<void>& seg_allocator_;
   const DataStructureMode data_structure_type_;
-  degree_map_t degree_map;
+  
+  //degree_map_t degree_map;
 
   adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
   uint64_vector_t *init_vec;

@@ -123,11 +123,16 @@ namespace mpi {
  */
 template <typename SegementManager>
 construct_dynamicgraph<SegementManager>::
-construct_dynamicgraph(mapped_t& asdf, SegmentAllocator<void>& seg_allocator, const DataStructureMode mode)
+construct_dynamicgraph (
+  mapped_t& asdf,
+  SegmentAllocator<void>& seg_allocator,
+  const DataStructureMode mode,
+  const uint64_t n )
   : asdf_(asdf)
   , seg_allocator_(seg_allocator)
   , data_structure_type_(mode)
-  , degree_map()
+  , kLowDegreeThreshold(n)
+  //, degree_map()
 {
   
   switch(data_structure_type_) {
@@ -297,7 +302,6 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_hybrid(Container& edges)
 {
-  const int64_t kLowDegreeThreshold = 1;
 
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
@@ -316,7 +320,7 @@ add_edges_hybrid(Container& edges)
 #if 0
       int64_t degree = ++degree_map[edge.first];
 #else
-      const int64_t new_degree = robin_hood_hashing_->count(source_vtx) + 1;
+      const uint64_t new_degree = robin_hood_hashing_->count(source_vtx) + 1;
 #endif
 
       // If new_degree is kLowDegreeThreshold or less, add the edge into robin_hood_hashing array.
