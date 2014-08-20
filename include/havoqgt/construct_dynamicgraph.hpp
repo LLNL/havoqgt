@@ -194,11 +194,8 @@ public:
 
   typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
 
-  typedef boost::unordered_map<uint64_t, uint64_t> degree_map_t;
+  //typedef boost::unordered_map<uint64_t, uint64_t> degree_map_t;
 
-  // typedef std::pair<uint64_t, uint64_t> uint64_pair_t;
-  // typedef bip::vector<uint64_pair_t, SegmentAllocator<uint64_pair_t>> vec_pair_t;
-  // typedef bip::set<uint64_pair_t, SegmentAllocator<uint64_pair_t>> set_pair_t;
 
   const uint64_t kLowDegreeThreshold;
   enum DataStructureMode {
@@ -219,7 +216,7 @@ public:
   ~construct_dynamicgraph();
 
 
-  /// add edges
+  /// add edges controller
   template <typename Container>
   inline void add_edges_adjacency_matrix(Container& edges)
   {
@@ -253,6 +250,10 @@ public:
 
 private:
 
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Functions
+  ///  ------------------------------------------------------ ///
+
   /// add edges vector-vector adjacency-matrix
   template <typename Container>
   void add_edges_adjacency_matrix_vector_vector(Container& edges);
@@ -266,25 +267,6 @@ private:
   void add_edges_robin_hood_hash(Container& edges);
 
   /// --- TODO: This is a temporarily code ---
-  void add_edges_adjacency_matrix_map_vector_core(const int64_t& source_vtx, const int64_t& target_vtx)
-  {
-#if DEBUG_INSERTEDEDGES == 1
-    fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << std::endl;
-#endif
-    auto value = adjacency_matrix_map_vec_->find(source_vtx);
-    if (value == adjacency_matrix_map_vec_->end()) { // new vertex
-      uint64_vector_t vec(1, target_vtx, seg_allocator_);
-      adjacency_matrix_map_vec_->insert(map_value_vec_t(source_vtx, vec));
-    } else {
-      uint64_vector_t& adjacency_list_vec = value->second;
-#if WITHOUT_DUPLICATE_INSERTION == 1
-      if (boost::find<uint64_vector_t>(adjacency_list_vec, target_vtx) != adjacency_list_vec.end() )
-        return;
-#endif
-      adjacency_list_vec.push_back(target_vtx);
-    }
-  }
-  /// --- TODO: This is a temporarily code ---
   template <typename Key, typename Value>
   inline void add_edges_robin_hood_hash_core(const Key& source_vtx, const Value& target_vtx)
   {
@@ -295,6 +277,7 @@ private:
 #endif
   }
 
+  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
   template <typename Container>
   void add_edges_hybrid(Container& edges);
 
@@ -302,6 +285,10 @@ private:
     asdf_.flush();
   }
 
+
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Variables
+  ///  ------------------------------------------------------ ///
   mapped_t& asdf_;
   const SegmentAllocator<void>& seg_allocator_;
   const DataStructureMode data_structure_type_;

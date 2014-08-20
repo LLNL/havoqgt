@@ -10,8 +10,8 @@ DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = False
-NORUN = True
+USE_DIMMAP_FOR_TUNE = True
+NORUN = False
 
 USE_CATALYST = True
 
@@ -88,7 +88,7 @@ def generate_shell_file():
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(110*1024*256) + " "
+		slurm_options += "--di-mmap=" + str(10*256) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -271,9 +271,9 @@ if DEBUG:
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
-	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "MP_VC", 1, 10)
-	#create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "RB_HS")
-	create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "DG_AW", 1, 20)
+	create_commands(30, 1, 30, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
+	#create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "RB_HS", 1, 1)
+	create_commands(30, 1, 30, 1, 1, 1, 1024, 1, "DG_AW", 1, 5)
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

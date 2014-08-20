@@ -301,6 +301,80 @@ template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_hybrid(Container& edges)
+#if 1
+{
+
+  io_info_->reset_baseline();
+  double time_start = MPI_Wtime();
+  for (auto itr = edges.begin(); itr != edges.end(); itr++) {
+
+    const int64_t source_vtx = itr->first;
+    const int64_t target_vtx = itr->second;
+
+#if DEBUG_INSERTEDEDGES == 1
+        fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
+#endif
+
+    const uint64_t num_edges_rbhs = robin_hood_hashing_->count(source_vtx);
+
+    if (num_edges_rbhs == 0) {
+      // ---- These are 2 situations ---- //
+      // 1. new vertex
+      // 2. non-low-degree edges
+
+      auto value = adjacency_matrix_map_vec_->find(source_vtx);
+      if (value == adjacency_matrix_map_vec_->end()) {
+        // -- 1. new vertex -- //
+        add_edges_robin_hood_hash_core(source_vtx, target_vtx);
+      } else { 
+        // -- 2. non-low-degree edges -- //
+        uint64_vector_t& adjacency_list_vec = value->second;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+        if (boost::find<uint64_vector_t>(adjacency_list_vec, target_vtx) != adjacency_list_vec.end() )
+          continue; // Since this edge is duplicated, skip adding this edge.
+#endif
+        adjacency_list_vec.push_back(target_vtx);
+      }
+
+    } else if (num_edges_rbhs < kLowDegreeThreshold) {
+      // -- Low-degree edge -- //
+      add_edges_robin_hood_hash_core(source_vtx, target_vtx);
+
+    } else {
+      // -- degree exceed the low-degree-threshold -- //
+      // Note: this implementation dose not care about order of edges insertion.
+      uint64_vector_t adjacency_list_vec(1, target_vtx, seg_allocator_);
+
+      // Move edges to the adjacency-matrix from the robin-hood-hashing //
+      auto itr_rb = robin_hood_hashing_->find(source_vtx);
+      while (itr_rb.is_valid_index()) {
+         const int64_t trg_vtx = *itr_rb;
+#if WITHOUT_DUPLICATE_INSERTION == 1
+         // Since we have already avoided duplicated edges when we add edges into robin_hood_hashing array,
+         // in this time, we only compare to the latest edge.
+         if (trg_vtx == target_vtx) goto NEXT_MOVING; // a duplicated edge
+#endif
+        adjacency_list_vec.push_back(trg_vtx);
+
+NEXT_MOVING:
+        robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
+        ++itr_rb;
+      } // End of edges moving loop
+      adjacency_matrix_map_vec_->insert(map_value_vec_t(source_vtx, adjacency_list_vec));      
+    }
+
+  } // End of a edges insertion step
+  flush_pagecache();
+  double time_end = MPI_Wtime();  
+
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+
+  total_exectution_time_ += time_end - time_start;
+  io_info_->log_diff();
+}
+
+#else
+
 {
 
   io_info_->reset_baseline();
@@ -377,7 +451,7 @@ NEXT_MOVING:
   total_exectution_time_ += time_end - time_start;
   io_info_->log_diff();
 }
-
+#endif
 
 template <typename SegmentManager>
 void construct_dynamicgraph<SegmentManager>::

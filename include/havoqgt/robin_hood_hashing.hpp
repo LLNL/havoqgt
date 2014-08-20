@@ -421,6 +421,7 @@ private:
     segment_manager_t* segment_manager = allocator_.get_segment_manager();
     bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
 
+    //std::cout << "Allocating " << capacity_ * sizeof(elem) << " Byte." << std::endl;
     bip::offset_ptr<elem> ptr = alloc_inst.allocate(capacity_ * sizeof(elem));
     buffer_ = reinterpret_cast<elem*>(ptr.get());
 #if USE_SEPARATE_HASH_ARRAY == 1
