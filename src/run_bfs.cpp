@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
         std::greater<uint64_t>(), MPI_COMM_WORLD);
 
   if(mpi_rank == 0) {
-    std::cout << "Max Degree = " << global_max_degree << std::endl;
+    std::cout << "Max Local Degree = " << global_max_degree << std::endl;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);

@@ -112,6 +112,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     m_local_outgoing_count.resize(m_max_vertex+1, 0);
     m_local_incoming_count.resize(m_max_vertex+1, 0);
     // flush_graph();
+    MPI_Barrier(m_mpi_comm);
 
   }
 
@@ -124,24 +125,28 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     if (m_mpi_rank == 0)
       std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
     // flush_graph();
+    MPI_Barrier(m_mpi_comm);
   }
 
   {
       LogStep logstep("initialize_low_meta_data", m_mpi_comm, m_mpi_rank);
       initialize_low_meta_data(global_hubs);
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
   }
 
   {
       LogStep logstep("initialize_high_meta_data", m_mpi_comm, m_mpi_rank);
       initialize_high_meta_data(global_hubs);
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
   }
 
   {
     LogStep logstep("count_high_degree_edges", m_mpi_comm, m_mpi_rank);
     count_high_degree_edges(edges.begin(), edges.end(), global_hubs);
     // flush_graph();
+    MPI_Barrier(m_mpi_comm);
   }
 
   m_graph_state = MetaDataGenerated;
@@ -176,12 +181,14 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
         LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
         calculate_overflow(transfer_info);
         // flush_graph();
+        MPI_Barrier(m_mpi_comm);
       }
 
       {
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
         initialize_edge_storage();
         // flush_graph();
+        MPI_Barrier(m_mpi_comm);
       }
 
       m_graph_state = EdgeStorageAllocated;
@@ -194,6 +201,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
       LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
       partition_low_degree(edges.begin(), edges.end());
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = LowEdgesPartitioned;
 
@@ -201,6 +209,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
       LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
       partition_high_degree(edges.begin(), edges.end(), transfer_info);
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = HighEdgesPartitioned;
 
@@ -215,6 +224,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
         mpi_all_reduce_inplace(m_delegate_degree, std::plus<uint64_t>(), m_mpi_comm);
       }
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
     }
     assert(m_delegate_degree.size() == m_delegate_label.size());
 
@@ -230,6 +240,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
         }
       }
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
     }
 
     //
@@ -248,6 +259,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges,
         }
       }
       // flush_graph();
+      MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = GraphReady;
 
@@ -504,7 +516,7 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
     if (incoming < m_delegate_degree_threshold) {
       edge_count += outgoing;
     } else {
-      #ifdef DEBUG
+      #ifdef DEBUG_DPG
         const uint64_t global_id = (vert_id * m_mpi_size) + m_mpi_rank;
         assert(global_id != 0);
         if (global_id < m_max_vertex) {
@@ -737,6 +749,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
         << std::flush;
       last_part_time = curr_time;
     }
+    MPI_Barrier(m_mpi_comm);
 
     // flush_graph();
 
@@ -798,7 +811,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
       std::sort(to_recv_edges_low.begin(), to_recv_edges_low.end());
 
 
-  #ifdef DEBUG
+  #ifdef DEBUG_DPG
       // Sanity Check to make sure we recieve the correct edges
       for (size_t i = 0; i<to_recv_edges_low.size(); ++i) {
         auto edge =  to_recv_edges_low[i];
@@ -863,7 +876,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
                  boost::unordered_set<uint64_t>& global_hub_set) {
   // Temp Vector for storing offsets
   // Used to store high_edge count
-  #if DEBUG
+  #if DEBUG_DPG
     std::vector<uint64_t> tmp_high_count_per_rank(m_mpi_size, 0);
   #endif
   m_edges_high_count = 0;
@@ -911,7 +924,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
         if (global_hub_set.count(unsorted_itr->first) == 0) {
           continue;
         } else if(global_hub_set.count(unsorted_itr->first)) {
-          #if DEBUG
+          #if DEBUG_DPG
             // This edge's source is a hub
             // 1) Increment the high edge count for the owner of the edge's dest
             tmp_high_count_per_rank[unsorted_itr->second %m_mpi_size]++;
@@ -956,7 +969,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
       << std::flush;
   }
 
-  #if DEBUG
+  #if DEBUG_DPG
     std::cout << "Checking count_high_degree_edges:" << std::endl << std::flush;
     size_t l_edges_high_count = 0;
     for (size_t i = 0; i < m_delegate_info.size(); i++) {
@@ -1161,7 +1174,7 @@ calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
     }  // While
   }  // For
 
-#ifdef DEBUG
+#ifdef DEBUG_DPG
   const uint64_t owned_total_edges2 = m_edges_high_count + m_edges_low_count;
   uint64_t sanity_global_edge_count = mpi_all_reduce(owned_total_edges2,
       std::plus<uint64_t>(), m_mpi_comm);
@@ -1313,6 +1326,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
 
       last_part_time = curr_time;
     }
+    MPI_Barrier(m_mpi_comm);
 
     // flush_graph();
 
@@ -1481,7 +1495,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
     }  // for edges recieved
   }
 
-#ifdef DEBUG
+#ifdef DEBUG_DPG
   int64_t recv_count2 = 0;
   for (size_t i = 0; i < m_delegate_degree.size(); i++) {
      recv_count2 += m_delegate_degree[i];

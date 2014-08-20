@@ -156,20 +156,34 @@ int main(int argc, char** argv) {
         std::greater<uint64_t>(), MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
-    std::cout << "Max Degree = " << global_max_degree << std::endl;
+    std::cout << "Max Local Degree = " << global_max_degree << std::endl;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   // BFS Experiments
   {
-  	typedef bip::managed_heap_memory bfs_mapped_t;
-	  typedef bfs_mapped_t::segment_manager bfs_segment_manager_t;
+    #if 1
+    typedef bip::managed_mapped_file bfs_mapped_t;
+    uint64_t file_size = (173249084000.0/24.0);
 
-    uint64_t filesize = (graph->max_vertex_id()*mpi_size + 1) * 10;  // Bytes
+    std::string bfs_filename =  graph_input + std::to_string(mpi_rank) + "_bfs";
+    bfs_mapped_t bfs_mapped_data(bip::create_only, bfs_filename.c_str(),
+        file_size);
+    assert_res = bfs_mapped_data.advise(rand_advice);
+    assert(assert_res);
+
+    #else
+
+    typedef bip::managed_heap_memory bfs_mapped_t;
+    uint64_t filesize = (90000000000.0/24.0);
     bfs_mapped_t bfs_mapped_data(filesize);
-    // assert_res = bfs_mapped_data.advise(rand_advice);
-    // assert(assert_res);
+    #endif
+
+
+    typedef bfs_mapped_t::segment_manager bfs_segment_manager_t;
+
+
 
     graph_type::vertex_data<uint8_t, bfs_segment_manager_t >* bfs_level_data;
     graph_type::vertex_data<uint64_t, bfs_segment_manager_t >* bfs_parent_data;

@@ -87,7 +87,8 @@
  #warning using default send chunk size of 2^16
 #endif
 
-#ifdef DEBUG
+
+#ifdef DEBUG_DPG
  #warning Debug MACRO is for delegate_partitioned_graph.
  #define IS_DEBUGING true
 #else
