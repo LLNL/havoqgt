@@ -83,8 +83,8 @@
 #endif
 
 #ifndef EDGE_CHUNK_SIZE
- #define EDGE_CHUNK_SIZE 1024*64
- #warning using default send chunk size of 2^16
+ #define EDGE_CHUNK_SIZE 1024*8
+ #warning using default send chunk size of 2^13
 #endif
 
 

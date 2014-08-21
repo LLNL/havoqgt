@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
 
   graph_type *graph = graph_mapped_file.get_segment_manager()->
     find<graph_type>("graph_obj").first;
-   assert(graph != nullptr);
+  assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {

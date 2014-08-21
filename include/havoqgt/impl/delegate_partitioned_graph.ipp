@@ -378,6 +378,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
       << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
       << std::flush;
   }
+  mpi_yield_barrier(m_mpi_comm);
 
 
   // Now, the m_local_incoming_count contains the total incoming and outgoing
@@ -631,14 +632,14 @@ delegate_partitioned_graph<SegmentManager>::
 initialize_edge_storage() {
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
-  // for (int i = 0; i < processes_per_node; i++) {
-  //   if (m_mpi_rank == 0) {
-  //     std::cout << "\tResizing m_owned_targets and m_delegate_targets: "
-  //       << i << "/" << processes_per_node << "." << std::endl << std::flush;
-  //   }
+  for (int i = 0; i < processes_per_node; i++) {
+    if (m_mpi_rank == 0) {
+      std::cout << "\tResizing m_owned_targets and m_delegate_targets: "
+        << i << "/" << processes_per_node << "." << std::endl << std::flush;
+    }
 
-  //   if (i == m_mpi_rank % processes_per_node) {
-  //
+    if (i == m_mpi_rank % processes_per_node) {
+
 
 
       #if 1
@@ -703,9 +704,9 @@ initialize_edge_storage() {
       }
       // flush_graph();
 
-  //   }  // If this processes
-  //   mpi_yield_barrier(m_mpi_comm);
-  // }  // for over processes
+    }  // If this processes
+    mpi_yield_barrier(m_mpi_comm);
+  }  // for over processes
 
 };
 
@@ -855,6 +856,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
       << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
       << std::flush;
   }
+  mpi_yield_barrier(m_mpi_comm);
 
   // flush_graph();
 }  // partition_low_degree
@@ -1447,6 +1449,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       << "Dirty Pages: " << get_dirty_pages() << "kb." << std::endl
       << std::flush;
   }
+  mpi_yield_barrier(m_mpi_comm);
 
   {//
   // Exchange edges we generated  with the other nodes and recieve edges we may need
@@ -1818,6 +1821,9 @@ print_graph_statistics() {
 
   //
   // Print out debugging info
+  if (m_mpi_rank == 0) {
+    std::cout << "Reducing.." << std::endl;
+  }
   uint64_t low_max_size = mpi_all_reduce(low_local_size,
     std::greater<uint64_t>(), m_mpi_comm);
   uint64_t high_max_size = mpi_all_reduce(high_local_size,
@@ -1831,13 +1837,21 @@ print_graph_statistics() {
   uint64_t total_sum_size = mpi_all_reduce(total_local_size,
     std::plus<uint64_t>(), m_mpi_comm);
 
+  if (m_mpi_rank == 0) {
+    std::cout << "counting..(" << m_owned_targets.size() << ")" << std::endl;
+  }
   uint64_t local_count_del_target = 0;
   for (uint64_t i = 0; i < m_owned_targets.size(); ++i) {
     if (m_owned_targets[i].is_delegate())
       ++local_count_del_target;
-    if (i % 10000000 == 0) {
-      // flush_advise_vector_dont_need(m_owned_targets);
+    if (m_mpi_rank == 0 && i % 10000000 == 0) {
+    //  flush_advise_vector_dont_need(m_owned_targets);
+      std::cout <<  i << "..." << std::flush;
     }
+  }
+
+  if (m_mpi_rank == 0) {
+    std::cout << "reducing(2).." << std::endl;
   }
 
   uint64_t total_count_del_target = mpi_all_reduce(local_count_del_target,
