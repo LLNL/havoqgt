@@ -68,55 +68,6 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
-
-// class heap_arena
-// {
-// public:
-//   heap_arena() { }
-//   template <typename T>
-//   struct allocator {
-//     typedef typename std::allocator<T> type;
-//   };
-
-//   template<typename T>
-//   std::allocator<T> make_allocator() {
-//     return std::allocator<T>();
-//   }
-// private:
-//   heap_arena(const heap_arena&);
-// };
-
-// class extended_memory_arena {
-//   // typedef boost::interprocess::basic_managed_mapped_file
-//   //   <char
-//   //   ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family, void*>
-//   //   ,boost::interprocess::iset_index>  managed_mapped_file;
-
-// public:
-//   template <typename T>
-//   struct allocator {
-//     typedef typename boost::interprocess::managed_mapped_file::template allocator<T>::type type;
-//   };
-
-//   template <typename T>
-//   typename allocator<T>::type make_allocator() {
-//     return m_mapped_file->template get_allocator<T>();
-//   }
-//   extended_memory_arena(const char* fname)
-//     {//: m_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128) {}
-//       m_mapped_file = new boost::interprocess::managed_mapped_file(boost::interprocess::create_only, fname, 1024*1024*128);
-//   }
-//   void print_info()
-//   {
-//     //std::cout << "free/size = " << m_mapped_file->get_free_memory() << " / " << m_mapped_file->get_size() << std::endl;
-//     std::cout << "check_sanity() == " << m_mapped_file->check_sanity() << std::endl;
-//   }
-// private:
-//   boost::interprocess::managed_mapped_file* m_mapped_file;
-// };
-
-
-
 // notes for how to setup a good test
 // take rank * 100 and make edges between (all local)
 // Make one vert per rank a hub.
@@ -124,16 +75,6 @@
 namespace hmpi = havoqgt::mpi;
 
 using namespace havoqgt::mpi;
-
-void temp_func(boost::interprocess::managed_mapped_file *file_mapping) {
-  // file_mapping->flush(0, 0, false);
-
-  // boost::interprocess::mapped_region::advice_types advice;
-  // advice = boost::interprocess::mapped_region::advice_types::advice_dontneed;
-  // bool assert_res = file_mapping->advise(advice);
-  // assert(assert_res);
-};
-
 
 int main(int argc, char** argv) {
 
@@ -232,12 +173,12 @@ int main(int argc, char** argv) {
 
   mapped_t asdf(bip::open_or_create, fname.str().c_str(), flash_capacity);
 
-  boost::interprocess::mapped_region::advice_types advice;
-  advice = boost::interprocess::mapped_region::advice_types::advice_random;
-  bool assert_res = asdf.advise(advice);
-  assert(assert_res);
+  // boost::interprocess::mapped_region::advice_types advice;
+  // advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  // bool assert_res = asdf.advise(advice);
+  // assert(assert_res);
 
-  std::function<void()> advice_dont_need = std::bind(temp_func, &asdf);
+
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
   bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -255,7 +196,7 @@ int main(int argc, char** argv) {
       }
 
       graph = segment_manager->find<graph_type>("graph_obj").first;
-      graph->complete_construction(MPI_COMM_WORLD, uptri, advice_dont_need);
+      graph->complete_construction(MPI_COMM_WORLD, uptri);
     } else {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
@@ -263,8 +204,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold,
-        advice_dont_need);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
     }
 
 
@@ -286,11 +226,11 @@ int main(int argc, char** argv) {
       // graph_new = segment_manager->construct<graph_type>
       //   ("graph_obj_new")
       //   (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold,
-      //     advice_dont_need, graph_type::MetaDataGenerated);
+      //     graph_type::MetaDataGenerated);
 
       // assert(graph_new->compare(graph));
 
-      graph->complete_construction(MPI_COMM_WORLD, rmat, advice_dont_need);
+      graph->complete_construction(MPI_COMM_WORLD, rmat);
 
     } else {
       if (mpi_rank == 0) {
@@ -298,9 +238,9 @@ int main(int argc, char** argv) {
       }
       graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold,
-          advice_dont_need);  // , graph_type::MetaDataGenerated);
-      // graph->complete_construction(MPI_COMM_WORLD, rmat, advice_dont_need);
+        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
+          // , graph_type::MetaDataGenerated);
+        // graph->complete_construction(MPI_COMM_WORLD, rmat);
     }
 
 
@@ -316,15 +256,15 @@ int main(int argc, char** argv) {
         std::cout << "Loading graph from file." << std::endl;
       }
       graph = segment_manager->find<graph_type>("graph_obj").first;
-      graph->complete_construction(MPI_COMM_WORLD, input_edges, advice_dont_need);
+      graph->complete_construction(MPI_COMM_WORLD, input_edges);
     } else {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
       }
       graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, input_edges, uint64_t(5489), hub_threshold,
-          advice_dont_need);
+        (alloc_inst, MPI_COMM_WORLD, input_edges, uint64_t(5489),
+          hub_threshold);
     }
 
     {

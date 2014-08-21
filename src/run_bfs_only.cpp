@@ -124,10 +124,10 @@ int main(int argc, char** argv) {
   graph_mapped_t graph_mapped_file(bip::open_only, graph_input.c_str());
   // graph_mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
 
-  boost::interprocess::mapped_region::advice_types rand_advice;
-  rand_advice = boost::interprocess::mapped_region::advice_types::advice_random;
-  bool assert_res = graph_mapped_file.advise(rand_advice);
-  assert(assert_res);
+  // boost::interprocess::mapped_region::advice_types rand_advice;
+  // rand_advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  // bool assert_res = graph_mapped_file.advise(rand_advice);
+  // assert(assert_res);
 
 
   graph_type *graph = graph_mapped_file.get_segment_manager()->
@@ -170,8 +170,8 @@ int main(int argc, char** argv) {
     std::string bfs_filename =  graph_input + std::to_string(mpi_rank) + "_bfs";
     bfs_mapped_t bfs_mapped_data(bip::create_only, bfs_filename.c_str(),
         file_size);
-    assert_res = bfs_mapped_data.advise(rand_advice);
-    assert(assert_res);
+    // assert_res = bfs_mapped_data.advise(rand_advice);
+    // assert(assert_res);
 
     #else
 

@@ -126,15 +126,6 @@
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
-void temp_func(boost::interprocess::managed_mapped_file *file_mapping) {
-  file_mapping->flush(0, 0, false);
-
-  boost::interprocess::mapped_region::advice_types advice;
-  advice = boost::interprocess::mapped_region::advice_types::advice_dontneed;
-  bool assert_res = file_mapping->advise(advice);
-  assert(assert_res);
-};
-
 
 int main(int argc, char** argv) {
   typedef bip::managed_mapped_file mapped_t;
@@ -218,13 +209,10 @@ int main(int argc, char** argv) {
   mapped_t asdf(bip::open_or_create, fname.str().c_str(),
       file_size);
 
-  boost::interprocess::mapped_region::advice_types advice;
-  advice = boost::interprocess::mapped_region::advice_types::advice_random;
-  bool assert_res = asdf.advise(advice);
-  assert(assert_res);
-
-
-  std::function<void()>  advice_dont_need = std::bind(temp_func, &asdf);
+  // boost::interprocess::mapped_region::advice_types advice;
+  // advice = boost::interprocess::mapped_region::advice_types::advice_random;
+  // bool assert_res = asdf.advise(advice);
+  // assert(assert_res);
 
 
   segment_manager_t* segment_manager = asdf.get_segment_manager();
@@ -241,7 +229,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold, advice_dont_need);
+      (alloc_inst, MPI_COMM_WORLD, uptri, uptri.max_vertex_id(), hub_threshold);
 
 
     } else if(type == "RMAT") {
@@ -252,7 +240,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(),
-            hub_threshold, advice_dont_need);
+            hub_threshold);
     } else if(type == "PA") {
       std::vector< std::pair<uint64_t, uint64_t> > input_edges;
 
@@ -261,7 +249,7 @@ int main(int argc, char** argv) {
 
       graph = segment_manager->construct<graph_type>("graph_obj")
           (alloc_inst, MPI_COMM_WORLD, input_edges, uint64_t(5489),
-            hub_threshold, advice_dont_need);
+            hub_threshold);
     } else {
       std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
