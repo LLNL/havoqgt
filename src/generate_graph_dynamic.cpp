@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
 
   // TODO change to (2^34 + 2^33 + 2^32 )
     uint64_t graph_capacity = std::pow(2, 39);//std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
-    assert (graph_capacity <= (751619276800.0/24.0));
+    //assert (graph_capacity <= (751619276800.0/24.0));
     mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
       graph_capacity);
     segment_manager_t* segment_manager = asdf.get_segment_manager();

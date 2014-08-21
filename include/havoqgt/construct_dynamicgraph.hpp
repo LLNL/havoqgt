@@ -112,6 +112,7 @@ namespace bip = boost::interprocess;
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
+
 template <typename SegmentManager>
 class construct_dynamicgraph {
 public:
@@ -120,70 +121,74 @@ public:
   using SegmentAllocator = bip::allocator<T, SegmentManager>;
   typedef bip::managed_mapped_file mapped_t;
 
-  // class DegreeTable {
-  //   public:
-  //     DegreeTable() {
-  //       max_vertex_id_ = -1;
-  //       // num_verticies_ = 0;
-  //       // num_edges_ = 0;
-  //       capacity_ = 0;
-  //     };
+  class bitmap_mgr {
+  public:
+    bitmap_mgr()
+    {
+      table_ = nullptr;
+      max_id_ = 0;
+      capacity_ = 0;
+    }
 
-  //     ~DegreeTable() {
-  //       if (capacity_ > 0)
-  //         delete[] degree_table_;
-  //     };
+    ~bitmap_mgr() {
+      if (table_ != nullptr)
+        delete[] table_;
+    }
 
-  //     inline uint64_t count_up(uint64_t vertex_id) {
-  //       if (vertex_id > max_vertex_id_) {
-  //         max_vertex_id_ = vertex_id;
-  //         grow();
-  //       }
+    inline void set(const uint64_t _id)
+    {
+      #define roundup(x,n) (((x)+((n)-1))&(~((n)-1)))
+      if (_id >= max_id_) {
+        max_id_ = roundup(_id, 64ULL);
+        grow_table();
+      }
+      table_[_id/64ULL] |= (1ULL << (_id & 63ULL));
+    }
 
-  //       return ++degree_table_[vertex_id]; 
-  //     };
+    inline void unset(const uint64_t _id)
+    {
+      table_[_id/64ULL] ^= (1ULL << (_id & 63ULL));
+    }
 
-  //     inline uint64_t count_down(uint64_t vertex_id) {
-  //       if (vertex_id > max_vertex_id_) {
-  //         return 0;
-  //       }
-  //       return --degree_table_[vertex_id];
-  //     };
+    inline bool get(const uint64_t _id)
+    {
+      if(static_cast<int64_t>(_id) >= max_id_) return false;
+      return table_[_id/64ULL] & (1ULL << (_id & 63ULL));
+    }
 
-  //     inline uint64_t degree(uint64_t vertex_id){
-  //       if (vertex_id > max_vertex_id_) {
-  //         return 0;
-  //       } else {
-  //         return degree_table_[vertex_id];
-  //       }
-  //     };
+    inline size_t size() const
+    {
+      return capacity_;
+    }
 
-  //   private:
-  //     inline void grow() {
-  //       uint64_t old_capacity = capacity_;
-  //       uint64_t *old_table = degree_table_;
+  private:
 
-  //       capacity_ |= (capacity_ == 0);
-  //       while (capacity_ < max_vertex_id_+1)
-  //         capacity_ *= 2ULL;
+    void grow_table() {
+      const uint64_t old_capacity = capacity_;
+      const uint64_t *old_table = table_;
 
-  //       calloc();
+      capacity_ |= (capacity_ == 0);
+      while (capacity_ < max_id_ / 64ULL)
+        capacity_ *= 2ULL;
+      max_id_ = capacity_*64ULL;
 
-  //       std::memcpy(degree_table_, old_table, old_capacity * sizeof(int64_t));
-  //       delete[] old_table;
-  //     }
+      calloc();
 
-  //     inline void calloc() {
-  //       degree_table_ = new uint64_t[capacity_];
-  //       std::memset(degree_table_, 0, capacity_ * sizeof(int64_t));
-  //     }
+      std::memcpy(table_, old_table, old_capacity * sizeof(uint64_t));
+      delete[] old_table;
+    }
 
-  //     uint64_t *degree_table_;
-  //     int64_t max_vertex_id_;
-  //     // uint64_t num_verticies_;
-  //     // uint64_t num_edges_;
-  //     size_t capacity_;
-  // };
+    inline void calloc() {
+        table_ = new uint64_t[capacity_];
+        std::memset(table_, 0, capacity_ * sizeof(uint64_t));
+    }
+
+    uint64_t *table_;
+    uint64_t max_id_;
+    size_t capacity_;
+
+  };
+
 
   // ---------  Data Structures ------------ //
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
@@ -194,10 +199,7 @@ public:
 
   typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
 
-  //typedef boost::unordered_map<uint64_t, uint64_t> degree_map_t;
 
-
-  const uint64_t kLowDegreeThreshold;
   enum DataStructureMode {
     kUseVecVecMatrix,
     kUseMapVecMatrix,
@@ -205,7 +207,11 @@ public:
     kUseDegreeAwareModel
   };
 
-  //--  Constructors -- //
+
+  ///  ------------------------------------------------------ ///
+  ///              Constructor / Deconstructor
+  ///  ------------------------------------------------------ ///
+  //--  Constructor -- //
   construct_dynamicgraph(
     mapped_t& asdf,
     SegmentAllocator<void>& seg_allocator,
@@ -216,6 +222,9 @@ public:
   ~construct_dynamicgraph();
 
 
+  ///  ------------------------------------------------------ ///
+  ///              Public Member Functions
+  ///  ------------------------------------------------------ ///
   /// add edges controller
   template <typename Container>
   inline void add_edges_adjacency_matrix(Container& edges)
@@ -234,12 +243,13 @@ public:
         break;
 
       case kUseDegreeAwareModel:
-        add_edges_hybrid(edges);
+        //add_edges_degree_aware_rbhs_first(edges);
+        add_edges_degree_aware_bitmap_first(edges);
+        //add_edges_degree_aware_adj_first(Container& edges);
         break;
 
       default:
         std::cerr << "Unknown data structure type" << std::endl;
-        assert(false);
         exit(-1);
     }
 
@@ -266,20 +276,20 @@ private:
   template <typename Container>
   void add_edges_robin_hood_hash(Container& edges);
 
-  /// --- TODO: This is a temporarily code ---
-  template <typename Key, typename Value>
-  inline void add_edges_robin_hood_hash_core(const Key& source_vtx, const Value& target_vtx)
-  {
-#if WITHOUT_DUPLICATE_INSERTION == 1
-    robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
-#else
-    robin_hood_hashing_->insert(source_vtx, target_vtx);
-#endif
-  }
+  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
+  /// check robihn hood hashing first
+  template <typename Container>
+  void add_edges_degree_aware_rbhs_first(Container& edges);
 
   /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
+  /// check bitmap first
   template <typename Container>
-  void add_edges_hybrid(Container& edges);
+  void add_edges_degree_aware_bitmap_first(Container& edges);
+
+  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
+  /// check adjacency-matrxit first
+  template <typename Container>
+  void add_edges_degree_aware_adj_first(Container& edges);
 
   inline void flush_pagecache() {
     asdf_.flush();
@@ -292,13 +302,13 @@ private:
   mapped_t& asdf_;
   const SegmentAllocator<void>& seg_allocator_;
   const DataStructureMode data_structure_type_;
-  
-  //degree_map_t degree_map;
+  const uint64_t kLowDegreeThreshold;
 
   adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
   uint64_vector_t *init_vec;
   adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
   robin_hood_hashing_t *robin_hood_hashing_;
+  bitmap_mgr *is_exist_bmp_;
 
   IOInfo *io_info_;
   double total_exectution_time_;

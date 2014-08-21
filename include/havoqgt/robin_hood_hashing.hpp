@@ -143,12 +143,10 @@ public:
     {
       dist_ = 0;
       current_index_ = hash_table->lookup_index_first(key, dist_);
-      //value_ = current_index_ != kInvaridIndex ? hash_table->get_value(current_index_) : nullptr;
     }
     
     void get_next() {
       hash_table_->get_next_index(key_, current_index_, dist_);
-      //value_ = current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : nullptr;
     }
 
     robin_hood_hash *hash_table_;
@@ -197,12 +195,11 @@ public:
 
   inline void insert(Key key, Value val)
   {
-    // std::cout << "Key = " << key << "\tval = " << val << std::endl;
     if (++num_elems_ >= resize_threshold_)
     {
       grow();
     }
-    insert_helper(hash_key(key), std::move(key), std::move(val));   
+    insert_helper(hash_key(key), std::move(key), std::move(val));
   }
 
   inline elem_iterator end()
@@ -219,19 +216,13 @@ public:
 
   inline bool has_data(const Key& key, const Value& val)
   {
-    const int64_t ix = lookup_index(key, val);
-    return (ix != kInvaridIndex);
+    return (lookup_index(key, val) != kInvaridIndex);
   }
 
   inline elem_iterator find(const Key& key)
   {
     return(elem_iterator(this, key));
   }
-  /// FIXME: this function is not supporting duplicated mdoel
-  // inline const Value* find(const Key& key) const
-  // {
-  //   return const_cast<robin_hood_hash*>(this)->lookup(key);
-  // }
 
   inline void erase(const elem_iterator& itr)
   {
@@ -502,7 +493,6 @@ private:
     int64_t dist = 0;
     int64_t pos = lookup_index_first(key, dist);
     if (pos == kInvaridIndex) return kInvaridIndex;
-
     for(;;) {
       if (elem_hash(pos) == 0) {// free space is found
         return kInvaridIndex;
@@ -590,7 +580,7 @@ private:
       }
 
       pos = (pos+1) & mask_;
-      ++dist;     
+      ++dist;
     }
   }
 
