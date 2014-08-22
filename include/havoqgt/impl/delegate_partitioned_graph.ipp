@@ -700,7 +700,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
   start_time = last_loop_time = last_part_time = MPI_Wtime();
 
 
-  for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
+  for (size_t node_turn = 0; node_turn < node_partitions; node_turn++) {
 
     InputIterator unsorted_itr = orgi_unsorted_itr;
     if (m_mpi_rank == 0) {
@@ -878,7 +878,6 @@ count_high_degree_edges(InputIterator unsorted_itr,
       boost::container::map<uint64_t, uint64_t> > maps_to_send(m_mpi_size);
     int maps_to_send_element_count = 0;
     {
-
       for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
            ++unsorted_itr) {
 
@@ -1276,7 +1275,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
   std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
   to_send_edges_high.reserve(edge_chunk_size);
 
-  for (int node_turn = 0; node_turn < node_partitions; node_turn++) {
+  for (size_t node_turn = 0; node_turn < node_partitions; node_turn++) {
 
     if (m_mpi_rank == 0) {
       double curr_time = MPI_Wtime();
@@ -1317,7 +1316,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
 
 
       while (unsorted_itr != unsorted_itr_end &&
-             to_send_edges_high.size()<edge_chunk_size) {
+             to_send_edges_high.size() < edge_chunk_size) {
         // Get next edge
         const auto edge = *unsorted_itr;
         ++unsorted_itr;
@@ -1365,7 +1364,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       assert(to_send_edges_high.size() == 0);
       std::sort(to_recv_edges_high.begin(), to_recv_edges_high.end());
 
-      for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
+      for (size_t i = 0; i < to_recv_edges_high.size(); ++i) {
         // Iterate over recieved edges, addiing them using similar logic from
         // above
         const auto edge = to_recv_edges_high[i];
