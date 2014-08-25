@@ -136,23 +136,23 @@ construct_dynamicgraph (
   
   switch(data_structure_type_) {
     case kUseVecVecMatrix:
-      adjacency_matrix_vec_vec_ = new adjacency_matrix_vec_vec_t(seg_allocator);
-      init_vec = new uint64_vector_t(seg_allocator);
+      adjacency_matrix_vec_vec_ = new adjacency_matrix_vec_vec_t(seg_allocator_);
+      init_vec = new uint64_vector_t(seg_allocator_);
       break;
 
     case kUseMapVecMatrix:
-      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator);
+      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
       break;
 
     case kUseRobinHoodHash:
-      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator);
+      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
       break;
 
     case kUseDegreeAwareModel:
-      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator);
-      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator);
+      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
+      robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
       //is_exist_bmp_ = new bitmap_mgr();
-      //adjacency_matrix_rbh_rbh_ = new adjacency_matrix_rbh_rbh_t(seg_allocator);
+      //adjacency_matrix_rbh_rbh_ = new adjacency_matrix_rbh_rbh_t(seg_allocator_);
       break;
 
     default:
@@ -177,11 +177,16 @@ template <typename SegementManager>
 construct_dynamicgraph<SegementManager>::
 ~construct_dynamicgraph()
 {
-  if (adjacency_matrix_vec_vec_ != NULL) delete(adjacency_matrix_vec_vec_);
-  if (init_vec != NULL) delete(init_vec);
-  if (adjacency_matrix_map_vec_ != NULL) delete(adjacency_matrix_map_vec_);
-  if (robin_hood_hashing_ != NULL) delete(robin_hood_hashing_);
-  if (io_info_ != NULL) delete(io_info_);
+  delete adjacency_matrix_vec_vec_;
+  delete init_vec;
+  delete adjacency_matrix_map_vec_;
+  delete robin_hood_hashing_;
+  delete io_info_;
+  // if (adjacency_matrix_vec_vec_ != NULL) delete adjacency_matrix_vec_vec_;
+  // if (init_vec != NULL) delete(init_vec);
+  // if (adjacency_matrix_map_vec_ != NULL) delete adjacency_matrix_map_vec_;
+  // if (robin_hood_hashing_ != NULL) delete robin_hood_hashing_;
+  // if (io_info_ != NULL) delete io_info_;
 }
 
 /**
@@ -387,8 +392,9 @@ NEXT_MOVING:
   std::cout << "Count: # non-low degree edges =\t" << count_non_low << std::endl;
   std::cout << "Count: # moved vertices =\t" << count_move << std::endl;
   std::cout << "Count: # moved edges =\t" << count_move * kLowDegreeThreshold << std::endl;
-  total_exectution_time_ += time_end - time_start;
+  std::cout << "Allocated size for low-degree-edges =\t" << robin_hood_hashing_->allocated_size() << std::endl;
   io_info_->log_diff();
+  total_exectution_time_ += time_end - time_start;
 }
 #if 1
 template <typename SegmentManager>
@@ -484,8 +490,10 @@ NEXT_MOVING:
   std::cout << "Count: # non-low degree edges =\t" << count_non_low << std::endl;
   std::cout << "Count: # moved vertices =\t" << count_move << std::endl;
   std::cout << "Count: # moved edges =\t" << count_move * kLowDegreeThreshold << std::endl;
-  total_exectution_time_ += time_end - time_start;
+  std::cout << "Allocated size for low-degree-edges =\t" << robin_hood_hashing_->allocated_size() << std::endl;
+  std::cout << "Allocated size for non-low-degree-edges =\t" << adjacency_matrix_rbh_rbh_->allocated_size() << std::endl;
   io_info_->log_diff();
+  total_exectution_time_ += time_end - time_start;
 }
 #endif
 

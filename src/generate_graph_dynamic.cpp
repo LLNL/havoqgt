@@ -80,7 +80,7 @@ typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
 
 template <typename Edges>
-void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size) 
+void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager)
 {
 
   const uint64_t num_edges = edges.size();
@@ -100,6 +100,8 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size)
     const double time_end = MPI_Wtime();
     std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges);
+    size_t usage = segment_manager->get_size() - segment_manager->get_free_memory();
+    std::cout << "Usage: allocated segment size =\t" << usage << std::endl;
 
   }
   std::cout << "<< Results >>" << std::endl;
@@ -245,7 +247,7 @@ int main(int argc, char** argv) {
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        add_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+        add_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
 
       } else if(type == "RMAT") {
         uint64_t num_edges_per_rank = num_vertices * edge_factor * 2ULL / mpi_size;
@@ -254,13 +256,13 @@ int main(int argc, char** argv) {
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
 
-        add_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+        add_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
         gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1ULL, pa_beta, 0.0, MPI_COMM_WORLD);
 
-        add_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+        add_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);

@@ -179,16 +179,31 @@ class robin_hood_hash {
 
 
   ///----- Constructor -----///
-  explicit robin_hood_hash(SegmentAllocator<void>& seg_allocator) 
-  : buffer_(nullptr),
-  allocator_(seg_allocator)
+  explicit robin_hood_hash(SegmentAllocator<void>& allocator)
+  : allocator_(allocator)
   {
-    init();
+    buffer_ = nullptr;
+    num_elems_ = 0;
+    capacity_ = kInitialCapacity;
+    resize_threshold_ = (capacity_ * kLoadFactorPercent) / 100LL;
+    mask_ = capacity_ - 1;
+    alloc();
+  }
+
+  robin_hood_hash(SegmentAllocator<void>& allocator, size_t initial_capasity) 
+  : allocator_(allocator)
+  {
+    buffer_ = nullptr;
+    num_elems_ = 0;
+    capacity_ = initial_capasity;
+    resize_threshold_ = (capacity_ * kLoadFactorPercent) / 100LL;
+    mask_ = capacity_ - 1;
     alloc();
   }
 
   ///-----  Copy constructor -----///
-  robin_hood_hash(const robin_hood_hash &obj) : allocator_(obj.allocator_)
+  robin_hood_hash(const robin_hood_hash &obj)
+  : allocator_(obj.allocator_)
   {
     num_elems_ = obj.num_elems_;
     capacity_ = obj.capacity_;
@@ -207,7 +222,9 @@ class robin_hood_hash {
   ///-----  Move constructor -----///
   robin_hood_hash(robin_hood_hash &&obj) 
   : allocator_(obj.allocator_)
-  {    
+  {
+    buffer_ = obj.buffer_;
+    obj.buffer_ = nullptr;
     num_elems_ = obj.num_elems_;
     obj.num_elems_ = 0;
     capacity_ = obj.capacity_;
@@ -216,10 +233,6 @@ class robin_hood_hash {
     obj.resize_threshold_ = 0;
     mask_ = obj.mask_;
     obj.mask_ = 0;
-
-    //alloc();
-    buffer_ = obj.buffer_;
-    obj.buffer_ = nullptr;
 
 #if USE_SEPARATE_HASH_ARRAY
     hashes_ = obj.hashes_;
@@ -237,6 +250,8 @@ class robin_hood_hash {
   ///-----  Move assignment operator -----///
   robin_hood_hash &operator=(robin_hood_hash&& obj)
   {
+    buffer_ = obj.buffer_;
+    obj.buffer_ = nullptr;
     num_elems_ = obj.num_elems_;
     obj.num_elems_ = 0;
     capacity_ = obj.capacity_;
@@ -245,9 +260,6 @@ class robin_hood_hash {
     obj.resize_threshold_ = 0;
     mask_ = obj.mask_;
     obj.mask_ = 0;
-
-    buffer_ = obj.buffer_;
-    obj.buffer_ = nullptr;
 
 #if USE_SEPARATE_HASH_ARRAY
     hashes_ = obj.hashes_;
@@ -278,15 +290,11 @@ class robin_hood_hash {
   {
     for( int64_t i = 0; i < capacity_; ++i)
     {
-      if (elem_hash(i) != 0)
-      {
-        buffer_[i].~elem();
-      }
+      if (elem_hash(i) != 0) buffer_[i].~elem();
     }
-    free_buffer(buffer_, capacity_);
+    if (buffer_ != nullptr) free_buffer(buffer_, capacity_);
 #if USE_SEPARATE_HASH_ARRAY
-    if (capacity_ > 0)
-      delete [] hashes_;
+    delete [] hashes_;
 #endif
   }
 
@@ -303,11 +311,12 @@ class robin_hood_hash {
     return elem_iterator();
   }
 
-  void resize(const size_t new_size)
-  {
-    capacity_ = new_size;
-    alloc();
-  }
+  /// FIXME: need to copy old elements
+  // void resize(const size_t new_size)
+  // {
+  //   capacity_ = new_size;
+  //   alloc();
+  // }
 
   inline void insert(Key key, Value val)
   {
@@ -365,6 +374,11 @@ class robin_hood_hash {
   inline size_t size() const
   {
     return num_elems_;
+  }
+
+  inline size_t allocated_size() const
+  {
+    return capacity_ * sizeof(elem);
   }
 
   // Count elements with a key equaivalent to 'key'
@@ -428,20 +442,12 @@ private:
   #warning Enable USE_TOMBSTONE
 #endif
 
-  static const int64_t INITIAL_SIZE = 1; // must be 1 or more
-  static const int64_t LOAD_FACTOR_PERCENT = 90LL;
+  static const int64_t kInitialCapacity = 1; // must be 1 or more
+  static const int64_t kLoadFactorPercent = 90LL;
   static const uint64_t kTombstoneMask = 0x8000000000000000ULL; // mask value to mark as deleted
   static const uint64_t kClearTombstoneMask = 0x7FFFFFFFFFFFFFFFULL;  // mask value to clear deleted flag
   static const int64_t  kCapacityGrowingFactor = 2LL;
   static const int64_t  kInvaridIndex = -1LL;
-
-  void init()
-  {
-    num_elems_ = 0;
-    capacity_ = INITIAL_SIZE;
-    resize_threshold_ = (capacity_ * LOAD_FACTOR_PERCENT) / 100LL;
-    mask_ = capacity_ - 1;
-  }
 
   /// ------ Private member functions: algorithm core ----- ///
   inline int64_t desired_pos(uint64_t hash) const
@@ -527,16 +533,14 @@ private:
     //std::cout << "alloc\n"; //D
     /// This is temprorary codes to remove compile warning
     /// Todo: rewrite fllowing process
-    typedef bip::managed_mapped_file mapped_t;
-    typedef mapped_t::segment_manager segment_manager_t;
-    segment_manager_t* segment_manager = allocator_.get_segment_manager();
-    bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
+    // typedef bip::managed_mapped_file::segment_manager segment_manager_t;
+    // segment_manager_t* segment_manager = allocator_.get_segment_manager();
+    // bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
 
     //std::cout << "Allocating " << capacity_ * sizeof(elem) << " Byte." << std::endl;
-    bip::offset_ptr<elem> ptr = alloc_inst.allocate(capacity_ * sizeof(elem));
+    bip::offset_ptr<void> ptr = allocator_.allocate(capacity_ * sizeof(elem));
     buffer_ = reinterpret_cast<elem*>(ptr.get());
 #if USE_SEPARATE_HASH_ARRAY == 1
-    // hashes_ = reinterpret_cast<uint64_t*>( allocator_.allocate(capacity_ * sizeof(uint64_t)) );
     hashes_ = new uint64_t[capacity_];
 #endif
 
@@ -546,14 +550,14 @@ private:
       elem_hash(i) = 0;
     }
 
-    resize_threshold_ = (capacity_ * LOAD_FACTOR_PERCENT) / 100LL; 
+    resize_threshold_ = (capacity_ * kLoadFactorPercent) / 100LL; 
     mask_ = capacity_ - 1;
   }
 
-  inline void free_buffer(void *buf, const size_t capacity)
+  inline void free_buffer(elem *buf, const size_t capacity)
   {
-    if (buf != nullptr)
-      allocator_.deallocate(buf, capacity * sizeof(elem));
+    allocator_.deallocate(buf, capacity * sizeof(elem));
+    //std::cout << "Dealloc: " << capacity * sizeof(elem) << std::endl; //D
   }
 
   void grow()
@@ -565,7 +569,9 @@ private:
 #endif
     capacity_ *= kCapacityGrowingFactor;
     capacity_ |= capacity_== 0;
+    //std::cout << capacity_ * sizeof(elem) << "alloc now\n"; //D
     alloc();
+    //std::cout << "alloc done\n"; //D
     // now copy over old elems
     for(int64_t i = 0; i < old_capacity; ++i)
     {
@@ -581,8 +587,9 @@ private:
         e.~elem();
       }
     }
-
-    free_buffer(old_elems, old_capacity);   
+    //std::cout << old_capacity * sizeof(elem) << "free now\n"; //D
+    free_buffer(old_elems, old_capacity); 
+    //std::cout << "free done\n"; //D  
 #if USE_SEPARATE_HASH_ARRAY
     delete [] old_hashes;
 #endif
@@ -713,7 +720,7 @@ private:
   }
 
   /// ---------- private menber variavles ---------- ///
-  SegmentAllocator<void> &allocator_;
+  SegmentAllocator<void>& allocator_;
   elem* __restrict buffer_;
 
 #if USE_SEPARATE_HASH_ARRAY
