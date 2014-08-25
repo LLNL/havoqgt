@@ -199,6 +199,9 @@ public:
 
   typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
 
+  //typedef std::pair<const uint64_t, robin_hood_hashing_t> map_value_rbh_t;
+  typedef robin_hood_hash<int64_t, robin_hood_hashing_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
+  //typedef boost::unordered_map<uint64_t, robin_hood_hashing_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_rbh_t>> adjacency_matrix_map_rbh_t;
 
   enum DataStructureMode {
     kUseVecVecMatrix,
@@ -243,9 +246,10 @@ public:
         break;
 
       case kUseDegreeAwareModel:
-        //add_edges_degree_aware_rbhs_first(edges);
-        add_edges_degree_aware_bitmap_first(edges);
-        //add_edges_degree_aware_adj_first(Container& edges);
+        add_edges_degree_aware_rbh_first(edges);
+        //add_edges_degree_aware_bitmap_first(edges);
+        //add_edges_degree_aware_adj_first(edges);
+        //add_edges_degree_aware_rbh_first_rbh_mtrx(edges);
         break;
 
       default:
@@ -279,7 +283,7 @@ private:
   /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
   /// check robihn hood hashing first
   template <typename Container>
-  void add_edges_degree_aware_rbhs_first(Container& edges);
+  void add_edges_degree_aware_rbh_first(Container& edges);
 
   /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
   /// check bitmap first
@@ -291,6 +295,9 @@ private:
   template <typename Container>
   void add_edges_degree_aware_adj_first(Container& edges);
 
+  template <typename Container>
+  void add_edges_degree_aware_rbh_first_rbh_mtrx(Container& edges);
+
   inline void flush_pagecache() {
     asdf_.flush();
   }
@@ -300,7 +307,7 @@ private:
   ///              Private Member Variables
   ///  ------------------------------------------------------ ///
   mapped_t& asdf_;
-  const SegmentAllocator<void>& seg_allocator_;
+  SegmentAllocator<void>& seg_allocator_;
   const DataStructureMode data_structure_type_;
   const uint64_t kLowDegreeThreshold;
 
@@ -309,6 +316,7 @@ private:
   adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
   robin_hood_hashing_t *robin_hood_hashing_;
   bitmap_mgr *is_exist_bmp_;
+  adjacency_matrix_rbh_rbh_t *adjacency_matrix_rbh_rbh_;
 
   IOInfo *io_info_;
   double total_exectution_time_;

@@ -57,7 +57,7 @@
 
 #define USE_SEPARATE_HASH_ARRAY 0
 
-namespace havoqgt {
+ namespace havoqgt {
 namespace mpi {
 
 namespace bip = boost::interprocess;
@@ -68,9 +68,10 @@ namespace bip = boost::interprocess;
 ///       however not supporting duplicated-element.
 template <typename Key, typename Value, typename SegementManager>
 
+
 class robin_hood_hash {
 
-public:
+  public:
 
   template<typename T>
   using SegmentAllocator = bip::allocator<T, SegementManager>;
@@ -88,32 +89,30 @@ public:
   ///
   /// Iterator
   ///
-  class elem_iterator : public std::iterator<std::input_iterator_tag, Value, ptrdiff_t,
-                                                const Value* const, const Value&>
+  class elem_iterator : public std::iterator<std::input_iterator_tag, Value, ptrdiff_t, const Value* const, const Value&>
   {
-   public:
-    elem_iterator()
-      : hash_table_(nullptr), key_(NULL) { current_index_ = kInvaridIndex; dist_ = 0;};
+  public:
 
-    const Value operator*() const
-    { 
-      //std::cout << (current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL);
-      return (current_index_ != kInvaridIndex ? hash_table_->get_value(current_index_) : NULL);
+    elem& operator*() const
+    {
+      return hash_table_->buffer_[current_index_];
     }
 
-    elem_iterator& operator++() {
+    elem_iterator& operator++() 
+    {
       get_next();
       return *this;
     }
 
-    elem_iterator operator++(int) {
+    elem_iterator operator++(int)
+    {
       elem_iterator __tmp = *this;
       get_next();
       return __tmp;
     }
 
-    Value *operator->() {
-      return current_index_ != kInvaridIndex ? &hash_table_->get_value(current_index_) : NULL;
+    elem *operator->() {
+      return &hash_table_->buffer_[current_index_];
     }
 
     inline bool is_equal(const elem_iterator& x) const
@@ -129,50 +128,154 @@ public:
     operator!=(const elem_iterator& x, const elem_iterator& y)
     { return !x.is_equal(y); }
 
-    inline bool is_valid_index()
+    inline bool is_valid_index() const
     {
       return (current_index_ != kInvaridIndex);
     }
 
-   private:
+  private:
     friend class robin_hood_hash;
 
-    elem_iterator(robin_hood_hash *hash_table, const Key& key)
+    elem_iterator()
+    : hash_table_(nullptr)
+    , key_(nullptr) 
+    { 
+      current_index_ = kInvaridIndex;
+      dist_ = 0;
+    }
+
+    explicit elem_iterator(robin_hood_hash *hash_table)
+    : hash_table_(hash_table)
+    , key_(nullptr)
+    {
+      dist_ = 0;
+      current_index_ = -1;
+      hash_table->get_next_index(current_index_);
+    }
+
+    elem_iterator(robin_hood_hash *hash_table, const Key* const key)
     : hash_table_(hash_table)
     , key_(key)
     {
       dist_ = 0;
-      current_index_ = hash_table->lookup_index_first(key, dist_);
-    }
-    
-    void get_next() {
-      hash_table_->get_next_index(key_, current_index_, dist_);
+      current_index_ = hash_table->lookup_index_first(*key, dist_);
     }
 
-    robin_hood_hash *hash_table_;
-    const Key& key_;
+    void get_next()
+    {
+      if (key_ == nullptr)
+        hash_table_->get_next_index(current_index_);
+      else
+        hash_table_->get_next_index(*key_, current_index_, dist_);
+    }
+
+    robin_hood_hash* hash_table_;
+    const Key* const key_;
     int64_t dist_;
-    Value *value_;
     int64_t current_index_;
   };
 
   friend class elem_iterator;
 
 
-
-
-  ///-----  Constructors -----///
-  explicit robin_hood_hash(SegmentAllocator<void>& seg_allocator) :
-  buffer_(nullptr),
+  ///----- Constructor -----///
+  explicit robin_hood_hash(SegmentAllocator<void>& seg_allocator) 
+  : buffer_(nullptr),
   allocator_(seg_allocator)
   {
     init();
     alloc();
   }
 
+  ///-----  Copy constructor -----///
+  robin_hood_hash(const robin_hood_hash &obj) : allocator_(obj.allocator_)
+  {
+    num_elems_ = obj.num_elems_;
+    capacity_ = obj.capacity_;
+    resize_threshold_ = obj.resize_threshold_;
+    mask_ = obj.mask_;
+
+    alloc();
+
+    std::memcpy(buffer_, obj.buffer_, capacity_*sizeof(elem));
+#if USE_SEPARATE_HASH_ARRAY
+    std::memcpy(hashes_, obj.hashes_, capacity_*sizeof(uint64_t));
+#endif
+
+  }
+
+  ///-----  Move constructor -----///
+  robin_hood_hash(robin_hood_hash &&obj) 
+  : allocator_(obj.allocator_)
+  {    
+    num_elems_ = obj.num_elems_;
+    obj.num_elems_ = 0;
+    capacity_ = obj.capacity_;
+    obj.capacity_ = 0;
+    resize_threshold_ = obj.resize_threshold_;
+    obj.resize_threshold_ = 0;
+    mask_ = obj.mask_;
+    obj.mask_ = 0;
+
+    //alloc();
+    buffer_ = obj.buffer_;
+    obj.buffer_ = nullptr;
+
+#if USE_SEPARATE_HASH_ARRAY
+    hashes_ = obj.hashes_;
+    obj.hashes_ = nullptr;
+#endif
+
+  }
+
+  ///-----  Copy assignment operator -----///
+  robin_hood_hash& operator=( robin_hood_hash const& rhs )
+  {
+    return *this = robin_hood_hash(rhs);
+  }
+
+  ///-----  Move assignment operator -----///
+  robin_hood_hash &operator=(robin_hood_hash&& obj)
+  {
+    num_elems_ = obj.num_elems_;
+    obj.num_elems_ = 0;
+    capacity_ = obj.capacity_;
+    obj.capacity_ = 0;
+    resize_threshold_ = obj.resize_threshold_;
+    obj.resize_threshold_ = 0;
+    mask_ = obj.mask_;
+    obj.mask_ = 0;
+
+    buffer_ = obj.buffer_;
+    obj.buffer_ = nullptr;
+
+#if USE_SEPARATE_HASH_ARRAY
+    hashes_ = obj.hashes_;
+    obj.hashes_ = nullptr;
+#endif
+
+    return *this;
+  }
+
+  void swap(robin_hood_hash& other) noexcept
+  {
+    using std::swap;
+    swap(num_elems_, other.num_elems_);
+    swap(capacity_, other.capacity_);
+    swap(resize_threshold_, other.resize_threshold_);
+    swap(mask_, other.mask_);
+    swap(buffer_, other.buffer_);
+#if USE_SEPARATE_HASH_ARRAY
+    swap(hashes_, other.hashes_);
+#endif
+  }
+  void swap(robin_hood_hash& l, robin_hood_hash& r) noexcept {
+    l.swap(r);
+  }
+
   ///-----  deconstructors -----///
   ~robin_hood_hash()
-  {   
+  {
     for( int64_t i = 0; i < capacity_; ++i)
     {
       if (elem_hash(i) != 0)
@@ -182,12 +285,25 @@ public:
     }
     free_buffer(buffer_, capacity_);
 #if USE_SEPARATE_HASH_ARRAY
-    delete [] hashes_;
+    if (capacity_ > 0)
+      delete [] hashes_;
 #endif
   }
 
   ///----- Public memober functions ----- ///
-  void resize(size_t new_size)
+
+  // Returns an iterator referring to the first element
+  inline elem_iterator begin()
+  {
+    return elem_iterator(this);
+  }
+
+  inline elem_iterator end()
+  {
+    return elem_iterator();
+  }
+
+  void resize(const size_t new_size)
   {
     capacity_ = new_size;
     alloc();
@@ -202,26 +318,27 @@ public:
     insert_helper(hash_key(key), std::move(key), std::move(val));
   }
 
-  inline elem_iterator end()
-  {
-    return elem_iterator();
-  }
-
-  /// insert a element without duplication
+  /// insert a element without duplicated key-value pair
   inline void insert_unique(Key key, Value val)
   {
     if (has_data(key, val)) return;
-    insert(key, val);
+
+    if (++num_elems_ >= resize_threshold_)
+    {
+      grow();
+    }
+    insert_helper(hash_key(key), std::move(key), std::move(val));
   }
 
-  inline bool has_data(const Key& key, const Value& val)
+  inline bool has_data(const Key& key, const Value& val) const
   {
     return (lookup_index(key, val) != kInvaridIndex);
   }
 
+  // Searches for a first element with a key equivalent to 'key' and returns an iterator to it
   inline elem_iterator find(const Key& key)
   {
-    return(elem_iterator(this, key));
+    return(elem_iterator(this, &key));
   }
 
   inline void erase(const elem_iterator& itr)
@@ -250,6 +367,7 @@ public:
     return num_elems_;
   }
 
+  // Count elements with a key equaivalent to 'key'
   inline size_t count(const Key& key)
   {
     int64_t dist = 0;
@@ -263,6 +381,7 @@ public:
 
     return key_count;
   }
+
 
   /// ----- Public member functions for debug ----- ///
   float average_probe_count() const
@@ -302,7 +421,6 @@ public:
     fout.close();
   }
 
-
 private:
 
 #define USE_TOMBSTONE 1
@@ -331,12 +449,12 @@ private:
     return hash & mask_;
   }
 
-  inline int64_t probe_distance(uint64_t hash, uint64_t slot_index) const
+  inline int64_t probe_distance(const uint64_t hash, const uint64_t slot_index) const
   { 
     return (slot_index + capacity_ - desired_pos(hash)) & mask_;
   }
 
-  inline uint64_t& elem_hash(int64_t ix)
+  inline uint64_t& elem_hash(const int64_t ix)
   {
 #if USE_SEPARATE_HASH_ARRAY
     return hashes_[ix];
@@ -345,7 +463,7 @@ private:
 #endif
   }
 
-  inline uint64_t elem_hash(int64_t ix) const
+  inline uint64_t elem_hash(const int64_t ix) const
   {
     return const_cast<robin_hood_hash*>(this)->elem_hash(ix);
   }
@@ -369,14 +487,14 @@ private:
   }
 
   inline void erase_element(const int64_t positon) {
-        buffer_[positon].~elem();
+    buffer_[positon].~elem();
 
 // mark as deleted
 #if USE_TOMBSTONE == 1
-        elem_hash(positon) |= kTombstoneMask;
+    elem_hash(positon) |= kTombstoneMask;
 #else
-        elem_hash(positon) = 0ULL;
-        backshift_element(positon);
+    elem_hash(positon) = 0ULL;
+    backshift_element(positon);
 #endif
 
   }
@@ -393,6 +511,7 @@ private:
       if ( probe_distance(elem_hash(swapped_pos), swapped_pos) == 0) {
         return ;
       }
+
       std::swap(elem_hash(previous_pos), elem_hash(swapped_pos));
       std::swap(buffer_[previous_pos].key, buffer_[swapped_pos].key);
       std::swap(buffer_[previous_pos].value, buffer_[swapped_pos].value);
@@ -404,7 +523,8 @@ private:
   /// ----- Private funtions: memroy management ----- ///
   // alloc buffer according to currently set capacity
   void alloc()
-  { 
+  {
+    //std::cout << "alloc\n"; //D
     /// This is temprorary codes to remove compile warning
     /// Todo: rewrite fllowing process
     typedef bip::managed_mapped_file mapped_t;
@@ -430,15 +550,16 @@ private:
     mask_ = capacity_ - 1;
   }
 
-  inline void free_buffer(elem* buf, size_t capacity)
+  inline void free_buffer(void *buf, const size_t capacity)
   {
-    allocator_.deallocate(buf, capacity * sizeof(elem));
+    if (buf != nullptr)
+      allocator_.deallocate(buf, capacity * sizeof(elem));
   }
 
   void grow()
   {
     elem* old_elems = buffer_;
-    int64_t old_capacity = capacity_;
+    const int64_t old_capacity = capacity_;
 #if USE_SEPARATE_HASH_ARRAY
     auto old_hashes = hashes_;
 #endif
@@ -510,12 +631,23 @@ private:
   }
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  void get_next_index(const Key& key, int64_t& pos, int64_t& dist)
+  void get_next_index(int64_t& pos) const
+  {
+    ++pos;
+    for(; pos < capacity_; ++pos)
+    { 
+      if (elem_hash(pos) != 0 && !is_deleted(elem_hash(pos)))
+        return;
+    }
+    pos = kInvaridIndex;
+  }
+
+  void get_next_index(const Key& key, int64_t& pos, int64_t& dist) const
   {
     const uint64_t hash = hash_key(key);
     for(;;)
     { 
-      pos = (pos+1) & mask_; // To prevent reference start point, we increment positon at here.
+      pos = (pos+1) & mask_; // In order to prevent finding a start point,e increment positon at here.
       ++dist;
       if (elem_hash(pos) == 0) {// free space is found
         pos = kInvaridIndex;
@@ -529,12 +661,7 @@ private:
     }
   }
 
-  inline Value& get_value(const int64_t pos)
-  {
-    return buffer_[pos].value;
-  }
-
-  inline static bool is_deleted(uint64_t hash)
+  inline static bool is_deleted(const uint64_t hash)
   {
 #if USE_TOMBSTONE == 1
     // MSB set indicates that this hash is a "tombstone"
@@ -544,7 +671,7 @@ private:
 #endif
   }
 
-  inline void construct(int64_t ix, uint64_t hash, Key&& key, Value&& val)
+  inline void construct(const int64_t ix, const uint64_t hash, Key&& key, Value&& val)
   {
     new (&buffer_[ix]) elem(std::move(key), std::move(val));  
     elem_hash(ix) = hash;
@@ -572,10 +699,11 @@ private:
           construct(pos, hash, std::move(key), std::move(val));
           return;
         }
-
+        //std::cout << "swap -- "; //D
         std::swap(hash, elem_hash(pos));
         std::swap(key, buffer_[pos].key);
         std::swap(val, buffer_[pos].value);
+        //std::cout << "swap done\n";
         dist = existing_elem_probe_dist;        
       }
 

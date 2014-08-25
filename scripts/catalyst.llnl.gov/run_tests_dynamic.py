@@ -271,7 +271,7 @@ if DEBUG:
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(30, 1, 30, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
+	#create_commands(30, 1, 30, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
 	#create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "RB_HS", 1, 1)
 	create_commands(30, 1, 30, 1, 1, 1, 1024, 1, "DG_AW", 1, 5)
 
