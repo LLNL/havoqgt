@@ -103,7 +103,7 @@ namespace bip = boost::interprocess;
 #endif
 
 #ifndef DEBUG_INSERTEDEDGES
-  #define DEBUG_INSERTEDEDGES 0
+  #define DEBUG_INSERTEDEDGES 1
 #endif
 
 #if DEBUG_INSERTEDEDGES == 1
@@ -199,9 +199,8 @@ public:
 
   typedef robin_hood_hash<int64_t, int64_t, SegmentManager> robin_hood_hashing_t;
 
-  //typedef std::pair<const uint64_t, robin_hood_hashing_t> map_value_rbh_t;
-  typedef robin_hood_hash<int64_t, robin_hood_hashing_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
-  //typedef boost::unordered_map<uint64_t, robin_hood_hashing_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_rbh_t>> adjacency_matrix_map_rbh_t;
+  typedef robin_hood_hash<int64_t, char, SegmentManager> robin_hood_hashing_novalue_t;
+  typedef robin_hood_hash<int64_t, robin_hood_hashing_novalue_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
 
   enum DataStructureMode {
     kUseVecVecMatrix,
@@ -246,10 +245,10 @@ public:
         break;
 
       case kUseDegreeAwareModel:
-        add_edges_degree_aware_rbh_first(edges);
+        //add_edges_degree_aware_rbh_first(edges);
         //add_edges_degree_aware_bitmap_first(edges);
         //add_edges_degree_aware_adj_first(edges);
-        //add_edges_degree_aware_rbh_first_rbh_mtrx(edges);
+        add_edges_degree_aware_rbh_first_rbh_mtrx(edges);
         break;
 
       default:

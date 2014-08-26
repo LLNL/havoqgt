@@ -80,7 +80,7 @@ typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
 
 template <typename Edges>
-void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager)
+void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager) 
 {
 
   const uint64_t num_edges = edges.size();
@@ -88,6 +88,9 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
   const uint64_t num_loop  = num_edges / chunk_size;
 
   auto edges_itr = edges.begin();
+
+  size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  std::cout << "Usage: segment size =\t"<< usages << std::endl;
 
   for (uint64_t i = 0; i < num_loop; i++ ) {
     std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
@@ -100,9 +103,8 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
     const double time_end = MPI_Wtime();
     std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges);
-    size_t usage = segment_manager->get_size() - segment_manager->get_free_memory();
-    std::cout << "Usage: allocated segment size =\t" << usage << std::endl;
-
+    size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+    std::cout << "Usage: segment size =\t"<< usages << std::endl;
   }
   std::cout << "<< Results >>" << std::endl;
   graph->print_profile();

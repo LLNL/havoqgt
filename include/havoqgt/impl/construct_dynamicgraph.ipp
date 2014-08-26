@@ -149,10 +149,10 @@ construct_dynamicgraph (
       break;
 
     case kUseDegreeAwareModel:
-      adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
+      //adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
       robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
       //is_exist_bmp_ = new bitmap_mgr();
-      //adjacency_matrix_rbh_rbh_ = new adjacency_matrix_rbh_rbh_t(seg_allocator_);
+      adjacency_matrix_rbh_rbh_ = new adjacency_matrix_rbh_rbh_t(seg_allocator_);
       break;
 
     default:
@@ -182,11 +182,6 @@ construct_dynamicgraph<SegementManager>::
   delete adjacency_matrix_map_vec_;
   delete robin_hood_hashing_;
   delete io_info_;
-  // if (adjacency_matrix_vec_vec_ != NULL) delete adjacency_matrix_vec_vec_;
-  // if (init_vec != NULL) delete(init_vec);
-  // if (adjacency_matrix_map_vec_ != NULL) delete adjacency_matrix_map_vec_;
-  // if (robin_hood_hashing_ != NULL) delete robin_hood_hashing_;
-  // if (io_info_ != NULL) delete io_info_;
 }
 
 /**
@@ -215,7 +210,7 @@ add_edges_adjacency_matrix_vector_vector(Container& edges)
     }
     uint64_vector_t& adjacency_list_vec = adjacency_matrix_vec_vec_->at(edge.first);
 #if WITHOUT_DUPLICATE_INSERTION == 1
-    // add a edge without duplication
+    /// add a edge without duplication
     if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) == adjacency_list_vec.end()) {
       adjacency_list_vec.push_back(edge.second);
     }
@@ -231,7 +226,6 @@ add_edges_adjacency_matrix_vector_vector(Container& edges)
 
   io_info_->log_diff();
 
-  //free_edge_container(edges);
 }
 
 
@@ -277,7 +271,6 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_robin_hood_hash(Container& edges)
 {
-
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (auto itr = edges.begin(); itr != edges.end(); itr++) {
@@ -298,8 +291,6 @@ add_edges_robin_hood_hash(Container& edges)
 
   total_exectution_time_ += time_end - time_start;
   io_info_->log_diff();
-  //robin_hood_hashing_->disp_elements();
-
 }
 
 
@@ -396,7 +387,7 @@ NEXT_MOVING:
   io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
-#if 1
+
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
@@ -415,7 +406,7 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container& edges)
     const int64_t target_vtx = itr->second;
 
 #if DEBUG_INSERTEDEDGES == 1
-        fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
+    fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
 #endif
 
     const uint64_t num_edges_rbh = robin_hood_hashing_->count(source_vtx);
@@ -434,12 +425,11 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container& edges)
       } else {
         // -- 2. non-low-degree edges -- //
         //std::cout << "non-low-degree edges\n";//D
-        //auto vl = *itr_rb;
         auto& adjacency_list_rbh = itr_rb->value;
 #if WITHOUT_DUPLICATE_INSERTION == 1
-        adjacency_list_rbh.insert_unique(target_vtx, 1);
+        adjacency_list_rbh.insert_unique(target_vtx, NULL);
 #else
-        adjacency_list_rbh.insert(target_vtx, 1);
+        adjacency_list_rbh.insert(target_vtx, NULL);
 #endif
         ++count_non_low;
       }
@@ -458,9 +448,9 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container& edges)
     } else {
       // -- degree exceed the low-degree-threshold -- //
       //std::cout << "degree exceed the low-degree-threshold\n";//D
-      adjacency_matrix_rbh_rbh_->insert(source_vtx, robin_hood_hashing_t(seg_allocator_));
-      robin_hood_hashing_t &adjacency_list_rbh = (adjacency_matrix_rbh_rbh_->find(source_vtx))->value;
-      adjacency_list_rbh.insert(target_vtx, 1);
+      adjacency_matrix_rbh_rbh_->insert(source_vtx, robin_hood_hashing_novalue_t(seg_allocator_));
+      robin_hood_hashing_novalue_t &adjacency_list_rbh = (adjacency_matrix_rbh_rbh_->find(source_vtx))->value;
+      adjacency_list_rbh.insert(target_vtx, NULL);
 
       // - Move edges to the adjacency-matrix from the robin-hood-hashing - //
       auto itr_rb = robin_hood_hashing_->find(source_vtx);
@@ -471,7 +461,7 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container& edges)
          // in this time, we only compare to the latest edge.
          if (trg_vtx == target_vtx) goto NEXT_MOVING; // a duplicated edge
 #endif
-        adjacency_list_rbh.insert(trg_vtx, 1);
+        adjacency_list_rbh.insert(trg_vtx, NULL);
 
 NEXT_MOVING:
         robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
@@ -495,7 +485,7 @@ NEXT_MOVING:
   io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
-#endif
+
 
 template <typename SegmentManager>
 template <typename Container>

@@ -537,7 +537,6 @@ private:
     // segment_manager_t* segment_manager = allocator_.get_segment_manager();
     // bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
 
-    //std::cout << "Allocating " << capacity_ * sizeof(elem) << " Byte." << std::endl;
     bip::offset_ptr<void> ptr = allocator_.allocate(capacity_ * sizeof(elem));
     buffer_ = reinterpret_cast<elem*>(ptr.get());
 #if USE_SEPARATE_HASH_ARRAY == 1
@@ -557,7 +556,6 @@ private:
   inline void free_buffer(elem *buf, const size_t capacity)
   {
     allocator_.deallocate(buf, capacity * sizeof(elem));
-    //std::cout << "Dealloc: " << capacity * sizeof(elem) << std::endl; //D
   }
 
   void grow()
@@ -567,11 +565,11 @@ private:
 #if USE_SEPARATE_HASH_ARRAY
     auto old_hashes = hashes_;
 #endif
+
     capacity_ *= kCapacityGrowingFactor;
     capacity_ |= capacity_== 0;
-    //std::cout << capacity_ * sizeof(elem) << "alloc now\n"; //D
     alloc();
-    //std::cout << "alloc done\n"; //D
+
     // now copy over old elems
     for(int64_t i = 0; i < old_capacity; ++i)
     {
@@ -587,9 +585,7 @@ private:
         e.~elem();
       }
     }
-    //std::cout << old_capacity * sizeof(elem) << "free now\n"; //D
     free_buffer(old_elems, old_capacity); 
-    //std::cout << "free done\n"; //D  
 #if USE_SEPARATE_HASH_ARRAY
     delete [] old_hashes;
 #endif
@@ -706,11 +702,9 @@ private:
           construct(pos, hash, std::move(key), std::move(val));
           return;
         }
-        //std::cout << "swap -- "; //D
         std::swap(hash, elem_hash(pos));
         std::swap(key, buffer_[pos].key);
         std::swap(val, buffer_[pos].value);
-        //std::cout << "swap done\n";
         dist = existing_elem_probe_dist;        
       }
 
