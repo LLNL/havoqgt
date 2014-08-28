@@ -149,7 +149,8 @@ class delegate_partitioned_graph {
                              ConstructionState stop_after = GraphReady);
 
   template <typename Container>
-  void complete_construction(MPI_Comm mpi_comm, Container& edges);
+  void complete_construction(const SegmentAllocator<void>& seg_allocator,
+    MPI_Comm mpi_comm, Container& edges);
   void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
@@ -242,16 +243,16 @@ class delegate_partitioned_graph {
       return false;
     if(m_owned_info != other.m_owned_info)
       return false;
-    if(m_owned_targets != other.m_owned_targets)
-      return false;
+    // if(m_owned_targets != other.m_owned_targets)
+    //   return false;
     if(m_delegate_info != other.m_delegate_info)
       return false;
     if(m_delegate_degree != other.m_delegate_degree)
       return false;
     if(m_delegate_label != other.m_delegate_label)
       return false;
-    if(m_delegate_targets != other.m_delegate_targets)
-      return false;
+    // if(m_delegate_targets != other.m_delegate_targets)
+    //   return false;
     if(m_map_delegate_locator != other.m_map_delegate_locator)
       return false;
     if(m_delegate_degree_threshold != other.m_delegate_degree_threshold)
@@ -284,7 +285,7 @@ class delegate_partitioned_graph {
   void initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hub_set);
   void initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs);
 
-  void initialize_edge_storage();
+  void initialize_edge_storage(const SegmentAllocator<void>& seg_allocator);
 
   template <typename InputIterator>
   void partition_low_degree(InputIterator unsorted_itr,
@@ -352,7 +353,9 @@ class delegate_partitioned_graph {
 
   bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
   bip::vector<uint32_t, SegmentAllocator<uint32_t>> m_owned_info_tracker;
-  bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+  //bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+  vertex_locator *m_owned_targets;
+  size_t m_owned_targets_size;
 
   // Delegate Storage
   uint64_t m_delegate_degree_threshold;
@@ -360,8 +363,10 @@ class delegate_partitioned_graph {
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
-  bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
-      m_delegate_targets;
+  // bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
+  //     m_delegate_targets;
+  vertex_locator *m_delegate_targets;
+  size_t m_delegate_targets_size;
 
   //Note: BIP only contains a map, not an unordered_map object.
   boost::unordered_map<

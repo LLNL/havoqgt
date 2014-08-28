@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
       }
 
       graph = segment_manager->find<graph_type>("graph_obj").first;
-      graph->complete_construction(MPI_COMM_WORLD, uptri);
+      graph->complete_construction(alloc_inst, MPI_COMM_WORLD, uptri);
     } else {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
 
       // assert(graph_new->compare(graph));
 
-      graph->complete_construction(MPI_COMM_WORLD, rmat);
+      graph->complete_construction(alloc_inst, MPI_COMM_WORLD, rmat);
 
     } else {
       if (mpi_rank == 0) {
@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
         std::cout << "Loading graph from file." << std::endl;
       }
       graph = segment_manager->find<graph_type>("graph_obj").first;
-      graph->complete_construction(MPI_COMM_WORLD, input_edges);
+      graph->complete_construction(alloc_inst, MPI_COMM_WORLD, input_edges);
     } else {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;

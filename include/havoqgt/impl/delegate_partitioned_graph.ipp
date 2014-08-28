@@ -79,12 +79,12 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       m_local_incoming_count(seg_allocator),
       m_owned_info(seg_allocator),
       m_owned_info_tracker(seg_allocator),
-      m_owned_targets(seg_allocator),
+      // m_owned_targets(seg_allocator),
       m_delegate_degree_threshold(delegate_degree_threshold),
       m_delegate_info(seg_allocator),
       m_delegate_degree(seg_allocator),
       m_delegate_label(seg_allocator),
-      m_delegate_targets(seg_allocator),
+      // m_delegate_targets(seg_allocator),
       m_map_delegate_locator(100, boost::hash<uint64_t>(),
           std::equal_to<uint64_t>(), seg_allocator),
       m_controller_locators(seg_allocator) {
@@ -144,7 +144,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   m_graph_state = MetaDataGenerated;
   if (m_graph_state != stop_after) {
-    complete_construction(mpi_comm, edges);
+    complete_construction(seg_allocator, mpi_comm, edges);
   }
 }
 
@@ -155,7 +155,8 @@ template <typename SegmentManager>
 template <typename Container>
 void
 delegate_partitioned_graph<SegmentManager>::
-complete_construction(MPI_Comm mpi_comm, Container& edges) {
+complete_construction(const SegmentAllocator<void>& seg_allocator,
+  MPI_Comm mpi_comm, Container& edges) {
   m_mpi_comm = mpi_comm;
   int temp_mpi_rank, temp_mpi_size;
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &temp_mpi_size) );
@@ -174,7 +175,7 @@ complete_construction(MPI_Comm mpi_comm, Container& edges) {
 
       {
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
-        initialize_edge_storage();
+        initialize_edge_storage(seg_allocator);
             MPI_Barrier(m_mpi_comm);
       }
 
@@ -602,7 +603,7 @@ initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
 template <typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
-initialize_edge_storage() {
+initialize_edge_storage(const SegmentAllocator<void>& seg_allocator) {
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
   for (int i = 0; i < processes_per_node; i++) {
@@ -612,51 +613,24 @@ initialize_edge_storage() {
     }
 
     if (i == m_mpi_rank % processes_per_node) {
+      // m_owned_targets.resize(m_edges_low_count);
+      // m_delegate_targets.resize(m_edges_high_count);
+      m_delegate_targets_size = m_edges_high_count;
+      m_owned_targets_size = m_edges_low_count;
 
-
-
-      #if 1
-        m_owned_targets.resize(m_edges_low_count);
-        m_delegate_targets.resize(m_edges_high_count);
-          #else
-      if (m_mpi_rank == 0) {
-        std::cout << "\tResizing m_delegate_targets: " << std::endl << std::flush;
-      }
-      m_delegate_targets.reserve(m_edges_high_count);
-      m_owned_targets.reserve(m_edges_low_count);
+      SegmentManager *segment_manager = seg_allocator.get_segment_manager();
 
       {
-        size_t  loop_limit = m_edges_low_count;
-        for (size_t j = 0; j < loop_limit; ) {
-          for (size_t k = 0; k < 10000000; k++) {
-            m_owned_targets.emplace_back();
-            j++;
-            if (j >= loop_limit) {
-              break;
-            }
-          }
-        }
+        void * temp = segment_manager->allocate(
+          m_delegate_targets_size * sizeof(vertex_locator));
+        m_delegate_targets = reinterpret_cast<vertex_locator *>(temp);
       }
 
-      if (m_mpi_rank == 0) {
-        std::cout << "\tResizing m_delegate_targets: " << std::endl << std::flush;
-      }
-
-      // hub nodes
       {
-        size_t  loop_limit = m_edges_high_count;
-        for (int j = 0; j < loop_limit; ) {
-          for (int k = 0; k < 10000000; k++) {
-            m_delegate_targets.emplace_back();
-            j++;
-            if (j >= loop_limit) {
-              break;
-            }
-          }
-
-        }
+        void * temp = segment_manager->allocate(
+          m_owned_targets_size * sizeof(vertex_locator));
+        m_owned_targets = reinterpret_cast<vertex_locator *>(temp);
       }
-      #endif
 
       // Currently, m_delegate_info holds the count of high degree edges
       // assigned to this node for each vertex.
@@ -1384,7 +1358,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
         }
         else {
           assert(place_pos < m_delegate_info[new_source_id+1]);
-          assert(place_pos < m_delegate_targets.size());
+          assert(place_pos < m_delegate_targets_size);
 
           uint64_t new_target_label = edge.second;
           m_delegate_targets[place_pos] = label_to_locator(new_target_label);
@@ -1445,7 +1419,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
       }
       else {
         assert(place_pos < m_delegate_info[new_source_id+1]);
-        assert(place_pos < m_delegate_targets.size());
+        assert(place_pos < m_delegate_targets_size);
 
         uint64_t new_target_label = edge.second;
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
@@ -1466,7 +1440,7 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
      recv_count2 += m_delegate_degree[i];
   }
 
-  int64_t difference = recv_count2 - m_delegate_targets.size();
+  int64_t difference = recv_count2 - m_delegate_targets_size;
 
   for (size_t i = 0; i < m_delegate_info.size()-1; i++) {
     size_t pos = m_delegate_info[i];
@@ -1713,11 +1687,11 @@ create_edge_data(SegManagerOther* segment_manager_o,
 
   if (obj_name == nullptr) {
     return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
-            (m_owned_targets.size(), m_delegate_targets.size(),
+            (m_owned_targets_size, m_delegate_targets_size,
               segment_manager_o);
   } else {
     return segment_manager_o->template construct<mytype>(obj_name)
-            (m_owned_targets.size(), m_delegate_targets.size(),
+            (m_owned_targets_size, m_delegate_targets_size,
               segment_manager_o);
   }
 }
@@ -1737,11 +1711,11 @@ create_edge_data(const T& init, SegManagerOther * segment_manager_o,
 
   if (obj_name == nullptr) {
     return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
-            (m_owned_targets.size(), m_delegate_targets.size(), init,
+            (m_owned_targets_size, m_delegate_targets_size, init,
               segment_manager_o);
   } else {
     return segment_manager_o->template construct<mytype>(obj_name)
-            (m_owned_targets.size(), m_delegate_targets.size(), init,
+            (m_owned_targets_size, m_delegate_targets_size, init,
               segment_manager_o);
   }
 }
@@ -1757,8 +1731,8 @@ print_graph_statistics() {
     }
   }*/
 
-  uint64_t low_local_size = m_owned_targets.size();
-  uint64_t high_local_size = m_delegate_targets.size();
+  uint64_t low_local_size = m_owned_targets_size;
+  uint64_t high_local_size = m_delegate_targets_size;
   uint64_t total_local_size = low_local_size + high_local_size;
 
   //
@@ -1780,10 +1754,10 @@ print_graph_statistics() {
     std::plus<uint64_t>(), m_mpi_comm);
 
   if (m_mpi_rank == 0) {
-    std::cout << "counting..(" << m_owned_targets.size() << ")" << std::endl;
+    std::cout << "counting..(" << m_owned_targets_size << ")" << std::endl;
   }
   uint64_t local_count_del_target = 0;
-  for (uint64_t i = 0; i < m_owned_targets.size(); ++i) {
+  for (uint64_t i = 0; i < m_owned_targets_size; ++i) {
     if (m_owned_targets[i].is_delegate())
       ++local_count_del_target;
     if (m_mpi_rank == 0 && i % 10000000 == 0) {
