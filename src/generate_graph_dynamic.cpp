@@ -92,17 +92,19 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
   size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
   std::cout << "Usage: segment size =\t"<< usages << std::endl;
 
-  for (uint64_t i = 0; i < num_loop; i++ ) {
+  for (uint64_t i = 0; i < num_loop; ++i ) {
     std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
     boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
     const double time_start = MPI_Wtime();
-    for (uint64_t j = 0; j < chunk_size && edges_itr != edges.end(); j++, edges_itr++) {
+    //onmemory_edges.resize(chunk_size);
+    auto edges_itr_end = edges.end();
+    for (uint64_t j = 0; j < chunk_size && edges_itr != edges_itr_end; ++j, ++edges_itr) {
       onmemory_edges.push_back(*edges_itr);
       //std::cerr << onmemory_edges[j].first << "\t" << onmemory_edges[j].second << std::endl;
     }
     const double time_end = MPI_Wtime();
     std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-    graph->add_edges_adjacency_matrix(onmemory_edges);
+    graph->add_edges_adjacency_matrix(onmemory_edges.begin(), chunk_size);
     size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
   }
@@ -111,6 +113,58 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
 
 }
 
+
+template <typename Edges>
+void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio) 
+{
+
+  /// Calucurate # of loops and chunk size
+  const uint64_t num_edges = edges.size();
+  chunk_size = std::min(chunk_size, num_edges);
+  const uint64_t num_loop  = num_edges / chunk_size;
+  assert(num_loop*chunk_size == num_edges);
+  
+  size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  std::cout << "\nUsage: segment size =\t"<< usages << std::endl;
+
+  typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
+  requests_vector_t *onmemory_edges = new requests_vector_t();
+
+
+  /// --------- Generate update requests  --------- ///
+  const double time_start = MPI_Wtime();
+  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
+    bool is_delete = std::rand()%100 < edges_delete_ratio;
+    if (is_delete) {
+      EdgeUpdateRequest delete_request(*edges_itr, true);      
+      onmemory_edges->push_back(delete_request);
+    }
+    EdgeUpdateRequest request(*edges_itr, false);
+    onmemory_edges->push_back(request);
+  }
+  /// Randomize order of requests
+  std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
+  const double time_end = MPI_Wtime();
+
+  std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
+  usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  std::cout << "Usage: segment size =\t"<< usages << std::endl;
+
+
+  /// -------------- Edge update loop ----------- ////
+  for (uint64_t i = 0; i < num_loop; ++i) {
+    std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
+
+    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
+
+    usages = segment_manager->get_size() - segment_manager->get_free_memory();
+    std::cout << "Usage: segment size =\t"<< usages << std::endl;
+  }
+  std::cout << "\n<< Results >>" << std::endl;
+  graph->print_profile();
+
+  delete onmemory_edges;
+}
 
 
 int main(int argc, char** argv) {
@@ -152,15 +206,16 @@ int main(int argc, char** argv) {
     uint32_t delete_file;
     uint64_t chunk_size_exp;
     uint64_t low_degree_threshold;
+    uint64_t edges_delete_ratio = 0;
     std::string type;
     std::string fname_output;
     std::string fname_compare = "";
     std::string data_structure_type;
 
-    if (argc < 12) {
+    if (argc < 13) {
       std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
       << " <load_from_disk> <delete file on exit>"
-      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/DG_AW> <low_degree_threshold>"
+      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/RB_MP/RB_MX> <low_degree_threshold>"
       << " <file to compare to>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -177,6 +232,7 @@ int main(int argc, char** argv) {
       chunk_size_exp  = boost::lexical_cast<uint64_t>(argv[pos++]);
       data_structure_type = argv[pos++];
       low_degree_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
+      edges_delete_ratio = boost::lexical_cast<uint64_t>(argv[pos++]);
       if (pos < argc) {
         fname_compare = argv[pos++];
       }
@@ -195,6 +251,7 @@ int main(int argc, char** argv) {
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
       std::cout << "Data structure type: " << data_structure_type << std::endl;
       std::cout << "Low Degree Threshold = " << low_degree_threshold << std::endl;
+      std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
       if (fname_compare != "") {
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
@@ -233,10 +290,14 @@ int main(int argc, char** argv) {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseRobinHoodHash, low_degree_threshold);
-    } else if (data_structure_type == "DG_AW") {
+    } else if (data_structure_type == "RB_MP") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseDegreeAwareModel, low_degree_threshold);
+    } else if (data_structure_type == "RB_MX") {
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelRbhMtx, low_degree_threshold);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);
@@ -249,7 +310,7 @@ int main(int argc, char** argv) {
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        add_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
+        add_and_delte_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "RMAT") {
         uint64_t num_edges_per_rank = num_vertices * edge_factor * 2ULL / mpi_size;
@@ -257,14 +318,14 @@ int main(int argc, char** argv) {
         havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
-
-        add_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
+        
+        add_and_delte_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
         gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1ULL, pa_beta, 0.0, MPI_COMM_WORLD);
 
-        add_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager);
+        add_and_delte_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);

@@ -11,7 +11,7 @@ if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
-NORUN = False
+NORUN = True
 
 USE_CATALYST = True
 
@@ -88,7 +88,7 @@ def generate_shell_file():
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(110*256*1024) + " "
+		slurm_options += "--di-mmap=" + str(10*256) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -237,26 +237,29 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 	graph_file = graph_dir+"out.graph"
 
-	for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :
+	delete_ratio_list = [0, 5, 10, 50, 90]
+	for k in delete_ratio_list:
 
-		save_file = 0
-		compare_files = 0
-		test_type = "RMAT"
-		chunk_size = 20
-		edges_factor = 16
-		scale = initial_scale
-		nodes = inital_nodes
-		degree_threshold = intial_threshold
+		for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :
 
-		while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
-			processes = 1 * nodes
+			save_file = 0
+			compare_files = 0
+			test_type = "RMAT"
+			chunk_size = 20
+			edges_factor = 16
+			scale = initial_scale
+			nodes = inital_nodes
+			degree_threshold = intial_threshold
 
-			cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type, str(i)]
-			add_command(nodes, processes, cmd)
+			while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
+				processes = 1 * nodes
 
-			nodes *= node_multipler
-			scale += scale_increments
-			degree_threshold *= threshold_multiplier
+				cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type, str(i), str(k)]
+				add_command(nodes, processes, cmd)
+
+				nodes *= node_multipler
+				scale += scale_increments
+				degree_threshold *= threshold_multiplier
 
 
 init_test_dir()
@@ -271,9 +274,9 @@ if DEBUG:
 else:
 	#create_commands(17, 1, 30, 1, 1, 1, 1024, 1)
 	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
-	create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
+	#create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
 	#create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "RB_HS", 1, 1)
-	create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "DG_AW", 1, 1)
+	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "RB_MX", 1, 3)
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

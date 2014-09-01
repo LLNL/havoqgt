@@ -89,10 +89,20 @@ class robin_hood_hash {
   ///
   /// Iterator
   ///
-  class elem_iterator : public std::iterator<std::input_iterator_tag, Value, ptrdiff_t, const Value* const, const Value&>
+  class elem_iterator : public std::iterator<std::input_iterator_tag, elem, ptrdiff_t, const elem* const, const elem&>
   {
   public:
+    ///-----  Copy constructor -----///
+    elem_iterator(const elem_iterator &obj)
+    : hash_table_(obj.hash_table_)
+    , key_(obj.key_) 
+    {
+      current_index_ = obj.current_index_;
+      dist_ = obj.dist_;
+    }
 
+
+    ///-----  Operators -----///
     elem& operator*() const
     {
       return hash_table_->buffer_[current_index_];
@@ -128,6 +138,8 @@ class robin_hood_hash {
     operator!=(const elem_iterator& x, const elem_iterator& y)
     { return !x.is_equal(y); }
 
+
+    ///-----  Public function -----///
     inline bool is_valid_index() const
     {
       return (current_index_ != kInvaridIndex);
@@ -136,41 +148,45 @@ class robin_hood_hash {
   private:
     friend class robin_hood_hash;
 
+    ///----- Constructor -----///
     elem_iterator()
     : hash_table_(nullptr)
-    , key_(nullptr) 
+    , key_(0) 
     { 
       current_index_ = kInvaridIndex;
       dist_ = 0;
     }
 
-    explicit elem_iterator(robin_hood_hash *hash_table)
-    : hash_table_(hash_table)
-    , key_(nullptr)
+    explicit elem_iterator(robin_hood_hash *_hash_table)
+    : hash_table_(_hash_table)
+    , key_(0)
     {
       dist_ = 0;
       current_index_ = -1;
-      hash_table->get_next_index(current_index_);
+      hash_table_->get_next_index(current_index_);
     }
 
-    elem_iterator(robin_hood_hash *hash_table, const Key* const key)
-    : hash_table_(hash_table)
-    , key_(key)
+    elem_iterator(robin_hood_hash *_hash_table, const Key& _key)
+    : hash_table_(_hash_table)
+    , key_(_key)
     {
       dist_ = 0;
-      current_index_ = hash_table->lookup_index_first(*key, dist_);
+      current_index_ = hash_table_->lookup_index_first(key_, dist_);
     }
 
+
+    ///----- Private menber functions -----///
     void get_next()
     {
-      if (key_ == nullptr)
+      if (key_ == 0)
         hash_table_->get_next_index(current_index_);
       else
-        hash_table_->get_next_index(*key_, current_index_, dist_);
+        hash_table_->get_next_index(key_, current_index_, dist_);
     }
 
+    ///----- Private member variables -----///
     robin_hood_hash* hash_table_;
-    const Key* const key_;
+    const Key key_;
     int64_t dist_;
     int64_t current_index_;
   };
@@ -178,9 +194,14 @@ class robin_hood_hash {
   friend class elem_iterator;
 
 
+  /// ----------------------------------------------------------- ///
+  ///                  robin_hood_hash class
+  /// ----------------------------------------------------------- ///
+
   ///----- Constructor -----///
-  explicit robin_hood_hash(SegmentAllocator<void>& allocator)
-  : allocator_(allocator)
+  explicit robin_hood_hash(SegmentAllocator<void>& _allocator)
+  : allocator_(_allocator)
+  , ptr_()
   {
     buffer_ = nullptr;
     num_elems_ = 0;
@@ -190,8 +211,9 @@ class robin_hood_hash {
     alloc();
   }
 
-  robin_hood_hash(SegmentAllocator<void>& allocator, size_t initial_capasity) 
-  : allocator_(allocator)
+  robin_hood_hash(SegmentAllocator<void>& _allocator, size_t initial_capasity) 
+  : allocator_(_allocator)
+  , ptr_()
   {
     buffer_ = nullptr;
     num_elems_ = 0;
@@ -204,6 +226,7 @@ class robin_hood_hash {
   ///-----  Copy constructor -----///
   robin_hood_hash(const robin_hood_hash &obj)
   : allocator_(obj.allocator_)
+  , ptr_(obj.ptr_)
   {
     num_elems_ = obj.num_elems_;
     capacity_ = obj.capacity_;
@@ -216,12 +239,12 @@ class robin_hood_hash {
 #if USE_SEPARATE_HASH_ARRAY
     std::memcpy(hashes_, obj.hashes_, capacity_*sizeof(uint64_t));
 #endif
-
   }
 
   ///-----  Move constructor -----///
   robin_hood_hash(robin_hood_hash &&obj) 
   : allocator_(obj.allocator_)
+  , ptr_(obj.ptr_)
   {
     buffer_ = obj.buffer_;
     obj.buffer_ = nullptr;
@@ -238,7 +261,6 @@ class robin_hood_hash {
     hashes_ = obj.hashes_;
     obj.hashes_ = nullptr;
 #endif
-
   }
 
   ///-----  Copy assignment operator -----///
@@ -250,6 +272,7 @@ class robin_hood_hash {
   ///-----  Move assignment operator -----///
   robin_hood_hash &operator=(robin_hood_hash&& obj)
   {
+    ptr_ = obj.ptr_;
     buffer_ = obj.buffer_;
     obj.buffer_ = nullptr;
     num_elems_ = obj.num_elems_;
@@ -265,13 +288,13 @@ class robin_hood_hash {
     hashes_ = obj.hashes_;
     obj.hashes_ = nullptr;
 #endif
-
     return *this;
   }
 
   void swap(robin_hood_hash& other) noexcept
   {
     using std::swap;
+    swap(ptr_, other.ptr_);
     swap(num_elems_, other.num_elems_);
     swap(capacity_, other.capacity_);
     swap(resize_threshold_, other.resize_threshold_);
@@ -292,7 +315,7 @@ class robin_hood_hash {
     {
       if (elem_hash(i) != 0) buffer_[i].~elem();
     }
-    if (buffer_ != nullptr) free_buffer(buffer_, capacity_);
+    if (buffer_ != nullptr) free_buffer(ptr_, capacity_);
 #if USE_SEPARATE_HASH_ARRAY
     delete [] hashes_;
 #endif
@@ -311,12 +334,6 @@ class robin_hood_hash {
     return elem_iterator();
   }
 
-  /// FIXME: need to copy old elements
-  // void resize(const size_t new_size)
-  // {
-  //   capacity_ = new_size;
-  //   alloc();
-  // }
 
   inline void insert(Key key, Value val)
   {
@@ -347,7 +364,7 @@ class robin_hood_hash {
   // Searches for a first element with a key equivalent to 'key' and returns an iterator to it
   inline elem_iterator find(const Key& key)
   {
-    return(elem_iterator(this, &key));
+    return(elem_iterator(this, key));
   }
 
   inline void erase(const elem_iterator& itr)
@@ -369,6 +386,16 @@ class robin_hood_hash {
     }
     num_elems_ -= erased_count;
     return erased_count;
+  }
+
+  /// XXX: this function dose not supporting edge duplication model
+  inline bool erase(const Key& key, const Value& val)
+  {
+    int64_t pos = lookup_index(key, val);
+    if (pos == kInvaridIndex) return false;
+    erase_element(pos);
+    --num_elems_;
+    return true;
   }
 
   inline size_t size() const
@@ -422,6 +449,16 @@ class robin_hood_hash {
     }
   }
 
+  void disp_hashes()
+  {
+    const size_t length = capacity_;
+
+    for (uint64_t i = 0; i < length; ++i) {
+      std::cout << buffer_[i].key << "\t" << elem_hash(i) << "\t" << desired_pos(elem_hash(i)) << "\t" << probe_distance(elem_hash(i), i) << std::endl;
+    }
+  }
+
+
   void dump_elements(const std::string& fname)
   {
     std::ofstream fout;
@@ -437,7 +474,7 @@ class robin_hood_hash {
 
 private:
 
-#define USE_TOMBSTONE 1
+#define USE_TOMBSTONE 0
 #if USE_TOMBSTONE == 1
   #warning Enable USE_TOMBSTONE
 #endif
@@ -477,7 +514,7 @@ private:
   inline static uint64_t hash_key(const Key& key)
   {
     const std::hash<Key> hasher;
-    auto h = static_cast<uint64_t>(hasher(key));
+    uint64_t h = static_cast<uint64_t>(hasher(key));
 
 #if USE_TOMBSTONE == 1
     // MSB is used to indicate a deleted elem, so
@@ -488,7 +525,7 @@ private:
     // Ensure that we never return 0 as a hash,
     // since we use 0 to indicate that the elem has never
     // been used at all.
-    h |= h==0LL;
+    h |= h==0ULL;
     return h;
   }
 
@@ -526,25 +563,26 @@ private:
     } 
   }
 
+
   /// ----- Private funtions: memroy management ----- ///
   // alloc buffer according to currently set capacity
   void alloc()
   {
-    //std::cout << "alloc\n"; //D
     /// This is temprorary codes to remove compile warning
     /// Todo: rewrite fllowing process
     // typedef bip::managed_mapped_file::segment_manager segment_manager_t;
     // segment_manager_t* segment_manager = allocator_.get_segment_manager();
     // bip::allocator<elem,segment_manager_t> alloc_inst(segment_manager);
 
-    bip::offset_ptr<void> ptr = allocator_.allocate(capacity_ * sizeof(elem));
-    buffer_ = reinterpret_cast<elem*>(ptr.get());
+    ptr_ = allocator_.allocate(capacity_ * sizeof(elem));
+    buffer_ = reinterpret_cast<elem*>(ptr_.get());
+
 #if USE_SEPARATE_HASH_ARRAY == 1
     hashes_ = new uint64_t[capacity_];
 #endif
 
     // flag all elems as free
-    for( int64_t i = 0; i < capacity_; ++i)
+    for( uint64_t i = 0; i < capacity_; ++i)
     {
       elem_hash(i) = 0;
     }
@@ -553,15 +591,16 @@ private:
     mask_ = capacity_ - 1;
   }
 
-  inline void free_buffer(elem *buf, const size_t capacity)
+  inline void free_buffer(bip::offset_ptr<void>& _ptr, const size_t _capacity)
   {
-    allocator_.deallocate(buf, capacity * sizeof(elem));
+    allocator_.deallocate(_ptr, _capacity * sizeof(elem));
   }
 
   void grow()
   {
     elem* old_elems = buffer_;
-    const int64_t old_capacity = capacity_;
+    bip::offset_ptr<void> old_ptr(ptr_);
+    const uint64_t old_capacity = capacity_;
 #if USE_SEPARATE_HASH_ARRAY
     auto old_hashes = hashes_;
 #endif
@@ -571,7 +610,7 @@ private:
     alloc();
 
     // now copy over old elems
-    for(int64_t i = 0; i < old_capacity; ++i)
+    for(uint64_t i = 0; i < old_capacity; ++i)
     {
       auto& e = old_elems[i];
 #if USE_SEPARATE_HASH_ARRAY
@@ -585,11 +624,12 @@ private:
         e.~elem();
       }
     }
-    free_buffer(old_elems, old_capacity); 
+    free_buffer(old_ptr, old_capacity); 
 #if USE_SEPARATE_HASH_ARRAY
     delete [] old_hashes;
 #endif
   }
+
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
   int64_t lookup_index_first(const Key& key, int64_t& dist=0) const
@@ -633,12 +673,13 @@ private:
     return kInvaridIndex;
   }
 
+
   /// ----- Private functions: search, delete, inset etc. ----- ///
   void get_next_index(int64_t& pos) const
   {
     ++pos;
     for(; pos < capacity_; ++pos)
-    { 
+    {
       if (elem_hash(pos) != 0 && !is_deleted(elem_hash(pos)))
         return;
     }
@@ -682,12 +723,15 @@ private:
 
   void insert_helper(uint64_t hash, Key&& key, Value&& val)
   {
+
     int64_t pos = desired_pos(hash);
     int64_t dist = 0;
+
     for(;;)
-    {     
+    {
+
       if(elem_hash(pos) == 0)
-      {     
+      {
         construct(pos, hash, std::move(key), std::move(val));
         return;
       }
@@ -713,16 +757,20 @@ private:
     }
   }
 
+
   /// ---------- private menber variavles ---------- ///
-  SegmentAllocator<void>& allocator_;
+  SegmentAllocator<void> allocator_;
+  bip::offset_ptr<void> ptr_;
+
   elem* __restrict buffer_;
 
 #if USE_SEPARATE_HASH_ARRAY
   uint64_t* __restrict hashes_;
-#endif  
-  int64_t num_elems_;
-  int64_t capacity_;
-  int64_t resize_threshold_;
+#endif
+
+  uint64_t num_elems_;
+  uint64_t capacity_;
+  uint64_t resize_threshold_;
   uint64_t mask_;
 
 };
