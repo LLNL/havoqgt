@@ -213,7 +213,7 @@ public:
   uint64_t parent() const  { return m_parent; }
 
   friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
-    return v1.level() > v2.level();
+    //return v1.level() > v2.level();
     if(v1.level() > v2.level())
     {
       return true;
