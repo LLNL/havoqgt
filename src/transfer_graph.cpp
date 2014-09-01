@@ -16,44 +16,35 @@ void execute_command(int backup, std::string fname_input,
 
 int main(int argc, char** argv) {
   int mpi_rank(0), mpi_size(0);
-
+i
   CHK_MPI(MPI_Init(&argc, &argv));
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
 
   int backup;
-  std::string fname_input, fname_output;
+  std::string fname_input;
+  std::string fname_output;
 
   int pos = 1;
-  if (argc == 4) {
+  if (argc == 3) {
     fname_input = argv[pos++];
     fname_output = argv[pos++];
-    backup = atoi(argv[pos++]);
+
   } else {
     if (mpi_rank == 0) {
-      std::cout << "Parameter Error: <input_file> <output_directory> "
-        << "<backup (1) | restore (0)>:" << std::endl;
+      std::cout << "Parameter Error: <input_file> <output_file>" << std::endl;
     }
     return -1;
   }
 
   if (mpi_rank == 0) {
-    if (backup == 1) {
-      std::cout << "Backing up File: ";
-    } else {
-      std::cout << "Restoring File:";
-    }
-    std::cout << "Source = '" << fname_input.c_str() << "' "
-      << "Destination = '" << fname_output.c_str() << "'" << std::endl;
+    std::cout << "Restoring File:";
+    std::cout << "Source = '" << fname_input.c_str() << std::endl;
+    std::cout << "Dest = '" << fname_output.c_str() << std::endl;
   }
-
 
   fname_input += "_" + std::to_string(mpi_rank);
-  if (backup == 0) {
-    fname_input += ".tar";
-  }
-
-  {
+ {
     std::ifstream fin(fname_input);
     bool is_good = fin.good();
     fin.close();
@@ -102,27 +93,10 @@ void execute_command(int backup, std::string fname_input,
   std::string fname_output) {
 
   std::string tar_str;
-  if (backup == 1) {
-    if (verbose)
-      std::cout << "Backing up File: ";
-    size_t found = fname_input.rfind("/");
-    if (found == std::string::npos) {
-      found = 0;
-    }
-    else {
-      found++;
-    }
-    fname_output += "/"+fname_input.substr(found)+".tar";
+  if (verbose)
+    std::cout << "Restoring File:";
 
-    fname_input = fname_input.substr(1);
-
-    tar_str = "tar -Scf " + fname_output + " -C /  " + fname_input;
-
-  } else {
-    if (verbose)
-      std::cout << "Restoring File:";
-    tar_str = "tar -xf " + fname_input + " -C " + fname_output + " --strip-components=2 " ;
-  }
+  tar_str = "cp " + fname_input + " " + fname_output;
 
   if (verbose)
     std::cout << "Source = '" << fname_input.c_str() << "' "
