@@ -155,6 +155,7 @@ class robin_hood_hash {
     { 
       current_index_ = kInvaridIndex;
       dist_ = 0;
+      has_key = false;
     }
 
     explicit elem_iterator(robin_hood_hash *_hash_table)
@@ -163,6 +164,7 @@ class robin_hood_hash {
     {
       dist_ = 0;
       current_index_ = -1;
+      has_key = false;
       hash_table_->get_next_index(current_index_);
     }
 
@@ -171,6 +173,7 @@ class robin_hood_hash {
     , key_(_key)
     {
       dist_ = 0;
+      has_key = true;
       current_index_ = hash_table_->lookup_index_first(key_, dist_);
     }
 
@@ -178,10 +181,10 @@ class robin_hood_hash {
     ///----- Private menber functions -----///
     void get_next()
     {
-      if (key_ == 0)
-        hash_table_->get_next_index(current_index_);
-      else
+      if (has_key)
         hash_table_->get_next_index(key_, current_index_, dist_);
+      else
+        hash_table_->get_next_index(current_index_);
     }
 
     ///----- Private member variables -----///
@@ -189,6 +192,7 @@ class robin_hood_hash {
     const Key key_;
     int64_t dist_;
     int64_t current_index_;
+    bool has_key;
   };
 
   friend class elem_iterator;
@@ -345,15 +349,16 @@ class robin_hood_hash {
   }
 
   /// insert a element without duplicated key-value pair
-  inline void insert_unique(Key key, Value val)
+  inline bool insert_unique(Key key, Value val)
   {
-    if (has_data(key, val)) return;
+    if (has_data(key, val)) return false;
 
     if (++num_elems_ >= resize_threshold_)
     {
       grow();
     }
     insert_helper(hash_key(key), std::move(key), std::move(val));
+    return true;
   }
 
   inline bool has_data(const Key& key, const Value& val) const
@@ -367,31 +372,40 @@ class robin_hood_hash {
     return(elem_iterator(this, key));
   }
 
-  inline void erase(const elem_iterator& itr)
+  inline void erase(elem_iterator& itr)
   {
+    /// FIXME:
+    //assert(itr.current_index_ >= 0 && itr.current_index_ < capacity_); //D
+
     erase_element(itr.current_index_);
+#if USE_TOMBSTONE == 0
+    if (!is_deleted(itr.current_index_)) {
+      itr.current_index_ = (itr.current_index_ + capacity_ - 1) % capacity_;
+      --(itr.dist_);
+    }
+#endif
     --num_elems_;
   }
 
-  inline size_t erase(const Key& key)
-  {
-    int64_t dist = 0;
-    int64_t pos = lookup_index_first(key, dist);
+  // inline size_t erase(const Key& key)
+  // {
+  //   int64_t dist = 0;
+  //   int64_t pos = lookup_index_first(key, dist);
     
-    size_t erased_count = 0;
-    while(pos != kInvaridIndex) {
-      get_next_index(key, pos, dist);
-      erase_element(pos);
-      ++erased_count;
-    }
-    num_elems_ -= erased_count;
-    return erased_count;
-  }
+  //   size_t erased_count = 0;
+  //   while(pos != kInvaridIndex) {
+  //     get_next_index(key, pos, dist);
+  //     erase_element(pos);
+  //     ++erased_count;
+  //   }
+  //   num_elems_ -= erased_count;
+  //   return erased_count;
+  // }
 
-  /// XXX: this function dose not supporting edge duplication model
+  /// XXX: this function dose not supporting duplicated edges model
   inline bool erase(const Key& key, const Value& val)
   {
-    int64_t pos = lookup_index(key, val);
+    const int64_t pos = lookup_index(key, val);
     if (pos == kInvaridIndex) return false;
     erase_element(pos);
     --num_elems_;
@@ -474,9 +488,9 @@ class robin_hood_hash {
 
 private:
 
-#define USE_TOMBSTONE 0
-#if USE_TOMBSTONE == 1
-  #warning Enable USE_TOMBSTONE
+#define USE_TOMBSTONE 1
+#if USE_TOMBSTONE == 0
+  #error Backshift model has a bug
 #endif
 
   static const int64_t kInitialCapacity = 1; // must be 1 or more
@@ -497,7 +511,7 @@ private:
     return (slot_index + capacity_ - desired_pos(hash)) & mask_;
   }
 
-  inline uint64_t& elem_hash(const int64_t ix)
+  inline uint64_t& elem_hash(int64_t ix)
   {
 #if USE_SEPARATE_HASH_ARRAY
     return hashes_[ix];
@@ -506,7 +520,7 @@ private:
 #endif
   }
 
-  inline uint64_t elem_hash(const int64_t ix) const
+  inline uint64_t elem_hash(int64_t ix) const
   {
     return const_cast<robin_hood_hash*>(this)->elem_hash(ix);
   }
@@ -549,10 +563,10 @@ private:
     for(;;)
     {             
       if (elem_hash(swapped_pos) == 0) {// free space is found
-        return ;
+        break ;
       } 
       if ( probe_distance(elem_hash(swapped_pos), swapped_pos) == 0) {
-        return ;
+        break ;
       }
 
       std::swap(elem_hash(previous_pos), elem_hash(swapped_pos));
@@ -560,7 +574,8 @@ private:
       std::swap(buffer_[previous_pos].value, buffer_[swapped_pos].value);
       previous_pos = swapped_pos;
       swapped_pos = (swapped_pos+1) & mask_;
-    } 
+    }
+    
   }
 
 
@@ -600,6 +615,7 @@ private:
   {
     elem* old_elems = buffer_;
     bip::offset_ptr<void> old_ptr(ptr_);
+
     const uint64_t old_capacity = capacity_;
 #if USE_SEPARATE_HASH_ARRAY
     auto old_hashes = hashes_;
@@ -686,8 +702,9 @@ private:
     pos = kInvaridIndex;
   }
 
-  void get_next_index(const Key& key, int64_t& pos, int64_t& dist) const
+  void get_next_index(const Key& key, int64_t& pos, int64_t& dist)
   {
+
     const uint64_t hash = hash_key(key);
     for(;;)
     { 
@@ -750,6 +767,9 @@ private:
         std::swap(key, buffer_[pos].key);
         std::swap(val, buffer_[pos].value);
         dist = existing_elem_probe_dist;        
+      } else if (existing_elem_probe_dist == dist && is_deleted(elem_hash(pos))) {
+        construct(pos, hash, std::move(key), std::move(val));
+        return;        
       }
 
       pos = (pos+1) & mask_;

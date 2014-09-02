@@ -173,7 +173,7 @@
   io_info_ = new IOInfo();
   total_exectution_time_  = 0.0;
 
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   fout_debug_insertededges_.open(kFnameDebugInsertedEdges+"_raw");
 #endif
 
@@ -283,7 +283,7 @@ add_edges_robin_hood_hash(Container req_itr, size_t length)
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
     const auto& edge = req_itr->edge;
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
     fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
 #endif
 #if WITHOUT_DUPLICATE_INSERTION == 1
@@ -319,7 +319,7 @@ add_edges_degree_aware_rbh_first(Container req_itr, size_t length)
     const int64_t source_vtx = req_itr->edge.first;
     const int64_t target_vtx = req_itr->edge.second;
 
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
     fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
 #endif
 
@@ -415,13 +415,13 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length)
     const uint64_t source_vtx = req_itr->edge.first;
     const uint64_t target_vtx = req_itr->edge.second;
 
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
     fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
 #endif
 
     if (req_itr->is_delete) {
       count_delete += delete_edge_from_rbh_rbh_mtrx(source_vtx, target_vtx);
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
       continue;
@@ -441,48 +441,48 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length)
 
 
 #if WITHOUT_DUPLICATE_INSERTION == 1
-        adjacency_list_rbh.insert_unique(target_vtx, kNoValue);
+        count_non_low += adjacency_list_rbh.insert_unique(target_vtx, kNoValue);
 #else
         adjacency_list_rbh.insert(target_vtx, kNoValue);
-#endif
         ++count_non_low;
+#endif
       }
 
 
     } else if (num_edges_rbh < kLowDegreeThreshold) {
       // -- 3. Low-degree edge -- //
 #if WITHOUT_DUPLICATE_INSERTION == 1
-      robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
+      count_low += robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
 #else
       robin_hood_hashing_->insert(source_vtx, target_vtx);
-#endif
       ++count_low;
-
+#endif
     } else {
       // -- 4. degree exceed the low-degree-threshold -- //
 
       /// If a new edge is same as existed edge which are stored in low-degree data structure
       /// and low-degree threshold is 1, we don't make instance into adjacency-matrix.
       auto itr_rb = robin_hood_hashing_->find(source_vtx);
+#if WITHOUT_DUPLICATE_INSERTION == 1
       if (itr_rb->value == target_vtx && num_edges_rbh == 1) continue;
-
+#endif
       adjacency_matrix_rbh_rbh_->insert(source_vtx, robin_hood_hashing_novalue_t(seg_allocator_));
       robin_hood_hashing_novalue_t &adjacency_list_rbh = adjacency_matrix_rbh_rbh_->find(source_vtx)->value;
       adjacency_list_rbh.insert(target_vtx, kNoValue);
+      ++count_move;
 
       // - Move edges to the adjacency-matrix from the robin-hood-hashing - //
       for (int64_t i = 0; i < kLowDegreeThreshold; ++i, ++itr_rb) {
-       const auto trg_vtx = itr_rb->value;
+       const uint64_t trg_vtx = itr_rb->value;
 #if WITHOUT_DUPLICATE_INSERTION == 1
-        if (trg_vtx == target_vtx) goto NEXT_MOVING; // a duplicated edge
+        if (trg_vtx == target_vtx) goto NEXT_MOVING;
 #endif
         adjacency_list_rbh.insert(trg_vtx, kNoValue);
+        ++count_move;
 
         NEXT_MOVING:
         robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
       } // End of the edges moving loop
-
-      ++count_move;
     }
 
   } // End of a edges insertion loop
@@ -493,8 +493,7 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length)
   std::cout << "Count: # new inserted edges =\t" << count_new << std::endl;
   std::cout << "Count: # low degree edges =\t" << count_low << std::endl;
   std::cout << "Count: # non-low degree edges =\t" << count_non_low << std::endl;
-  std::cout << "Count: # moved vertices =\t" << count_move << std::endl;
-  std::cout << "Count: # moved edges =\t" << count_move * kLowDegreeThreshold << std::endl;
+  std::cout << "Count: # moved edges =\t" << count_move << std::endl;
   std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
   std::cout << "Allocated size for low-degree-edges =\t" << robin_hood_hashing_->allocated_size() << std::endl;
   std::cout << "Allocated size for non-low-degree-edges =\t" << adjacency_matrix_rbh_rbh_->allocated_size() << std::endl;
@@ -544,8 +543,8 @@ print_profile()
   io_info_->log_diff(true);
 
   std::cout << "WITHOUT_DUPLICATE_INSERTION is " << WITHOUT_DUPLICATE_INSERTION << std::endl;
-  std::cout << "DEBUG_INSERTEDEDGES is " << DEBUG_INSERTEDEDGES << std::endl;
-#if DEBUG_INSERTEDEDGES
+  std::cout << "DEBUG_DUMPUPDATEREQUESTANDRESULTS is " << DEBUG_DUMPUPDATEREQUESTANDRESULTS << std::endl;
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS
   std::cout << "kFnameDebugInsertedEdges is " << kFnameDebugInsertedEdges << std::endl;
 #endif
   if (data_structure_type_ == kUseRobinHoodHash ||
@@ -556,7 +555,7 @@ print_profile()
     std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
   }
 
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream tmp;
   tmp.open(kFnameDebugInsertedEdges+"_graph", std::ios::trunc);
   tmp.close();

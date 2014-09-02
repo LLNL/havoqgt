@@ -84,12 +84,12 @@ namespace bip = boost::interprocess;
   #define WITHOUT_DUPLICATE_INSERTION 1
 #endif
 
-#ifndef DEBUG_INSERTEDEDGES
-  #define DEBUG_INSERTEDEDGES 0
+#ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
+  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
 #endif
 
-#if DEBUG_INSERTEDEDGES == 1
-  #warning DEBUG_INSERTEDEDGES is enabled.
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+  #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
   static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
@@ -337,7 +337,7 @@ class construct_dynamicgraph {
   IOInfo *io_info_;
   double total_exectution_time_;
 
-#if DEBUG_INSERTEDEDGES == 1
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream fout_debug_insertededges_;
 #endif
 
