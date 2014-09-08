@@ -64,7 +64,7 @@ class bfs_priority_queue
 {
 
 protected:
-  std::priority_queue< Visitor, std::vector<Visitor>, 
+  std::priority_queue< Visitor, std::deque<Visitor>, 
                                std::greater<Visitor> > m_data;
 public:
   bfs_priority_queue() { }
