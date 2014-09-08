@@ -78,8 +78,8 @@
 #endif
 
 #ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 8
- #warning using default edge pass partitions of eight.
+ #define EDGE_PASS_PARTITIONS 4
+ #warning using default edge pass partitions of 4
 #endif
 
 #ifndef EDGE_CHUNK_SIZE
@@ -354,7 +354,7 @@ class delegate_partitioned_graph {
   bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
   bip::vector<uint32_t, SegmentAllocator<uint32_t>> m_owned_info_tracker;
   //bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
-  vertex_locator *m_owned_targets;
+  bip::offset_ptr<vertex_locator> m_owned_targets;
   size_t m_owned_targets_size;
 
   // Delegate Storage
@@ -365,7 +365,7 @@ class delegate_partitioned_graph {
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
   // bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
   //     m_delegate_targets;
-  vertex_locator *m_delegate_targets;
+  bip::offset_ptr<vertex_locator> m_delegate_targets;
   size_t m_delegate_targets_size;
 
   //Note: BIP only contains a map, not an unordered_map object.
