@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     }
     std::cout << std::endl;
     havoqgt::get_environment().print();
-    print_system_info(false);
+    //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
 
   // BFS Experiments
   {
-    #if 1
+    #if 0
     typedef bip::managed_mapped_file bfs_mapped_t;
     uint64_t file_size = (173249084000.0/24.0);
 
@@ -176,7 +176,8 @@ int main(int argc, char** argv) {
     #else
 
     typedef bip::managed_heap_memory bfs_mapped_t;
-    uint64_t filesize = (90000000000.0/24.0);
+    //uint64_t filesize = (21474836480/24.0);
+    uint64_t filesize = (20401094656/24.0);
     bfs_mapped_t bfs_mapped_data(filesize);
     #endif
 
@@ -266,7 +267,7 @@ int main(int argc, char** argv) {
           std::cout
             << "Visited total = " << visited_total
             << ", percentage visited = "
-            << double(visited_total) / double(graph->max_vertex_id()) * 100
+            << double(visited_total) / double(graph->max_vertex_id() * mpi_size) * 100
             << "%" << std::endl
             << "BFS Time = " << time_end - time_start << std::endl;
           time += time_end - time_start;
@@ -285,7 +286,7 @@ int main(int argc, char** argv) {
 
   if (mpi_rank == 0) {
     std::cout << "FIN." << std::endl;
-    print_system_info(false);
+    //print_system_info(false);
     // print_dmesg();
   }
   return 0;

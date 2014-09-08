@@ -130,10 +130,10 @@ void flush_advise_vector(Vector &vec) {
 uint32_t get_disk_utilization() {
   uint32_t dirty_kb;
 
-  FILE *pipe;
-  pipe = popen("df -h /l/ssd | grep /dev/md0  | awk '{print $3}'", "r" );
-  fscanf(pipe, "%u", &dirty_kb);
-  pclose(pipe);
+  //FILE *pipe;
+  //pipe = popen("df -h /l/ssd | grep /dev/md0  | awk '{print $3}'", "r" );
+  //fscanf(pipe, "%u", &dirty_kb);
+  //pclose(pipe);
 
   return dirty_kb;
 }
@@ -198,10 +198,10 @@ void print_dmesg() {
 uint32_t get_dirty_pages() {
   uint32_t dirty_kb;
 
-  FILE *pipe;
-  pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
-  fscanf(pipe, "%u", &dirty_kb);
-  pclose(pipe);
+  //FILE *pipe;
+  //pipe = popen("grep Dirty /proc/meminfo | awk '{print $2}'", "r" );
+  //fscanf(pipe, "%u", &dirty_kb);
+  //pclose(pipe);
 
   return dirty_kb;
 }
@@ -214,12 +214,12 @@ bool check_dirty_pages() {
 
 
 void get_io_stat_info(int &r, int &w) {
-  FILE *pipe;
-  char str[250];
-  pipe = popen("iostat -m | grep md0 2>&1 | awk '{printf \"%d %d\\n\" , $5, $6}'", "r" );
+  //FILE *pipe;
+  //char str[250];
+  //pipe = popen("iostat -m | grep md0 2>&1 | awk '{printf \"%d %d\\n\" , $5, $6}'", "r" );
 
-  fscanf(pipe, "%d %d", &r, &w);
-  pclose(pipe);
+  //fscanf(pipe, "%d %d", &r, &w);
+  //pclose(pipe);
 };
 
 

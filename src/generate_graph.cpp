@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
     havoqgt::get_environment().print();
 
-    print_system_info(false);
+    //print_system_info(false);
 
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -316,19 +316,16 @@ int main(int argc, char** argv) {
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
 
   if (mpi_rank == 0) {
-    print_system_info(false);
+    //print_system_info(false);
     //print_dmesg();
   }
 
 
+  } //END Main MPI
+  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   if (mpi_rank == 0)
     std::cout << "Pre Finalize." << std::endl;
-
   CHK_MPI(MPI_Finalize());
-  } //END Main MPI
-
-//  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-
   if (mpi_rank == 0)
     std::cout << "After Bracket." << std::endl;
 

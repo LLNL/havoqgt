@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
     }
     std::cout << std::endl;
     havoqgt::get_environment().print();
-    print_system_info(false);
+    //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -316,7 +316,7 @@ int main(int argc, char** argv) {
     double time(0);
     int count(0);
     uint64_t isource=0;
-    for(int nrbfs = 0; nrbfs < 16; ++nrbfs) {
+    for(int nrbfs = 0; nrbfs < 8; ++nrbfs) {
       graph_type::vertex_locator source = graph->label_to_locator(isource);
       uint64_t global_degree(0);
       do {
@@ -394,7 +394,7 @@ int main(int argc, char** argv) {
   CHK_MPI(MPI_Finalize());
   if (mpi_rank == 0) {
     std::cout << "FIN." << std::endl;
-    print_system_info(false);
+    //print_system_info(false);
     //print_dmesg();
   }
   return 0;
