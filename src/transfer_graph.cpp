@@ -16,7 +16,6 @@ void execute_command(int backup, std::string fname_input,
 
 int main(int argc, char** argv) {
   int mpi_rank(0), mpi_size(0);
-i
   CHK_MPI(MPI_Init(&argc, &argv));
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
