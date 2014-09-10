@@ -80,7 +80,7 @@ typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
 
 template <typename Edges>
-void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager) 
+void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager)
 {
 
   const uint64_t num_edges = edges.size();
@@ -115,7 +115,7 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
 
 
 template <typename Edges>
-void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio) 
+void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio)
 {
 
   /// Calucurate # of loops and chunk size
@@ -123,7 +123,7 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   chunk_size = std::min(chunk_size, num_edges);
   const uint64_t num_loop  = num_edges / chunk_size;
   assert(num_loop*chunk_size == num_edges);
-  
+
   size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
   std::cout << "\nUsage: segment size =\t"<< usages << std::endl;
 
@@ -136,7 +136,7 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
     bool is_delete = std::rand()%100 < edges_delete_ratio;
     if (is_delete) {
-      EdgeUpdateRequest delete_request(*edges_itr, true);      
+      EdgeUpdateRequest delete_request(*edges_itr, true);
       onmemory_edges->push_back(delete_request);
     }
     EdgeUpdateRequest request(*edges_itr, false);
@@ -286,18 +286,22 @@ int main(int argc, char** argv) {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseMapVecMatrix, low_degree_threshold);
-    } else if (data_structure_type == "RB_HS") {
+    } else if (data_structure_type == "RH_HS") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseRobinHoodHash, low_degree_threshold);
-    } else if (data_structure_type == "RB_MP") {
+    } else if (data_structure_type == "RH_MP") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseDegreeAwareModel, low_degree_threshold);
-    } else if (data_structure_type == "RB_MX") {
+    } else if (data_structure_type == "RH_MX") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseDegreeAwareModelRbhMtx, low_degree_threshold);
+    } else if (data_structure_type == "ML_RH") {
+      graph = segment_manager->construct<graph_type>
+      ("graph_obj")
+      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelMultiRhh, low_degree_threshold);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);
@@ -306,24 +310,24 @@ int main(int argc, char** argv) {
     if (load_from_disk  == 0) {
 
       if(type == "UPTRI") {
-        uint64_t num_edges = num_vertices * edge_factor * 2ULL;
+        uint64_t num_edges = num_vertices * edge_factor * 2LL;
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
         add_and_delte_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "RMAT") {
-        uint64_t num_edges_per_rank = num_vertices * edge_factor * 2ULL / mpi_size;
+        uint64_t num_edges_per_rank = num_vertices * edge_factor * 2LL / mpi_size;
 
         havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, true);
-        
+
         add_and_delte_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1ULL, pa_beta, 0.0, MPI_COMM_WORLD);
+        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1LL, pa_beta, 0.0, MPI_COMM_WORLD);
 
         add_and_delte_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
         {
@@ -349,10 +353,10 @@ int main(int argc, char** argv) {
       if (i == mpi_rank) {
         size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
         double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] " 
+        std::cout << "[" << mpi_rank << "] "
         << usages << " "
         << segment_manager->get_free_memory()
-        << "/" << segment_manager->get_size() 
+        << "/" << segment_manager->get_size()
         << " = " << percent << std::endl;
       }
       MPI_Barrier(MPI_COMM_WORLD);

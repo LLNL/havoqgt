@@ -106,7 +106,7 @@
       std::cout << "MB Written:\t"  << written << std::endl;
       if (final) {
         std::cout << "Total MB Read:\t"    << read_total_mb_     << std::endl;
-        std::cout << "Total MB Written:\t" << written_total_mb_  << std::endl;    
+        std::cout << "Total MB Written:\t" << written_total_mb_  << std::endl;
       }
 
       read_previous_mb_    = read_current_mb;
@@ -164,6 +164,14 @@
     // std::cout << "Random seed is time" << std::endl;
     break;
 
+    case kUseDegreeAwareModelMultiRhh:
+    std::srand(1);
+    std::cout << "Random seed is 1" << std::endl;
+    // std::srand(std::time(0));
+    // std::cout << "Random seed is time" << std::endl;
+    multi_rhh_ = new multi_rhh_t(seg_allocator_);
+    break;
+
     default:
     std::cerr << "Unknown data structure type" << std::endl;
     assert(false);
@@ -190,6 +198,8 @@ template <typename SegementManager>
   delete init_vec;
   delete adjacency_matrix_map_vec_;
   delete robin_hood_hashing_;
+  multi_rhh_->free(seg_allocator_);
+  delete multi_rhh_;
   delete io_info_;
 }
 
@@ -230,7 +240,7 @@ template <typename Container>
   flush_pagecache();
   double time_end = MPI_Wtime();
 
-  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;  
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   total_exectution_time_ += time_end - time_start;
 
   io_info_->log_diff();
@@ -263,9 +273,9 @@ add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
       adjacency_list_vec.push_back(edge.second);
 
     }
-  }  
+  }
   flush_pagecache();
-  double time_end = MPI_Wtime();  
+  double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
@@ -293,7 +303,7 @@ add_edges_robin_hood_hash(Container req_itr, size_t length)
 #endif
   }
   flush_pagecache();
-  double time_end = MPI_Wtime();  
+  double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
@@ -335,7 +345,7 @@ add_edges_degree_aware_rbh_first(Container req_itr, size_t length)
         // -- 1. new vertex -- //
         robin_hood_hashing_->insert(source_vtx, target_vtx);
         ++count_new;
-      } else { 
+      } else {
         // -- 2. non-low-degree edges -- //
         uint64_vector_t& adjacency_list_vec = value->second;
 #if WITHOUT_DUPLICATE_INSERTION == 1
@@ -383,7 +393,7 @@ add_edges_degree_aware_rbh_first(Container req_itr, size_t length)
 
   } // End of a edges insertion loop
   flush_pagecache();
-  double time_end = MPI_Wtime();  
+  double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   std::cout << "Count: # new inserted edges =\t" << count_new << std::endl;
@@ -487,7 +497,7 @@ add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length)
 
   } // End of a edges insertion loop
   flush_pagecache();
-  double time_end = MPI_Wtime();  
+  double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   std::cout << "Count: # new inserted edges =\t" << count_new << std::endl;
@@ -508,7 +518,7 @@ delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx
 
   /// Delete from the robin hood hashing 1-D array
   if (robin_hood_hashing_->erase(source_vtx, target_vtx)) { return true; }
-  
+
   /// If there is no 'source_vtx', then return false.
   auto itr_mtrx_rb = adjacency_matrix_rbh_rbh_->find(source_vtx);
   if (!itr_mtrx_rb.is_valid_index()) { return false; }
@@ -517,7 +527,7 @@ delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx
   /// If the edge is not existed, then return false.
   auto& adjacency_list_rbh = itr_mtrx_rb->value;
   if (!adjacency_list_rbh.erase(target_vtx, kNoValue)) { return false; }
-  
+
   /// If degree on the adjacency-list become equal to low-degree threshold,
   /// move edges from the adjacency-list to the 1-D hash array.
   uint64_t degree = adjacency_list_rbh.size();
@@ -527,13 +537,52 @@ delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx
       robin_hood_hashing_->insert(source_vtx, itr->key); /// Note: we don't need to call unique insert function.
       //adjacency_list_rbh.erase(itr);
     }
-    /// delete a element from the adjacency-matrix 
+    /// delete a element from the adjacency-matrix
     adjacency_matrix_rbh_rbh_->erase(itr_mtrx_rb);
   }
 
   return true;
 }
 
+template <typename SegmentManager>
+template <typename Container>
+void construct_dynamicgraph<SegmentManager>::
+add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length)
+{
+  uint64_t count_inserted = 0;
+  uint64_t count_delete = 0;
+
+  io_info_->reset_baseline();
+  double time_start = MPI_Wtime();
+  for (size_t k = 0; k < length; ++k, ++req_itr) {
+
+    const uint64_t source_vtx = req_itr->edge.first;
+    const uint64_t target_vtx = req_itr->edge.second;
+
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+    fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
+#endif
+
+    if (req_itr->is_delete) {
+      count_delete += multi_rhh_->erase(seg_allocator_, source_vtx, target_vtx);
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+      fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
+#endif
+    } else {
+      count_inserted += multi_rhh_->insert_uniquely(seg_allocator_, source_vtx, target_vtx);
+    }
+
+
+  } // End of a edges insertion loop
+  flush_pagecache();
+  double time_end = MPI_Wtime();
+
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+  std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
+  std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
+  io_info_->log_diff();
+  total_exectution_time_ += time_end - time_start;
+}
 
 template <typename SegmentManager>
 void construct_dynamicgraph<SegmentManager>::
@@ -552,7 +601,14 @@ print_profile()
       data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
-    std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
+    //std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
+  }
+  if (data_structure_type_ == kUseDegreeAwareModelMultiRhh) {
+    std::cout << "\n<Status of the data structure>" << std::endl;
+    multi_rhh_->disp_status();
+    std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
+    std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
+    std::cout << "--------------------" << std::endl;
   }
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
@@ -571,28 +627,36 @@ print_profile()
     }
     fout.close();
   }
+
   if (data_structure_type_ == kUseRobinHoodHash || data_structure_type_ == kUseDegreeAwareModel || data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
     std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
     robin_hood_hashing_->dump_elements(kFnameDebugInsertedEdges+"_graph");
     //robin_hood_hashing_->disp_elements();
   }
+
   if (data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
     for(auto itr = adjacency_matrix_rbh_rbh_->begin(), itr_end=adjacency_matrix_rbh_rbh_->end();
         itr!=itr_end;
-        ++itr) 
+        ++itr)
     {
           auto& list = itr->value;
           for (auto itr_lst = list.begin(), itr_lst_end = list.end();
             itr_lst != itr_lst_end;
-            ++itr_lst) 
+            ++itr_lst)
           {
               fout << itr->key << "\t" << itr_lst->key << std::endl;
           }
     }
     fout.close();
     //robin_hood_hashing_->disp_elements();
+  }
+
+  if (data_structure_type_ == kUseDegreeAwareModelMultiRhh) {
+    std::ofstream fout;
+    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
+    multi_rhh_->dump_elements(kFnameDebugInsertedEdges+"_graph");
   }
 
   fout_debug_insertededges_.close();

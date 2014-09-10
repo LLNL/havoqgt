@@ -11,7 +11,7 @@ if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
-NORUN = True
+NORUN = False
 
 USE_CATALYST = True
 
@@ -84,7 +84,7 @@ def generate_shell_file():
 		slurm_options = " --clear-ssd "
 	else:
 		slurm_options = ""
-	
+
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
 	elif USE_DIMMAP_FOR_TUNE:
@@ -276,7 +276,7 @@ else:
 	#create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "VC_VC")
 	#create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "MP_VC", 1, 1)
 	#create_commands(22, 1, 22, 1, 1, 1, 1024, 1, "RB_HS", 1, 1)
-	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "RB_MX", 1, 3)
+	create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "ML_RH", 1, 1)
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

@@ -74,6 +74,7 @@
 #include <limits>
 
 #include <havoqgt/robin_hood_hashing.hpp>
+#include <havoqgt/MultiRHH.hpp>
 
  namespace havoqgt {
   namespace mpi {
@@ -87,7 +88,6 @@ namespace bip = boost::interprocess;
 #ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
   #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
 #endif
-
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
   static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
@@ -117,7 +117,7 @@ struct EdgeUpdateRequest
     edge = _edge;
     is_delete = _is_delete;
   }
-  
+
   std::pair<uint64_t, uint64_t> edge;
   bool is_delete;
 };
@@ -204,7 +204,7 @@ class construct_dynamicgraph {
 
   typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
   typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
-  
+
   typedef std::pair<const uint64_t, uint64_vector_t> map_value_vec_t;
   typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_vec_t>> adjacency_matrix_map_vec_t;
 
@@ -213,12 +213,15 @@ class construct_dynamicgraph {
   typedef robin_hood_hash<uint64_t, char, SegmentManager> robin_hood_hashing_novalue_t;
   typedef robin_hood_hash<uint64_t, robin_hood_hashing_novalue_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
 
+  typedef MultiRHH<uint64_t, SegmentAllocator<void>> multi_rhh_t;
+
   enum DataStructureMode {
     kUseVecVecMatrix,
     kUseMapVecMatrix,
     kUseRobinHoodHash,
     kUseDegreeAwareModel,
-    kUseDegreeAwareModelRbhMtx
+    kUseDegreeAwareModelRbhMtx,
+    kUseDegreeAwareModelMultiRhh
   };
 
   ///  ------------------------------------------------------ ///
@@ -260,9 +263,13 @@ class construct_dynamicgraph {
         //add_edges_degree_aware_bitmap_first(req_itr, length);
         //add_edges_degree_aware_adj_first(req_itr, length);
         break;
-      
+
       case kUseDegreeAwareModelRbhMtx:
         add_edges_degree_aware_rbh_first_rbh_mtrx(req_itr, length);
+        break;
+
+      case kUseDegreeAwareModelMultiRhh:
+        add_edges_degree_aware_rbh_first_multi_rhh(req_itr, length);
         break;
 
       default:
@@ -312,6 +319,9 @@ class construct_dynamicgraph {
   template <typename Container>
   void add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length);
 
+  template <typename Container>
+  void add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length);
+
   /// Delete edge from a Robin-Hood-Hashing and a adjacency-matrix of Robin-Hood-Hashing
   bool delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx);
 
@@ -333,6 +343,7 @@ class construct_dynamicgraph {
   robin_hood_hashing_t *robin_hood_hashing_;
   bitmap_mgr *is_exist_bmp_;
   adjacency_matrix_rbh_rbh_t *adjacency_matrix_rbh_rbh_;
+  multi_rhh_t *multi_rhh_;
 
   IOInfo *io_info_;
   double total_exectution_time_;

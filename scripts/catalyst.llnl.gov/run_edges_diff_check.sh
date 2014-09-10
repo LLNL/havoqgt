@@ -1,6 +1,11 @@
 #!/bin/sh
 
-/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/src/generate_graph_dynamic RMAT $1 16 0 1024 /l/ssd/out.graph 0 0 20 RB_MX 1 $2 | tee  /l/ssd/edge_diff_check.log
+# $1 -> scale
+# $2 -> DATA_type
+# $3 -> low_deg_threshold
+# $4 -> delete ratio
+
+/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/src/generate_graph_dynamic RMAT $1 16 0 1024 /l/ssd/out.graph 0 0 20 $2 $3 $4 | tee  /l/ssd/edge_diff_check.log
 
 ls -lsth /l/ssd/*  | tee -a  /l/ssd/edge_diff_check.log
 

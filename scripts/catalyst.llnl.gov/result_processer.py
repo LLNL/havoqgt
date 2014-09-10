@@ -14,7 +14,7 @@ import numpy as np
 targer_dir = sys.argv[1]
 num_files = int(sys.argv[2])
 keyword = sys.argv[3]
-col_num = int(sys.argv[4])
+col_num = int(sys.argv[4]) # NOTE: [ awk -1 ]
 is_cumulate = bool(int(sys.argv[5]))
 
 flist = []
