@@ -117,15 +117,16 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
 template <typename Edges>
 void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio)
 {
-
+  std::cout << "\n<< Edge update >>" << std::endl;
   /// Calucurate # of loops and chunk size
-  const uint64_t num_edges = edges.size();
-  chunk_size = std::min(chunk_size, num_edges);
-  const uint64_t num_loop  = num_edges / chunk_size;
-  assert(num_loop*chunk_size == num_edges);
+  const uint64_t num_original_edges = edges.size();
+  std::cout << "Status: # generated edges (DIRECTED graph) =\t"<< num_original_edges << std::endl;
+  chunk_size = std::min(chunk_size, num_original_edges);
+  const uint64_t num_loop  = num_original_edges / chunk_size;
+  assert(num_loop*chunk_size == num_original_edges);
 
   size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "\nUsage: segment size =\t"<< usages << std::endl;
+  std::cout << "Usage: segment size =\t"<< usages << std::endl;
 
   typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
   requests_vector_t *onmemory_edges = new requests_vector_t();
@@ -144,6 +145,8 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   }
   /// Randomize order of requests
   std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
+  std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
+  std::cout << "Status: ratio of delete requeste =\t"<< (static_cast<double>(onmemory_edges->size()) / static_cast<double>(num_original_edges) - 1.0) << std::endl;
   const double time_end = MPI_Wtime();
 
   std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
@@ -153,13 +156,19 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
 
   /// -------------- Edge update loop ----------- ////
   for (uint64_t i = 0; i < num_loop; ++i) {
-    std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
-
+    std::cout << "\n[" << i+1 << " / " << num_loop << "] :\t" << chunk_size << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
-
     usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
   }
+  uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loop;
+  if (num_rest_edges > 0) {
+    std::cout << "\n[" << num_loop+1ULL << " / " << num_loop << "] :\t" << num_rest_edges << std::endl;
+    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * num_loop, num_rest_edges);
+    usages = segment_manager->get_size() - segment_manager->get_free_memory();
+    std::cout << "Usage: segment size =\t"<< usages << std::endl;
+  }
+
   std::cout << "\n<< Results >>" << std::endl;
   graph->print_profile();
 
@@ -310,24 +319,24 @@ int main(int argc, char** argv) {
     if (load_from_disk  == 0) {
 
       if(type == "UPTRI") {
-        uint64_t num_edges = num_vertices * edge_factor * 2LL;
+        uint64_t num_edges = num_vertices * edge_factor;
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
         add_and_delte_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "RMAT") {
-        uint64_t num_edges_per_rank = num_vertices * edge_factor * 2LL / mpi_size;
+        uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
 
         havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
           vert_scale, num_edges_per_rank,
-          0.57, 0.19, 0.19, 0.05, true, true);
+          0.57, 0.19, 0.19, 0.05, true, false);
 
         add_and_delte_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor)+1LL, pa_beta, 0.0, MPI_COMM_WORLD);
+        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor), pa_beta, 0.0, MPI_COMM_WORLD);
 
         add_and_delte_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
         {
