@@ -122,8 +122,8 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   const uint64_t num_original_edges = edges.size();
   std::cout << "Status: # generated edges (DIRECTED graph) =\t"<< num_original_edges << std::endl;
   chunk_size = std::min(chunk_size, num_original_edges);
-  const uint64_t num_loop  = num_original_edges / chunk_size;
-  assert(num_loop*chunk_size == num_original_edges);
+  //const uint64_t num_loop  = num_original_edges / chunk_size;
+  //assert(num_loop*chunk_size == num_original_edges);
 
   size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
   std::cout << "Usage: segment size =\t"<< usages << std::endl;
@@ -134,6 +134,7 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
 
   /// --------- Generate update requests  --------- ///
   const double time_start = MPI_Wtime();
+#if 1
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
     bool is_delete = std::rand()%100 < edges_delete_ratio;
     if (is_delete) {
@@ -145,6 +146,23 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   }
   /// Randomize order of requests
   std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
+#else
+  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
+    EdgeUpdateRequest request(*edges_itr, false);
+    onmemory_edges->push_back(request);
+  }
+  /// Randomize order of requests
+  std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
+  for (auto edges_itr = onmemory_edges->begin(), edges_itr_end = onmemory_edges->end(); edges_itr != edges_itr_end; ++edges_itr) {
+    bool is_delete = std::rand()%100 < edges_delete_ratio;
+    if (is_delete) {
+      size_t index = std::distance(onmemory_edges->begin(), edges_itr);
+      uint64_t insert_pos = rand() % (onmemory_edges->size() - index) + index + 1;
+      EdgeUpdateRequest request(edges_itr->edge, true);
+      onmemory_edges->insert(onmemory_edges->begin()+insert_pos, request);
+    }
+  }
+#endif
   std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
   std::cout << "Status: ratio of delete requeste =\t"<< (static_cast<double>(onmemory_edges->size()) / static_cast<double>(num_original_edges) - 1.0) << std::endl;
   const double time_end = MPI_Wtime();
@@ -155,16 +173,18 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
 
 
   /// -------------- Edge update loop ----------- ////
-  for (uint64_t i = 0; i < num_loop; ++i) {
-    std::cout << "\n[" << i+1 << " / " << num_loop << "] :\t" << chunk_size << std::endl;
+  const uint64_t num_requests = onmemory_edges->size();
+  const uint64_t num_loops  = num_requests / chunk_size;
+  for (uint64_t i = 0; i < num_loops; ++i) {
+    std::cout << "\n[" << i+1 << " / " << num_loops << "] :\t" << chunk_size << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
     usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
   }
-  uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loop;
+  uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loops;
   if (num_rest_edges > 0) {
-    std::cout << "\n[" << num_loop+1ULL << " / " << num_loop << "] :\t" << num_rest_edges << std::endl;
-    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * num_loop, num_rest_edges);
+    std::cout << "\n[" << "*" << " / " << num_loops << "] :\t" << num_rest_edges << std::endl;
+    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * num_loops, num_rest_edges);
     usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
   }
