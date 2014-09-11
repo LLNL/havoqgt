@@ -183,7 +183,7 @@ class MultiRHH {
         /// 3. low-degree
         construct(pos, hash_key(key), std::move(key), std::move(value), false, mask);
         return true;
-      } else if (dist > extract_probe_distance(existing_elem_property)) {
+      } else if (dist > extract_probedistance(existing_elem_property)) {
         /// 3. low-degree
         /// TODO: we can use value of 'pos' and 'dist' in order to reduce serching steps
         insert_directly_with_growing(allocator, std::move(key), std::move(value));
@@ -258,6 +258,23 @@ class MultiRHH {
     free_buffer(allocator, reinterpret_cast<void *>(m_pos_head_), 0);
   }
 
+  void dump_probedistance (const std::string& fname)
+  {
+    std::ofstream fout;
+    fout.open(fname, std::ios::out | std::ios::app);
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      if (is_adj_list(prop)) {
+        MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        rhh_adj_list.dump_probedistance(fname);
+      } else {
+        fout << m_pos_head_->capacity << "\t" << extract_probedistance(prop) << std::endl;
+      }
+    }
+    fout.close();
+  }
+
   void disp_status()
   {
     DISP_VAR(kDirectInsertionThreshold);
@@ -321,6 +338,7 @@ class MultiRHH {
     }
  }
 
+
  private:
   /// ---------  Typedefs and Enums ------------ ///
   typedef uint64_t PropertyBlockType;
@@ -378,10 +396,11 @@ class MultiRHH {
   static constexpr double kResizeFactor = 0.9;
   static const uint64_t kCapacityGrowingFactor = 2ULL;
 
-  static const PropertyBlockType kTombstoneMask = 0x8000000000000000LL; /// mask value to mark as deleted
-  static const PropertyBlockType kClearFlagsMask = 0x3FFFFFFFFFFFFFFFLL;  /// mask value to clear deleted flag
-  static const PropertyBlockType kAdjacencylistMask = 0x4000000000000000LL; // mask value represents whether value is adjacency-list(RHH) or just a value
-  static const PropertyBlockType kClearedValue = 0x3FFFFFFFFFFFFFFFLL; // value repsents cleared space
+  static const PropertyBlockType kTombstoneMask     = 0x8000000000000000LL; /// mask value to mark as deleted
+  static const PropertyBlockType kAdjacencylistMask = 0x4000000000000000LL; /// mask value represents whether value is adjacency-list(RHH) or just a value
+  static const PropertyBlockType kProbedistanceMask = 0x0000000000000FFFLL; /// mask value to extract probe distance
+  static const PropertyBlockType kCapacityMask      = 0x3FFFFFFFFFFFF000LL; /// mask value to extract probe distance
+  static const PropertyBlockType kClearedValue      = 0x3FFFFFFFFFFFFFFFLL; /// value repsents cleared space
   static const int64_t kInvaridIndex = -1LL;
 
 
@@ -403,7 +422,7 @@ class MultiRHH {
   }
 
   /// XXX: capacity = mask + 1LL
-  inline ProbeDistanceType cal_probe_distance(HashElemType hash, const int64_t slot_index, const uint64_t mask)
+  inline ProbeDistanceType cal_probedistance(HashElemType hash, const int64_t slot_index, const uint64_t mask)
   {
     return ((slot_index + (mask + 1LL) - cal_desired_pos(hash, mask)) & mask);
   }
@@ -421,12 +440,12 @@ class MultiRHH {
 
   inline PropertyBlockType cal_property(HashElemType hash, const int64_t slot_index, const bool is_adj_list, const uint64_t mask)
   {
-    return cal_probe_distance(hash, slot_index, mask) | (static_cast<uint64_t>(is_adj_list) * kAdjacencylistMask);
+    return cal_probedistance(hash, slot_index, mask) | (static_cast<uint64_t>(is_adj_list) * kAdjacencylistMask);
   }
 
-  inline PropertyBlockType cal_property(const ProbeDistanceType probe_distance, const bool is_adj_list)
+  inline PropertyBlockType cal_property(const ProbeDistanceType probedistance, const bool is_adj_list)
   {
-    return probe_distance | (static_cast<uint64_t>(is_adj_list) * kAdjacencylistMask);
+    return probedistance | (static_cast<uint64_t>(is_adj_list) * kAdjacencylistMask);
   }
 
   inline bool extract_adj_list_flag(const PropertyBlockType prop)
@@ -462,9 +481,14 @@ class MultiRHH {
     return (prop & kAdjacencylistMask) == kAdjacencylistMask;
   }
 
-  inline static ProbeDistanceType extract_probe_distance(PropertyBlockType prop)
+  inline static ProbeDistanceType extract_probedistance(PropertyBlockType prop)
   {
-  	return prop & kClearFlagsMask;
+  	return prop & kProbedistanceMask;
+  }
+
+  inline static ProbeDistanceType extract_capacity(PropertyBlockType prop)
+  {
+    return prop & kCapacityMask;
   }
 
 
@@ -588,7 +612,7 @@ class MultiRHH {
 
       /// If the existing elem has probed less than or "equal to" us, then swap places with existing
       /// elem, and keep going to find another slot for that elem.
-      if (extract_probe_distance(existing_elem_property) <= dist)
+      if (extract_probedistance(existing_elem_property) <= dist)
       {
         if(is_deleted(existing_elem_property))
         {
@@ -598,7 +622,7 @@ class MultiRHH {
         m_pos_head_->pos_property_block[pos] = cal_property(dist, is_adj_list);
         std::swap(key, m_pos_head_->pos_key_block[pos]);
         std::swap(value, m_pos_head_->pos_value_block[pos]);
-        dist = extract_probe_distance(existing_elem_property);
+        dist = extract_probedistance(existing_elem_property);
         is_adj_list = extract_adj_list_flag(existing_elem_property);
       }
 
@@ -623,7 +647,7 @@ class MultiRHH {
 
       /// If the existing elem has probed less than or "equal to" us, then swap places with existing
       /// elem, and keep going to find another slot for that elem.
-      if (extract_probe_distance(existing_elem_property) <= dist)
+      if (extract_probedistance(existing_elem_property) <= dist)
       {
         if(is_deleted(existing_elem_property))
         {
@@ -632,7 +656,7 @@ class MultiRHH {
         }
         m_pos_head_->pos_property_block[pos] = dist;
         std::swap(key, m_pos_head_->pos_key_block[pos]);
-        dist = extract_probe_distance(existing_elem_property);
+        dist = extract_probedistance(existing_elem_property);
       }
 
       pos = (pos+1) & mask;
@@ -649,7 +673,7 @@ class MultiRHH {
 
   inline void construct(const int64_t ix, const HashElemType hash, ElemType&& key, const uint64_t mask)
   {
-    m_pos_head_->pos_property_block[ix] = cal_probe_distance(hash, ix, mask);
+    m_pos_head_->pos_property_block[ix] = cal_probedistance(hash, ix, mask);
     m_pos_head_->pos_key_block[ix] = std::move(key);
   }
 
@@ -665,7 +689,7 @@ class MultiRHH {
       ProbeDistanceType existing_elem_property = property(pos);
       if (existing_elem_property == kClearedValue) { /// free space is found
         return kInvaridIndex;
-      } else if (*dist > extract_probe_distance(existing_elem_property)) {
+      } else if (*dist > extract_probedistance(existing_elem_property)) {
         return kInvaridIndex;
       } else if (!is_deleted(existing_elem_property) && m_pos_head_->pos_key_block[pos] == key) {
         /// found !
@@ -712,7 +736,7 @@ class MultiRHH {
   	/// Check whether we have a same key-value pair.
     PropertyBlockType existing_elem_property = property(pos);
     while(true) {
-      if (existing_elem_property==kClearedValue || dist > extract_probe_distance(existing_elem_property))
+      if (existing_elem_property==kClearedValue || dist > extract_probedistance(existing_elem_property))
         return kInvaridIndex;
       if (is_equal_element(key, value, pos, existing_elem_property))
       	return pos;
@@ -727,7 +751,7 @@ class MultiRHH {
     /// Check whether we have a same key element.
     PropertyBlockType existing_elem_property = property(pos);
     while(true) {
-      if (existing_elem_property==kClearedValue || dist > extract_probe_distance(existing_elem_property))
+      if (existing_elem_property==kClearedValue || dist > extract_probedistance(existing_elem_property))
         return kInvaridIndex;
       if (is_equal_element(key, pos, existing_elem_property))
         return pos;

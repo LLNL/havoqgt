@@ -658,9 +658,9 @@ print_profile()
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
     multi_rhh_->dump_elements(kFnameDebugInsertedEdges+"_graph");
   }
-
   fout_debug_insertededges_.close();
 
+  multi_rhh_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
 #endif
 }
 
