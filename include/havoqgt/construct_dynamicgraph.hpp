@@ -74,7 +74,7 @@
 #include <limits>
 
 #include <havoqgt/robin_hood_hashing.hpp>
-#include <havoqgt/MultiRHH.hpp>
+#include <havoqgt/RHHAdjacencyMatrix.hpp>
 
  namespace havoqgt {
   namespace mpi {
