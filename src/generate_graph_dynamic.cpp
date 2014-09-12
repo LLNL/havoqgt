@@ -330,7 +330,7 @@ int main(int argc, char** argv) {
     } else if (data_structure_type == "ML_RH") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelMultiRhh, low_degree_threshold);
+      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelRHHAdjMx, low_degree_threshold);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);

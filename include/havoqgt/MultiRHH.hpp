@@ -49,8 +49,8 @@
  *
  */
 
-#ifndef HAVOQGT_MPI_MultiRHH_HPP_INCLUDED
-#define HAVOQGT_MPI_MultiRHH_HPP_INCLUDED
+#ifndef HAVOQGT_MPI_RHHAdjacencyMatrix_HPP_INCLUDED
+#define HAVOQGT_MPI_RHHAdjacencyMatrix_HPP_INCLUDED
 
 #include <boost/interprocess/allocators/allocator.hpp>
 
@@ -72,7 +72,7 @@ namespace bip = boost::interprocess;
 template <typename ElemType, typename SegmentAllocator>
 
 
-class MultiRHH {
+class RHHAdjacencyMatrix {
 
   // template<typename T>grow
   // using SegmentAllocator = bip::allocator<T, SegementManager>;
@@ -102,43 +102,43 @@ class MultiRHH {
   ///  ------------------------------------------------------ ///
 
   /// --- Constructor --- //
-  explicit MultiRHH(SegmentAllocator& allocator)
+  explicit RHHAdjacencyMatrix(SegmentAllocator& allocator)
   {
-    //DEBUG("MultiRHH constructor");
+    //DEBUG("RHHAdjacencyMatrix constructor");
     alloc(allocator, kInitialCapacity, true);
   }
 
-  MultiRHH(SegmentAllocator& allocator, const uint64_t initial_capasity, const bool is_allocate_valueblock)
+  RHHAdjacencyMatrix(SegmentAllocator& allocator, const uint64_t initial_capasity, const bool is_allocate_valueblock)
   {
-    //DEBUG("MultiRHH constructor");
+    //DEBUG("RHHAdjacencyMatrix constructor");
     alloc(allocator, initial_capasity, is_allocate_valueblock);
   }
 
   /// --- Copy constructor --- //
 
   /// --- Move constructor --- //
-  MultiRHH(MultiRHH &&old_obj)
+  RHHAdjacencyMatrix(RHHAdjacencyMatrix &&old_obj)
   {
-    //DEBUG("MultiRHH move-constructor");
+    //DEBUG("RHHAdjacencyMatrix move-constructor");
     m_pos_head_ = old_obj.m_pos_head_;
     old_obj.m_pos_head_ = nullptr;
   }
 
   /// --- Destructor --- //
-  ~MultiRHH()
+  ~RHHAdjacencyMatrix()
   {
-    // DEBUG("MultiRHH destructor");
+    // DEBUG("RHHAdjacencyMatrix destructor");
     if (m_pos_head_ != nullptr) {
       assert(false);
-      // DEBUG("MultiRHH destructor : need free_buffer");
+      // DEBUG("RHHAdjacencyMatrix destructor : need free_buffer");
       //free_buffer(m_pos_head_, 0); /// XXX: memsize = 0
     }
   }
 
   /// ---  Move assignment operator --- //
-  MultiRHH &operator=(MultiRHH&& old_obj)
+  RHHAdjacencyMatrix &operator=(RHHAdjacencyMatrix&& old_obj)
   {
-    //DEBUG("MultiRHH move-assignment");
+    //DEBUG("RHHAdjacencyMatrix move-assignment");
     m_pos_head_ = old_obj.m_pos_head_;
     old_obj.m_pos_head_ = nullptr;
     return *this;
@@ -167,7 +167,7 @@ class MultiRHH {
 
     if (is_adj_list(property(pos_first))) {
       /// 2. non-low-degree
-      MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[pos_first].adj_list;
+      RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[pos_first].adj_list;
       return rhh_adj_list.insert_key_unique(allocator, std::move(value.value));
     }
 
@@ -197,7 +197,7 @@ class MultiRHH {
     /// 4. convert data strucure of value from direct-insertion model to adj-list-insertion model
     //DEBUG("Convert start, current initial alloc size = 2");
     ValueWrapperType value_wrapper;
-    new(&value_wrapper.adj_list) MultiRHH(allocator, kInitialCapacityAdjlist, false);
+    new(&value_wrapper.adj_list) RHHAdjacencyMatrix(allocator, kInitialCapacityAdjlist, false);
     value_wrapper.adj_list.insert_directly_with_growing(allocator, std::move(value.value));
     for (uint64_t k = 0; k < kDirectInsertionThreshold; ++k) {
       value_wrapper.adj_list.insert_directly_with_growing(allocator, std::move(m_pos_head_->pos_value_block[moved_pos_list[k]].value));
@@ -223,7 +223,7 @@ class MultiRHH {
 
     /// target value is stored as adj-list
     if (is_adj_list(property(pos_first))) {
-      MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[pos_first].adj_list;
+      RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[pos_first].adj_list;
       if (!rhh_adj_list.erase_key_only(value)) return false;
       if (rhh_adj_list.m_pos_head_->num_elems == kDirectInsertionThreshold) {
       	ElemType moved_value_list[kDirectInsertionThreshold];
@@ -266,7 +266,7 @@ class MultiRHH {
       PropertyBlockType prop = m_pos_head_->pos_property_block[i];
       if (is_deleted(prop) || prop == kClearedValue) continue;
       if (is_adj_list(prop)) {
-        MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
         rhh_adj_list.dump_probedistance(fname);
       } else {
         fout << m_pos_head_->capacity << "\t" << extract_probedistance(prop) << std::endl;
@@ -295,7 +295,7 @@ class MultiRHH {
       PropertyBlockType prop = m_pos_head_->pos_property_block[i];
       if (is_deleted(prop) || prop == kClearedValue) continue;
       if (is_adj_list(prop)) {
-        MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
         rhh_adj_list.dump_keys_with_prefix(fout, i);
       } else {
         fout << m_pos_head_->pos_key_block[i] << "\t" << m_pos_head_->pos_value_block[i].value << std::endl;
@@ -320,7 +320,7 @@ class MultiRHH {
       PropertyBlockType prop = m_pos_head_->pos_property_block[i];
       if (is_deleted(prop) || prop == kClearedValue) continue;
       if (is_adj_list(prop)) {
-        MultiRHH& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
         rhh_adj_list.disp_keys_with_prefix(i);
       } else {
         std::cout << m_pos_head_->pos_key_block[i] << "\t" << m_pos_head_->pos_value_block[i].value << std::endl;
@@ -347,7 +347,7 @@ class MultiRHH {
 
   union ValueWrapperType {
     ElemType value;
-    MultiRHH adj_list;
+    RHHAdjacencyMatrix adj_list;
     ValueWrapperType() {
       //DEBUG("union constructor");
     }
@@ -435,7 +435,7 @@ class MultiRHH {
 
   inline PropertyBlockType property(const int64_t ix) const
   {
-    return const_cast<MultiRHH*>(this)->property(ix);
+    return const_cast<RHHAdjacencyMatrix*>(this)->property(ix);
   }
 
   inline PropertyBlockType cal_property(HashElemType hash, const int64_t slot_index, const bool is_adj_list, const uint64_t mask)
@@ -458,7 +458,7 @@ class MultiRHH {
   {
   	if (is_adj_list(property(positon))) {
       m_pos_head_->pos_value_block[positon].adj_list.free(allocator);
-    	m_pos_head_->pos_value_block[positon].adj_list.~MultiRHH();
+    	m_pos_head_->pos_value_block[positon].adj_list.~RHHAdjacencyMatrix();
     }
     property(positon) |= kTombstoneMask;
   }

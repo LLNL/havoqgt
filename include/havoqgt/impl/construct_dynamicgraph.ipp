@@ -164,12 +164,12 @@
     // std::cout << "Random seed is time" << std::endl;
     break;
 
-    case kUseDegreeAwareModelMultiRhh:
+    case kUseDegreeAwareModelRHHAdjMx:
     std::srand(1);
     std::cout << "Random seed is 1" << std::endl;
     // std::srand(std::time(0));
     // std::cout << "Random seed is time" << std::endl;
-    multi_rhh_ = new multi_rhh_t(seg_allocator_);
+    rhh_matrix_ = new rhh_matrix_t(seg_allocator_);
     break;
 
     default:
@@ -198,8 +198,8 @@ template <typename SegementManager>
   delete init_vec;
   delete adjacency_matrix_map_vec_;
   delete robin_hood_hashing_;
-  multi_rhh_->free(seg_allocator_);
-  delete multi_rhh_;
+  rhh_matrix_->free(seg_allocator_);
+  delete rhh_matrix_;
   delete io_info_;
 }
 
@@ -564,12 +564,12 @@ add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length)
 #endif
 
     if (req_itr->is_delete) {
-      count_delete += multi_rhh_->erase(seg_allocator_, source_vtx, target_vtx);
+      count_delete += rhh_matrix_->erase(seg_allocator_, source_vtx, target_vtx);
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
     } else {
-      count_inserted += multi_rhh_->insert_uniquely(seg_allocator_, source_vtx, target_vtx);
+      count_inserted += rhh_matrix_->insert_uniquely(seg_allocator_, source_vtx, target_vtx);
     }
 
 
@@ -603,9 +603,9 @@ print_profile()
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
     //std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
   }
-  if (data_structure_type_ == kUseDegreeAwareModelMultiRhh) {
+  if (data_structure_type_ == kUseDegreeAwareModelRHHAdjMx) {
     std::cout << "\n<Status of the data structure>" << std::endl;
-    multi_rhh_->disp_status();
+    rhh_matrix_->disp_status();
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
     std::cout << "--------------------" << std::endl;
@@ -653,14 +653,14 @@ print_profile()
     //robin_hood_hashing_->disp_elements();
   }
 
-  if (data_structure_type_ == kUseDegreeAwareModelMultiRhh) {
+  if (data_structure_type_ == kUseDegreeAwareModelRHHAdjMx) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
-    multi_rhh_->dump_elements(kFnameDebugInsertedEdges+"_graph");
+    rhh_matrix_->dump_elements(kFnameDebugInsertedEdges+"_graph");
   }
   fout_debug_insertededges_.close();
 
-  multi_rhh_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
+  rhh_matrix_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
 #endif
 }
 

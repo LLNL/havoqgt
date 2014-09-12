@@ -213,7 +213,7 @@ class construct_dynamicgraph {
   typedef robin_hood_hash<uint64_t, char, SegmentManager> robin_hood_hashing_novalue_t;
   typedef robin_hood_hash<uint64_t, robin_hood_hashing_novalue_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
 
-  typedef MultiRHH<uint64_t, SegmentAllocator<void>> multi_rhh_t;
+  typedef RHHAdjacencyMatrix<uint64_t, SegmentAllocator<void>> rhh_matrix_t;
 
   enum DataStructureMode {
     kUseVecVecMatrix,
@@ -221,7 +221,7 @@ class construct_dynamicgraph {
     kUseRobinHoodHash,
     kUseDegreeAwareModel,
     kUseDegreeAwareModelRbhMtx,
-    kUseDegreeAwareModelMultiRhh
+    kUseDegreeAwareModelRHHAdjMx
   };
 
   ///  ------------------------------------------------------ ///
@@ -268,7 +268,7 @@ class construct_dynamicgraph {
         add_edges_degree_aware_rbh_first_rbh_mtrx(req_itr, length);
         break;
 
-      case kUseDegreeAwareModelMultiRhh:
+      case kUseDegreeAwareModelRHHAdjMx:
         add_edges_degree_aware_rbh_first_multi_rhh(req_itr, length);
         break;
 
@@ -343,7 +343,7 @@ class construct_dynamicgraph {
   robin_hood_hashing_t *robin_hood_hashing_;
   bitmap_mgr *is_exist_bmp_;
   adjacency_matrix_rbh_rbh_t *adjacency_matrix_rbh_rbh_;
-  multi_rhh_t *multi_rhh_;
+  rhh_matrix_t *rhh_matrix_;
 
   IOInfo *io_info_;
   double total_exectution_time_;
