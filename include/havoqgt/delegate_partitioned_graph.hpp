@@ -208,7 +208,11 @@ class delegate_partitioned_graph {
     return m_owned_info.size();
   }
 
-  uint64_t max_vertex_id() {
+  uint64_t max_global_vertex_id() {
+    return m_global_max_vertex;
+  }
+
+  uint64_t max_local_vertex_id() {
     return m_max_vertex;
   }
 
@@ -344,6 +348,7 @@ class delegate_partitioned_graph {
 
 
   uint64_t m_max_vertex {0};
+  uint64_t m_global_max_vertex {0};
   uint64_t m_global_edge_count {0};
   uint64_t m_edges_high_count {0};
   uint64_t m_edges_low_count {0};

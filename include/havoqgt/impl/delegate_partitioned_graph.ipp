@@ -92,9 +92,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
 
+  m_global_max_vertex = max_vertex;
   m_max_vertex = (std::ceil(double(max_vertex) / double(m_mpi_size)));
 
-  LogStep logstep_main("Delegate Paritioning", m_mpi_comm, m_mpi_rank);
+  LogStep logstep_main("Delegate Partitioning", m_mpi_comm, m_mpi_rank);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Meta data phase of graph construction
@@ -320,6 +321,9 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
       int owner    = owner_source_id(m_mpi_size)(*unsorted_itr);
       if (owner == m_mpi_rank) {
         m_local_outgoing_count[local_id]++;
+        if (m_local_outgoing_count[local_id] == delegate_degree_threshold) {
+          high_vertex_count++;
+        }
       } else {
         maps_to_send.at(owner)[local_id].first++;
       }
@@ -329,9 +333,9 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
       owner    = owner_dest_id(m_mpi_size)(*unsorted_itr);
       if (owner == m_mpi_rank) {
         m_local_incoming_count[local_id]++;
-        if (m_local_incoming_count[local_id] == delegate_degree_threshold) {
-          high_vertex_count++;
-        }
+        // if (m_local_incoming_count[local_id] == delegate_degree_threshold) {
+        //   high_vertex_count++;
+        // }
       } else {
         int c = maps_to_send.at(owner)[local_id].second++;
         if (c == 0) {
@@ -369,10 +373,10 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
   std::vector<uint64_t> temp_hubs;
   temp_hubs.reserve(high_vertex_count);
   for (size_t i = 0; i < m_local_incoming_count.size(); i++) {
-    // const uint64_t outgoing = m_local_outgoing_count[i];
-    const uint64_t incoming = m_local_incoming_count[i];
+    const uint64_t outgoing = m_local_outgoing_count[i];
+    // const uint64_t incoming = m_local_incoming_count[i];
 
-    if (incoming >= delegate_degree_threshold) {
+    if (outgoing >= delegate_degree_threshold) {
       const uint64_t global_id = (i * m_mpi_size) + m_mpi_rank;
       assert(global_id != 0);
       temp_hubs.push_back(global_id);
@@ -451,12 +455,19 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
 
     // If its not currently a high vertex but by adding this it becomes one
     // then increment high_vertex_count
-    if (m_local_incoming_count[local_id] < delegate_degree_threshold
-      && m_local_incoming_count[local_id] + dest_count >=
+    // if (m_local_incoming_count[local_id] < delegate_degree_threshold
+    //   && m_local_incoming_count[local_id] + dest_count >=
+    //   delegate_degree_threshold) {
+
+    //   high_vertex_count++;
+    // }
+    if (m_local_outgoing_count[local_id] < delegate_degree_threshold
+      && m_local_outgoing_count[local_id] + dest_count >=
       delegate_degree_threshold) {
 
       high_vertex_count++;
     }
+
     m_local_outgoing_count[local_id] += source_count;
     m_local_incoming_count[local_id] += dest_count;
   }  // for each recieved element.
@@ -496,7 +507,7 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
 
     m_owned_info[vert_id] = vert_info(false, 0, edge_count);
 
-    if (incoming < m_delegate_degree_threshold) {
+    if (outgoing < m_delegate_degree_threshold) {
       edge_count += outgoing;
     } else {
       #ifdef DEBUG_DPG
