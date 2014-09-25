@@ -67,7 +67,7 @@ namespace bip = boost::interprocess;
 /// --------------------------------------------------------------------------------------- ///
 ///                                RHH static class
 /// --------------------------------------------------------------------------------------- ///
-template <typename KeyType, typename ValueType, uint64_t Capacity>
+template <typename KeyType, uint64_t Capacity>
 class RHHStatic {
 
   public:
@@ -117,13 +117,12 @@ class RHHStatic {
   {
     ProbeDistanceType dist = 0;
     const uint64_t mask = cal_mask(); // sinse this function is called by parent RHH, we should calvurate mask at here
-    const int64_t pos_first = lookup_first_position(key, &dist, mask);
-    if (pos_first != kInvaridIndex) {
+    const int64_t pos_same_key = find_key(key, &dist, mask);
+
+    if (pos_same_key != kInvaridIndex) {
       return kDuplicated;
     }
-    if (get_pos_equal_element_from_here(key, pos_first, dist, mask) != kInvaridIndex) {
-      return kDuplicated;
-    }
+
     return insert_directly(std::move(key));
   }
 
@@ -159,6 +158,7 @@ class RHHStatic {
   static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
   static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
   static const PropertyBlockType kClearedValue      = 0x7F; /// value repsents cleared space
+  static const ProbeDistanceType kLongProbedistanceThreshold = 32LL;
   static const int64_t kInvaridIndex = -1LL;
 
 
@@ -221,22 +221,29 @@ class RHHStatic {
 
   inline static ProbeDistanceType extract_probedistance(PropertyBlockType prop)
   {
-    return prop;
+    return prop & kProbedistanceMask;
   }
 
-  /// FIXME: we need to search chained array.
-  void insert_helper(KeyType &&key, const uint64_t mask)
+  UpdateErrors insert_helper(KeyType &&key, const uint64_t mask)
   {
     int64_t pos = cal_desired_pos(hash_key(key), mask);
     ProbeDistanceType dist = 0;
-
+    UpdateErrors err;
     while(true) {
+      if (dist >= kLongProbedistanceThreshold) {
+        err = kLongProbedistance
+        break;
+      }
+      if (dist >= Capacity) {
+        err = kReachingFUllCapacity;
+        break;
+      }
+
       PropertyBlockType existing_elem_property = property(pos);
 
       if(existing_elem_property == kClearedValue)
       {
-        construct(pos, std::move(key), mask);
-        return;
+        return construct(pos, std::move(key), mask);
       }
 
       /// If the existing elem has probed less than or "equal to" us, then swap places with existing
@@ -245,8 +252,7 @@ class RHHStatic {
       {
         if(is_deleted(existing_elem_property))
         {
-          construct(pos, std::move(key), mask);
-          return;
+          return construct(pos, std::move(key), mask);
         }
         m_property_block_[pos] = dist;
         std::swap(key, m_key_block_[pos]);
@@ -256,6 +262,13 @@ class RHHStatic {
       pos = (pos+1) & mask;
       ++dist;
     }
+
+    if (m_next_ != nullptr)  {
+      RHHStatic<KeyType, ValueType, Capacity> *next_rhh = reinterpret_cast<RHHStatic<KeyType, ValueType, Capacity> *>(m_next_);
+      return next_rhh->insert_helper(key, mask);
+    }
+
+    return err;
   }
 
   inline void construct(const int64_t ix, const HashType hash, KeyType&& key, const uint64_t mask)
@@ -266,8 +279,7 @@ class RHHStatic {
 
 
   /// ------ Private member functions: search ----- ///
-  /// FIXME: we need to search chained array.
-  int64_t lookup_first_position(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
+  int64_t find_key(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
   {
     const HashType hash = hash_key(key);
     int64_t pos = cal_desired_pos(hash, mask);
@@ -275,9 +287,9 @@ class RHHStatic {
     while(true) {
       ProbeDistanceType existing_elem_property = property(pos);
       if (existing_elem_property == kClearedValue) { /// free space is found
-        return kInvaridIndex;
+        break;
       } else if (*dist > extract_probedistance(existing_elem_property)) {
-        return kInvaridIndex;
+        break;
       } else if (!is_deleted(existing_elem_property) && m_key_block_[pos] == key) {
         /// found !
         return pos;
@@ -285,45 +297,17 @@ class RHHStatic {
       pos = (pos+1) & mask;
       *dist = *dist + 1;
     }
+
+    /// Find a key from chained RHH
+    if (m_next_ != nullptr)  {
+      RHHStatic<KeyType, ValueType, Capacity> *next_rhh = reinterpret_cast<RHHStatic<KeyType, ValueType, Capacity> *>(m_next_);
+      return next_rhh->find_key(key, dist, mask);
+    }
+
+    return kInvaridIndex;
   }
 
   /// ------ Private member functions: utility ----- ///
-  /// FIXME: we need to search chained array.
-  inline void get_all_elem_key_list(KeyType pos_list[])
-  {
-    uint64_t capacity = Capacity;
-    uint64_t m_num_elems_ = m_num_elems_;
-    for (int64_t pos=0, cout=0; pos < capacity && cout < m_num_elems_; ++pos) {
-      PropertyBlockType prop = property(pos);
-      if (is_deleted(prop) || prop == kClearedValue) continue;
-      pos_list[cout] = m_key_block_[pos];
-      ++cout;
-    }
-  }
-
-  /// FIXME: we need to search chained array.
-  inline int64_t get_pos_equal_element_from_here(const KeyType& key, int64_t pos, ProbeDistanceType dist, const uint64_t mask) const
-  {
-    /// Check whether we have a same key element.
-    PropertyBlockType existing_elem_property = property(pos);
-    while(true) {
-      if (existing_elem_property==kClearedValue || dist > extract_probedistance(existing_elem_property))
-        return kInvaridIndex;
-      if (is_equal_element(key, pos, existing_elem_property))
-        return pos;
-      pos=(pos+1)&mask;
-      ++dist;
-      existing_elem_property = property(pos);
-    }
-  }
-
-  inline bool is_equal_element(const KeyType& key, const int64_t pos, const PropertyBlockType prop) const
-  {
-    if (is_deleted(prop) || m_key_block_[pos] != key)
-      return false;
-    else
-      return true;
-  }
 
 
   ///  ------------------------------------------------------ ///

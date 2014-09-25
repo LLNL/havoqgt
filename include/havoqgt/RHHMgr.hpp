@@ -122,20 +122,18 @@ class AllocatorsHolder
   {
     if (required_capacity < capacity1) {
       return reinterpret_cast<void*>(allocator_key_array.allocate(required_capacity).get());
-    } else if (required_capacity <= capacity1){
+    } else if (required_capacity < capacity2){
       return reinterpret_cast<void*>(allocator_rhh_1.allocate(1).get());
-    } else if (required_capacity <= capacity2){
+    } else if (required_capacity < capacity3){
       return reinterpret_cast<void*>(allocator_rhh_2.allocate(1).get());
-    } else if (required_capacity <= capacity3){
+    } else if (required_capacity < capacity4){
       return reinterpret_cast<void*>(allocator_rhh_3.allocate(1).get());
-    } else if (required_capacity <= capacity4){
+    } else if (required_capacity < capacity5){
       return reinterpret_cast<void*>(allocator_rhh_4.allocate(1).get());
-    } else if (required_capacity <= capacity5){
+    } else if (required_capacity < capacity6){
       return reinterpret_cast<void*>(allocator_rhh_5.allocate(1).get());
-    } else if (required_capacity <= capacity6){
-      return reinterpret_cast<void*>(allocator_rhh_6.allocate(1).get());
     } else {
-      assert(false);
+     reinterpret_cast<void*>(allocator_rhh_6.allocate(1).get());
     }
   }
 
@@ -150,20 +148,18 @@ class AllocatorsHolder
   {
     if (required_capacity < capacity1) {
       allocator_value.deallocate(ptr, required_capacity);
-    } else if (required_capacity <= capacity1){
+    } else if (required_capacity < capacity2){
       allocator_rhh_1.deallocate(ptr, 1);
-    } else if (required_capacity <= capacity2){
+    } else if (required_capacity < capacity3){
       allocator_rhh_2.deallocate(ptr, 1);
-    } else if (required_capacity <= capacity3){
+    } else if (required_capacity < capacity4){
       allocator_rhh_3.deallocate(ptr, 1);
-    } else if (required_capacity <= capacity4){
+    } else if (required_capacity < capacity5){
       allocator_rhh_4.deallocate(ptr, 1);
-    } else if (required_capacity <= capacity5){
+    } else if (required_capacity < capacity6){
       allocator_rhh_5.deallocate(ptr, 1);
-    } else if (required_capacity <= capacity6){
-      allocator_rhh_6.deallocate(ptr, 1);
     } else {
-      assert(false);
+      allocator_rhh_6.deallocate(ptr, 1);
     }
   }
 
@@ -174,7 +170,7 @@ class AllocatorsHolder
 
   static inline uint64_t cal_capacity(uint64_t size)
   {
-    return cal_next_highest_power_of_2(size);
+    return cal_next_highest_power_of_2(static_cast<uint64_t>(size + size/10LL));
   }
 
  private:
@@ -287,28 +283,28 @@ class RHHMgr {
 
   UpdateErrors insert_helper(KeyType& key, const uint64_t current_size)
   {
-    if (current_size < AllocatorsHolder::capacity1) {
+    if (current_size < AllocatorsHolder::capacity1*0.9) {
       return assert(false);
-    } else if (current_size <= AllocatorsHolder::capacity1) {
-      AllocatorsHolder::RHHStaticNoVal1* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal1*>(m_ptr_);
+    } else if (current_size < AllocatorsHolder::capacity2*0.9) {
+      AllocatorsHolder::RHHStaticNoVal* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal1*>(m_ptr_);
       return rhh->insert_uniquely(key);
-    }  else if (current_size <= AllocatorsHolder::capacity2) {
+    }  else if (current_size < AllocatorsHolder::capacity3*0.9) {
       AllocatorsHolder::RHHStaticNoVal2* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal2*>(m_ptr_);
       return rhh->insert_uniquely(key);
-    }  else if (current_size <= AllocatorsHolder::capacity3) {
+    }  else if (current_size < AllocatorsHolder::capacity4*0.9) {
       AllocatorsHolder::RHHStaticNoVal3* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal3*>(m_ptr_);
       return rhh->insert_uniquely(key);
-    }  else if (current_size <= AllocatorsHolder::capacity4) {
+    }  else if (current_size < AllocatorsHolder::capacity5*0.9) {
       AllocatorsHolder::RHHStaticNoVal4* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal4*>(m_ptr_);
       return rhh->insert_uniquely(key);
-    }  else if (current_size <= AllocatorsHolder::capacity5) {
+    }  else if (current_size < AllocatorsHolder::capacity6*0.9) {
       AllocatorsHolder::RHHStaticNoVal5* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal5*>(m_ptr_);
       return rhh->insert_uniquely(key);
-    }  else if (current_size <= AllocatorsHolder::capacity6) {
+    }  else  {
       AllocatorsHolder::RHHStaticNoVal6* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal6*>(m_ptr_);
       return rhh->insert_uniquely(key);
     } else {
-      assert(1);
+      assert(false);
     }
   }
 
@@ -338,7 +334,7 @@ class RHHMgr {
     RHHMain<KeyType, ValueType>* old_rhh = reinterpret_cast<RHHMain<KeyType, ValueType>*>(m_ptr_);
 
     uint64_t capacity = old_rhh->capacity; * kCapacityGrowingFactor;
-    alloc(allocators, capacity);
+    allocate_rhh_main(allocators, capacity);
     /// now copy over old elems
     RHHMain<KeyType, ValueType>* rhh = reinterpret_cast<RHHMain<KeyType, ValueType>*>(m_ptr_);
     rhh->move_elems_from(old_rhh);
