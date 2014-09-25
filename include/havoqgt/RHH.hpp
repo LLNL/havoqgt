@@ -129,10 +129,10 @@ class RHHMain {
     if (is_adj_list(property(pos_first))) {
       /// 2. non-low-degree
       RHHMgr<ValueType, NoValueType>& rhh_adj_list = m_value_type_[pos_first].adj_list;
-      return rhh_adj_list.insert_uniquely(allocators, std::move(value.value));
+      return rhh_adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_first)));
     }
 
-    /// Confirm unique insertion
+    /// Check whether we already have a same edge
     if (get_pos_equal_element_from_here(key, value.value, pos_first, dist, mask) != kInvaridIndex) {
       return kDuplicated;
     }
@@ -141,12 +141,11 @@ class RHHMain {
     for (int64_t pos = pos_first, count_key = 0;; pos = (pos+1) & mask, ++dist) {
       PropertyBlockType existing_elem_property = property(pos);
       if (existing_elem_property == kClearedValue) {
-        /// 3. low-degree
+        /// 3. low-degree, we found a space to insert
         construct(pos, std::move(key), std::move(value), false, mask);
         return kSucceed;
       } else if (dist > extract_probedistance(existing_elem_property)) {
         /// 3. low-degree
-        /// TODO: we can use value of 'pos' and 'dist' in order to reduce serching steps
         return insert_directly(std::move(key), std::move(value));
       }else if (!is_deleted(existing_elem_property) && m_key_block_[pos] == key) {
         moved_pos_list[count_key] = pos;
@@ -158,15 +157,13 @@ class RHHMain {
     //DEBUG("Convert start, current initial alloc size = 2");
     ValueWrapperType value_wrapper;
     new(&value_wrapper.adj_list) RHHMgr(kInitialCapacityAdjlist, false);
-    value_wrapper.adj_list.insert_directly(std::move(value.value));
+    value_wrapper.adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_first)));
     for (uint64_t k = 0; k < kDirectInsertionThreshold; ++k) {
-      value_wrapper.adj_list.insert_directly(std::move(m_value_type_[moved_pos_list[k]].value));
+      value_wrapper.adj_list.insert_uniquely(allocators, std::move(m_value_type_[moved_pos_list[k]].value), extract_capacity(property(pos_first)));
       delete_elem(moved_pos_list[k]);
     }
     /// insert adjacency-list
-    //DEBUG("Move adj_list");
-    construct(pos_first, std::move(key), std::move(value_wrapper), true, mask);
-    //DEBUG("Convert done");
+    construct(pos_first, std::move(key), std::move(value_wrapper), mask);
 
     return kSucceed;
   }
@@ -191,7 +188,7 @@ class RHHMain {
 
   void inline reset_property_block()
   {
-    for (uint64_t k = 0; k < Capacity; ++k) {
+    for (uint64_t k = 0; k < m_capacity_; ++k) {
       m_property_block_[k] = kClearedValue;
     }
   }
@@ -570,14 +567,6 @@ class RHHStatic {
   ///  ------------------------------------------------------ ///
   ///              Private Member Functions
   ///  ------------------------------------------------------ ///
-
-#define USE_TOMBSTONE 1
-#if USE_TOMBSTONE == 0
-  #error Backshift model has a bug
-#endif
-
-  static const uint64_t kDirectInsertionThreshold = 1ULL; /// NOTE: We assume that this value is small (may be less than 10)
-
   static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
   static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
   static const PropertyBlockType kClearedValue      = 0x7F; /// value repsents cleared space
@@ -646,51 +635,7 @@ class RHHStatic {
     return prop;
   }
 
-
-  /// ------ Private member functions: insertion ----- ///
-  inline void insert_directly(KeyType&& key)
-  {
-    if (++m_num_elems_ >= Capacity*kResizeFactor) {
-      grow_without_valueblock(allocator);
-    }
-    insert_helper(std::move(key), cal_mask());
-  }
-
-  void insert_helper(KeyType &&key, ValueWrapperType &&value, bool is_adj_list, const uint64_t mask)
-  {
-    int64_t pos = cal_desired_pos(hash_key(key), mask);
-    ProbeDistanceType dist = 0;
-
-    while(true) {
-      PropertyBlockType existing_elem_property = property(pos);
-
-      if(existing_elem_property == kClearedValue)
-      {
-        construct(pos, std::move(key), std::move(value), is_adj_list, mask);
-        return;
-      }
-
-      /// If the existing elem has probed less than or "equal to" us, then swap places with existing
-      /// elem, and keep going to find another slot for that elem.
-      if (extract_probedistance(existing_elem_property) <= dist)
-      {
-        if(is_deleted(existing_elem_property))
-        {
-          construct(pos, std::move(key), std::move(value), is_adj_list, mask);
-          return;
-        }
-        m_property_block_[pos] = cal_property(dist, is_adj_list);
-        std::swap(key, m_key_block_[pos]);
-        std::swap(value, m_value_type_[pos]);
-        dist = extract_probedistance(existing_elem_property);
-        is_adj_list = extract_adj_list_flag(existing_elem_property);
-      }
-
-      pos = (pos+1) & mask;
-      ++dist;
-    }
-  }
-
+  /// FIXME: we need to search chained array.
   void insert_helper(KeyType &&key, const uint64_t mask)
   {
     int64_t pos = cal_desired_pos(hash_key(key), mask);
@@ -754,6 +699,7 @@ class RHHStatic {
   }
 
   /// ------ Private member functions: utility ----- ///
+  /// FIXME: we need to search chained array.
   inline void get_all_elem_key_list(KeyType pos_list[])
   {
     uint64_t capacity = Capacity;
@@ -766,6 +712,7 @@ class RHHStatic {
     }
   }
 
+  /// FIXME: we need to search chained array.
   inline int64_t get_pos_equal_element_from_here(const KeyType& key, int64_t pos, ProbeDistanceType dist, const uint64_t mask) const
   {
     /// Check whether we have a same key element.

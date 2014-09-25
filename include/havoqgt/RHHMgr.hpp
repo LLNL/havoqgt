@@ -263,7 +263,7 @@ class RHHMgr {
     return true;
   }
 
-  inline UpdateErrors insert_helper(AllocatorsHolder& allocators, KeyType& key, ValueType& val, const uint64_t current_size)
+  inline UpdateErrors insert_helper(AllocatorsHolder& allocators, KeyType& key, ValueType& val)
   {
     RHHMain<KeyType, ValueType>* rhh = reinterpret_cast<RHHMain<KeyType, ValueType>*>(m_ptr_);
     return rhh->insert_uniquely(key, val);
