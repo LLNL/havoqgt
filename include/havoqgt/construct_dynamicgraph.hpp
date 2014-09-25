@@ -86,7 +86,7 @@ namespace bip = boost::interprocess;
 #endif
 
 #ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
-  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 1
+  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
 #endif
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
@@ -213,7 +213,7 @@ class construct_dynamicgraph {
   typedef robin_hood_hash<uint64_t, char, SegmentManager> robin_hood_hashing_novalue_t;
   typedef robin_hood_hash<uint64_t, robin_hood_hashing_novalue_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
 
-  typedef RHHAdjacencyMatrix<uint64_t, SegmentAllocator<void>> rhh_matrix_t;
+  typedef RHHAdjacencyMatrix<uint64_t, uint64_t, SegmentAllocator<void>> rhh_matrix_t;
 
   enum DataStructureMode {
     kUseVecVecMatrix,

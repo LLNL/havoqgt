@@ -67,7 +67,8 @@ namespace bip = boost::interprocess;
 
 template <typename KeyType, typename ValueType, typename SegmentAllocator>
 class RHHAdjacencyMatrix {
- public:
+
+  public:
 
   /// ---------  Typedefs and Enums ------------ //
 
@@ -77,16 +78,10 @@ class RHHAdjacencyMatrix {
   ///  ------------------------------------------------------ ///
 
   /// --- Constructor --- //
-  explicit RHHAdjacencyMatrix(SegmentAllocator& allocator)
+  RHHAdjacencyMatrix(SegmentAllocator& allocator, const uint64_t initial_capasity)
   {
     //DEBUG("RHHAdjacencyMatrix constructor");
-    alloc(allocator, kInitialCapacity, true);
-  }
-
-  RHHAdjacencyMatrix(SegmentAllocator& allocator, const uint64_t initial_capasity, const bool is_allocate_valueblock)
-  {
-    //DEBUG("RHHAdjacencyMatrix constructor");
-    alloc(allocator, initial_capasity, is_allocate_valueblock);
+    alloc(allocator, initial_capasity);
   }
 
   /// --- Copy constructor --- //
@@ -140,10 +135,11 @@ class RHHAdjacencyMatrix {
       return true;
     }
 
+    /// XXX CHANGE
     if (is_adj_list(property(pos_first))) {
       /// 2. non-low-degree
       RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[pos_first].adj_list;
-      return rhh_adj_list.insert_key_unique(allocator, std::move(value.value));
+      return rhh_adj_list.insert_uniquely(allocator, std::move(value.value));
     }
 
     /// Confirm unique insertion
@@ -489,28 +485,7 @@ class RHHAdjacencyMatrix {
     free_buffer(allocator, reinterpret_cast<void*>(old_pos_head), 0);
   }
 
-  void grow_without_valueblock(SegmentAllocator& allocator)
-  {
-    HeadBlock* old_pos_head = m_pos_head_;
-
-    const uint64_t new_capacity = m_pos_head_->capacity * kCapacityGrowingFactor;
-    alloc(allocator, new_capacity, false);
-    m_pos_head_->num_elems = old_pos_head->num_elems;
-
-    /// now copy over old elems
-    const uint64_t mask = cal_mask();
-    uint64_t old_capacity = old_pos_head->capacity;
-    for(uint64_t i = 0; i < old_capacity; ++i) {
-      ProbeDistanceType dist = old_pos_head->pos_property_block[i];
-      if (is_deleted(dist) || dist == kClearedValue)
-		    continue;
-  	  insert_helper(std::move(old_pos_head->pos_key_block[i]), mask);
-    }
-
-     free_buffer(allocator, reinterpret_cast<void*>(old_pos_head), 0);
-  }
-
-  void alloc(SegmentAllocator& allocator, const uint64_t capacity, const bool is_allocate_valueblock)
+  void alloc(SegmentAllocator& allocator, const uint64_t capacity)
   {
     uint64_t mem_size = sizeof(HeadBlock);
     mem_size += capacity*sizeof(PropertyBlockType);
@@ -521,10 +496,7 @@ class RHHAdjacencyMatrix {
     m_pos_head_ = reinterpret_cast<HeadBlock*>(ptr.get());
     m_pos_head_->pos_property_block   = reinterpret_cast<PropertyBlockType*>(&m_pos_head_[1]);
     m_pos_head_->pos_key_block        = reinterpret_cast<KeyType*>(&m_pos_head_->pos_property_block[capacity]);
-  	if (is_allocate_valueblock)
-  		 	m_pos_head_->pos_value_block  = reinterpret_cast<ValueWrapperType*>(&m_pos_head_->pos_key_block[capacity]);
-  	else
-  			m_pos_head_->pos_value_block  = nullptr;
+  	m_pos_head_->pos_value_block      = reinterpret_cast<ValueWrapperType*>(&m_pos_head_->pos_key_block[capacity]);
   	m_pos_head_->capacity             = capacity;
 
     for (uint64_t k = 0; k < capacity; ++k) {
@@ -540,35 +512,12 @@ class RHHAdjacencyMatrix {
 
   /// ------ Private member functions: insertion ----- ///
 
-  inline bool insert_key_unique(SegmentAllocator& allocator, KeyType&& key)
-  {
- 	  ProbeDistanceType dist = 0;
-    const uint64_t mask = cal_mask(); // sinse this function is called by parent RHH, we should calvurate mask at here
-    const int64_t pos_first = lookup_first_position(key, &dist, mask);
-    if (pos_first != kInvaridIndex) {
-      return false;
-    }
-    if (get_pos_equal_element_from_here(key, pos_first, dist, mask) != kInvaridIndex) {
-      return false;
-    }
-    insert_directly_with_growing(allocator, std::move(key));
-    return true;
-  }
-
   inline void insert_directly_with_growing(SegmentAllocator& allocator, KeyType&& key, ValueWrapperType&& value)
   {
   	if (++m_pos_head_->num_elems >= m_pos_head_->capacity*kResizeFactor) {
   		grow(allocator);
   	}
   	insert_helper(std::move(key), std::move(value), false, cal_mask());
-  }
-
-  inline void insert_directly_with_growing(SegmentAllocator& allocator, KeyType&& key)
-  {
-  	if (++m_pos_head_->num_elems >= m_pos_head_->capacity*kResizeFactor) {
-  		grow_without_valueblock(allocator);
-  	}
-  	insert_helper(std::move(key), cal_mask());
   }
 
   void insert_helper(KeyType &&key, ValueWrapperType &&value, bool is_adj_list, const uint64_t mask)
@@ -606,52 +555,12 @@ class RHHAdjacencyMatrix {
     }
   }
 
-  void insert_helper(KeyType &&key, const uint64_t mask)
-  {
-    int64_t pos = cal_desired_pos(hash_key(key), mask);
-    ProbeDistanceType dist = 0;
-
-    while(true) {
-      PropertyBlockType existing_elem_property = property(pos);
-
-      if(existing_elem_property == kClearedValue)
-      {
-        construct(pos, hash_key(key), std::move(key), mask);
-        return;
-      }
-
-      /// If the existing elem has probed less than or "equal to" us, then swap places with existing
-      /// elem, and keep going to find another slot for that elem.
-      if (extract_probedistance(existing_elem_property) <= dist)
-      {
-        if(is_deleted(existing_elem_property))
-        {
-          construct(pos, hash_key(key), std::move(key), mask);
-          return;
-        }
-        m_pos_head_->pos_property_block[pos] = dist;
-        std::swap(key, m_pos_head_->pos_key_block[pos]);
-        dist = extract_probedistance(existing_elem_property);
-      }
-
-      pos = (pos+1) & mask;
-      ++dist;
-    }
-  }
-
   inline void construct(const int64_t ix, const HashType hash, KeyType&& key, ValueWrapperType&& val, const bool is_adj_list, const uint64_t mask)
   {
     m_pos_head_->pos_property_block[ix] = cal_property(hash, ix, is_adj_list, mask);
     m_pos_head_->pos_key_block[ix] = std::move(key);
     m_pos_head_->pos_value_block[ix] = std::move(val);
   }
-
-  inline void construct(const int64_t ix, const HashType hash, KeyType&& key, const uint64_t mask)
-  {
-    m_pos_head_->pos_property_block[ix] = cal_probedistance(hash, ix, mask);
-    m_pos_head_->pos_key_block[ix] = std::move(key);
-  }
-
 
   /// ------ Private member functions: search ----- ///
 
@@ -674,23 +583,6 @@ class RHHAdjacencyMatrix {
       *dist = *dist + 1;
     }
   }
-
-
-  /// ------ Private member functions: erase ----- ///
-
-  bool erase_key_only(KeyType &key)
-  {
-    ProbeDistanceType dist = 0;
-    const int64_t pos = lookup_first_position(key, &dist, cal_mask());
-    if (pos == kInvaridIndex) {
-      return false;
-    }
-
-    delete_key(pos);
-    --m_pos_head_->num_elems;
-    return true;
-  }
-
 
   /// ------ Private member functions: utility ----- ///
     /// NOTE: this function require buffer, i.e. "pos_list", in order to store keys
@@ -721,6 +613,425 @@ class RHHAdjacencyMatrix {
     }
   }
 
+  inline bool is_equal_element(const KeyType& key, const ValueType& value, const int64_t pos, const PropertyBlockType prop) const
+  {
+  	if (is_deleted(prop) || m_pos_head_->pos_key_block[pos] != key || m_pos_head_->pos_value_block[pos].value != value)
+  		return false;
+  	else
+  		return true;
+  }
+
+
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Variables
+  ///  ------------------------------------------------------ ///
+  HeadBlock *m_pos_head_;
+
+};
+
+
+template <typename KeyType, typename ValueType, typename SegmentAllocator>
+class RHHAdjacencyMatrix <KeyType, void, SegmentAllocator> {
+
+  public:
+
+  /// ---------  Typedefs and Enums ------------ //
+
+  ///  ------------------------------------------------------ ///
+  ///              Constructor / Destructor
+  ///  ------------------------------------------------------ ///
+
+  /// --- Constructor --- //
+  RHHAdjacencyMatrix(SegmentAllocator& allocator, const uint64_t initial_capasity)
+  {
+    //DEBUG("RHHAdjacencyMatrix constructor");
+    alloc(allocator, initial_capasity);
+  }
+
+  /// --- Copy constructor --- //
+
+  /// --- Move constructor --- //
+  RHHAdjacencyMatrix(RHHAdjacencyMatrix &&old_obj)
+  {
+    //DEBUG("RHHAdjacencyMatrix move-constructor");
+    m_pos_head_ = old_obj.m_pos_head_;
+    old_obj.m_pos_head_ = nullptr;
+  }
+
+  /// --- Destructor --- //
+  // ~RHHAdjacencyMatrix()
+  // {
+  //   // DEBUG("RHHAdjacencyMatrix destructor");
+  //   if (m_pos_head_ != nullptr) {
+  //     assert(false);
+  //     // DEBUG("RHHAdjacencyMatrix destructor : need free_buffer");
+  //     //free_buffer(m_pos_head_, 0); /// XXX: memsize = 0
+  //   }
+  // }
+
+  /// ---  Move assignment operator --- //
+  RHHAdjacencyMatrix &operator=(RHHAdjacencyMatrix&& old_obj)
+  {
+    //DEBUG("RHHAdjacencyMatrix move-assignment");
+    m_pos_head_ = old_obj.m_pos_head_;
+    old_obj.m_pos_head_ = nullptr;
+    return *this;
+  }
+
+
+  ///  ------------------------------------------------------ ///
+  ///              Public Member Functions
+  ///  ------------------------------------------------------ ///
+
+  void free(SegmentAllocator& allocator)
+  {
+    free_buffer(allocator, reinterpret_cast<void*>(m_pos_head_), 0);
+  }
+
+  void dump_probedistance (const std::string& fname)
+  {
+    std::ofstream fout;
+    fout.open(fname, std::ios::out | std::ios::app);
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      if (is_adj_list(prop)) {
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        rhh_adj_list.dump_probedistance(fname);
+      } else {
+        fout << m_pos_head_->capacity << "\t" << extract_probedistance(prop) << std::endl;
+      }
+    }
+    fout.close();
+  }
+
+  void disp_status()
+  {
+    DISP_VAR(kDirectInsertionThreshold);
+    DISP_VAR(kInitialCapacity);
+    DISP_VAR(kInitialCapacityAdjlist);
+    DISP_VAR(kResizeFactor);
+    DISP_VAR(kCapacityGrowingFactor);
+    DISP_VAR(m_pos_head_->num_elems);
+    DISP_VAR(m_pos_head_->capacity);
+  }
+
+  void dump_elements(const std::string& fname)
+  {
+    std::ofstream fout;
+    fout.open(fname, std::ios::out | std::ios::app);
+
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      if (is_adj_list(prop)) {
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        rhh_adj_list.dump_keys_with_prefix(fout, i);
+      } else {
+        fout << m_pos_head_->pos_data_block[i] << "\t" << m_pos_head_->pos_value_block[i].value << std::endl;
+      }
+    }
+    fout.close();
+  }
+
+ void dump_keys_with_prefix(std::ofstream& fout, uint64_t prefix)
+ {
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      fout << prefix << "\t" << m_pos_head_->pos_data_block[i] << std::endl;
+    }
+ }
+
+  void disp_elements(void)
+  {
+
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      if (is_adj_list(prop)) {
+        RHHAdjacencyMatrix& rhh_adj_list = m_pos_head_->pos_value_block[i].adj_list;
+        rhh_adj_list.disp_keys_with_prefix(i);
+      } else {
+        std::cout << m_pos_head_->pos_data_block[i] << "\t" << m_pos_head_->pos_value_block[i].value << std::endl;
+      }
+    }
+    std::cout << "\n\n"; //D
+  }
+
+ void disp_keys_with_prefix(uint64_t prefix)
+ {
+    for (uint64_t i = 0; i < m_pos_head_->capacity; ++i) {
+      PropertyBlockType prop = m_pos_head_->pos_property_block[i];
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      std::cout << prefix << "\t" << m_pos_head_->pos_data_block[i] << std::endl;
+    }
+ }
+
+
+ private:
+  typename KeyType DataBlockType;
+  /// ---------  Typedefs and Enums ------------ ///
+  typedef int32_t ProbeDistanceType;
+  typedef uint64_t HashType;
+
+  struct HeadBlock {
+    DataBlockType *pos_data_block;
+
+    uint64_t num_elems;
+    uint64_t capacity;
+  };
+
+
+
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Functions
+  ///  ------------------------------------------------------ ///
+
+#define USE_TOMBSTONE 1
+#if USE_TOMBSTONE == 0
+  #error Backshift model has a bug
+#endif
+
+  static const uint64_t kInitialCapacity = 4ULL; /// must be 1 or more
+  static constexpr double kResizeFactor = 0.9;
+  static const uint64_t kCapacityGrowingFactor = 2ULL;
+
+  static const DataBlockType kTombstoneMask     = 0x8000000000000000LL; /// mask value to mark as deleted
+  static const DataBlockType kProbedistanceMask = 0x7FE0000000000000LL; /// mask value to extract probe distance
+  static const DataBlockType kKeyMask           = 0x007FFFFFFFFFFFFFLL; /// value repsents cleared space
+  static const DataBlockType kClearedValue      = 0x7FFFFFFFFFFFFFFFLL; /// value repsents cleared space
+  static const int64_t kInvaridIndex = -1LL;
+
+
+  /// ------ Private member functions: algorithm core ----- ///
+  /// NOTE: we assume that key can use static_cast to HashType
+  inline HashType hash_key(KeyType& key)
+  {
+    return static_cast<HashType>(key);
+  }
+
+  inline uint64_t cal_mask() const
+  {
+    return m_pos_head_->capacity - 1ULL;
+  }
+
+  inline int64_t cal_desired_pos(HashType hash, const uint64_t mask)
+  {
+    return hash & mask;
+  }
+
+  /// XXX: capacity = mask + 1LL
+  inline ProbeDistanceType cal_probedistance(HashType hash, const int64_t slot_index, const uint64_t mask)
+  {
+    return ((slot_index + (mask + 1LL) - cal_desired_pos(hash, mask)) & mask);
+  }
+
+  /// XXX: tombstone only
+  inline DataBlockType& data(const int64_t ix)
+  {
+    return m_pos_head_->pos_data_block[ix];
+  }
+
+  inline DataBlockType data(const int64_t ix) const
+  {
+    return const_cast<RHHAdjacencyMatrix*>(this)->property(ix);
+  }
+
+  inline DataBlockType cal_data(HashType hash, const int64_t slot_index, , const Key &key, const uint64_t mask)
+  {
+    return cal_probedistance(hash, slot_index, mask) | key;
+  }
+
+  inline DataBlockType cal_data(const ProbeDistanceType probedistance, const Key &key)
+  {
+    return probedistance | key;
+  }
+
+  /// XXX: tombstone only
+  inline void delete_elem(const int64_t positon)
+  {
+    data(positon) |= kTombstoneMask;
+  }
+
+  /// XXX: tombstone only
+  inline static bool is_deleted(const DataBlockType data)
+  {
+    return (data & kTombstoneMask) == kTombstoneMask;
+  }
+
+  inline static ProbeDistanceType extract_probedistance(DataBlockType data)
+  {
+    return data & kProbedistanceMask;
+  }
+
+  inline static KeyType extract_key(DataBlockType data)
+  {
+    return data & kKeyMask;
+  }
+
+  /// ------ Private member functions: memory management ----- ///
+
+  void grow(SegmentAllocator& allocator)
+  {
+    HeadBlock* old_pos_head = m_pos_head_;
+
+    const uint64_t new_capacity = m_pos_head_->capacity * kCapacityGrowingFactor;
+    alloc(allocator, new_capacity);
+    m_pos_head_->num_elems = old_pos_head->num_elems;
+
+    /// now copy over old elems
+    const uint64_t mask = cal_mask();
+    uint64_t old_capacity = old_pos_head->capacity;
+    for(uint64_t i = 0; i < old_capacity; ++i) {
+      ProbeDistanceType dist = old_pos_head->pos_property_block[i];
+      if (is_deleted(dist) || dist == kClearedValue)
+        continue;
+      insert_helper(std::move(old_pos_head->pos_data_block[i]), mask);
+    }
+
+     free_buffer(allocator, reinterpret_cast<void*>(old_pos_head), 0);
+  }
+
+  void alloc(SegmentAllocator& allocator, const uint64_t capacity)
+  {
+    uint64_t mem_size = sizeof(HeadBlock);
+    mem_size += capacity*sizeof(KeyType);
+
+    bip::offset_ptr<void> ptr = allocator.allocate(mem_size);
+    m_pos_head_ = reinterpret_cast<HeadBlock*>(ptr.get());
+    m_pos_head_->pos_data_block = reinterpret_cast<DataBlockType*>(&m_pos_head_[1]);
+    m_pos_head_->capacity             = capacity;
+
+    for (uint64_t k = 0; k < capacity; ++k) {
+      m_pos_head_->pos_data_block[k] = kClearedValue;
+    }
+  }
+
+  inline void free_buffer(SegmentAllocator& allocator, void* ptr, const size_t memsize)
+  {
+    //allocator.mp_mngr->deallocate(ptr);
+    allocator.deallocate(bip::offset_ptr<void>(ptr), memsize);
+  }
+
+  /// ------ Private member functions: insertion ----- ///
+
+  inline bool insert_uniquely(SegmentAllocator& allocator, KeyType&& key)
+  {
+    ProbeDistanceType dist = 0;
+    const uint64_t mask = cal_mask(); // sinse this function is called by parent RHH, we should calvurate mask at here
+    const int64_t pos_first = lookup_first_position(key, &dist, mask);
+    if (pos_first != kInvaridIndex) {
+      return false;
+    }
+    if (get_pos_equal_element_from_here(key, pos_first, dist, mask) != kInvaridIndex) {
+      return false;
+    }
+    insert_directly_with_growing(allocator, std::move(key));
+    return true;
+  }
+
+  inline void insert_directly_with_growing(SegmentAllocator& allocator, KeyType&& key)
+  {
+    if (++m_pos_head_->num_elems >= m_pos_head_->capacity*kResizeFactor) {
+      grow_without_valueblock(allocator);
+    }
+    insert_helper(std::move(key), cal_mask());
+  }
+
+  void insert_helper(KeyType &&key, const uint64_t mask)
+  {
+    int64_t pos = cal_desired_pos(hash_key(key), mask);
+    ProbeDistanceType dist = 0;
+
+    while(true) {
+      DataBlockType existing_data = data(pos);
+
+      if(existing_data == kClearedValue)
+      {
+        construct(pos, hash_key(key), std::move(key), mask);
+        return;
+      }
+
+      /// If the existing elem has probed less than or "equal to" us, then swap places with existing
+      /// elem, and keep going to find another slot for that elem.
+      if (extract_probedistance(existing_data) <= dist)
+      {
+        if(is_deleted(existing_data))
+        {
+          construct(pos, hash_key(key), std::move(key), mask);
+          return;
+        }
+        m_pos_head_->pos_property_block[pos] = dist;
+        std::swap(key, m_pos_head_->pos_data_block[pos]);
+        dist = extract_probedistance(existing_data);
+      }
+
+      pos = (pos+1) & mask;
+      ++dist;
+    }
+  }
+
+  inline void construct(const int64_t ix, const HashType hash, KeyType&& key, const uint64_t mask)
+  {
+    m_pos_head_->pos_property_block[ix] = cal_probedistance(hash, ix, mask);
+    m_pos_head_->pos_data_block[ix] = std::move(key);
+  }
+
+
+  /// ------ Private member functions: search ----- ///
+
+  int64_t lookup_first_position(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
+  {
+    const HashType hash = hash_key(key);
+    int64_t pos = cal_desired_pos(hash, mask);
+
+    while(true) {
+      ProbeDistanceType existing_elem_property = property(pos);
+      if (existing_elem_property == kClearedValue) { /// free space is found
+        return kInvaridIndex;
+      } else if (*dist > extract_probedistance(existing_elem_property)) {
+        return kInvaridIndex;
+      } else if (!is_deleted(existing_elem_property) && m_pos_head_->pos_data_block[pos] == key) {
+        /// found !
+        return pos;
+      }
+      pos = (pos+1) & mask;
+      *dist = *dist + 1;
+    }
+  }
+
+
+  /// ------ Private member functions: erase ----- ///
+
+  bool erase(KeyType &key)
+  {
+    ProbeDistanceType dist = 0;
+    const int64_t pos = lookup_first_position(key, &dist, cal_mask());
+    if (pos == kInvaridIndex) {
+      return false;
+    }
+
+    delete_key(pos);
+    --m_pos_head_->num_elems;
+    return true;
+  }
+
+
+  /// ------ Private member functions: utility ----- ///
+    /// NOTE: this function require buffer, i.e. "pos_list", in order to store keys
+  inline void get_all_elem_key_list(KeyType pos_list[])
+  {
+    uint64_t capacity = m_pos_head_->capacity;
+    uint64_t num_elems = m_pos_head_->num_elems;
+    for (int64_t pos=0, cout=0; pos < capacity && cout < num_elems; ++pos) {
+      PropertyBlockType prop = property(pos);
+      if (is_deleted(prop) || prop == kClearedValue) continue;
+      pos_list[cout] = m_pos_head_->pos_data_block[pos];
+      ++cout;
+    }
+  }
+
   inline int64_t get_pos_equal_element_from_here(const KeyType& key, int64_t pos, ProbeDistanceType dist, const uint64_t mask) const
   {
     /// Check whether we have a same key element.
@@ -736,17 +1047,9 @@ class RHHAdjacencyMatrix {
     }
   }
 
-  inline bool is_equal_element(const KeyType& key, const ValueType& value, const int64_t pos, const PropertyBlockType prop) const
-  {
-  	if (is_deleted(prop) || m_pos_head_->pos_key_block[pos] != key || m_pos_head_->pos_value_block[pos].value != value)
-  		return false;
-  	else
-  		return true;
-  }
-
   inline bool is_equal_element(const KeyType& key, const int64_t pos, const PropertyBlockType prop) const
   {
-    if (is_deleted(prop) || m_pos_head_->pos_key_block[pos] != key)
+    if (is_deleted(prop) || m_pos_head_->pos_data_block[pos] != key)
       return false;
     else
       return true;
