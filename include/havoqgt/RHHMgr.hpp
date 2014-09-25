@@ -77,8 +77,7 @@ class AllocatorsHolder
     capacity3 = 32,
     capacity4 = 64,
     capacity5 = 128,
-    capacity6 = 256,
-    max_capacity = 256,
+    capacity6 = 256
   }
 
   typename RHHStatic<uint64_t, RHHStatic::NoValueType, capacity1> RHHStaticNoVal1;
@@ -277,10 +276,10 @@ class RHHMgr {
 
     uint64_t new_capacity;
     if (err == kReachingFUllCapacity) {
-      new_capacity = grow(allocators, current_size);
+      new_capacity = grow_rhh_static(allocators, current_size);
     } else if (err == kLongProbedistance) {
       /// XXX: current implementation dose not allocate new RHH-array
-      new_capacity = grow(allocators, current_size);
+      new_capacity = grow_rhh_static(allocators, current_size);
       DEBUG("kLongProbedistance");
     }
     return true;
@@ -289,7 +288,7 @@ class RHHMgr {
   UpdateErrors insert_helper(KeyType& key, const uint64_t current_size)
   {
     if (current_size < AllocatorsHolder::capacity1) {
-      return insert_simple_array(key);
+      return assert(false);
     } else if (current_size <= AllocatorsHolder::capacity1) {
       AllocatorsHolder::RHHStaticNoVal1* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal1*>(m_ptr_);
       return rhh->insert_uniquely(key);
@@ -355,7 +354,7 @@ class RHHMgr {
     rhh->reset_property_block();
   }
 
-  uint64_t grow_rhh_static(AllocatorsHolder &allocators)
+  uint64_t grow_rhh_static(AllocatorsHolder &allocators, uint64_t current_size)
   {
     /// Depends on capacity, expand current rhh array OR allocate new rhh array and make chain.
     ///
