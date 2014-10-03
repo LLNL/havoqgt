@@ -16,8 +16,7 @@ This code was developed at Lawrence Livermore National Laboratory, and as part
 of Roger Pearce's Ph.D. research.
 
 Built in C++, the framework provides a runtime for parallel communication and
-algorithm termination detection.   V0.1 is an initial release with only 
-multi-threaded communication; future releases to provide MPI support.
+algorithm termination detection.   V0.1 is an initial release with only MPI support.
 All graph data is stored in mmaped files, using Boost.Interprocess and Memory 
 Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
@@ -25,19 +24,10 @@ devices are preferred for external memory storage.
 
 V0.1 only provides a simple Graph500 example:
 
-src/generate_graph.cpp
-======================
-
-This will generate an input graph following the Graph500 V1 specs.   The graph
-is stored in an adjacency list format through MMAPed files.   Example usage:
-
-./generate_graph <external_memory_file_name> <SCALE>
-
-
 src/run_bfs.cpp
 ===============
 
-This will run BFS using OpenMP for threading.  Input graph needs to be
-previously generated.  Example usage:
+This will generate a RMAT graph, and run BFS using MPI. Example usage:
 
-./run_bfs <external_memory_file_name> <SCALE>
+mpirun -np <ranks> src/run_bfs RMAT <SCALE> 0 <delegate_treshold> <external_memory_file_name> 0 0 0
+
