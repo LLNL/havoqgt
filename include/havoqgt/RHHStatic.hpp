@@ -72,8 +72,14 @@ namespace RHH {
   class RHHStatic {
     
   public:
-    
+
+    /// ---------  Typedefs and Enums ------------ ///
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
+    typedef unsigned char PropertyBlockType;
+    typedef unsigned char ProbeDistanceType;
+    static const ProbeDistanceType kLongProbedistanceThreshold = 32LL;
+
+    
     ///  ------------------------------------------------------ ///
     ///              Constructor / Destructor
     ///  ------------------------------------------------------ ///
@@ -150,21 +156,18 @@ namespace RHH {
     
   private:
     /// ---------  Typedefs and Enums ------------ ///
-    typedef unsigned char PropertyBlockType;
-    typedef unsigned char ProbeDistanceType;
     typedef uint64_t HashType;
+    
+    static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
+    static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
+    static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
+    static const int64_t kInvaridIndex = -1LL;
+    static const uint64_t kMask = Capacity - 1ULL;
     
     
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
     ///  ------------------------------------------------------ ///
-    static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
-    static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
-    static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
-    static const ProbeDistanceType kLongProbedistanceThreshold = 32LL;
-    static const int64_t kInvaridIndex = -1LL;
-    static const uint64_t kMask = Capacity - 1ULL;
-    
     /// ------ Private member functions: algorithm core ----- ///
     inline HashType hash_key(KeyType& key)
     {
@@ -273,6 +276,7 @@ namespace RHH {
       m_value_block_[ix] = std::move(val);
       if (probedist >= kLongProbedistanceThreshold) {
         return kLongProbedistance;
+        
       }
       return kSucceed;
     }
@@ -313,7 +317,6 @@ namespace RHH {
     ///              Private Member Variables
     ///  ------------------------------------------------------ ///
   public:
-    uint64_t m_num_elems_;
     RHHStaticType* m_next_;
     PropertyBlockType m_property_block_[Capacity];
     KeyType m_key_block_[Capacity];
