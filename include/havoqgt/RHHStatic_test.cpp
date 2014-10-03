@@ -6,6 +6,11 @@
 //  Copyright (c) 2014年 IwabuchiMlab. All rights reserved.
 //
 
+
+/// How to use
+/// $ g++ std=c++11 RHHStatic_test.cpp
+/// $ ./a.out
+
 #include <iostream>
 #include <cstdint>
 #include "RHHStatic.hpp"
