@@ -52,17 +52,7 @@
 #ifndef HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 
-namespace havoqgt {
-namespace mpi {
-
-  enum UpdateErrors {
-    kSucceed,
-    kDuplicated,
-    kReachingFUllCapacity,
-    kLongProbedistance
-  };
-
-namespace bip = boost::interprocess;
+namespace RHH {
 
 template <typename KeyType, typename ValueType>
 class RHHMain {
@@ -108,7 +98,6 @@ class RHHMain {
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions
   ///  ------------------------------------------------------ ///
-
   UpdateErrors insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
   {
     // std::cout << key << "," << val << std::endl; //D
@@ -118,25 +107,57 @@ class RHHMain {
     value.value = val;
     const uint64_t mask = cal_mask();
     ProbeDistanceType dist = 0;
-    const int64_t pos_first = lookup_first_position(key, &dist, mask);
-    if (pos_first == kInvaridIndex) {
+    const int64_t pos_key = find_key(key, &dist, mask);
+    if (pos_key == kInvaridIndex) {
       /// 1. new vertex
       return insert_directly(std::move(key), std::move(value));
     }
 
-    if (is_adj_list(property(pos_first))) {
+    const uint64_t size = extract_size(property(pos_key));
+    if (size == 1) {
+      /// FIXME: check duplication
+      /// convert data structure
+      ValueType* array = allocators->allocate_normal_array(2);
+      array[0] = m_value_type_[pos_key].value;
+      array[1] = val;
+      m_value_type_[pos_key].value_array = array;
+    } else if (size < AllocatorsHolder::capacityNormalArray3) {
+      /// FIXME: check duplication
+      ValueType* array = m_value_type_[pos_key].value_array;
+      const int pos = ffs(extract_bitmap(property(pos_key))) - 1;
+      array[pos] = val;
+      set_bit(pos_key, pos);
+    } else if (size == AllocatorsHolder::capacityNormalArray3) {
+          /// 4. convert data strucure of value from direct-insertion model to adj-list-insertion model
+      //DEBUG("Convert start, current initial alloc size = 2");
+      ValueWrapperType value_wrapper;
+      new(&value_wrapper.adj_list) RHHMgr(kInitialCapacityAdjlist, false);
+      value_wrapper.adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_key)));
+      for (uint64_t k = 0; k < kDirectInsertionThreshold; ++k) {
+        value_wrapper.adj_list.insert_uniquely(allocators, std::move(m_value_type_[moved_pos_list[k]].value), extract_capacity(property(pos_key)));
+        delete_elem(moved_pos_list[k]);
+      }
+    /// insert adjacency-list
+    construct(pos_key, std::move(key), std::move(value_wrapper), mask);
+
+    } else {
+      RHHMgr<ValueType, NoValueType>& rhh_adj_list = m_value_type_[pos_key].adj_list;
+      return rhh_adj_list.insert_uniquely(allocators, std::move(value.value), NULL, extract_capacity(property(pos_key)));
+    }
+
+    if (is_adj_list(property(pos_key))) {
       /// 2. non-low-degree
-      RHHMgr<ValueType, NoValueType>& rhh_adj_list = m_value_type_[pos_first].adj_list;
-      return rhh_adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_first)));
+      RHHMgr<ValueType, NoValueType>& rhh_adj_list = m_value_type_[pos_key].adj_list;
+      return rhh_adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_key)));
     }
 
     /// Check whether we already have a same edge
-    if (get_pos_equal_element_from_here(key, value.value, pos_first, dist, mask) != kInvaridIndex) {
+    if (get_pos_equal_element_from_here(key, value.value, pos_key, dist, mask) != kInvaridIndex) {
       return kDuplicated;
     }
 
     int64_t moved_pos_list[kDirectInsertionThreshold];
-    for (int64_t pos = pos_first, count_key = 0;; pos = (pos+1) & mask, ++dist) {
+    for (int64_t pos = pos_key, count_key = 0;; pos = (pos+1) & mask, ++dist) {
       PropertyBlockType existing_elem_property = property(pos);
       if (existing_elem_property == kClearedValue) {
         /// 3. low-degree, we found a space to insert
@@ -151,17 +172,7 @@ class RHHMain {
       }
     }
 
-    /// 4. convert data strucure of value from direct-insertion model to adj-list-insertion model
-    //DEBUG("Convert start, current initial alloc size = 2");
-    ValueWrapperType value_wrapper;
-    new(&value_wrapper.adj_list) RHHMgr(kInitialCapacityAdjlist, false);
-    value_wrapper.adj_list.insert_uniquely(allocators, std::move(value.value), extract_capacity(property(pos_first)));
-    for (uint64_t k = 0; k < kDirectInsertionThreshold; ++k) {
-      value_wrapper.adj_list.insert_uniquely(allocators, std::move(m_value_type_[moved_pos_list[k]].value), extract_capacity(property(pos_first)));
-      delete_elem(moved_pos_list[k]);
-    }
-    /// insert adjacency-list
-    construct(pos_first, std::move(key), std::move(value_wrapper), mask);
+
 
     return kSucceed;
   }
@@ -169,7 +180,7 @@ class RHHMain {
   bool erase(KeyType &key)
   {
     ProbeDistanceType dist = 0;
-    const int64_t pos = lookup_first_position(key, &dist, cal_mask());
+    const int64_t pos = find_key(key, &dist, cal_mask());
     if (pos == kInvaridIndex) {
       return false;
     }
@@ -184,7 +195,7 @@ class RHHMain {
     return m_m_num_elems__;
   }
 
-  void inline reset_property_block()
+  void inline clear()
   {
     for (uint64_t k = 0; k < m_capacity_; ++k) {
       m_property_block_[k] = kClearedValue;
@@ -239,7 +250,7 @@ class RHHMain {
   // ---------  static variables ------------ ///
   static const uint64_t kDirectInsertionThreshold = 1ULL; /// NOTE: We assume that this value is small (may be less than 10)
 
-  /// tombstone (1), adjacency-list (1), capacity (48), # arrays? (6), probe distance (8)
+  /// tombstone (1), size (48), bitmap (8), probe distance (7)
   static const PropertyBlockType kTombstoneMask     = 0x8000000000000000LL; /// mask value to mark as deleted
   static const PropertyBlockType kPropertyDirectInserted = 0x0000000000001000LL;
   //static const PropertyBlockType kAdjacencylistMask = 0x4000000000000000LL; /// mask value represents whether value is adjacency-list(RHH) or just a value
@@ -331,7 +342,7 @@ class RHHMain {
     return prop & kProbedistanceMask;
   }
 
-  inline static ProbeDistanceType extract_capacity(PropertyBlockType prop)
+  inline static ProbeDistanceType extract_size(PropertyBlockType prop)
   {
     return prop & kCapacityMask;
   }
@@ -400,7 +411,7 @@ class RHHMain {
 
   /// ------ Private member functions: search ----- ///
 
-  int64_t lookup_first_position(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
+  int64_t find_key(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
   {
     const HashType hash = hash_key(key);
     int64_t pos = cal_desired_pos(hash, mask);

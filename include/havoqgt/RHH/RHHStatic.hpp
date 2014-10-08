@@ -52,18 +52,9 @@
 #ifndef HAVOQGT_MPI_RHHSTATIC_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHSTATIC_HPP_INCLUDED
 
-#define DEBUG(msg) do { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } while (0)
-#define DEBUG2(x) do  { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << x << std::endl; } while (0)
-#define DISP_VAR(x) do  { std::cout << #x << " =\t" << x << std::endl; } while (0)
+#include "RHHUtility.hpp"
 
 namespace RHH {
-  
-  enum UpdateErrors {
-    kSucceed,
-    kDuplicated,
-    kReachingFUllCapacity,
-    kLongProbedistance
-  };
   
   /// --------------------------------------------------------------------------------------- ///
   ///                                RHH static class
@@ -72,13 +63,13 @@ namespace RHH {
   class RHHStatic {
     
   public:
-
+    
     /// ---------  Typedefs and Enums ------------ ///
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
     typedef unsigned char PropertyBlockType;
     typedef unsigned char ProbeDistanceType;
     static const ProbeDistanceType kLongProbedistanceThreshold = 32LL;
-
+    
     
     ///  ------------------------------------------------------ ///
     ///              Constructor / Destructor
@@ -89,20 +80,16 @@ namespace RHH {
     : m_next_(nullptr)
     {
       DEBUG("RHHStatic constructor");
-      for (uint64_t i=0; i < Capacity; i++) {
-        m_property_block_[i] = kEmptyValue;
-      }
+      clear(false);
     }
     
     /// --- Copy constructor --- //
     
     /// --- Move constructor --- //
-    // XXX: ???
     RHHStatic(RHHStatic&& old_obj)
     {
       DEBUG("RHHStatic move-constructor");
-      // m_property_block_ = old_obj.m_property_block_;
-      // old_obj.m_property_block_ = NULL;
+      assert(false); ///
     }
     
     /// --- Destructor --- //
@@ -112,12 +99,10 @@ namespace RHH {
     }
     
     /// ---  Move assignment operator --- //
-    // XXX: ???
     RHHStatic &operator=(RHHStatic&& old_obj)
     {
       DEBUG("RHHStatic move-assignment");
-      // m_pos_head_ = old_obj.m_pos_head_;
-      // old_obj.m_pos_head_ = nullptr;
+      assert(false);
       return *this;
     }
     
@@ -152,6 +137,22 @@ namespace RHH {
       }
       
       return false;
+    }
+    
+    inline void clear(bool is_clear_recursively)
+    {
+      for (uint64_t i=0; i < Capacity; i++) {
+        m_property_block_[i] = kEmptyValue;
+      }
+      if (is_clear_recursively && m_next_) {
+        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+        next_rhh->clear(true);
+      }
+    }
+    
+    inline static uint64_t capacity()
+    {
+      return Capacity;
     }
     
   private:
@@ -214,6 +215,7 @@ namespace RHH {
       property(positon) |= kTombstoneMask;
     }
     
+  public: /// TODO
     inline static bool is_deleted(const PropertyBlockType prop)
     {
       return (prop & kTombstoneMask) == kTombstoneMask;
@@ -239,7 +241,7 @@ namespace RHH {
         
         if(existing_elem_property == kEmptyValue)
         {
-          return construct(pos, hash_key(key), std::move(key), std::move(val));
+          return construct(pos, dist, std::move(key), std::move(val));
         }
         
         /// If the existing elem has probed less than or "equal to" us, then swap places with existing
@@ -248,7 +250,7 @@ namespace RHH {
         {
           if(is_deleted(existing_elem_property))
           {
-            return construct(pos, hash_key(key), std::move(key), std::move(val));
+            return construct(pos, dist, std::move(key), std::move(val));
           }
           m_property_block_[pos] = dist;
           std::swap(key, m_key_block_[pos]);
@@ -268,15 +270,14 @@ namespace RHH {
       return err;
     }
     
-    inline UpdateErrors construct(const int64_t ix, const HashType hash, KeyType&& key, ValueType&& val)
+    inline UpdateErrors construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
     {
-      ProbeDistanceType probedist = cal_probedistance(hash, ix);
+      ProbeDistanceType probedist = dist;
       m_property_block_[ix] = probedist;
       m_key_block_[ix] = std::move(key);
       m_value_block_[ix] = std::move(val);
       if (probedist >= kLongProbedistanceThreshold) {
         return kLongProbedistance;
-        
       }
       return kSucceed;
     }
@@ -316,12 +317,12 @@ namespace RHH {
     ///  ------------------------------------------------------ ///
     ///              Private Member Variables
     ///  ------------------------------------------------------ ///
-  public:
+  public: /// TODO: use friend class
     RHHStaticType* m_next_;
     PropertyBlockType m_property_block_[Capacity];
     KeyType m_key_block_[Capacity];
     ValueType m_value_block_[Capacity];
   };
-};
+}
 
 #endif
