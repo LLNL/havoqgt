@@ -53,36 +53,34 @@
 #define HAVOQGT_MPI_RHHMGRSTATIC_HPP_INCLUDED
 
 #include <boost/interprocess/allocators/allocator.hpp>
-#include "RHHUtility.hpp"
+#include <boost/interprocess/allocators/node_allocator.hpp>
+#include "RHHCommon.hpp"
+#include "RHHAllocHolder.hpp"
 #include "RHHStatic.hpp"
 
-namespace RHH {
-  
+ namespace RHH {
+
   ///  =========================================================================== ///
   ///                            RHH Manager class
   ///  =========================================================================== ///
   template <typename KeyType, typename ValueType>
   class RHHMgrStatic {
-    
+
   public:
-    
-    template<C>
-    typedef RHHStatic<KeyType, ValueType, C, PropertyBlockType> RHHAdjlistType;
-    
-    
+
     ///  ------------------------------------------------------ ///
     ///              Constructor / Destructor
     ///  ------------------------------------------------------ ///
     /// --- Constructor --- //
-    explicit RHHMgrStatic(AllocatorsHolder &allocators)
+    explicit RHHMgrStatic(AllocatorsHolder& allocators)
     {
-      m_ptr_ = reinterpret_cast<void*>(allocator_rhh_2.allocate(1).get());
-      AllocatorsHolder::RHHStaticNoVal2* new_rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal2*>(m_ptr_);
+      m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_1.allocate(1).get());
+      RHHStaticNoVal1* new_rhh = reinterpret_cast<RHHStaticNoVal1*>(m_ptr_);
       new_rhh->clear(false);
     }
-    
+
     /// --- Copy constructor --- //
-    
+
     /// --- Move constructor --- //
     RHHMgrStatic(RHHMgrStatic &&old_obj)
     {
@@ -90,29 +88,27 @@ namespace RHH {
       m_ptr_ = old_obj.m_ptr_;
       old_obj.m_ptr_ = nullptr;
     }
-    
+
     /// --- Destructor --- //
     ~RHHMgrStatic()
     {
       // DEBUG("RHHMgr destructor");
       if (m_ptr_ != nullptr) {
-        assert(false);
-        // DEBUG("RHHMgr destructor : need free_buffer");
-        //free_buffer(m_pos_head_, 0); /// XXX: memsize = 0
+        DEBUG("Have to deallcate");
       }
     }
-    
+
     /// ---  Move assignment operator --- //
     RHHMgrStatic &operator=(RHHMgrStatic&& old_obj)
     {
       //DEBUG("RHHMgr move-assignment");
       m_ptr_ = old_obj.m_ptr_;
       old_obj.m_ptr_ = nullptr;
-      
+
       return *this;
     }
-    
-    
+
+
     ///  ------------------------------------------------------ ///
     ///              Public function
     ///  ------------------------------------------------------ ///
@@ -120,109 +116,130 @@ namespace RHH {
     bool insert_uniquely_static(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
     {
       uint64_t current_capacity;
-      UpdateErrors err = insert_helper_static(key, val, current_size, &current_capacity);
+      UpdateErrors err = insert_helper_static(key, val, current_size+1, &current_capacity);
       if (err == kDuplicated) return false;
-      
-      if (++current_size > current_capacity / 100ULL * 90ULL) {
-        /// near-capacity
-        grow_rhh_static(allocators, current_size);
-      } else if (err == kLongProbedistance) {
+      ++current_size;
+
+      if (err == kLongProbedistance) {
         /// XXX: current implementation dose not allocate new RHH-array
-        grow_rhh_static(allocators, current_size);
-        DEBUG("kLongProbedistance");
+        ///DEBUG("kLongProbedistance");
+        grow_rhh_static(allocators, current_capacity, true);
+
+      } else  if (current_size % current_capacity == 0) {
+        /// full-capacity
+        ///DEBUG("full-capacity");
+        grow_rhh_static(allocators, current_capacity, false);
       }
+
       return true;
     }
-    
-    UpdateErrors insert_helper_static(KeyType& key, ValueType& val, const uint64_t current_size, uint64_t *current_capacity)
+
+    UpdateErrors insert_helper_static(KeyType& key, ValueType& val, const uint64_t require_capacity, uint64_t *current_capacity)
     {
       UpdateErrors err;
-      
-      if (current_size <= AllocatorsHolder::capacityRHHStatic1) {
-        AllocatorsHolder::RHHStaticNoVal* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal1*>(m_ptr_);
+
+      if (require_capacity <= capacityRHHStatic1) {
+        RHHStaticNoVal1* rhh = reinterpret_cast<RHHStaticNoVal1*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic1;
-      } else if (current_size <= AllocatorsHolder::capacity2) {
-        AllocatorsHolder::RHHStaticNoVa2* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal2*>(m_ptr_);
+        *current_capacity = capacityRHHStatic1;
+
+      } else if (require_capacity <= capacityRHHStatic2) {
+        RHHStaticNoVal2* rhh = reinterpret_cast<RHHStaticNoVal2*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic2;
-      }  else if (current_size <= AllocatorsHolder::capacity3) {
-        AllocatorsHolder::RHHStaticNoVal3* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal3*>(m_ptr_);
+        *current_capacity = capacityRHHStatic2;
+
+      }  else if (require_capacity <= capacityRHHStatic3) {
+        RHHStaticNoVal3* rhh = reinterpret_cast<RHHStaticNoVal3*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic3;
-      }  else if (current_size <= AllocatorsHolder::capacity4) {
-        AllocatorsHolder::RHHStaticNoVal4* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal4*>(m_ptr_);
+        *current_capacity = capacityRHHStatic3;
+
+      }  else if (require_capacity <= capacityRHHStatic4) {
+        RHHStaticNoVal4* rhh = reinterpret_cast<RHHStaticNoVal4*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic4;
-      }  else if (current_size <= AllocatorsHolder::capacity5) {
-        AllocatorsHolder::RHHStaticNoVal5* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal5*>(m_ptr_);
+        *current_capacity = capacityRHHStatic4;
+
+      }  else if (require_capacity <= capacityRHHStatic5) {
+        RHHStaticNoVal5* rhh = reinterpret_cast<RHHStaticNoVal5*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic5;
+        *current_capacity = capacityRHHStatic5;
+
       } else {
-        AllocatorsHolder::RHHStaticNoVal6* rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal6*>(m_ptr_);
+        RHHStaticNoVal6* rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
         err = rhh->insert_uniquely(key, val);
-        *current_capacity = AllocatorsHolder::capacityRHHStatic6;
+        *current_capacity = capacityRHHStatic6;
       }
-      
+
       return err;
     }
-    
+
     // inline bool erase(AllocatorsHolder &allocators, KeyType key, uint64_t* current_size)
     // {
     //   uint64_t capacity = AllocatorsHolder.cal_next_highest_power_of_2(*current_size);
     //   RHHAdjlistType<capacity>* rhh = reinterpret_cast<RHHAdjlistType<capacity>*>(m_ptr_);
     //   return rhh->erase(allocators, key);
     // }
-    
-    
+
+
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
     ///  ------------------------------------------------------ ///
-    
+
     /// XXX: should use template function
-#define ALLOCATE_AND_MOVE(OLD_C, NEW_C) do {
-    AllocatorsHolder::RHHStaticNoVal ## OLD_C* old_rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal ## OLD_C*>(m_ptr_);
-    m_ptr_ = reinterpret_cast<void*>(allocator_rhh_ ## NEW_C.allocate(1).get());
-    AllocatorsHolder::RHHStaticNoVal ## NEW_C* new_rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal ## NEW_C*>(m_ptr_);
-    
-    new_rhh->clear(false);
-    const uint64_t old_capacity = old_rhh->capacity;
-    for (uint64_t i = 0; i < old_capacity; ++i) {
-      if (!old_rhh->is_deleted(old_rhh->m_property_block_[i])) {
-        new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);
-      }
-    }
-  } while(0)
-    
-    uint64_t grow_rhh_static(AllocatorsHolder &allocators, uint64_t current_size)
+#define ALLOCATE_AND_MOVE(OLD_C, NEW_C) do{\
+    RHHStaticNoVal##OLD_C* old_rhh = reinterpret_cast<RHHStaticNoVal##OLD_C*>(m_ptr_);\
+    m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_##NEW_C.allocate(1).get());\
+    RHHStaticNoVal##NEW_C* new_rhh = reinterpret_cast<RHHStaticNoVal##NEW_C*>(m_ptr_);\
+    new_rhh->clear(false);\
+    const uint64_t old_capacity = old_rhh->capacity();\
+    for (uint64_t i = 0; i < old_capacity; ++i) {\
+      if (old_rhh->is_valid(i)) {\
+        new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
+      }\
+    }\
+    allocators.deallocate_rhh_static(reinterpret_cast<void*>(old_rhh), capacityRHHStatic##OLD_C);\
+  }while(0)
+
+  uint64_t grow_rhh_static(AllocatorsHolder &allocators, uint64_t current_capacity, bool has_long_probedistance)
   {
-    if (current_size <= AllocatorsHolder::capacityRHHStatic1) {
+    if (current_capacity <= capacityRHHStatic1) {
       ALLOCATE_AND_MOVE(1, 2);
-    } else if (current_size <= AllocatorsHolder::capacityRHHStatic2){
+    } else if (current_capacity <= capacityRHHStatic2){
       ALLOCATE_AND_MOVE(2, 3);
-    } else if (current_size <= AllocatorsHolder::capacityRHHStatic3){
+    } else if (current_capacity <= capacityRHHStatic3){
       ALLOCATE_AND_MOVE(3, 4);
-    } else if (current_size <= AllocatorsHolder::capacityRHHStatic4){
+    } else if (current_capacity <= capacityRHHStatic4){
       ALLOCATE_AND_MOVE(4, 5);
-    } else if (current_size <= AllocatorsHolder::capacityRHHStatic5){
+    } else if (current_capacity <= capacityRHHStatic5){
       ALLOCATE_AND_MOVE(5, 6);
     } else {
       /// allocate chained rhh
-      AllocatorsHolder::RHHStaticNoVal6* old_rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal6*>(m_ptr_);
-      m_ptr_ = reinterpret_cast<void*>(allocator_rhh_6.allocate(1).get());
-      AllocatorsHolder::RHHStaticNoVal6* new_rhh = reinterpret_cast<AllocatorsHolder::RHHStaticNoVal6*>(m_ptr_);
-      new_rhh->m_next_ = old_rhh;
+      RHHStaticNoVal6* old_rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
+      m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_6.allocate(1).get());
+      RHHStaticNoVal6* new_rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
       new_rhh->clear(false);
+      new_rhh->m_next_ = old_rhh;
+
+      if (has_long_probedistance) {
+        /// move longprobedisrance element to new array
+        const uint64_t old_capacity = old_rhh->capacity();
+        for (uint64_t i = 0; i < old_capacity; ++i) {
+          if (old_rhh->is_valid(i) && old_rhh->is_longprobedistance(i)) {
+            new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);
+            old_rhh->delete_key(i);
+          }
+        }
+      }
+
     }
+
   }
-    
-    void inline free_buffer_rhh_static(AllocatorsHolder &allocators, void* ptr, uint64_t capacity)
+
+  void inline free_buffer_rhh_static(AllocatorsHolder &allocators, void* ptr, uint64_t capacity)
   {
     allocators.deallocate_rhh_static(ptr, capacity);
   }
-    
-    
-    void* m_ptr_;
+
+  void* m_ptr_;
 };
 }
 

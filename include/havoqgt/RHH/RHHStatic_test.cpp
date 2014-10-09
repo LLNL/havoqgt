@@ -59,63 +59,29 @@
 #include <cassert>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/adaptive_pool.hpp>
-
-#include "RHHUtility.hpp"
+#include <stdio.h>
+#include <time.h>
+#include "RHHCommon.hpp"
 #include "RHHMgrStatic.hpp"
 
-#define DEBUG(msg) do { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } while (0)
-#define DEBUG2(x) do  { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << x << std::endl; } while (0)
-#define DISP_VAR(x) do  { std::cout << #x << " =\t" << x << std::endl; } while (0)
+ int main (void)
+ {
+  boost::interprocess::file_mapping::remove( "./tmp.dat" );
+  boost::interprocess::managed_mapped_file mfile( boost::interprocess::create_only, "./tmp.dat", 1ULL<<28ULL );
+  RHH::AllocatorsHolder holder = RHH::AllocatorsHolder(mfile.get_segment_manager());
+  RHH::RHHMgrStatic<uint64_t, RHH::NoValueType> *rhh = new RHH::RHHMgrStatic<uint64_t, RHH::NoValueType>(holder);
 
+  srand((unsigned int)time(NULL));
 
-int main (void)
-{
-  
-  boost::interprocess::managed_shared_memory segment(create_only,
-                                "MySharedMemory",  //segment name
-                                65536);
-  
-  RHH::AllocatorsHolder *holder = new RHH::AllocatorsHolder(segment.get_segment_manager());
-  RHH::RHHMgrStatic<uint64_t, RHH::NoValueType> *rhh = new RHH::RHHMgrStatic<uint64_t, RHH::NoValueType>();
-
-  std::cout << "-------insert--------\n";
-  for (uint64_t i = 0; i < 64; i++) {
-    std::cout << i << ": ";
-    rhh->insert_uniquely_static(holder, i, NULL, i);
+  uint64_t num_elems = 0;
+  unsigned char dmy = 0;
+  for (int i = 0; i < (1<<22); i++) {
+    uint64_t key = rand() % 32768;
+    bool result = rhh->insert_uniquely_static(holder, key, dmy, num_elems);
+    std::cout << key << "\t" << result << std::endl;
+    num_elems += result;
   }
-
-  
-//  std::cout << "-------allocate chained RHHStatic--------\n";
-//  RHH::RHHStatic<uint64_t, unsigned char, 256> *rhh2 = new RHH::RHHStatic<uint64_t, unsigned char, 256>();
-//  rhh2->m_next_ = rhh;
-//  std::cout << "-------insert--------\n";
-//  for (uint64_t i = 0; i < 64; i++) {
-//    std::cout << i << ": ";
-//    insertion_result(rhh2->insert_uniquely(i, 0));
-//  }
-//  std::cout << "--------erase-------\n";
-//  for (uint64_t i = 0; i < 64; i++) {
-//    std::cout << i << ": ";
-//    erasion_result(rhh2->erase(i));
-//  }
-//  
-//  std::cout << "-------allocate chained RHHStatic--------\n";
-//  RHH::RHHStatic<uint64_t, unsigned char, 256> *rhh3 = new RHH::RHHStatic<uint64_t, unsigned char, 256>();
-//  rhh3->m_next_ = rhh2;
-//  std::cout << "------insert---------\n";
-//  for (uint64_t i = 0; i < 64; i++) {
-//    std::cout << i << ": ";
-//    insertion_result(rhh3->insert_uniquely(i, 0));
-//  }
-//  std::cout << "--------erase-------\n";
-//  for (uint64_t i = 0; i < 64; i++) {
-//    std::cout << i << ": ";
-//    erasion_result(rhh3->erase(i));
-//  }
-  
   delete rhh;
-//  delete rhh2;
-//  delete rhh3;
-  
+
   return 0;
 }
