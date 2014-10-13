@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
   //
   // Calculate max degree
-  uint64_t max_degree = graph->max_vertex_id();
+  uint64_t max_degree = 0;//graph->max_vertex();
   for(graph_type::vertex_iterator vitr = graph->vertices_begin();
         vitr != graph->vertices_end(); ++vitr) {
     max_degree = std::max(max_degree, graph->degree(*vitr));

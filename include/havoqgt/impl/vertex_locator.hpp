@@ -117,13 +117,13 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
   friend class delegate_partitioned_graph;
   unsigned int m_is_delegate  : 1;
 
-  unsigned int m_is_bcast     : 3;
+  unsigned int m_is_bcast     : 1;
   unsigned int m_is_intercept : 1;
-  unsigned int m_owner_dest   : 20;
-  uint64_t     m_local_id     : 39;
+  unsigned int m_owner_dest   : 14;
+  uint64_t     m_local_id     : 31;
 
   vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
-};
+} __attribute__ ((packed)) ;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -147,16 +147,17 @@ vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest) {
     m_is_delegate = true;
     m_owner_dest  = owner_dest;
     m_local_id    = local_id;
-    assert(m_is_delegate == true
+    if(!(m_is_delegate == true
         && m_local_id    == local_id
-        && m_owner_dest  == owner_dest);
+        && m_owner_dest  == owner_dest)) { std::cerr << "ERROR:  vertex_locator()" << std::endl; exit(-1);}
   } else {
     m_is_delegate = false;
     m_owner_dest  = owner_dest;
     m_local_id    = local_id;
-    assert(m_is_delegate == false
+    if(!(m_is_delegate == false
         && m_owner_dest  == owner_dest
-        && m_local_id    == local_id);
+        && m_local_id    == local_id)) { std::cerr << "ERROR:  vertex_locator()" << std::endl; exit(-1);}
+
   }
 }
 

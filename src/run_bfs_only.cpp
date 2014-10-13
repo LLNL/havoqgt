@@ -61,11 +61,8 @@
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
-#include <boost/interprocess/mapped_region.hpp>
-#include <boost/interprocess/managed_heap_memory.hpp>
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
 
+#include <havoqgt/distributed_db.hpp>
 #include <assert.h>
 
 #include <deque>
@@ -78,9 +75,8 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
-  typedef bip::managed_mapped_file graph_mapped_t;
-  typedef graph_mapped_t::segment_manager graph_segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<graph_segment_manager_t> graph_type;
+  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -114,14 +110,14 @@ int main(int argc, char** argv) {
     graph_input = argv[pos++];
   }
 
-  graph_input += "_" + std::to_string(mpi_rank);
-  if (mpi_rank == 0) {
-    std::cout << "[0]Graph input file = " << graph_input << std::endl;
-  }
+//  graph_input += "_" + std::to_string(mpi_rank);
+//  if (mpi_rank == 0) {
+//    std::cout << "[0]Graph input file = " << graph_input << std::endl;
+//  }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  graph_mapped_t graph_mapped_file(bip::open_only, graph_input.c_str());
+  havoqgt::distributed_db ddb(havoqgt::db_open(), MPI_COMM_WORLD, graph_input.c_str());
   // graph_mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
 
   // boost::interprocess::mapped_region::advice_types rand_advice;
@@ -130,7 +126,7 @@ int main(int argc, char** argv) {
   // assert(assert_res);
 
 
-  graph_type *graph = graph_mapped_file.get_segment_manager()->
+  graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
@@ -143,7 +139,7 @@ int main(int argc, char** argv) {
 
   //
   // Calculate max degree
-  uint64_t max_degree = graph->max_vertex_id();
+  uint64_t max_degree = 0;//graph->max_vertex_id();
   for (graph_type::vertex_iterator vitr = graph->vertices_begin();
         vitr != graph->vertices_end(); ++vitr) {
     max_degree = std::max(max_degree, graph->degree(*vitr));
@@ -160,7 +156,8 @@ int main(int argc, char** argv) {
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-
+ 
+  /*   NEED TO FIX LOCAL DATA!!
   // BFS Experiments
   {
     #if 0
@@ -280,6 +277,7 @@ int main(int argc, char** argv) {
       std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;
     }
   }  // End BFS Test
+  */
   }  // END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());

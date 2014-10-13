@@ -555,6 +555,13 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
   }
 }
 
+template <typename T>
+void mpi_bcast(T& data, int root, MPI_Comm comm)
+{
+  CHK_MPI( MPI_Bcast(&data, sizeof(data), MPI_BYTE, root, comm));
+}
+
+
 inline std::ostream& cout_rank0() {
   int mpi_rank(0);
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );

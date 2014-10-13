@@ -57,6 +57,7 @@
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
+#include <havoqgt/distributed_db.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -65,8 +66,6 @@
 #include <functional>
 #include <fstream>      // std::ifstream
 
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
 
 // notes for how to setup a good test
 // take rank * 100 and make edges between (all local)
@@ -78,8 +77,8 @@ using namespace havoqgt::mpi;
 
 int main(int argc, char** argv) {
 
-  typedef bip::managed_mapped_file mapped_t;
-  typedef mapped_t::segment_manager segment_manager_t;
+  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
@@ -90,6 +89,8 @@ int main(int argc, char** argv) {
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
   CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
   havoqgt::get_environment();
+
+
 
   if (mpi_rank == 0) {
 
@@ -139,7 +140,7 @@ int main(int argc, char** argv) {
       << "Debuging = " << IS_DEBUGING << std::endl;
   }
 
-
+/*
   std::stringstream fname;
   fname << fname_output << "_" << mpi_rank;
 
@@ -170,8 +171,8 @@ int main(int argc, char** argv) {
       exit(-1);
     }
   }
-
-  mapped_t asdf(bip::open_or_create, fname.str().c_str(), flash_capacity);
+*/
+  havoqgt::distributed_db ddb(havoqgt::db_create(), MPI_COMM_WORLD, fname_output.c_str());
 
   // boost::interprocess::mapped_region::advice_types advice;
   // advice = boost::interprocess::mapped_region::advice_types::advice_random;
@@ -180,7 +181,7 @@ int main(int argc, char** argv) {
 
 
 
-  segment_manager_t* segment_manager = asdf.get_segment_manager();
+  segment_manager_t* segment_manager = ddb.get_segment_manager();
   bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
   graph_type *graph;
@@ -212,7 +213,7 @@ int main(int argc, char** argv) {
     uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
     havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
                                       vert_scale, num_edges_per_rank,
-                                      0.57, 0.19, 0.19, 0.05, true, true);
+                                      1.57, 0.19, 0.19, 0.05, true, true);
 
 
     if (load_from_disk == 1) {
