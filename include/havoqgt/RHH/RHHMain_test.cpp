@@ -48,37 +48,35 @@
  * purposes.
  *
  */
-#ifndef RHH_RHHCOMMON_HPP_INCLUDED
-#define RHH_RHHCOMMON_HPP_INCLUDED
 
-namespace RHH {
+#include <iostream>
+#include <cstdint>
+#include <cassert>
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/allocators/adaptive_pool.hpp>
+#include <stdio.h>
+#include <time.h>
 
-#define DEBUG(msg) \
-  do { \
-    std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
-  while (0)
+#include "RHHAllocHolder.hpp"
+#include "RHHMain.hpp"
 
-#define DEBUG2(x) \
-  do { \
-    std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
-  while (0)
+int main (void)
+{
+  boost::interprocess::file_mapping::remove( "./tmp.dat" );
+  boost::interprocess::managed_mapped_file mfile( boost::interprocess::create_only, "./tmp.dat", 1ULL<<28ULL );
+  RHH::AllocatorsHolder holder = RHH::AllocatorsHolder(mfile.get_segment_manager());
+  RHH::RHHMain<uint64_t, uint64_t> *rhh = new RHH::RHHMain<uint64_t, uint64_t>(holder, 2ULL);
 
-#define DISP_VAR(x) \
-  do { \
-    std::cout << #x << " =\t" << x << std::endl; } \
-  while (0)
+  srand((unsigned int)time(NULL));
 
-
-  enum UpdateErrors {
-    kSucceed,
-    kDuplicated,
-    kReachingFUllCapacity,
-    kLongProbedistance
-  };
-
-  static const uint64_t kCapacityGrowingFactor = 2ULL;
-  typedef unsigned char NoValueType;
+  uint64_t num_elems = 0;
+  for (int i = 0; i < (1<<10); i++) {
+    uint64_t key = rand() % 32768;
+    uint64_t val = rand() % 32768;
+    bool result = rhh->insert_uniquely(holder, key, val);
+    std::cout << key << "\t" << val << "\t" << result << std::endl;
+    num_elems += result;
+  }
+  delete rhh;
 
 }
-
-#endif

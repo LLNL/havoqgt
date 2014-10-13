@@ -113,10 +113,10 @@
     ///              Public function
     ///  ------------------------------------------------------ ///
     /// insert a key into RHHStatic class
-    bool insert_uniquely_static(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
+    bool insert_uniquely(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
     {
       uint64_t current_capacity;
-      UpdateErrors err = insert_helper_static(key, val, current_size+1, &current_capacity);
+      UpdateErrors err = insert_helper(key, val, current_size+1, &current_capacity);
       if (err == kDuplicated) return false;
       ++current_size;
 
@@ -134,7 +134,7 @@
       return true;
     }
 
-    UpdateErrors insert_helper_static(KeyType& key, ValueType& val, const uint64_t require_capacity, uint64_t *current_capacity)
+    UpdateErrors insert_helper(KeyType& key, ValueType& val, const uint64_t require_capacity, uint64_t *current_capacity)
     {
       UpdateErrors err;
 
@@ -172,9 +172,8 @@
       return err;
     }
 
-    // inline bool erase(AllocatorsHolder &allocators, KeyType key, uint64_t* current_size)
+    // inline bool erase(AllocatorsHolder &allocators, KeyType key, uint64_t current_size)
     // {
-    //   uint64_t capacity = AllocatorsHolder.cal_next_highest_power_of_2(*current_size);
     //   RHHAdjlistType<capacity>* rhh = reinterpret_cast<RHHAdjlistType<capacity>*>(m_ptr_);
     //   return rhh->erase(allocators, key);
     // }

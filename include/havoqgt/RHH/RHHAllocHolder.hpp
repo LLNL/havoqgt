@@ -47,49 +47,9 @@ namespace RHH {
     , allocator_rhh_noval_4(segment_manager)
     , allocator_rhh_noval_5(segment_manager)
     , allocator_rhh_noval_6(segment_manager)
-    , allocator_normalarray_1(segment_manager)
-    , allocator_normalarray_2(segment_manager)
-    , allocator_normalarray_3(segment_manager)
+    , allocator_normalarray(segment_manager)
     , allocator_raw(segment_manager)
     { }
-
-    void* allocate_normal_array(const uint64_t required_capacity)
-    {
-      if (required_capacity <= capacityNormalArray1) {
-        return reinterpret_cast<void*>(allocator_normalarray_1.allocate(1).get());
-      } else if (required_capacity <= capacityNormalArray2) {
-        return reinterpret_cast<void*>(allocator_normalarray_2.allocate(1).get());
-      } else if (required_capacity <= capacityNormalArray3) {
-        return reinterpret_cast<void*>(allocator_normalarray_3.allocate(1).get());
-      } else {
-        assert(false);
-      }
-    }
-
-    // void* allocate_rhh_static(const uint64_t required_capacity, uint64_t* allocated_capacity)
-    // {
-    //   if (required_capacity <= capacityRHHStatic1) {
-    //     *allocated_capacity = capacityRHHStatic1;
-    //     return reinterpret_cast<void*>(allocator_rhh_1.allocate(1).get());
-    //   } else if (required_capacity <= capacityRHHStatic2){
-    //     *allocated_capacity = capacityRHHStatic2;
-    //     return reinterpret_cast<void*>(allocator_rhh_2.allocate(1).get());
-    //   } else if (required_capacity <= capacityRHHStatic3){
-    //     *allocated_capacity = capacityRHHStatic3;
-    //     return reinterpret_cast<void*>(allocator_rhh_3.allocate(1).get());
-    //   } else if (required_capacity <= capacityRHHStatic4){
-    //     *allocated_capacity = capacityRHHStatic4;
-    //     return reinterpret_cast<void*>(allocator_rhh_4.allocate(1).get());
-    //   } else if (required_capacity <= capacityRHHStatic5){
-    //     *allocated_capacity = capacityRHHStatic5;
-    //     return reinterpret_cast<void*>(allocator_rhh_5.allocate(1).get());
-    //   } else if (required_capacity <= capacityRHHStatic6){
-    //     *allocated_capacity = capacityRHHStatic6;
-    //     return reinterpret_cast<void*>(allocator_rhh_6.allocate(1).get());
-    //   } else {
-    //    assert(false);
-    //   }
-    // }
 
     // void* allocate_rhh_main(const uint64_t required_capacity)
     // {
@@ -134,10 +94,10 @@ namespace RHH {
       //allocator_raw.deallocate(bip::offset_ptr<void>(ptr), capacity);
     }
 
-    static inline uint64_t cal_capacity(uint64_t size)
-    {
-      return cal_next_highest_power_of_2(static_cast<uint64_t>(size + size/10LL));
-    }
+    // static inline uint64_t cal_capacity(uint64_t size)
+    // {
+    //   return cal_next_highest_power_of_2(static_cast<uint64_t>(size + size/10LL));
+    // }
 
 
   /// size = capacity * (1 + 8 + 1) + 8
@@ -148,23 +108,21 @@ namespace RHH {
   bip::node_allocator<RHHStaticNoVal4, segment_manager_t,   6>  allocator_rhh_noval_4;
   bip::node_allocator<RHHStaticNoVal5, segment_manager_t,   3>  allocator_rhh_noval_5;
   bip::node_allocator<RHHStaticNoVal6, segment_manager_t,   1>  allocator_rhh_noval_6;
-  bip::node_allocator<uint64_t, segment_manager_t, 2048> allocator_normalarray_1;
-  bip::node_allocator<uint64_t, segment_manager_t, 1024> allocator_normalarray_2;
-  bip::node_allocator<uint64_t, segment_manager_t, 512> allocator_normalarray_3;
+  bip::node_allocator<uint64_t, segment_manager_t, 512> allocator_normalarray;
   bip::allocator<unsigned char, segment_manager_t> allocator_raw;
 
   private:
-    static inline uint64_t cal_next_highest_power_of_2(uint64_t x)
-    {
-      --x;
-      x != x >> 1ULL;
-      x != x >> 2ULL;
-      x != x >> 4ULL;
-      x != x >> 8ULL;
-      x != x >> 16ULL;
-      x != x >> 32ULL;
-      return ++x;
-    }
+    // static inline uint64_t cal_next_highest_power_of_2(uint64_t x)
+    // {
+    //   --x;
+    //   x != x >> 1ULL;
+    //   x != x >> 2ULL;
+    //   x != x >> 4ULL;
+    //   x != x >> 8ULL;
+    //   x != x >> 16ULL;
+    //   x != x >> 32ULL;
+    //   return ++x;
+    // }
 
   };
 }
