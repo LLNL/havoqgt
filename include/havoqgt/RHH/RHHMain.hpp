@@ -51,6 +51,7 @@
 
 #ifndef HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
+#include <fstream>
 #include "RHHCommon.hpp"
 #include "RHHAllocHolder.hpp"
 #include "RHHMgrStatic.hpp"
@@ -82,7 +83,7 @@ template <typename KeyType, typename ValueType>
     ~RHHMain()
     {
      DEBUG("RHHMain destructor");
-   }
+    }
 
   /// ---  Move assignment operator --- //
 
@@ -92,79 +93,90 @@ template <typename KeyType, typename ValueType>
   ///  ------------------------------------------------------ ///
    bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
    {
-
-    ValueWrapperType value;
-    value.value = val;
     const uint64_t mask = cal_mask();
     ProbeDistanceType dist = 0;
     const int64_t pos_key = find_key(key, &dist, mask);
     if (pos_key == kInvaridIndex) {
         /// 1. new vertex
+      ValueWrapperType value;
+      value.value = val;
       insert_directly_with_growing(allocators, std::move(key), std::move(value));
       return true;
     }
 
+
     const uint64_t size = extract_size(property(pos_key));
-    if (size == 1) {
+
+    if (size == 1ULL) {
       if (is_equal_element(key, val, pos_key)) return false;
         /// 2. convert data structure to array model
-      ValueType* array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(1).get());
+      ValueType* array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(2).get());
       array[0] = m_value_block_[pos_key].value;
       array[1] = val;
       m_value_block_[pos_key].value_array = array;
-      NormalArrayBitmapType btmp = 0x03;
-      set_bitmap(pos_key, btmp);
+
+      set_bitmap(pos_key, 0x03);
+      set_size(pos_key, 2ULL);
 
     } else if (size <= capacityNormalArray3) {
-        /// 3. we already have a normal-array
+      /// 3. we already have a normal-array
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
       uint64_t capacity = cal_next_pow2(size);
 
-        /// Check duplicated elements
+      /// Check duplicated value
       for (int i=0; i < capacity; ++i) {
-        if (((btmp >> i) & 0xfe) && (array[i] == val)) return false;
+        if (((btmp >> i) & 0x01) && (array[i] == val)) return false;
       }
 
       if (size == capacityNormalArray3) {
           /// 3-1. convert data strucure normal-array to RHHStatic
         ValueType* array = m_value_block_[pos_key].value_array;
         ValueWrapperType value_wrapper;
+        // DEBUG("convert to RHHStatic");
         new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
-        uint64_t array_size = 0;
+        uint64_t adj_list_size = 0;
         unsigned char dmy = 0;
-        array_size += value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, array_size);
         for (uint64_t i = 0; i < capacityNormalArray3; ++i) {
-          array_size += value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, array_size);
+          /// TODO: don't need to check uniquely
+          adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, adj_list_size);
+          // DEBUG2(array[i]);
+          // value_wrapper.adj_list.disp_keys(adj_list_size, "a"); //D
         }
-        allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(array), capacity);
-        set_size(pos_key, array_size);
+        adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, adj_list_size);
 
-        return true;
+        free_buffer_normal_array(allocators, array, capacity);
+
+        m_value_block_[pos_key] = std::move(value_wrapper);
+        set_size(pos_key, adj_list_size);
+
+        return (adj_list_size == capacityNormalArray3+1ULL);
       }
 
       if (size == capacity) {
-          /// grow array
-        const int new_capacity = capacity * kCapacityGrowingFactor;
+        /// grow array
+        const uint64_t new_capacity = capacity * kCapacityGrowingFactor;
         ValueType* new_array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(new_capacity).get());
         memcpy(new_array, array, sizeof(ValueType)*capacity);
-        allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(array), capacity);
+        free_buffer_normal_array(allocators, array, capacity);
         m_value_block_[pos_key].value_array = new_array;
         array = new_array;
-
       }
 
-        /// 3-2. insert value into normal array
-      const int pos = ffs(btmp) - 1;
+      /// 3-2. insert value into normal array
+      const int pos = ffs(0xFF-btmp) - 1;
       array[pos] = val;
-      btmp |= (1<<pos);
+      btmp |= (1 << pos);
       set_bitmap(pos_key, btmp);
       set_size(pos_key, size+1);
 
     } else {
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+
+      // rhh_adj_list.disp_keys(size, "a"); //D
+
       unsigned char dmy = 0;
-      bool err = rhh_adj_list.insert_uniquely(allocators, value.value, dmy, size);
+      bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
       if (err) set_size(pos_key, size+1);
 
       return err;
@@ -191,32 +203,35 @@ template <typename KeyType, typename ValueType>
     return m_num_elems_;
   }
 
-  // void disp_elems()
-  // {
+  void disp_elems(std::ofstream& output_file)
+  {
 
-  //   for (uint64_t i = 0; i < m_capacity_; ++i) {
-  //     PropertyBlockType prop = property(i);
-  //     if (prop == kClearedValue || is_deleted(prop))
-  //       constitute;
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop))
+        continue;
 
-  //     const uint64_t size = extract_size(prop);
-  //     if (size == 1) {
-  //       std::cout << m_key_block_[i] << "\t" << m_value_block_[i] << std::endl;
-  //     } else if (size <= capacityNormalArray3) {
-  //       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
-  //       ValueType* array = m_value_block_[pos_key].value_array;
-  //       uint64_t capacity = cal_next_pow2(size);
-  //       for (int j=0; j < capacity; ++j) {
-  //         if (((btmp >> j) & 0xfe) && (array[j] == val))
-  //           std::cout << m_key_block_[j] << "\t" << array[i] << std::endl;;
-  //       }
-  //     } else {
+      const uint64_t size = extract_size(prop);
+      if (size == 1) {
+        output_file << m_key_block_[i] << "\t" << m_value_block_[i].value << std::endl;
+      } else if (size <= capacityNormalArray3) {
+        NormalArrayBitmapType btmp = extract_bitmap(prop);
+        ValueType* array = m_value_block_[i].value_array;
+        uint64_t capacity = cal_next_pow2(size);
+        for (int j=0; j < capacity; ++j) {
+          if ((btmp >> j) & 0xfe)
+            output_file << m_key_block_[i] << "\t" << array[j] << std::endl;;
+        }
+      } else {
+        RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
+        std::stringstream prefix;
+        prefix << m_key_block_[i];
+        rhh_adj_list.disp_keys(size, prefix.str(), output_file);
+      }
 
-  //     }
+    }
 
-  //   }
-
-  // }
+  }
 
 private:
   ///  ------------------------------------------------------ ///
@@ -334,7 +349,7 @@ private:
     return prop & kProbedistanceMask;
   }
 
-  inline static ProbeDistanceType extract_size(PropertyBlockType prop)
+  inline static uint64_t extract_size(PropertyBlockType prop)
   {
     return (prop >> 15ULL) & 0x0000ffffffffffffLL;
   }
@@ -351,7 +366,7 @@ private:
 
   inline void set_bitmap(const int64_t pos, NormalArrayBitmapType btmp)
   {
-    property(pos) |= (0x40ULL << btmp);
+    property(pos) |= (btmp << 7ULL);
   }
 
   inline void set_size(const int64_t pos, const uint64_t sz)
@@ -389,6 +404,7 @@ private:
     mem_size += sizeof(KeyType) * m_capacity_;
     mem_size += sizeof(ValueWrapperType) * m_capacity_;
 
+    DEBUG2(mem_size);
     m_ptr_ = reinterpret_cast<unsigned char *>(allocators.allocator_raw.allocate(mem_size).get());
     m_property_block_ = reinterpret_cast<PropertyBlockType*>(m_ptr_);
     m_key_block_      = reinterpret_cast<KeyType*>(&m_property_block_[m_capacity_]);
@@ -399,14 +415,19 @@ private:
     }
   }
 
-  void inline free_buffer_rhh_main(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
+  inline void free_buffer_rhh_main(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
   {
-    // uint64_t mem_size = 0;
-    // mem_size += sizeof(PropertyBlockType) * capacity;
-    // mem_size += sizeof(KeyType) * capacity;
-    // mem_size += sizeof(ValueType) * capacity;
+    uint64_t mem_size = 0;
+    mem_size += sizeof(PropertyBlockType) * capacity;
+    mem_size += sizeof(KeyType) * capacity;
+    mem_size += sizeof(ValueType) * capacity;
 
-    allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(ptr), 0);
+    allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(ptr), mem_size);
+  }
+
+  inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, uint64_t capacity)
+  {
+    allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
   }
 
   /// ------ Private member functions: insertion ----- ///

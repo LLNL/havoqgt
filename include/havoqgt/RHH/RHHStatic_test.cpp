@@ -77,7 +77,7 @@
   unsigned char dmy = 0;
   for (int i = 0; i < (1<<22); i++) {
     uint64_t key = rand() % 32768;
-    bool result = rhh->insert_uniquely_static(holder, key, dmy, num_elems);
+    bool result = rhh->insert_uniquely(holder, key, dmy, num_elems);
     std::cout << key << "\t" << result << std::endl;
     num_elems += result;
   }

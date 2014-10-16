@@ -72,21 +72,21 @@ namespace RHH {
 
     void deallocate_rhh_static(void* ptr, uint64_t capacity)
     {
-      if (capacity == capacityRHHStatic1) {
-        allocator_rhh_noval_1.deallocate(bip::offset_ptr<RHHStaticNoVal1>(reinterpret_cast<RHHStaticNoVal1*>(ptr)), 1);
-      } else if (capacity == capacityRHHStatic2) {
-        allocator_rhh_noval_2.deallocate(bip::offset_ptr<RHHStaticNoVal2>(reinterpret_cast<RHHStaticNoVal2*>(ptr)), 1);
-      } else if (capacity == capacityRHHStatic3) {
-        allocator_rhh_noval_3.deallocate(bip::offset_ptr<RHHStaticNoVal3>(reinterpret_cast<RHHStaticNoVal3*>(ptr)), 1);
-      } else if (capacity == capacityRHHStatic4) {
-        allocator_rhh_noval_4.deallocate(bip::offset_ptr<RHHStaticNoVal4>(reinterpret_cast<RHHStaticNoVal4*>(ptr)), 1);
-      } else if (capacity == capacityRHHStatic5) {
-        allocator_rhh_noval_5.deallocate(bip::offset_ptr<RHHStaticNoVal5>(reinterpret_cast<RHHStaticNoVal5*>(ptr)), 1);
-      } else if (capacity == capacityRHHStatic6) {
-        allocator_rhh_noval_6.deallocate(bip::offset_ptr<RHHStaticNoVal6>(reinterpret_cast<RHHStaticNoVal6*>(ptr)), 1);
-      } else {
-        assert(false);
-      }
+      // if (capacity == capacityRHHStatic1) {
+      //   allocator_rhh_noval_1.deallocate(bip::offset_ptr<RHHStaticNoVal1>(reinterpret_cast<RHHStaticNoVal1*>(ptr)), 1);
+      // } else if (capacity == capacityRHHStatic2) {
+      //   allocator_rhh_noval_2.deallocate(bip::offset_ptr<RHHStaticNoVal2>(reinterpret_cast<RHHStaticNoVal2*>(ptr)), 1);
+      // } else if (capacity == capacityRHHStatic3) {
+      //   allocator_rhh_noval_3.deallocate(bip::offset_ptr<RHHStaticNoVal3>(reinterpret_cast<RHHStaticNoVal3*>(ptr)), 1);
+      // } else if (capacity == capacityRHHStatic4) {
+      //   allocator_rhh_noval_4.deallocate(bip::offset_ptr<RHHStaticNoVal4>(reinterpret_cast<RHHStaticNoVal4*>(ptr)), 1);
+      // } else if (capacity == capacityRHHStatic5) {
+      //   allocator_rhh_noval_5.deallocate(bip::offset_ptr<RHHStaticNoVal5>(reinterpret_cast<RHHStaticNoVal5*>(ptr)), 1);
+      // } else if (capacity == capacityRHHStatic6) {
+      //   allocator_rhh_noval_6.deallocate(bip::offset_ptr<RHHStaticNoVal6>(reinterpret_cast<RHHStaticNoVal6*>(ptr)), 1);
+      // } else {
+      //   assert(false);
+      // }
     }
 
     void deallocate_rhh_main(void* ptr, uint64_t capacity)

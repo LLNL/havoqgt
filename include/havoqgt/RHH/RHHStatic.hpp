@@ -52,6 +52,7 @@
 #ifndef HAVOQGT_MPI_RHHSTATIC_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHSTATIC_HPP_INCLUDED
 
+#include <fstream>
 #include "RHHCommon.hpp"
 
  namespace RHH {
@@ -68,7 +69,7 @@
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
     typedef unsigned char PropertyBlockType;
     typedef unsigned char ProbeDistanceType;
-    static const ProbeDistanceType kLongProbedistanceThreshold = 32;
+    static const ProbeDistanceType kLongProbedistanceThreshold = 120;
 
 
     ///  ------------------------------------------------------ ///
@@ -110,16 +111,33 @@
     ///  ------------------------------------------------------ ///
     ///              Public Member Functions
     ///  ------------------------------------------------------ ///
-    UpdateErrors insert_uniquely(KeyType key, ValueType val)
+    inline bool try_unique_key_insertion (KeyType& key, ValueType& val)
     {
       const int64_t pos_key = find_key(key, true);
+      if (pos_key == kInvaridIndex)
+        return true;
+      else
+        return false;
+    }
 
-      if (pos_key != kInvaridIndex) {
-        return kDuplicated;
-      }
-
+    inline UpdateErrors insert_uniquely(KeyType key, ValueType val)
+    {
       return insert_helper(std::move(key), std::move(val));
     }
+
+
+    // UpdateErrors insert_uniquely(KeyType key, ValueType val)
+    // {
+    //   // if (m_next_ != nullptr)
+    //   //   std::cout << "!!" << std::hex << m_next_ << std::endl; //D
+
+    //   const int64_t pos_key = find_key(key, true);
+    //   if (pos_key != kInvaridIndex) {
+    //     return kDuplicated;
+    //   }
+
+    //   return insert_helper(std::move(key), std::move(val));
+    // }
 
     bool erase(KeyType key)
     {
@@ -161,7 +179,7 @@
 
     inline bool is_valid(uint64_t pos) const
     {
-      return ( (property(pos) == kEmptyValue) || !is_deleted(property(pos)) );
+      return ( (property(pos) != kEmptyValue) && !is_deleted(property(pos)) );
     }
 
     inline bool is_longprobedistance(const int64_t positon)
@@ -171,7 +189,7 @@
 
     void disp_elems(const uint64_t level)
     {
-      std::cout << ">> --------- disp ---------" << std::endl;
+      // std::cout << ">> --------- disp ---------" << std::endl;
       for (uint64_t i = 0; i < Capacity; ++i) {
         std::cout << "[" << i+Capacity*level << "] " << static_cast<int>(m_property_block_[i]) << " : " << m_key_block_[i] << " : " << static_cast<int>(m_value_block_[i]) << std::endl;
       }
@@ -179,17 +197,19 @@
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
         next_rhh->disp_elems(level+1ULL);
       }
-      std::cout << "<< ------------------" << std::endl;
+      // std::cout << "<< ------------------" << std::endl;
     }
 
-    void disp_keys(const uint64_t level)
+    void disp_keys(std::string prefix, std::ofstream& output_file)
     {
       for (uint64_t i = 0; i < Capacity; ++i) {
-        std::cout << m_key_block_[i] << std::endl;
+        if (is_valid(i)) {
+          output_file << prefix << "\t" << m_key_block_[i] << std::endl;
+        }
       }
       if (m_next_) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->disp_keys(level+1ULL);
+        next_rhh->disp_keys(prefix, output_file);
       }
     }
 
@@ -248,8 +268,6 @@
       return probedistance;
     }
 
-
-
     inline static bool is_deleted(const PropertyBlockType prop)
     {
       return (prop & kTombstoneMask) == kTombstoneMask;
@@ -266,6 +284,8 @@
       ProbeDistanceType dist = 0;
       UpdateErrors err;
       while(true) {
+        // if (m_next_ != nullptr)
+        // std::cout << "!!!! insert !!!!!! " << std::hex << m_next_ << std::endl; //D
         // if (dist >= kLongProbedistanceThreshold) {
         //   err = kLongProbedistance;
         //   break;
@@ -325,6 +345,7 @@
       int64_t pos = cal_desired_pos(hash);
 
       while(true) {
+
         ProbeDistanceType existing_elem_property = property(pos);
         if (existing_elem_property == kEmptyValue) { /// free space is found
           break;
@@ -339,7 +360,7 @@
       }
 
       /// Find a key from chained RHH
-      if (is_check_recursively && m_next_ != nullptr)  {
+      if (is_check_recursively && m_next_ != nullptr) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
         return next_rhh->find_key(key, true);
       }

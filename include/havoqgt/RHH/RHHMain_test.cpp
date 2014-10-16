@@ -56,27 +56,43 @@
 #include <boost/interprocess/allocators/adaptive_pool.hpp>
 #include <stdio.h>
 #include <time.h>
+#include <fstream>
 
 #include "RHHAllocHolder.hpp"
 #include "RHHMain.hpp"
 
+using namespace std;
+
 int main (void)
 {
-  boost::interprocess::file_mapping::remove( "./tmp.dat" );
-  boost::interprocess::managed_mapped_file mfile( boost::interprocess::create_only, "./tmp.dat", 1ULL<<28ULL );
+  boost::interprocess::file_mapping::remove( "/home/iwabuchi/tmp/test_havoc/tmp/tmp.dat" );
+  boost::interprocess::managed_mapped_file mfile( boost::interprocess::create_only, "/home/iwabuchi/tmp/test_havoc/tmp/tmp.dat", 1ULL<<35ULL );
   RHH::AllocatorsHolder holder = RHH::AllocatorsHolder(mfile.get_segment_manager());
   RHH::RHHMain<uint64_t, uint64_t> *rhh = new RHH::RHHMain<uint64_t, uint64_t>(holder, 2ULL);
 
-  srand((unsigned int)time(NULL));
+  srand(1);
+  /// srand((unsigned int)time(NULL));
+
+  ofstream input_file;
+  input_file.open ("/home/iwabuchi/tmp/test_havoc/tmp/input.txt");
 
   uint64_t num_elems = 0;
-  for (int i = 0; i < (1<<10); i++) {
-    uint64_t key = rand() % 32768;
-    uint64_t val = rand() % 32768;
+  for (uint64_t i = 0; i < (1<<22ULL); ++i) {
+    uint64_t key = rand() % 100000;
+    uint64_t val = rand() % 1000000;
     bool result = rhh->insert_uniquely(holder, key, val);
-    std::cout << key << "\t" << val << "\t" << result << std::endl;
+    //std::cout << key << "\t" << val << "\t" << result << std::endl;
+    input_file << key << "\t" << val << "\t" << result << std::endl;
     num_elems += result;
   }
+  input_file.close();
+
+  std::cout << "\n=====================================\n";
+  ofstream output_file;
+  output_file.open ("/home/iwabuchi/tmp/test_havoc/tmp/output.txt");
+  rhh->disp_elems(output_file);
+  output_file.close();
+
   delete rhh;
 
 }
