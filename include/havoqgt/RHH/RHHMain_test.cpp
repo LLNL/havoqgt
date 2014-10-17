@@ -77,9 +77,10 @@ int main (void)
   input_file.open ("/home/iwabuchi/tmp/test_havoc/tmp/input.txt");
 
   uint64_t num_elems = 0;
-  for (uint64_t i = 0; i < (1<<22ULL); ++i) {
-    uint64_t key = rand() % 100000;
-    uint64_t val = rand() % 1000000;
+  for (uint64_t i = 0; i < (1<<24ULL); ++i) {
+    if (i % (1<<20ULL) == 0) std::cout << "!";
+    uint64_t key = rand() % (1<<20ULL);
+    uint64_t val = rand() % (1<<16ULL);
     bool result = rhh->insert_uniquely(holder, key, val);
     //std::cout << key << "\t" << val << "\t" << result << std::endl;
     input_file << key << "\t" << val << "\t" << result << std::endl;
@@ -92,6 +93,9 @@ int main (void)
   output_file.open ("/home/iwabuchi/tmp/test_havoc/tmp/output.txt");
   rhh->disp_elems(output_file);
   output_file.close();
+
+  std::cout << "Segment size = " << mfile.get_segment_manager()->get_size() << std::endl;
+  std::cout << "Used size = " << mfile.get_segment_manager()->get_size() - mfile.get_segment_manager()->get_free_memory() << std::endl;
 
   delete rhh;
 

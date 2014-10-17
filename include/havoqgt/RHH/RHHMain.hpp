@@ -93,9 +93,9 @@ template <typename KeyType, typename ValueType>
   ///  ------------------------------------------------------ ///
    bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
    {
-    const uint64_t mask = cal_mask();
-    ProbeDistanceType dist = 0;
-    const int64_t pos_key = find_key(key, &dist, mask);
+
+    const int64_t pos_key = find_key(key);
+
     if (pos_key == kInvaridIndex) {
         /// 1. new vertex
       ValueWrapperType value;
@@ -104,11 +104,10 @@ template <typename KeyType, typename ValueType>
       return true;
     }
 
-
     const uint64_t size = extract_size(property(pos_key));
 
     if (size == 1ULL) {
-      if (is_equal_element(key, val, pos_key)) return false;
+      if (m_value_block_[pos_key].value == val) return false;
         /// 2. convert data structure to array model
       ValueType* array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(2).get());
       array[0] = m_value_block_[pos_key].value;
@@ -118,7 +117,10 @@ template <typename KeyType, typename ValueType>
       set_bitmap(pos_key, 0x03);
       set_size(pos_key, 2ULL);
 
-    } else if (size <= capacityNormalArray3) {
+      return true;
+    }
+
+    if (size <= capacityNormalArray3) {
       /// 3. we already have a normal-array
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
@@ -133,15 +135,13 @@ template <typename KeyType, typename ValueType>
           /// 3-1. convert data strucure normal-array to RHHStatic
         ValueType* array = m_value_block_[pos_key].value_array;
         ValueWrapperType value_wrapper;
-        // DEBUG("convert to RHHStatic");
+
         new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
         uint64_t adj_list_size = 0;
         unsigned char dmy = 0;
         for (uint64_t i = 0; i < capacityNormalArray3; ++i) {
           /// TODO: don't need to check uniquely
           adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, adj_list_size);
-          // DEBUG2(array[i]);
-          // value_wrapper.adj_list.disp_keys(adj_list_size, "a"); //D
         }
         adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, adj_list_size);
 
@@ -169,11 +169,9 @@ template <typename KeyType, typename ValueType>
       btmp |= (1 << pos);
       set_bitmap(pos_key, btmp);
       set_size(pos_key, size+1);
-
     } else {
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
 
-      // rhh_adj_list.disp_keys(size, "a"); //D
 
       unsigned char dmy = 0;
       bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
@@ -203,6 +201,14 @@ template <typename KeyType, typename ValueType>
     return m_num_elems_;
   }
 
+  void disp_all()
+  {
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      std::cout << "[" << i << "] " << m_property_block_[i] << " : "  << extract_probedistance(m_property_block_[i]) << " : " << m_key_block_[i] << std::endl;
+    }
+    std::cout << "-------------------------------------------" << std::endl;
+  }
+
   void disp_elems(std::ofstream& output_file)
   {
 
@@ -218,8 +224,8 @@ template <typename KeyType, typename ValueType>
         NormalArrayBitmapType btmp = extract_bitmap(prop);
         ValueType* array = m_value_block_[i].value_array;
         uint64_t capacity = cal_next_pow2(size);
-        for (int j=0; j < capacity; ++j) {
-          if ((btmp >> j) & 0xfe)
+        for (unsigned int j=0; j < capacity; ++j) {
+          if ((btmp >> j) & 0x01)
             output_file << m_key_block_[i] << "\t" << array[j] << std::endl;;
         }
       } else {
@@ -241,7 +247,7 @@ private:
   /// ---------  Typedefs and Enums ------------ ///
   typedef RHHMgrStatic<ValueType, NoValueType> RHHAdjalistType;
   typedef uint64_t PropertyBlockType;
-  typedef int64_t ProbeDistanceType;
+  typedef uint64_t ProbeDistanceType;
   typedef uint64_t HashType;
   typedef unsigned char NormalArrayBitmapType;
 
@@ -277,14 +283,15 @@ private:
 
   // ---------  static variables ------------ ///
   /// tombstone (1), size (48), bitmap (8), probe distance (7)
-  static const PropertyBlockType kTombstoneMask               = 0x8000000000000000LL; /// mask value to mark as deleted
-  static const PropertyBlockType kPropertyDirectInserted      = 0x0000000000008000LL; ///
-  static const PropertyBlockType kProbedistanceMask           = 0x000000000000007FLL; /// mask value to extract probe distance
-  static const PropertyBlockType kClearProbedistanceMask      = 0xFFFFFFFFFFFFFF80LL; /// mask value to clear probe distance
-  static const ProbeDistanceType kLongProbedistanceThreshold  = 128LL;
+  static const PropertyBlockType kTombstoneMask               = 0x8000000000000000ULL; /// mask value to mark as deleted
+  static const PropertyBlockType kPropertySize1               = 0x0000000000008000ULL; /// property value for size = 1
+  static const PropertyBlockType kProbedistanceMask           = 0x000000000000007FULL; /// mask value to extract probe distance
+  static const PropertyBlockType kClearProbedistanceMask      = 0xFFFFFFFFFFFFFF80ULL; /// mask value to clear probe distance
+  static const ProbeDistanceType kLongProbedistanceThreshold  = 120ULL;                /// must be less than max value of probedirance
   //static const PropertyBlockType kSizeMask                    = 0x7FFFFFFFFFFF8000LL; /// mask value to extract size
-  static const PropertyBlockType kClearSize                   = 0x8000000000007FFFLL; /// mask value to clear size
-  static const PropertyBlockType kClearedValue                = 0x7FFFFFFFFFFFFFFFLL; /// value repsents cleared space
+  static const PropertyBlockType kClearSize                   = 0x8000000000007FFFULL; /// mask value to clear size
+  static const PropertyBlockType kClearBitmap                 = 0xFFFFFFFFFFFF807FULL;
+  static const PropertyBlockType kClearedValue                = 0x7FFFFFFFFFFFFFFFULL; /// value repsents cleared space
   static const int64_t kInvaridIndex                          = -1LL;
   static constexpr double kFullCalacityFactor                 = 0.9;
 
@@ -356,17 +363,12 @@ private:
 
   inline static unsigned char extract_bitmap(PropertyBlockType prop)
   {
-    return (prop >> 7ULL) & 0xffULL;
-  }
-
-  inline static void set_bit(const int64_t pos, int64_t ix)
-  {
-    property(pos) = property(pos) | (0x40ULL << ix);
+    return (prop >> 7ULL) & 0x0ffULL;
   }
 
   inline void set_bitmap(const int64_t pos, NormalArrayBitmapType btmp)
   {
-    property(pos) |= (btmp << 7ULL);
+    property(pos) = (property(pos) & kClearBitmap) | (static_cast<PropertyBlockType>(btmp) << 7ULL);
   }
 
   inline void set_size(const int64_t pos, const uint64_t sz)
@@ -374,7 +376,7 @@ private:
     property(pos) = (property(pos) & kClearSize) | (sz << 15ULL);
   }
 
-  uint64_t grow_rhh_main(AllocatorsHolder &allocators)
+  void grow_rhh_main(AllocatorsHolder &allocators)
   {
     const uint64_t old_capacity = m_capacity_;
     unsigned char* old_ptr = m_ptr_;
@@ -386,15 +388,19 @@ private:
     allocate_rhh_main(allocators);
 
     /// now copy over old elems
+    bool is_long_probedistance = false;
     for (uint64_t i = 0; i < old_capacity; ++i) {
       const PropertyBlockType old_prop = old_property_block[i];
       if (old_prop != kClearedValue && !is_deleted(old_prop)) {
-        insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), old_prop);
+        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
       }
     }
 
     free_buffer_rhh_main(allocators, old_ptr, old_capacity);
 
+    if (is_long_probedistance) {
+      grow_rhh_main(allocators);
+    }
   }
 
   void allocate_rhh_main(AllocatorsHolder &allocators)
@@ -404,7 +410,6 @@ private:
     mem_size += sizeof(KeyType) * m_capacity_;
     mem_size += sizeof(ValueWrapperType) * m_capacity_;
 
-    DEBUG2(mem_size);
     m_ptr_ = reinterpret_cast<unsigned char *>(allocators.allocator_raw.allocate(mem_size).get());
     m_property_block_ = reinterpret_cast<PropertyBlockType*>(m_ptr_);
     m_key_block_      = reinterpret_cast<KeyType*>(&m_property_block_[m_capacity_]);
@@ -434,34 +439,45 @@ private:
   inline void insert_directly_with_growing(AllocatorsHolder &allocators, KeyType&& key, ValueWrapperType&& value)
   {
     ++m_num_elems_;
-    UpdateErrors err = insert_helper(std::move(key), std::move(value), kPropertyDirectInserted);
+    bool is_long_probedistance = insert_helper(std::move(key), std::move(value), kPropertySize1);
 
-    if (m_num_elems_ >= m_capacity_*kFullCalacityFactor || err == kLongProbedistance) {
+    if (m_num_elems_ >= m_capacity_*kFullCalacityFactor || is_long_probedistance) {
       grow_rhh_main(allocators);
     }
   }
 
-  UpdateErrors insert_helper(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
+  bool insert_helper(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
   {
     const uint64_t mask = cal_mask();
     int64_t pos = cal_desired_pos(hash_key(key), mask);
     ProbeDistanceType dist = 0;
+    bool is_long_probedistance = false;
 
     while(true) {
-
       PropertyBlockType existing_elem_property = property(pos);
-      if(existing_elem_property == kClearedValue)
+
+      if (existing_elem_property == kClearedValue)
       {
-        return construct(pos, std::move(key), std::move(value), prop, dist);
+        if (dist >= kLongProbedistanceThreshold) {
+          is_long_probedistance = true;
+          dist = kLongProbedistanceThreshold;
+        }
+        construct(pos, std::move(key), std::move(value), prop, dist);
+        break;
       }
 
       /// If the existing elem has probed less than or "equal to" us, then swap places with existing
       /// elem, and keep going to find another slot for that elem.
-      if (extract_probedistance(existing_elem_property) <= dist)
+      if (extract_probedistance(existing_elem_property) < dist)
       {
+        if (dist >= kLongProbedistanceThreshold) {
+          is_long_probedistance = true;
+          dist = kLongProbedistanceThreshold;
+        }
         if(is_deleted(existing_elem_property))
         {
-          return construct(pos, std::move(key), std::move(value), prop, dist);
+          construct(pos, std::move(key), std::move(value), prop, dist);
+          break;
         }
         m_property_block_[pos] = update_probedistance(prop, dist);
         std::swap(key, m_key_block_[pos]);
@@ -469,10 +485,11 @@ private:
         dist = extract_probedistance(existing_elem_property);
         prop = existing_elem_property;
       }
-
       pos = (pos+1) & mask;
       ++dist;
     }
+
+    return is_long_probedistance;
   }
 
   inline UpdateErrors construct(const int64_t ix, KeyType&& key, ValueWrapperType&& val, const PropertyBlockType prop, const ProbeDistanceType dist)
@@ -480,42 +497,33 @@ private:
     m_property_block_[ix] = update_probedistance(prop, dist);
     m_key_block_[ix] = std::move(key);
     m_value_block_[ix] = std::move(val);
-    if (dist >= kLongProbedistanceThreshold) return kLongProbedistance;
-    else return kSucceed;
   }
 
 
   /// ------ Private member functions: search ----- ///
-
-  int64_t find_key(KeyType& key, ProbeDistanceType* dist, const uint64_t mask)
+  int64_t find_key(KeyType& key)
   {
+    const uint64_t mask = cal_mask();
     const HashType hash = hash_key(key);
     int64_t pos = cal_desired_pos(hash, mask);
+    ProbeDistanceType dist = 0;
 
     while(true) {
       ProbeDistanceType existing_elem_property = property(pos);
       if (existing_elem_property == kClearedValue) { /// free space is found
         return kInvaridIndex;
-      } else if (*dist > extract_probedistance(existing_elem_property)) {
+      } else if (dist > extract_probedistance(existing_elem_property)) {
         return kInvaridIndex;
       } else if (!is_deleted(existing_elem_property) && m_key_block_[pos] == key) {
         /// found !
         return pos;
       }
       pos = (pos+1) & mask;
-      *dist = *dist + 1;
+      ++dist;
     }
   }
 
   /// ------ Private member functions: utility ----- ///
-  inline bool is_equal_element(const KeyType& key, const ValueType& value, const int64_t pos) const
-  {
-    if (is_deleted(property(pos)) || m_key_block_[pos] != key || m_value_block_[pos].value != value)
-      return false;
-    else
-      return true;
-  }
-
 
   inline unsigned char cal_next_pow2(unsigned char n)
   {
@@ -537,6 +545,7 @@ private:
   KeyType* m_key_block_;
   ValueWrapperType* m_value_block_;
 
+  bool flag; //D
 };
 
 } /// namespace RHH

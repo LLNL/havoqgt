@@ -69,7 +69,7 @@
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
     typedef unsigned char PropertyBlockType;
     typedef unsigned char ProbeDistanceType;
-    static const ProbeDistanceType kLongProbedistanceThreshold = 120;
+    static const ProbeDistanceType kLongProbedistanceThreshold = 64;
 
 
     ///  ------------------------------------------------------ ///
@@ -282,7 +282,7 @@
     {
       int64_t pos = cal_desired_pos(hash_key(key));
       ProbeDistanceType dist = 0;
-      UpdateErrors err;
+      UpdateErrors err = kSucceed;
       while(true) {
         // if (m_next_ != nullptr)
         // std::cout << "!!!! insert !!!!!! " << std::hex << m_next_ << std::endl; //D
@@ -295,16 +295,26 @@
 
         if(existing_elem_property == kEmptyValue)
         {
-          return construct(pos, dist, std::move(key), std::move(val));
+          if (dist >= kLongProbedistanceThreshold) {
+            err = kLongProbedistance;
+            dist = kLongProbedistanceThreshold;
+          }
+          construct(pos, dist, std::move(key), std::move(val));
+          break;
         }
 
-        /// If the existing elem has probed less than or "equal to" us, then swap places with existing
+        /// If the existing elem has probed less than new, then swap places with existing
         /// elem, and keep going to find another slot for that elem.
-        if (extract_probedistance(existing_elem_property) <= dist)
+        if (extract_probedistance(existing_elem_property) < dist)
         {
+          if (dist >= kLongProbedistanceThreshold) {
+            err = kLongProbedistance;
+            dist = kLongProbedistanceThreshold;
+          }
           if(is_deleted(existing_elem_property))
           {
-            return construct(pos, dist, std::move(key), std::move(val));
+            construct(pos, dist, std::move(key), std::move(val));
+            break;
           }
           m_property_block_[pos] = dist;
           std::swap(key, m_key_block_[pos]);
@@ -316,25 +326,20 @@
         ++dist;
       }
 
-      if (m_next_ != nullptr)  {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        return next_rhh->insert_helper(std::move(key), std::move(val));
-      }
+      // if (m_next_ != nullptr)  {
+      //   RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      //   return next_rhh->insert_helper(std::move(key), std::move(val));
+      // }
 
       return err;
     }
 
-    inline UpdateErrors construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
+    inline void construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
     {
       m_property_block_[ix] = static_cast<PropertyBlockType>(dist);
       //DEBUG2(m_property_block_[ix]);
       m_key_block_[ix] = std::move(key);
       m_value_block_[ix] = std::move(val);
-      if (dist >= kLongProbedistanceThreshold) {
-        m_property_block_[ix] = kEmptyValue - 1; /// in order to prevent from being recognized as a empty space, set 0.
-        return kLongProbedistance;
-      }
-      return kSucceed;
     }
 
     /// ------ Private member functions: search ----- ///

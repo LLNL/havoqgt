@@ -55,12 +55,12 @@ namespace RHH {
 
 #define DEBUG(msg) \
   do { \
-    std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
   while (0)
 
 #define DEBUG2(x) \
   do { \
-    std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
   while (0)
 
 #define DISP_VAR(x) \
@@ -70,7 +70,7 @@ namespace RHH {
 
 
   enum UpdateErrors {
-    kSucceed,
+    kSucceed = 0,
     kDuplicated,
     kReachingFUllCapacity,
     kLongProbedistance
