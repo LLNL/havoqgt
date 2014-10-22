@@ -71,6 +71,10 @@
 #include <algorithm>
 #include <functional>
 
+#include <boost/interprocess/managed_heap_memory.hpp>
+
+//namespace bip = boost::interprocess;
+
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
@@ -134,12 +138,12 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "Graph Loaded Ready." << std::endl;
   }
-  graph->print_graph_statistics();
+  //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
 
   //
   // Calculate max degree
-  uint64_t max_degree = 0;//graph->max_vertex_id();
+  /*uint64_t max_degree = 0;//graph->max_vertex_id();
   for (graph_type::vertex_iterator vitr = graph->vertices_begin();
         vitr != graph->vertices_end(); ++vitr) {
     max_degree = std::max(max_degree, graph->degree(*vitr));
@@ -154,10 +158,10 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "Max Local Degree = " << global_max_degree << std::endl;
   }
-
+*/
   MPI_Barrier(MPI_COMM_WORLD);
  
-  /*   NEED TO FIX LOCAL DATA!!
+  //   NEED TO FIX LOCAL DATA!!
   // BFS Experiments
   {
     #if 0
@@ -174,7 +178,7 @@ int main(int argc, char** argv) {
 
     typedef bip::managed_heap_memory bfs_mapped_t;
     //uint64_t filesize = (21474836480/24.0);
-    uint64_t filesize = (20401094656/24.0);
+    uint64_t filesize = (4973120026ULL);
     bfs_mapped_t bfs_mapped_data(filesize);
     #endif
 
@@ -190,6 +194,10 @@ int main(int argc, char** argv) {
           bfs_mapped_data.get_segment_manager(), "bfs_level_data");
     bfs_parent_data = graph->create_vertex_data<uint64_t, bfs_segment_manager_t>(
           bfs_mapped_data.get_segment_manager(), "bfs_parent_data");
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) {
+    std::cout << "BFS data allocated." << std::endl;
+  }
 
     //  Run BFS experiments
     double time(0);
@@ -205,7 +213,9 @@ int main(int argc, char** argv) {
           break;
         }
         if (uint32_t(mpi_rank) == source.owner()) {
+          std::cout << "Howdy, getting degree = " << std::endl;
           local_degree = graph->degree(source);
+          std::cout << local_degree << std::endl;
         }
         global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(),
             MPI_COMM_WORLD);
@@ -221,8 +231,8 @@ int main(int argc, char** argv) {
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data,
-          source);
+      //hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data,
+      //    source);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
@@ -264,7 +274,7 @@ int main(int argc, char** argv) {
           std::cout
             << "Visited total = " << visited_total
             << ", percentage visited = "
-            << double(visited_total) / double(graph->max_vertex_id() * mpi_size) * 100
+            << double(visited_total) / double(graph->max_global_vertex_id()) * 100
             << "%" << std::endl
             << "BFS Time = " << time_end - time_start << std::endl;
           time += time_end - time_start;
@@ -277,7 +287,6 @@ int main(int argc, char** argv) {
       std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;
     }
   }  // End BFS Test
-  */
   }  // END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());
