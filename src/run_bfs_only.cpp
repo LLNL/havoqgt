@@ -71,6 +71,8 @@
 #include <algorithm>
 #include <functional>
 
+#include <boost/interprocess/managed_heap_memory.hpp>
+
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
@@ -157,7 +159,6 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
  
-  /*   NEED TO FIX LOCAL DATA!!
   // BFS Experiments
   {
     #if 0
@@ -174,7 +175,7 @@ int main(int argc, char** argv) {
 
     typedef bip::managed_heap_memory bfs_mapped_t;
     //uint64_t filesize = (21474836480/24.0);
-    uint64_t filesize = (20401094656/24.0);
+    uint64_t filesize = 5368709120/120;//(20401094656/24.0);
     bfs_mapped_t bfs_mapped_data(filesize);
     #endif
 
@@ -264,7 +265,7 @@ int main(int argc, char** argv) {
           std::cout
             << "Visited total = " << visited_total
             << ", percentage visited = "
-            << double(visited_total) / double(graph->max_vertex_id() * mpi_size) * 100
+            << double(visited_total) / double(graph->max_global_vertex_id()) * 100
             << "%" << std::endl
             << "BFS Time = " << time_end - time_start << std::endl;
           time += time_end - time_start;
@@ -277,7 +278,6 @@ int main(int argc, char** argv) {
       std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;
     }
   }  // End BFS Test
-  */
   }  // END Main MPI
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
   CHK_MPI(MPI_Finalize());

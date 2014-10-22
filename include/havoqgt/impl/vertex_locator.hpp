@@ -71,8 +71,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
 
   bool is_valid() {
     struct Temp {
-      uint64_t local_id : 39;
-      uint32_t owner_dest : 20;
+      uint64_t local_id : 31;//39;
+      uint32_t owner_dest : 14;//20;
     };
 
     Temp conv;
@@ -113,6 +113,7 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
 
   friend bool operator!=(const vertex_locator& x,
                          const vertex_locator& y) {return !(x.is_equal(y)); }
+
  private:
   friend class delegate_partitioned_graph;
   unsigned int m_is_delegate  : 1;

@@ -227,7 +227,9 @@ private:
     if(fsize == NULL) 
       //return 700ULL * 1024ULL * 1024ULL * 1024ULL / 24;
       //return 799700000000ULL;
-      return 500ULL * 1024ULL * 1024ULL * 1024ULL;
+      //return 500ULL * 1024ULL * 1024ULL * 1024ULL;
+      // causing probs return 799700000000ULL / 24ULL;
+      return 799595142400 / 24ULL;
     return boost::lexical_cast<uint64_t>(fsize);
   } 
 
