@@ -73,8 +73,6 @@
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-//namespace bip = boost::interprocess;
-
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 

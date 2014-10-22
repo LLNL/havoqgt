@@ -85,8 +85,9 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       m_delegate_degree(seg_allocator),
       m_delegate_label(seg_allocator),
       // m_delegate_targets(seg_allocator),
-      m_map_delegate_locator(100, boost::hash<uint64_t>(),
-          std::equal_to<uint64_t>(), seg_allocator),
+      //m_map_delegate_locator(100, boost::hash<uint64_t>(),
+      //    std::equal_to<uint64_t>(), seg_allocator),
+      m_map_delegate_locator(seg_allocator),
       m_controller_locators(seg_allocator) {
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
@@ -632,15 +633,17 @@ initialize_edge_storage(const SegmentAllocator<void>& seg_allocator) {
       SegmentManager *segment_manager = seg_allocator.get_segment_manager();
 
       {
-        void * temp = segment_manager->allocate(
-          m_delegate_targets_size * sizeof(vertex_locator));
-        m_delegate_targets = reinterpret_cast<vertex_locator *>(temp);
+        //void * temp = segment_manager->allocate(
+        //   m_delegate_targets_size * sizeof(vertex_locator));
+        //m_delegate_targets = reinterpret_cast<vertex_locator *>(temp);
+        m_delegate_targets = (vertex_locator*) segment_manager->allocate(m_delegate_targets_size * sizeof(vertex_locator));
       }
 
       {
-        void * temp = segment_manager->allocate(
-          m_owned_targets_size * sizeof(vertex_locator));
-        m_owned_targets = reinterpret_cast<vertex_locator *>(temp);
+        //void * temp = segment_manager->allocate(
+        //  m_owned_targets_size * sizeof(vertex_locator));
+       // m_owned_targets = reinterpret_cast<vertex_locator *>(temp);
+        m_owned_targets = (vertex_locator*) segment_manager->allocate(m_owned_targets_size * sizeof(vertex_locator));
       }
 
       // Currently, m_delegate_info holds the count of high degree edges
@@ -784,9 +787,13 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
 
 
         if (!(loc <  m_owned_info[new_vertex_id+1].low_csr_idx)) {
-          std::cout << loc << " < " <<  m_owned_info[new_vertex_id+1].low_csr_idx
+          std::cout << "Error rank: " << m_mpi_rank << " -- " <<
+                   loc << " < " <<  m_owned_info[new_vertex_id+1].low_csr_idx
+                   << ", new_vertex_id = " << new_vertex_id
+                   << ", temp_offset = " << temp_offset
           << std::endl << std::flush;
           assert(false);
+          exit(-1);
         }
         assert(!m_owned_targets[loc].is_valid());
 
@@ -1498,10 +1505,11 @@ inline
 typename delegate_partitioned_graph<SegmentManager>::vertex_locator
 delegate_partitioned_graph<SegmentManager>::
 label_to_locator(uint64_t label) const {
-  typename boost::unordered_map< uint64_t, vertex_locator,
+  /*typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
               SegmentAllocator< std::pair<uint64_t,vertex_locator> >
-             >::const_iterator itr = m_map_delegate_locator.find(label);
+             >::const_iterator*/
+ auto itr = m_map_delegate_locator.find(label);
 
   if(itr == m_map_delegate_locator.end()) {
     uint32_t owner    = label % uint64_t(m_mpi_size);

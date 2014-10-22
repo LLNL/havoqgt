@@ -74,12 +74,12 @@
 
 #ifndef PROCESSES_PER_NODE
  #define PROCESSES_PER_NODE 24
- #warning using default processer node of 24.
+ #warning using default processer node of 24
 #endif
 
 #ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 4
- #warning using default edge pass partitions of 4
+ #define EDGE_PASS_PARTITIONS 6
+ #warning using default edge pass partitions of 6
 #endif
 
 #ifndef EDGE_CHUNK_SIZE
@@ -374,10 +374,12 @@ class delegate_partitioned_graph {
   size_t m_delegate_targets_size;
 
   //Note: BIP only contains a map, not an unordered_map object.
-  boost::unordered_map<
+  /*boost::interprocess::unordered_map<
       uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
       SegmentAllocator< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
+  */
+  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
