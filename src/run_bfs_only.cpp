@@ -176,7 +176,8 @@ int main(int argc, char** argv) {
 
     typedef bip::managed_heap_memory bfs_mapped_t;
     //uint64_t filesize = (21474836480/24.0);
-    uint64_t filesize = (4973120026ULL);
+    //uint64_t filesize = (4973120026ULL);
+    uint64_t filesize = 3616814565ULL;
     bfs_mapped_t bfs_mapped_data(filesize);
     #endif
 
@@ -186,11 +187,11 @@ int main(int argc, char** argv) {
 
 
     graph_type::vertex_data<uint8_t, bfs_segment_manager_t >* bfs_level_data;
-    graph_type::vertex_data<uint64_t, bfs_segment_manager_t >* bfs_parent_data;
+    graph_type::vertex_data<graph_type::vertex_locator, bfs_segment_manager_t >* bfs_parent_data;
 
     bfs_level_data = graph->create_vertex_data<uint8_t, bfs_segment_manager_t>(
           bfs_mapped_data.get_segment_manager(), "bfs_level_data");
-    bfs_parent_data = graph->create_vertex_data<uint64_t, bfs_segment_manager_t>(
+    bfs_parent_data = graph->create_vertex_data<graph_type::vertex_locator, bfs_segment_manager_t>(
           bfs_mapped_data.get_segment_manager(), "bfs_parent_data");
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
@@ -211,9 +212,7 @@ int main(int argc, char** argv) {
           break;
         }
         if (uint32_t(mpi_rank) == source.owner()) {
-          std::cout << "Howdy, getting degree = " << std::endl;
           local_degree = graph->degree(source);
-          std::cout << local_degree << std::endl;
         }
         global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(),
             MPI_COMM_WORLD);
@@ -229,8 +228,8 @@ int main(int argc, char** argv) {
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      //hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data,
-      //    source);
+      hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data,
+          source);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
