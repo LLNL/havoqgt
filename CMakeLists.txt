@@ -30,9 +30,14 @@ find_package (Threads)
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-  target_link_libraries (${target} pthread)
-  target_link_libraries (${target} rt)
+  #target_link_libraries (${target} pthread)
+  #target_link_libraries (${target} rt)
 endmacro() 
+
+#
+#  Posix_fallocate
+#
+CHECK_SYMBOL_EXISTS(posix_fallocate fcntl.h HAVE_POSIX_FALLOCATE)
 
 add_subdirectory (include)
 add_subdirectory (src)
