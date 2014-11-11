@@ -75,6 +75,8 @@
 
 #include <havoqgt/robin_hood_hashing.hpp>
 #include <havoqgt/RHHAdjacencyMatrix.hpp>
+#include <havoqgt/RHH/RHHAllocHolder.hpp>
+#include <havoqgt/RHH/RHHMain.hpp>
 
  namespace havoqgt {
   namespace mpi {
@@ -126,76 +128,6 @@ template <typename SegmentManager>
 class construct_dynamicgraph {
  public:
 
-  class bitmap_mgr {
-   public:
-    bitmap_mgr()
-    {
-      table_ = nullptr;
-      max_id_ = 0;
-      capacity_ = 0;
-    }
-
-    ~bitmap_mgr() {
-      if (table_ != nullptr)
-        delete[] table_;
-    }
-
-    inline void set(const uint64_t _id)
-    {
-      #define roundup(x,n) (((x)+((n)-1))&(~((n)-1)))
-      if (_id >= max_id_) {
-        max_id_ = roundup(_id, 64ULL);
-        grow_table();
-      }
-      table_[_id/64ULL] |= (1ULL << (_id & 63ULL));
-    }
-
-    inline void unset(const uint64_t _id)
-    {
-      table_[_id/64ULL] ^= (1ULL << (_id & 63ULL));
-    }
-
-    inline bool get(const uint64_t _id)
-    {
-      if(static_cast<int64_t>(_id) >= max_id_) return false;
-      return table_[_id/64ULL] & (1ULL << (_id & 63ULL));
-    }
-
-    inline size_t size() const
-    {
-      return capacity_;
-    }
-
-   private:
-
-    static const char kNoValue;
-
-    void grow_table() {
-      const uint64_t old_capacity = capacity_;
-      const uint64_t *old_table = table_;
-
-      capacity_ |= (capacity_ == 0);
-      while (capacity_ < max_id_ / 64ULL)
-        capacity_ *= 2ULL;
-      max_id_ = capacity_*64ULL;
-
-      calloc();
-
-      std::memcpy(table_, old_table, old_capacity * sizeof(uint64_t));
-      delete[] old_table;
-    }
-
-    inline void calloc() {
-        table_ = new uint64_t[capacity_];
-        std::memset(table_, 0, capacity_ * sizeof(uint64_t));
-    }
-
-    uint64_t *table_;
-    uint64_t max_id_;
-    size_t capacity_;
-
-  };
-
   // ---------  Typedefs and Enums ------------ //
 
   template<typename T>
@@ -221,7 +153,8 @@ class construct_dynamicgraph {
     kUseRobinHoodHash,
     kUseDegreeAwareModel,
     kUseDegreeAwareModelRbhMtx,
-    kUseDegreeAwareModelRHHAdjMx
+    kUseDegreeAwareModelRHHAdjMx,
+    kUseDegreeAwareModelRHH
   };
 
   ///  ------------------------------------------------------ ///
@@ -260,8 +193,6 @@ class construct_dynamicgraph {
 
       case kUseDegreeAwareModel:
         add_edges_degree_aware_rbh_first(req_itr, length);
-        //add_edges_degree_aware_bitmap_first(req_itr, length);
-        //add_edges_degree_aware_adj_first(req_itr, length);
         break;
 
       case kUseDegreeAwareModelRbhMtx:
@@ -270,6 +201,10 @@ class construct_dynamicgraph {
 
       case kUseDegreeAwareModelRHHAdjMx:
         add_edges_degree_aware_rbh_first_multi_rhh(req_itr, length);
+        break;
+
+      case kUseDegreeAwareModelRHH:
+        add_edges_degree_aware_rbh(req_itr, length);
         break;
 
       default:
@@ -325,6 +260,9 @@ class construct_dynamicgraph {
   /// Delete edge from a Robin-Hood-Hashing and a adjacency-matrix of Robin-Hood-Hashing
   bool delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx);
 
+  template <typename Container>
+  void add_edges_degree_aware_rbh(Container req_itr, size_t length);
+
   inline void flush_pagecache() {
     asdf_.flush();
   }
@@ -341,9 +279,11 @@ class construct_dynamicgraph {
   uint64_vector_t *init_vec;
   adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
   robin_hood_hashing_t *robin_hood_hashing_;
-  bitmap_mgr *is_exist_bmp_;
   adjacency_matrix_rbh_rbh_t *adjacency_matrix_rbh_rbh_;
   rhh_matrix_t *rhh_matrix_;
+
+  RHH::AllocatorsHolder *alloc_holder;
+  RHH::RHHMain<uint64_t, uint64_t> *rhh_main;
 
   IOInfo *io_info_;
   double total_exectution_time_;

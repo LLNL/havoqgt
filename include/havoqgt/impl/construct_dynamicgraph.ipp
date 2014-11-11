@@ -172,6 +172,14 @@
     rhh_matrix_ = new rhh_matrix_t(seg_allocator_);
     break;
 
+    case kUseDegreeAwareModelRHH:
+    std::srand(1);
+    std::cout << "Random seed is 1" << std::endl;
+    alloc_holder = new RHH::AllocatorsHolder(seg_allocator_.get_segment_manager());
+    rhh_main = new RHH::RHHMain<uint64_t, uint64_t>(*alloc_holder, 2ULL);
+
+    break;
+
     default:
     std::cerr << "Unknown data structure type" << std::endl;
     assert(false);
@@ -199,8 +207,11 @@ template <typename SegementManager>
   delete adjacency_matrix_map_vec_;
   delete robin_hood_hashing_;
   rhh_matrix_->free(seg_allocator_);
+  delete alloc_holder;
+  delete rhh_main;
   delete rhh_matrix_;
   delete io_info_;
+
 }
 
 /**
@@ -583,6 +594,47 @@ add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length)
   io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
+
+
+template <typename SegmentManager>
+template <typename Container>
+void construct_dynamicgraph<SegmentManager>::
+add_edges_degree_aware_rbh(Container req_itr, size_t length)
+{
+  uint64_t count_inserted = 0;
+  uint64_t count_delete = 0;
+
+  io_info_->reset_baseline();
+  double time_start = MPI_Wtime();
+  for (size_t k = 0; k < length; ++k, ++req_itr) {
+
+    const uint64_t source_vtx = req_itr->edge.first;
+    const uint64_t target_vtx = req_itr->edge.second;
+
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+    fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
+#endif
+
+    if (req_itr->is_delete) {
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+      fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
+#endif
+    } else {
+      count_inserted += rhh_main->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
+    }
+
+
+  } // End of a edges insertion loop
+  flush_pagecache();
+  double time_end = MPI_Wtime();
+
+  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+  std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
+  std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
+  io_info_->log_diff();
+  total_exectution_time_ += time_end - time_start;
+}
+
 
 template <typename SegmentManager>
 void construct_dynamicgraph<SegmentManager>::
