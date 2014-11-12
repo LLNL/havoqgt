@@ -217,6 +217,7 @@
     } else if (current_capacity <= capacityRHHStatic5){
       ALLOCATE_AND_MOVE(5, 6);
     } else {
+      std::cout << "*"; //D
       /// allocate chained rhh
       RHHStaticNoVal6* old_rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
       m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_6.allocate(1).get());
@@ -285,6 +286,16 @@
     }
   }
 
+
+  uint64_t cal_depth(uint64_t current_capacity)
+  {
+    if (current_capacity <= capacityRHHStatic5){
+      return 0;
+    } else {
+      RHHStaticNoVal6* rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
+      return rhh->cal_depth();
+    }
+  }
 
   void* m_ptr_;
 };

@@ -54,8 +54,8 @@
 
 #include <boost/interprocess/allocators/allocator.hpp>
 
-#define DEBUG(msg) do { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } while (0)
-#define DEBUG2(x) do  { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << x << std::endl; } while (0)
+// #define DEBUG(msg) do { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } while (0)
+// #define DEBUG2(x) do  { std::cerr << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << x << std::endl; } while (0)
 #define DISP_VAR(x) do  { std::cout << #x << " =\t" << x << std::endl; } while (0)
 
 #define USE_SEPARATE_HASH_ARRAY 0

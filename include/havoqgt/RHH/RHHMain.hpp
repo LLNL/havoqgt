@@ -234,9 +234,25 @@ template <typename KeyType, typename ValueType>
         prefix << m_key_block_[i];
         rhh_adj_list.disp_keys(size, prefix.str(), output_file);
       }
-
     }
+  }
 
+  void disp_adjlists_depth(std::ofstream& output_file)
+  {
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop))
+        continue;
+
+      const uint64_t size = extract_size(prop);
+      if (size > capacityNormalArray3) {
+        RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
+        const uint64_t depth = rhh_adj_list.cal_depth(size);
+        if (depth > 0) {
+          output_file << depth << std::endl;
+        }
+      }
+    }
   }
 
 private:

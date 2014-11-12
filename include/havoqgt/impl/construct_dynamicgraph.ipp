@@ -212,6 +212,10 @@ template <typename SegementManager>
   delete rhh_matrix_;
   delete io_info_;
 
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+  fout_debug_insertededges_.close();
+#endif
+
 }
 
 /**
@@ -663,6 +667,13 @@ print_profile()
     std::cout << "--------------------" << std::endl;
   }
 
+  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
+    std::ofstream fout;
+    fout.open("/l/ssd/g_adjlisdepth", std::ios::out | std::ios::app);
+    rhh_main->disp_adjlists_depth(fout);
+    fout.close();
+  }
+
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream tmp;
   tmp.open(kFnameDebugInsertedEdges+"_graph", std::ios::trunc);
@@ -709,10 +720,17 @@ print_profile()
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
     rhh_matrix_->dump_elements(kFnameDebugInsertedEdges+"_graph");
+    rhh_matrix_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
+    fout.close();
   }
-  fout_debug_insertededges_.close();
 
-  rhh_matrix_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
+  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
+    std::ofstream fout;
+    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
+    rhh_main->disp_elems(fout);
+    fout.close();
+  }
+
 #endif
 }
 

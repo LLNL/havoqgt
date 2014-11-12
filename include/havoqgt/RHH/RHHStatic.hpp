@@ -187,6 +187,16 @@
       return extract_probedistance(property(positon)) >= kLongProbedistanceThreshold;
     }
 
+
+    uint64_t cal_depth()
+    {
+      if (m_next_) {
+        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+        return next_rhh->cal_depth() + 1ULL;
+      }
+      return 1;
+    }
+
     void disp_elems(const uint64_t level)
     {
       // std::cout << ">> --------- disp ---------" << std::endl;
@@ -212,7 +222,6 @@
         next_rhh->disp_keys(prefix, output_file);
       }
     }
-
 
   private:
     /// ---------  Typedefs and Enums ------------ ///
