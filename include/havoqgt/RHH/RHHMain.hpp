@@ -255,6 +255,22 @@ template <typename KeyType, typename ValueType>
     }
   }
 
+  void disp_adjlists_prbdist(std::ofstream& output_file)
+  {
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop))
+        continue;
+
+      const uint64_t size = extract_size(prop);
+      if (size > capacityNormalArray3) {
+        RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
+        rhh_adj_list.disp_probedistance(size, output_file);
+      }
+    }
+  }
+
+
 private:
   ///  ------------------------------------------------------ ///
   ///              Private

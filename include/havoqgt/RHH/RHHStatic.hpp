@@ -223,6 +223,21 @@
       }
     }
 
+    void disp_probedistance(std::ofstream& output_file)
+    {
+      for (uint64_t i = 0; i < Capacity; ++i) {
+        if (is_valid(i)) {
+          uint64_t d = extract_probedistance(property(i));
+          output_file << Capacity << " " << d << std::endl;
+        }
+      }
+      if (m_next_) {
+        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+        next_rhh->disp_probedistance(output_file);
+      }
+    }
+
+
   private:
     /// ---------  Typedefs and Enums ------------ ///
     typedef uint64_t HashType;
@@ -312,9 +327,9 @@
           break;
         }
 
-        /// If the existing elem has probed less than new, then swap places with existing
+        /// If the existing elem has probed equal or less than new, then swap places with existing
         /// elem, and keep going to find another slot for that elem.
-        if (extract_probedistance(existing_elem_property) < dist)
+        if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
             err = kLongProbedistance;
@@ -346,7 +361,6 @@
     inline void construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
     {
       m_property_block_[ix] = static_cast<PropertyBlockType>(dist);
-      //DEBUG2(m_property_block_[ix]);
       m_key_block_[ix] = std::move(key);
       m_value_block_[ix] = std::move(val);
     }
@@ -354,6 +368,7 @@
     /// ------ Private member functions: search ----- ///
     int64_t find_key(KeyType& key, bool is_check_recursively)
     {
+
       ProbeDistanceType dist = 0;
       const HashType hash = hash_key(key);
       int64_t pos = cal_desired_pos(hash);
@@ -375,6 +390,7 @@
 
       /// Find a key from chained RHH
       if (is_check_recursively && m_next_ != nullptr) {
+        //std::cout << "* "; //D
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
         return next_rhh->find_key(key, true);
       }

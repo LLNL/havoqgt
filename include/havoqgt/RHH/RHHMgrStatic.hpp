@@ -166,7 +166,7 @@
         RHHStaticNoVal6* rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
         if (!rhh->try_unique_key_insertion(key, val))
           return kDuplicated;
-        if (current_size % capacityRHHStatic6 == 0) {
+        if (current_size % (capacityRHHStatic6 - 26) == 0) {
           grow_rhh_static(allocators, current_size, false);
           RHHStaticNoVal6* rhh_new = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
           return rhh_new->insert_uniquely(key, val);
@@ -217,7 +217,6 @@
     } else if (current_capacity <= capacityRHHStatic5){
       ALLOCATE_AND_MOVE(5, 6);
     } else {
-      std::cout << "*"; //D
       /// allocate chained rhh
       RHHStaticNoVal6* old_rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
       m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_6.allocate(1).get());
@@ -262,7 +261,7 @@
   }
 
 
-  /// XXX: should use template function
+/// XXX: should use template function
 #define DISP_KEYS(C, PRFX, OF) \
   do{ \
     RHHStaticNoVal##C* rhh = reinterpret_cast<RHHStaticNoVal##C*>(m_ptr_); \
@@ -286,7 +285,6 @@
     }
   }
 
-
   uint64_t cal_depth(uint64_t current_capacity)
   {
     if (current_capacity <= capacityRHHStatic5){
@@ -294,6 +292,30 @@
     } else {
       RHHStaticNoVal6* rhh = reinterpret_cast<RHHStaticNoVal6*>(m_ptr_);
       return rhh->cal_depth();
+    }
+  }
+
+/// XXX: should use template function
+#define DISP_PROBEDISTANCE(C, OF) \
+  do{ \
+    RHHStaticNoVal##C* rhh = reinterpret_cast<RHHStaticNoVal##C*>(m_ptr_); \
+    rhh->disp_probedistance(OF); \
+  } while (0)
+
+  void disp_probedistance(uint64_t current_capacity, std::ofstream& output_file)
+  {
+    if (current_capacity <= capacityRHHStatic1) {
+      DISP_PROBEDISTANCE(1, output_file);
+    } else if (current_capacity <= capacityRHHStatic2){
+      DISP_PROBEDISTANCE(2, output_file);
+    } else if (current_capacity <= capacityRHHStatic3){
+      DISP_PROBEDISTANCE(3, output_file);
+    } else if (current_capacity <= capacityRHHStatic4){
+      DISP_PROBEDISTANCE(4, output_file);
+    } else if (current_capacity <= capacityRHHStatic5){
+      DISP_PROBEDISTANCE(5, output_file);
+    } else {
+      DISP_PROBEDISTANCE(6, output_file);
     }
   }
 

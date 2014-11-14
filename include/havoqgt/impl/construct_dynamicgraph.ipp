@@ -608,12 +608,16 @@ add_edges_degree_aware_rbh(Container req_itr, size_t length)
   uint64_t count_inserted = 0;
   uint64_t count_delete = 0;
 
+//  uint64_t count[256] = {0};
+
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
 
     const uint64_t source_vtx = req_itr->edge.first;
     const uint64_t target_vtx = req_itr->edge.second;
+
+ //   count[target_vtx%256]++;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
     fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
@@ -631,6 +635,10 @@ add_edges_degree_aware_rbh(Container req_itr, size_t length)
   } // End of a edges insertion loop
   flush_pagecache();
   double time_end = MPI_Wtime();
+
+//  for (int i =0; i < 256; i++) {
+//      std::cout << count[i] << " ";
+//  }
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
@@ -669,10 +677,17 @@ print_profile()
 
   if (data_structure_type_ == kUseDegreeAwareModelRHH) {
     std::ofstream fout;
-    fout.open("/l/ssd/g_adjlisdepth", std::ios::out | std::ios::app);
+    fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out | std::ios::app);
     rhh_main->disp_adjlists_depth(fout);
     fout.close();
   }
+  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
+    std::ofstream fout;
+    fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out | std::ios::app);
+    rhh_main->disp_adjlists_prbdist(fout);
+    fout.close();
+  }
+
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream tmp;
