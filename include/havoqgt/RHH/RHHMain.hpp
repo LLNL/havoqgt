@@ -577,7 +577,6 @@ private:
   KeyType* m_key_block_;
   ValueWrapperType* m_value_block_;
 
-  bool flag; //D
 };
 
 } /// namespace RHH
