@@ -72,21 +72,14 @@ template <typename KeyType, typename ValueType>
     , m_capacity_(initial_capasity)
     , m_ptr_(nullptr)
     {
-      DEBUG("RHHMain constructor");
       allocate_rhh_main(allocators);
     }
-
-  /// --- Copy constructor --- //
-  /// --- Move constructor --- //
 
   /// --- Destructor --- //
     ~RHHMain()
     {
-     DEBUG("RHHMain destructor");
+      assert(m_ptr_ == nullptr);
     }
-
-  /// ---  Move assignment operator --- //
-
 
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions
@@ -171,9 +164,8 @@ template <typename KeyType, typename ValueType>
       set_size(pos_key, size+1);
     } else {
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
-
-
       unsigned char dmy = 0;
+
       bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
       if (err) set_size(pos_key, size+1);
 
@@ -200,6 +192,32 @@ template <typename KeyType, typename ValueType>
   {
     return m_num_elems_;
   }
+
+  inline void free(AllocatorsHolder &allocators)
+  {
+    /// free each elements
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop)) {
+        continue;
+      }
+
+      const uint64_t size = extract_size(prop);
+      if (size <= 1) {
+        continue;
+      } else if (size <= capacityNormalArray3) {
+        ValueType* array = m_value_block_[i].value_array;
+        uint64_t capacity = cal_next_pow2(size);
+        free_buffer_normal_array(allocators, array, capacity);
+      } else {
+        RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
+        rhh_adj_list.free(allocators, size);
+      }
+    }
+
+    free_buffer(allocators, m_ptr_, m_capacity_);
+  }
+
 
   void disp_all()
   {
@@ -232,7 +250,7 @@ template <typename KeyType, typename ValueType>
         RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
         std::stringstream prefix;
         prefix << m_key_block_[i];
-        rhh_adj_list.disp_keys(size, prefix.str(), output_file);
+        rhh_adj_list.fprint_keys(size, prefix.str(), output_file);
       }
     }
   }
@@ -265,9 +283,26 @@ template <typename KeyType, typename ValueType>
       const uint64_t size = extract_size(prop);
       if (size > capacityNormalArray3) {
         RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
-        rhh_adj_list.disp_probedistance(size, output_file);
+        rhh_adj_list.fprint_probedistance(size, output_file);
       }
     }
+  }
+
+  void disp_RHH_elems(KeyType& key)
+  {
+    const int64_t pos_key = find_key(key);
+    if (pos_key == kInvaridIndex) {
+      std::cout << "Invalid key" << std::endl;
+      return;
+    }
+    const uint64_t size = extract_size(property(pos_key));
+    if (size <= capacityNormalArray3) {
+      std::cout << "Invalid key" << std::endl;
+      return;
+    }
+
+    RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+    rhh_adj_list.disp_elems(size);
   }
 
 
@@ -319,13 +354,13 @@ private:
   static const PropertyBlockType kPropertySize1               = 0x0000000000008000ULL; /// property value for size = 1
   static const PropertyBlockType kProbedistanceMask           = 0x000000000000007FULL; /// mask value to extract probe distance
   static const PropertyBlockType kClearProbedistanceMask      = 0xFFFFFFFFFFFFFF80ULL; /// mask value to clear probe distance
-  static const ProbeDistanceType kLongProbedistanceThreshold  = 120ULL;                /// must be less than max value of probedirance
   //static const PropertyBlockType kSizeMask                    = 0x7FFFFFFFFFFF8000LL; /// mask value to extract size
   static const PropertyBlockType kClearSize                   = 0x8000000000007FFFULL; /// mask value to clear size
   static const PropertyBlockType kClearBitmap                 = 0xFFFFFFFFFFFF807FULL;
   static const PropertyBlockType kClearedValue                = 0x7FFFFFFFFFFFFFFFULL; /// value repsents cleared space
   static const int64_t kInvaridIndex                          = -1LL;
-  static constexpr double kFullCalacityFactor                 = 0.9;
+
+  static const ProbeDistanceType kLongProbedistanceThreshold  = 120ULL;  /// must be less than max value of probedirance
 
   ///  ------------------------------------------------------ ///
   ///              Private Member Functions
@@ -428,7 +463,7 @@ private:
       }
     }
 
-    free_buffer_rhh_main(allocators, old_ptr, old_capacity);
+    free_buffer(allocators, old_ptr, old_capacity);
 
     if (is_long_probedistance) {
       grow_rhh_main(allocators);
@@ -452,7 +487,7 @@ private:
     }
   }
 
-  inline void free_buffer_rhh_main(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
+  inline void free_buffer(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
   {
     uint64_t mem_size = 0;
     mem_size += sizeof(PropertyBlockType) * capacity;

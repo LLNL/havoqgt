@@ -69,7 +69,6 @@
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
     typedef unsigned char PropertyBlockType;
     typedef unsigned char ProbeDistanceType;
-    static const ProbeDistanceType kLongProbedistanceThreshold = 64;
 
 
     ///  ------------------------------------------------------ ///
@@ -80,7 +79,6 @@
     RHHStatic()
     : m_next_(nullptr)
     {
-      DEBUG("RHHStatic constructor");
       clear(false);
     }
 
@@ -89,20 +87,18 @@
     /// --- Move constructor --- //
     RHHStatic(RHHStatic&& old_obj)
     {
-      DEBUG("RHHStatic move-constructor");
       assert(false); ///
     }
 
     /// --- Destructor --- //
     ~RHHStatic()
     {
-      DEBUG("RHHStatic destructor");
+
     }
 
     /// ---  Move assignment operator --- //
     RHHStatic &operator=(RHHStatic&& old_obj)
     {
-      DEBUG("RHHStatic move-assignment");
       assert(false);
       return *this;
     }
@@ -210,7 +206,7 @@
       // std::cout << "<< ------------------" << std::endl;
     }
 
-    void disp_keys(std::string prefix, std::ofstream& output_file)
+    void fprint_keys(std::string prefix, std::ofstream& output_file)
     {
       for (uint64_t i = 0; i < Capacity; ++i) {
         if (is_valid(i)) {
@@ -219,11 +215,11 @@
       }
       if (m_next_) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->disp_keys(prefix, output_file);
+        next_rhh->fprint_keys(prefix, output_file);
       }
     }
 
-    void disp_probedistance(std::ofstream& output_file)
+    void fprint_probedistance(std::ofstream& output_file)
     {
       for (uint64_t i = 0; i < Capacity; ++i) {
         if (is_valid(i)) {
@@ -233,7 +229,7 @@
       }
       if (m_next_) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->disp_probedistance(output_file);
+        next_rhh->fprint_probedistance(output_file);
       }
     }
 
@@ -247,6 +243,7 @@
     static const int64_t kInvaridIndex                = -1LL;
     static const uint64_t kMask = Capacity - 1ULL;
 
+    static const ProbeDistanceType kLongProbedistanceThreshold  = 120;  /// must be less than max value of probedirance
 
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
@@ -307,19 +304,15 @@
       int64_t pos = cal_desired_pos(hash_key(key));
       ProbeDistanceType dist = 0;
       UpdateErrors err = kSucceed;
+
       while(true) {
-        // if (m_next_ != nullptr)
-        // std::cout << "!!!! insert !!!!!! " << std::hex << m_next_ << std::endl; //D
-        // if (dist >= kLongProbedistanceThreshold) {
-        //   err = kLongProbedistance;
-        //   break;
-        // }
 
         PropertyBlockType existing_elem_property = property(pos);
 
         if(existing_elem_property == kEmptyValue)
         {
           if (dist >= kLongProbedistanceThreshold) {
+            assert(false);
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;
           }
@@ -332,6 +325,7 @@
         if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
+            assert(false);
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;
           }
@@ -349,11 +343,6 @@
         pos = (pos+1) & kMask;
         ++dist;
       }
-
-      // if (m_next_ != nullptr)  {
-      //   RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-      //   return next_rhh->insert_helper(std::move(key), std::move(val));
-      // }
 
       return err;
     }

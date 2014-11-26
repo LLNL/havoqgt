@@ -95,10 +95,7 @@
     /// --- Destructor --- //
     ~RHHMgrStatic()
     {
-      // DEBUG("RHHMgr destructor");
-      if (m_ptr_ != nullptr) {
-        DEBUG("Have to deallcate");
-      }
+      assert(m_ptr_ != nullptr);
     }
 
     /// ---  Move assignment operator --- //
@@ -116,19 +113,23 @@
     ///              Public function
     ///  ------------------------------------------------------ ///
     /// insert a key into RHHStatic class
-    bool insert_uniquely(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
+    inline bool insert_uniquely(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
     {
-
       UpdateErrors err = insert_uniquely_helper(allocators, key, val, current_size);
       if (err == kDuplicated) return false;
       ++current_size;
 
       if (err == kLongProbedistance) {
-        /// XXX: current implementation dose not allocate new RHH-array
+        assert(false);
         grow_rhh_static(allocators, current_size, true);
       }
 
       return true;
+    }
+
+    inline void free(AllocatorsHolder &allocators, uint64_t size)
+    {
+      free_buffer_rhh_static(allocators, size);
     }
 
 
@@ -145,6 +146,7 @@
         return rhh->insert_uniquely(key, val);\
     } while (0)
 
+    /// TODO: use binary tree ?
     UpdateErrors insert_uniquely_helper(AllocatorsHolder &allocators, KeyType& key, ValueType& val, const uint64_t current_size)
     {
       if (current_size <= capacityRHHStatic_1) {
@@ -234,42 +236,43 @@
         new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
       }\
     }\
-    free_buffer_rhh_static(allocators, reinterpret_cast<void*>(old_rhh), capacityRHHStatic_##OLD_C);\
+    allocators.allocator_rhh_noval_##OLD_C.deallocate(bip::offset_ptr<RHHStaticNoVal_##OLD_C>(old_rhh), 1);\
   }while(0)
 
-  void grow_rhh_static(AllocatorsHolder &allocators, uint64_t current_capacity, bool has_long_probedistance)
+  /// TODO: use binary tree ?
+  void grow_rhh_static(AllocatorsHolder &allocators, uint64_t size, bool has_long_probedistance)
   {
-    if (current_capacity <= capacityRHHStatic_1) {
+    if (size <= capacityRHHStatic_1) {
       ALLOCATE_AND_MOVE(1, 2);
-    } else if (current_capacity <= capacityRHHStatic_2){
+    } else if (size <= capacityRHHStatic_2){
       ALLOCATE_AND_MOVE(2, 3);
-    } else if (current_capacity <= capacityRHHStatic_3){
+    } else if (size <= capacityRHHStatic_3){
       ALLOCATE_AND_MOVE(3, 4);
-    } else if (current_capacity <= capacityRHHStatic_4){
+    } else if (size <= capacityRHHStatic_4){
       ALLOCATE_AND_MOVE(4, 5);
-    } else if (current_capacity <= capacityRHHStatic_5){
+    } else if (size <= capacityRHHStatic_5){
       ALLOCATE_AND_MOVE(5, 6);
-    } else if (current_capacity <= capacityRHHStatic_6) {
-        ALLOCATE_AND_MOVE(6, 7);
-    } else if (current_capacity <= capacityRHHStatic_7) {
+    } else if (size <= capacityRHHStatic_6) {
+      ALLOCATE_AND_MOVE(6, 7);
+    } else if (size <= capacityRHHStatic_7) {
       ALLOCATE_AND_MOVE(7, 8);
-    } else if (current_capacity <= capacityRHHStatic_8) {
+    } else if (size <= capacityRHHStatic_8) {
       ALLOCATE_AND_MOVE(8, 9);
-    } else if (current_capacity <= capacityRHHStatic_9) {
+    } else if (size <= capacityRHHStatic_9) {
       ALLOCATE_AND_MOVE(9, 10);
-    } else if (current_capacity <= capacityRHHStatic_10) {
+    } else if (size <= capacityRHHStatic_10) {
       ALLOCATE_AND_MOVE(10, 11);
-    } else if (current_capacity <= capacityRHHStatic_11) {
+    } else if (size <= capacityRHHStatic_11) {
       ALLOCATE_AND_MOVE(11, 12);
-    } else if (current_capacity <= capacityRHHStatic_12) {
+    } else if (size <= capacityRHHStatic_12) {
       ALLOCATE_AND_MOVE(12, 13);
-    } else if (current_capacity <= capacityRHHStatic_13) {
+    } else if (size <= capacityRHHStatic_13) {
       ALLOCATE_AND_MOVE(13, 14);
-    } else if (current_capacity <= capacityRHHStatic_14) {
+    } else if (size <= capacityRHHStatic_14) {
       ALLOCATE_AND_MOVE(14, 15);
-    } else if (current_capacity <= capacityRHHStatic_15) {
+    } else if (size <= capacityRHHStatic_15) {
       ALLOCATE_AND_MOVE(15, 16);
-    } else if (current_capacity <= capacityRHHStatic_16) {
+    } else if (size <= capacityRHHStatic_16) {
       ALLOCATE_AND_MOVE(16, 17);
     } else {
 
@@ -295,99 +298,153 @@
 
   }
 
-  void inline free_buffer_rhh_static(AllocatorsHolder &allocators, void* ptr, uint64_t capacity)
+  /// TODO: use binary tree ?
+  void free_buffer_rhh_static(AllocatorsHolder &allocators, uint64_t size)
   {
-    allocators.deallocate_rhh_static(ptr, capacity);
-      /// FIXME: deallocation error!
-    if (capacity == capacityRHHStatic_1) {
-      allocators.allocator_rhh_noval_1.deallocate(bip::offset_ptr<RHHStaticNoVal_1>(reinterpret_cast<RHHStaticNoVal_1*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_2) {
-      allocators.allocator_rhh_noval_2.deallocate(bip::offset_ptr<RHHStaticNoVal_2>(reinterpret_cast<RHHStaticNoVal_2*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_3) {
-      allocators.allocator_rhh_noval_3.deallocate(bip::offset_ptr<RHHStaticNoVal_3>(reinterpret_cast<RHHStaticNoVal_3*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_4) {
-      allocators.allocator_rhh_noval_4.deallocate(bip::offset_ptr<RHHStaticNoVal_4>(reinterpret_cast<RHHStaticNoVal_4*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_5) {
-      allocators.allocator_rhh_noval_5.deallocate(bip::offset_ptr<RHHStaticNoVal_5>(reinterpret_cast<RHHStaticNoVal_5*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_6) {
-      allocators.allocator_rhh_noval_6.deallocate(bip::offset_ptr<RHHStaticNoVal_6>(reinterpret_cast<RHHStaticNoVal_6*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_7) {
-      allocators.allocator_rhh_noval_7.deallocate(bip::offset_ptr<RHHStaticNoVal_7>(reinterpret_cast<RHHStaticNoVal_7*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_8) {
-      allocators.allocator_rhh_noval_8.deallocate(bip::offset_ptr<RHHStaticNoVal_8>(reinterpret_cast<RHHStaticNoVal_8*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_9) {
-      allocators.allocator_rhh_noval_9.deallocate(bip::offset_ptr<RHHStaticNoVal_9>(reinterpret_cast<RHHStaticNoVal_9*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_10) {
-      allocators.allocator_rhh_noval_10.deallocate(bip::offset_ptr<RHHStaticNoVal_10>(reinterpret_cast<RHHStaticNoVal_10*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_11) {
-      allocators.allocator_rhh_noval_11.deallocate(bip::offset_ptr<RHHStaticNoVal_11>(reinterpret_cast<RHHStaticNoVal_11*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_12) {
-      allocators.allocator_rhh_noval_12.deallocate(bip::offset_ptr<RHHStaticNoVal_12>(reinterpret_cast<RHHStaticNoVal_12*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_13) {
-      allocators.allocator_rhh_noval_13.deallocate(bip::offset_ptr<RHHStaticNoVal_13>(reinterpret_cast<RHHStaticNoVal_13*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_14) {
-      allocators.allocator_rhh_noval_14.deallocate(bip::offset_ptr<RHHStaticNoVal_14>(reinterpret_cast<RHHStaticNoVal_14*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_15) {
-      allocators.allocator_rhh_noval_15.deallocate(bip::offset_ptr<RHHStaticNoVal_15>(reinterpret_cast<RHHStaticNoVal_15*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_16) {
-      allocators.allocator_rhh_noval_16.deallocate(bip::offset_ptr<RHHStaticNoVal_16>(reinterpret_cast<RHHStaticNoVal_16*>(ptr)), 1);
-    } else if (capacity == capacityRHHStatic_17) {
-      allocators.allocator_rhh_noval_17.deallocate(bip::offset_ptr<RHHStaticNoVal_17>(reinterpret_cast<RHHStaticNoVal_17*>(ptr)), 1);
+    if (size <= capacityRHHStatic_1) {
+      allocators.allocator_rhh_noval_1.deallocate(bip::offset_ptr<RHHStaticNoVal_1>(reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_2) {
+      allocators.allocator_rhh_noval_2.deallocate(bip::offset_ptr<RHHStaticNoVal_2>(reinterpret_cast<RHHStaticNoVal_2*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_3) {
+      allocators.allocator_rhh_noval_3.deallocate(bip::offset_ptr<RHHStaticNoVal_3>(reinterpret_cast<RHHStaticNoVal_3*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_4) {
+      allocators.allocator_rhh_noval_4.deallocate(bip::offset_ptr<RHHStaticNoVal_4>(reinterpret_cast<RHHStaticNoVal_4*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_5) {
+      allocators.allocator_rhh_noval_5.deallocate(bip::offset_ptr<RHHStaticNoVal_5>(reinterpret_cast<RHHStaticNoVal_5*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_6) {
+      allocators.allocator_rhh_noval_6.deallocate(bip::offset_ptr<RHHStaticNoVal_6>(reinterpret_cast<RHHStaticNoVal_6*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_7) {
+      allocators.allocator_rhh_noval_7.deallocate(bip::offset_ptr<RHHStaticNoVal_7>(reinterpret_cast<RHHStaticNoVal_7*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_8) {
+      allocators.allocator_rhh_noval_8.deallocate(bip::offset_ptr<RHHStaticNoVal_8>(reinterpret_cast<RHHStaticNoVal_8*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_9) {
+      allocators.allocator_rhh_noval_9.deallocate(bip::offset_ptr<RHHStaticNoVal_9>(reinterpret_cast<RHHStaticNoVal_9*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_10) {
+      allocators.allocator_rhh_noval_10.deallocate(bip::offset_ptr<RHHStaticNoVal_10>(reinterpret_cast<RHHStaticNoVal_10*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_11) {
+      allocators.allocator_rhh_noval_11.deallocate(bip::offset_ptr<RHHStaticNoVal_11>(reinterpret_cast<RHHStaticNoVal_11*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_12) {
+      allocators.allocator_rhh_noval_12.deallocate(bip::offset_ptr<RHHStaticNoVal_12>(reinterpret_cast<RHHStaticNoVal_12*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_13) {
+      allocators.allocator_rhh_noval_13.deallocate(bip::offset_ptr<RHHStaticNoVal_13>(reinterpret_cast<RHHStaticNoVal_13*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_14) {
+      allocators.allocator_rhh_noval_14.deallocate(bip::offset_ptr<RHHStaticNoVal_14>(reinterpret_cast<RHHStaticNoVal_14*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_15) {
+      allocators.allocator_rhh_noval_15.deallocate(bip::offset_ptr<RHHStaticNoVal_15>(reinterpret_cast<RHHStaticNoVal_15*>(m_ptr_)), 1);
+    } else if (size <= capacityRHHStatic_16) {
+      allocators.allocator_rhh_noval_16.deallocate(bip::offset_ptr<RHHStaticNoVal_16>(reinterpret_cast<RHHStaticNoVal_16*>(m_ptr_)), 1);
     } else {
-      assert(false);
+
+      RHHStaticNoVal_17 *rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+      while (1) {
+        void* next = rhh->m_next_;
+        allocators.allocator_rhh_noval_17.deallocate(bip::offset_ptr<RHHStaticNoVal_17>(rhh), 1);
+        if (next == nullptr) {
+          break;
+        }
+        rhh = reinterpret_cast<RHHStaticNoVal_17*>(next);
+      }
+
     }
   }
 
 
 /// XXX: should use template function
-#define DISP_KEYS(C, PRFX, OF) \
+#define FPRINT_KEYS(C, PRFX, OF) \
   do{ \
     RHHStaticNoVal_##C* rhh = reinterpret_cast<RHHStaticNoVal_##C*>(m_ptr_); \
-    rhh->disp_keys(PRFX, OF); \
+    rhh->fprint_keys(PRFX, OF); \
   } while (0)
 
-  void disp_keys(uint64_t current_capacity, std::string prefix, std::ofstream& output_file)
+  void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
   {
-    if (current_capacity <= capacityRHHStatic_1) {
-      DISP_KEYS(1, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_2){
-      DISP_KEYS(2, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_3){
-      DISP_KEYS(3, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_4){
-      DISP_KEYS(4, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_5){
-      DISP_KEYS(5, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_6){
-      DISP_KEYS(6, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_7){
-      DISP_KEYS(7, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_8){
-      DISP_KEYS(8, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_9){
-      DISP_KEYS(9, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_10){
-      DISP_KEYS(10, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_11){
-      DISP_KEYS(11, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_12){
-      DISP_KEYS(12, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_13){
-      DISP_KEYS(13, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_14){
-      DISP_KEYS(14, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_15){
-      DISP_KEYS(15, prefix, output_file);
-    } else if (current_capacity <= capacityRHHStatic_16){
-      DISP_KEYS(16, prefix, output_file);
+    if (size <= capacityRHHStatic_1) {
+      FPRINT_KEYS(1, prefix, output_file);
+    } else if (size <= capacityRHHStatic_2){
+      FPRINT_KEYS(2, prefix, output_file);
+    } else if (size <= capacityRHHStatic_3){
+      FPRINT_KEYS(3, prefix, output_file);
+    } else if (size <= capacityRHHStatic_4){
+      FPRINT_KEYS(4, prefix, output_file);
+    } else if (size <= capacityRHHStatic_5){
+      FPRINT_KEYS(5, prefix, output_file);
+    } else if (size <= capacityRHHStatic_6){
+      FPRINT_KEYS(6, prefix, output_file);
+    } else if (size <= capacityRHHStatic_7){
+      FPRINT_KEYS(7, prefix, output_file);
+    } else if (size <= capacityRHHStatic_8){
+      FPRINT_KEYS(8, prefix, output_file);
+    } else if (size <= capacityRHHStatic_9){
+      FPRINT_KEYS(9, prefix, output_file);
+    } else if (size <= capacityRHHStatic_10){
+      FPRINT_KEYS(10, prefix, output_file);
+    } else if (size <= capacityRHHStatic_11){
+      FPRINT_KEYS(11, prefix, output_file);
+    } else if (size <= capacityRHHStatic_12){
+      FPRINT_KEYS(12, prefix, output_file);
+    } else if (size <= capacityRHHStatic_13){
+      FPRINT_KEYS(13, prefix, output_file);
+    } else if (size <= capacityRHHStatic_14){
+      FPRINT_KEYS(14, prefix, output_file);
+    } else if (size <= capacityRHHStatic_15){
+      FPRINT_KEYS(15, prefix, output_file);
+    } else if (size <= capacityRHHStatic_16){
+      FPRINT_KEYS(16, prefix, output_file);
     } else {
-      DISP_KEYS(17, prefix, output_file);
+      FPRINT_KEYS(17, prefix, output_file);
     }
   }
 
-  uint64_t cal_depth(uint64_t current_capacity)
+/// XXX: should use template function
+#define DISP_ELEMS(C) \
+  do{ \
+    RHHStaticNoVal_##C* rhh = reinterpret_cast<RHHStaticNoVal_##C*>(m_ptr_); \
+    rhh->disp_elems(0); \
+  } while (0)
+
+  void disp_elems(uint64_t size)
   {
-    if (current_capacity <= capacityRHHStatic_16){
+    if (size <= capacityRHHStatic_1) {
+      DISP_ELEMS(1);
+    } else if (size <= capacityRHHStatic_2){
+      DISP_ELEMS(2);
+    } else if (size <= capacityRHHStatic_3){
+      DISP_ELEMS(3);
+    } else if (size <= capacityRHHStatic_4){
+      DISP_ELEMS(4);
+    } else if (size <= capacityRHHStatic_5){
+      DISP_ELEMS(5);
+    } else if (size <= capacityRHHStatic_6){
+      DISP_ELEMS(6);
+    } else if (size <= capacityRHHStatic_7){
+      DISP_ELEMS(7);
+    } else if (size <= capacityRHHStatic_8){
+      DISP_ELEMS(8);
+    } else if (size <= capacityRHHStatic_9){
+      DISP_ELEMS(9);
+    } else if (size <= capacityRHHStatic_10){
+      DISP_ELEMS(10);
+    } else if (size <= capacityRHHStatic_11){
+      DISP_ELEMS(11);
+    } else if (size <= capacityRHHStatic_12){
+      DISP_ELEMS(12);
+    } else if (size <= capacityRHHStatic_13){
+      DISP_ELEMS(13);
+    } else if (size <= capacityRHHStatic_14){
+      DISP_ELEMS(14);
+    } else if (size <= capacityRHHStatic_15){
+      DISP_ELEMS(15);
+    } else if (size <= capacityRHHStatic_16){
+      DISP_ELEMS(16);
+    } else {
+      DISP_ELEMS(17);
+    }
+  }
+
+
+  uint64_t cal_depth(uint64_t size)
+  {
+    if (size <= capacityRHHStatic_16){
       return 0;
     } else {
       RHHStaticNoVal_17* rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
@@ -396,48 +453,48 @@
   }
 
 /// XXX: should use template function
-#define DISP_PROBEDISTANCE(C, OF) \
+#define FPRINT_PROBEDISTANCE(C, OF) \
   do{ \
     RHHStaticNoVal_##C* rhh = reinterpret_cast<RHHStaticNoVal_##C*>(m_ptr_); \
-    rhh->disp_probedistance(OF); \
+    rhh->fprint_probedistance(OF); \
   } while (0)
 
-  void disp_probedistance(uint64_t current_capacity, std::ofstream& output_file)
+  void fprint_probedistance(uint64_t size, std::ofstream& output_file)
   {
-    if (current_capacity <= capacityRHHStatic_1) {
-      DISP_PROBEDISTANCE(1, output_file);
-    } else if (current_capacity <= capacityRHHStatic_2){
-      DISP_PROBEDISTANCE(2, output_file);
-    } else if (current_capacity <= capacityRHHStatic_3){
-      DISP_PROBEDISTANCE(3, output_file);
-    } else if (current_capacity <= capacityRHHStatic_4){
-      DISP_PROBEDISTANCE(4, output_file);
-    } else if (current_capacity <= capacityRHHStatic_5){
-      DISP_PROBEDISTANCE(5, output_file);
-    } else if (current_capacity <= capacityRHHStatic_6){
-      DISP_PROBEDISTANCE(6, output_file);
-    } else if (current_capacity <= capacityRHHStatic_7){
-      DISP_PROBEDISTANCE(7, output_file);
-    } else if (current_capacity <= capacityRHHStatic_8){
-      DISP_PROBEDISTANCE(8, output_file);
-    } else if (current_capacity <= capacityRHHStatic_9){
-      DISP_PROBEDISTANCE(9, output_file);
-    } else if (current_capacity <= capacityRHHStatic_10){
-      DISP_PROBEDISTANCE(10, output_file);
-    } else if (current_capacity <= capacityRHHStatic_11){
-      DISP_PROBEDISTANCE(11, output_file);
-    } else if (current_capacity <= capacityRHHStatic_12){
-      DISP_PROBEDISTANCE(12, output_file);
-    } else if (current_capacity <= capacityRHHStatic_13){
-      DISP_PROBEDISTANCE(13, output_file);
-    } else if (current_capacity <= capacityRHHStatic_14){
-      DISP_PROBEDISTANCE(14, output_file);
-    } else if (current_capacity <= capacityRHHStatic_15){
-      DISP_PROBEDISTANCE(15, output_file);
-    } else if (current_capacity <= capacityRHHStatic_16){
-      DISP_PROBEDISTANCE(16, output_file);
+    if (size <= capacityRHHStatic_1) {
+      FPRINT_PROBEDISTANCE(1, output_file);
+    } else if (size <= capacityRHHStatic_2){
+      FPRINT_PROBEDISTANCE(2, output_file);
+    } else if (size <= capacityRHHStatic_3){
+      FPRINT_PROBEDISTANCE(3, output_file);
+    } else if (size <= capacityRHHStatic_4){
+      FPRINT_PROBEDISTANCE(4, output_file);
+    } else if (size <= capacityRHHStatic_5){
+      FPRINT_PROBEDISTANCE(5, output_file);
+    } else if (size <= capacityRHHStatic_6){
+      FPRINT_PROBEDISTANCE(6, output_file);
+    } else if (size <= capacityRHHStatic_7){
+      FPRINT_PROBEDISTANCE(7, output_file);
+    } else if (size <= capacityRHHStatic_8){
+      FPRINT_PROBEDISTANCE(8, output_file);
+    } else if (size <= capacityRHHStatic_9){
+      FPRINT_PROBEDISTANCE(9, output_file);
+    } else if (size <= capacityRHHStatic_10){
+      FPRINT_PROBEDISTANCE(10, output_file);
+    } else if (size <= capacityRHHStatic_11){
+      FPRINT_PROBEDISTANCE(11, output_file);
+    } else if (size <= capacityRHHStatic_12){
+      FPRINT_PROBEDISTANCE(12, output_file);
+    } else if (size <= capacityRHHStatic_13){
+      FPRINT_PROBEDISTANCE(13, output_file);
+    } else if (size <= capacityRHHStatic_14){
+      FPRINT_PROBEDISTANCE(14, output_file);
+    } else if (size <= capacityRHHStatic_15){
+      FPRINT_PROBEDISTANCE(15, output_file);
+    } else if (size <= capacityRHHStatic_16){
+      FPRINT_PROBEDISTANCE(16, output_file);
     } else {
-      DISP_PROBEDISTANCE(17, output_file);
+      FPRINT_PROBEDISTANCE(17, output_file);
     }
   }
 

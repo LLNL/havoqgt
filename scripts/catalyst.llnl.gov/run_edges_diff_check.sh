@@ -19,7 +19,9 @@ echo "Sorting 2 ..."  | tee -a  /l/ssd/edge_diff_check.log
 sort -k 1,1n -k 2,2n /l/ssd/graph_out.debug_edges_graph > /l/ssd/tmp_sortr2.dat
 
 echo "Checking diff..." | tee -a  /l/ssd/edge_diff_check.log
-diff /l/ssd/tmp_sortr1.dat /l/ssd/tmp_sortr2.dat | tee -a /l/ssd/edge_diff_check.log
+diff /l/ssd/tmp_sortr1.dat /l/ssd/tmp_sortr2.dat > /l/ssd/edge_diff_out.log
+echo "# of different edges"  | tee -a  /l/ssd/edge_diff_check.log
+wc /l/ssd/edge_diff_out.log
 
 echo ""  | tee -a  /l/ssd/edge_diff_check.log
 echo "Check done!!"  | tee -a  /l/ssd/edge_diff_check.log

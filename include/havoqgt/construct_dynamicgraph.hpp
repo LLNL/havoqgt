@@ -74,7 +74,9 @@
 #include <limits>
 
 #include <havoqgt/robin_hood_hashing.hpp>
+
 #include <havoqgt/RHHAdjacencyMatrix.hpp>
+
 #include <havoqgt/RHH/RHHAllocHolder.hpp>
 #include <havoqgt/RHH/RHHMain.hpp>
 
@@ -88,7 +90,7 @@ namespace bip = boost::interprocess;
 #endif
 
 #ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
-  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
+  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 1
 #endif
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
@@ -140,21 +142,16 @@ class construct_dynamicgraph {
   typedef std::pair<const uint64_t, uint64_vector_t> map_value_vec_t;
   typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_vec_t>> adjacency_matrix_map_vec_t;
 
-  typedef robin_hood_hash<uint64_t, uint64_t, SegmentManager> robin_hood_hashing_t;
-
-  typedef robin_hood_hash<uint64_t, char, SegmentManager> robin_hood_hashing_novalue_t;
-  typedef robin_hood_hash<uint64_t, robin_hood_hashing_novalue_t, SegmentManager> adjacency_matrix_rbh_rbh_t;
+  typedef robin_hood_hash<uint64_t, uint64_t, SegmentManager> rhh_single_array_t;
 
   typedef RHHAdjacencyMatrix<uint64_t, uint64_t, SegmentAllocator<void>> rhh_matrix_t;
 
   enum DataStructureMode {
     kUseVecVecMatrix,
     kUseMapVecMatrix,
-    kUseRobinHoodHash,
-    kUseDegreeAwareModel,
-    kUseDegreeAwareModelRbhMtx,
-    kUseDegreeAwareModelRHHAdjMx,
-    kUseDegreeAwareModelRHH
+    kUseRHHAsArray,
+    kUseRHHAsMatrix,
+    kUseHybridDegreeAwareModel
   };
 
   ///  ------------------------------------------------------ ///
@@ -187,24 +184,16 @@ class construct_dynamicgraph {
         add_edges_adjacency_matrix_map_vector(req_itr, length);
         break;
 
-      case kUseRobinHoodHash:
-        add_edges_robin_hood_hash(req_itr, length);
+      case kUseRHHAsArray:
+        add_edges_rhh_single_array(req_itr, length);
         break;
 
-      case kUseDegreeAwareModel:
-        add_edges_degree_aware_rbh_first(req_itr, length);
+      case kUseRHHAsMatrix:
+        add_edges_rhh_matrix(req_itr, length);
         break;
 
-      case kUseDegreeAwareModelRbhMtx:
-        add_edges_degree_aware_rbh_first_rbh_mtrx(req_itr, length);
-        break;
-
-      case kUseDegreeAwareModelRHHAdjMx:
-        add_edges_degree_aware_rbh_first_multi_rhh(req_itr, length);
-        break;
-
-      case kUseDegreeAwareModelRHH:
-        add_edges_degree_aware_rbh(req_itr, length);
+      case kUseHybridDegreeAwareModel:
+        add_edges_degree_aware_hybrid(req_itr, length);
         break;
 
       default:
@@ -234,34 +223,13 @@ class construct_dynamicgraph {
 
   /// add edges array by using robin hood hash
   template <typename Container>
-  void add_edges_robin_hood_hash(Container req_itr, size_t length);
-
-  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
-  /// check robihn hood hashing first
-  template <typename Container>
-  void add_edges_degree_aware_rbh_first(Container req_itr, size_t length);
-
-  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
-  /// check bitmap first
-  template <typename Container>
-  void add_edges_degree_aware_bitmap_first(Container req_itr, size_t length);
-
-  /// Add edges to robihn-hood-hash or adjacency-matrix depends on degree of souce vertex
-  /// check adjacency-matrxit first
-  template <typename Container>
-  void add_edges_degree_aware_adj_first(Container req_itr, size_t length);
+  void add_edges_rhh_single_array(Container req_itr, size_t length);
 
   template <typename Container>
-  void add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length);
+  void add_edges_rhh_matrix(Container req_itr, size_t length);
 
   template <typename Container>
-  void add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length);
-
-  /// Delete edge from a Robin-Hood-Hashing and a adjacency-matrix of Robin-Hood-Hashing
-  bool delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx);
-
-  template <typename Container>
-  void add_edges_degree_aware_rbh(Container req_itr, size_t length);
+  void add_edges_degree_aware_hybrid(Container req_itr, size_t length);
 
   inline void flush_pagecache() {
     asdf_.flush();
@@ -277,13 +245,15 @@ class construct_dynamicgraph {
 
   adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
   uint64_vector_t *init_vec;
+
   adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
-  robin_hood_hashing_t *robin_hood_hashing_;
-  adjacency_matrix_rbh_rbh_t *adjacency_matrix_rbh_rbh_;
+
+  rhh_single_array_t *rhh_single_array;
+
   rhh_matrix_t *rhh_matrix_;
 
   RHH::AllocatorsHolder *alloc_holder;
-  RHH::RHHMain<uint64_t, uint64_t> *rhh_main;
+  RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
 
   IOInfo *io_info_;
   double total_exectution_time_;

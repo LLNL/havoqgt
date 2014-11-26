@@ -88,7 +88,7 @@ def generate_shell_file():
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(10*256) + " "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(10*256) + " "
+		slurm_options += "--di-mmap=" + str(1024*256*100) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -237,7 +237,7 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 	graph_file = graph_dir+"out.graph"
 
-	delete_ratio_list = [0, 5, 10, 50, 90]
+	delete_ratio_list = [0, 10]
 	for k in delete_ratio_list:
 
 		for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :

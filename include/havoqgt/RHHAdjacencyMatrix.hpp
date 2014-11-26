@@ -330,7 +330,7 @@ class RHHAdjacencyMatrix {
     {
       //DEBUG("union move-constructor");
       value = old_obj.value;
-      old_obj.value = NULL;
+      old_obj.value = 0;
     }
     ~ValueWrapperType()
     {
@@ -340,7 +340,7 @@ class RHHAdjacencyMatrix {
     {
      // DEBUG("union move-assigment");
       value = old_obj.value;
-      old_obj.value = NULL;
+      old_obj.value = 0;
       return *this;
     }
   };

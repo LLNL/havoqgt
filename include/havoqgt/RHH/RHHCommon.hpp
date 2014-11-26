@@ -63,12 +63,6 @@ namespace RHH {
     std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
   while (0)
 
-// #define DISP_VAR(x) \
-//   do { \
-//     std::cout << #x << " =\t" << x << std::endl; } \
-//   while (0)
-
-
   enum UpdateErrors {
     kSucceed = 0,
     kDuplicated,
@@ -76,7 +70,9 @@ namespace RHH {
     kLongProbedistance
   };
 
+  static constexpr double kFullCalacityFactor  = 0.9;
   static const uint64_t kCapacityGrowingFactor = 2ULL;
+
   typedef unsigned char NoValueType;
 
 }

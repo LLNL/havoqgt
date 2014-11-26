@@ -63,6 +63,8 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
+#include <sys/sysinfo.h>
+
 #ifdef PROFILE_DETAIL
  #warning PROFILE_DETAIL is enabled.
 #endif
@@ -78,6 +80,19 @@ typedef bip::managed_mapped_file mapped_t;
 typedef mapped_t::segment_manager segment_manager_t;
 typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
+
+void print_dram_usages(void)
+{
+    struct sysinfo info;
+    sysinfo(&info);
+    std::cout << "Usage: mem_unit:\t" << info.mem_unit << std::endl;
+    std::cout << "Usage: totalram(GiB):\t" << (double)info.totalram / (1<<30ULL) << std::endl;
+    std::cout << "Usage: freeram(GiB):\t" << (double)info.freeram / (1<<30ULL) << std::endl;
+    std::cout << "Usage: usedram(GiB):\t" << (double)(info.totalram - info.freeram) / (1<<30ULL) << std::endl;
+    std::cout << "Usage: bufferram(GiB):\t" << (double)info.bufferram / (1<<30ULL) << std::endl;
+    std::cout << "Usage: totalswap(GiB):\t" << (double)info.totalswap / (1<<30ULL) << std::endl;
+    std::cout << "Usage: freeswap(GiB):\t" << (double)info.freeswap / (1<<30ULL) << std::endl;
+}
 
 template <typename Edges>
 void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager)
@@ -117,23 +132,24 @@ void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segme
 template <typename Edges>
 void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio)
 {
-  std::cout << "\n<< Edge update >>" << std::endl;
-  /// Calucurate # of loops and chunk size
-  const uint64_t num_original_edges = edges.size();
-  std::cout << "Status: # generated edges (DIRECTED graph) =\t"<< num_original_edges << std::endl;
-  chunk_size = std::min(chunk_size, num_original_edges);
-  //const uint64_t num_loop  = num_original_edges / chunk_size;
-  //assert(num_loop*chunk_size == num_original_edges);
-
+  std::cout << "-- Disp status of before generation --" << std::endl;
   size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
   std::cout << "Usage: segment size =\t"<< usages << std::endl;
-
-  typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
-  requests_vector_t *onmemory_edges = new requests_vector_t();
+  print_dram_usages();
 
 
   /// --------- Generate update requests  --------- ///
+  std::cout << "-- Generate edge update requests --" << std::endl;
   const double time_start = MPI_Wtime();
+
+  /// -- Calucurate # of loops and chunk size -- ///
+  const uint64_t num_original_edges = edges.size();
+  std::cout << "Status: # generated edges (DIRECTED graph) =\t"<< num_original_edges << std::endl;
+  chunk_size = std::min(chunk_size, num_original_edges);
+
+  std::cout << "Generating edge update requests..." << std::endl;
+  typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
+  requests_vector_t *onmemory_edges = new requests_vector_t();
 #if 1
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
     bool is_delete = std::rand()%100 < edges_delete_ratio;
@@ -166,20 +182,23 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
   std::cout << "Status: ratio of delete requeste =\t"<< (static_cast<double>(onmemory_edges->size()) / static_cast<double>(num_original_edges) - 1.0) << std::endl;
   const double time_end = MPI_Wtime();
+  std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
+  std::cout << "Status: Generate edges memory size (GiB) =\t" << (double)onmemory_edges->capacity() * sizeof(requests_vector_t) / (1<<30ULL) << std::endl;
+  print_dram_usages();
 
-  std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
   usages = segment_manager->get_size() - segment_manager->get_free_memory();
   std::cout << "Usage: segment size =\t"<< usages << std::endl;
 
-
   /// -------------- Edge update loop ----------- ////
+  std::cout << "-- Apply update requests --" << std::endl;
   const uint64_t num_requests = onmemory_edges->size();
   const uint64_t num_loops  = num_requests / chunk_size;
   for (uint64_t i = 0; i < num_loops; ++i) {
-    std::cout << "\n[" << i+1 << " / " << num_loops << "] :\t" << chunk_size << std::endl;
+    std::cout << "[" << i+1 << " / " << num_loops << "] :\t" << chunk_size << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
     usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
+    std::cout << std::endl;
   }
   uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loops;
   if (num_rest_edges > 0) {
@@ -194,7 +213,6 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
 
   delete onmemory_edges;
 }
-
 
 int main(int argc, char** argv) {
 
@@ -284,29 +302,24 @@ int main(int argc, char** argv) {
       if (fname_compare != "") {
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
+      print_dram_usages();
     }
 
     std::stringstream fname;
-    //fname << "/l/ssd/"<< fname_output << "_" << mpi_rank;
     fname << fname_output << "_" << mpi_rank;
 
     if (load_from_disk  == 0) {
       remove(fname.str().c_str());
     }
 
-  // TODO change to (2^34 + 2^33 + 2^32 )
-    uint64_t graph_capacity = std::pow(2, 39);//std::pow(2,34) + std::pow(2,33) +  std::pow(2,32);
-    //assert (graph_capacity <= (751619276800.0/24.0));
-    mapped_t  asdf(bip::open_or_create, fname.str().c_str(),
-      graph_capacity);
+
+    std::cout << "\n<<Construct segment>>" << std::endl;
+    uint64_t graph_capacity = std::pow(2, 39);
+    mapped_t  asdf(bip::open_or_create, fname.str().c_str(), graph_capacity);
     segment_manager_t* segment_manager = asdf.get_segment_manager();
     bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
-    //std::cout << "Allocation test " << std::pow(2,34) / std::pow(2, 30) << " Byte" << std::endl;
-    //bip::offset_ptr<void> ptr = alloc_inst.allocate( std::pow(2,34) * sizeof(char));
-    //asdf.flush();
 
     graph_type *graph;
-
     if (data_structure_type == "VC_VC") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
@@ -315,27 +328,25 @@ int main(int argc, char** argv) {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
       (asdf, alloc_inst, graph_type::kUseMapVecMatrix, low_degree_threshold);
-    } else if (data_structure_type == "RH_HS") {
+    } else if (data_structure_type == "RH_AR") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseRobinHoodHash, low_degree_threshold);
-    } else if (data_structure_type == "RH_MP") {
+      (asdf, alloc_inst, graph_type::kUseRHHAsArray, low_degree_threshold);
+    } if (data_structure_type == "RH_MX") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseDegreeAwareModel, low_degree_threshold);
-    } else if (data_structure_type == "RH_MX") {
+      (asdf, alloc_inst, graph_type::kUseRHHAsMatrix, low_degree_threshold);
+    } else if (data_structure_type == "HY_DA") {
       graph = segment_manager->construct<graph_type>
       ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelRbhMtx, low_degree_threshold);
-    } else if (data_structure_type == "ML_RH") {
-      graph = segment_manager->construct<graph_type>
-      ("graph_obj")
-      (asdf, alloc_inst, graph_type::kUseDegreeAwareModelRHH, low_degree_threshold);
+      (asdf, alloc_inst, graph_type::kUseHybridDegreeAwareModel, low_degree_threshold);
     } else {
       std::cerr << "Unknown data structure type: " << data_structure_type << std::endl;
       exit(-1);
     }
 
+
+    std::cout << "\n<<Update edges>>" << std::endl;
     if (load_from_disk  == 0) {
 
       if(type == "UPTRI") {
@@ -372,14 +383,15 @@ int main(int argc, char** argv) {
       }
       graph = segment_manager->find<graph_type>("graph_obj").first;
     }
-
     MPI_Barrier(MPI_COMM_WORLD);
-  // if (mpi_rank == 0) {
-  //   std::cout << "Graph Ready, Running Tests. (free/capacity) " << std::endl;
-  // }
 
+
+    std::cout << "\n<<Profile>>" << std::endl;
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
+
+        print_dram_usages();
+
         size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
         double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());
         std::cout << "[" << mpi_rank << "] "
@@ -391,48 +403,21 @@ int main(int argc, char** argv) {
       MPI_Barrier(MPI_COMM_WORLD);
     }
 
-  //
-  // Calculate max degree
-  // uint64_t max_degree(0);
-  // for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
-  //   max_degree = std::max(max_degree, graph->degree(*citr));
-  // }
 
-  // uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
-  // if (mpi_rank == 0) {
-  //   std::cout << "Max Degree = " << global_max_degree << std::endl;
-  // }
+    std::cout << "\n<<Delete segment and files>>" << std::endl;
+    /// this function call graph_type's destructor
+    segment_manager->destroy<graph_type>("graph_obj");
 
-    // if (fname_compare != "") {
-    //   std::stringstream fname2;
-    //   fname2 << "/l/ssd/"<< fname_compare << "_" << mpi_rank;
-
-    //   mapped_t  asdf2(bip::open_or_create, fname2.str().c_str(), 1024ULL*1024*1024*16);
-    //   segment_manager_t* segment_manager2 = asdf2.get_segment_manager();
-
-    //   graph_type *graph_other =
-    //   segment_manager2->find<graph_type>("graph_obj").first;
-
-    //   std::cout << "[" << mpi_rank << "]Comparing member variables of the two graphs";
-    //   // if (graph != nullptr && graph_other != nullptr && *graph == *graph_other) {
-    //   //   std::cout << "...they are equivelent" << std::endl;
-    //   // } else {
-    //   //   std::cout << "...they are different." << std::endl;
-    //   // }
-    // }
-
-  if (delete_file) {
-    std::cout << "Deleting Mapped File." << std::endl;
-    bip::file_mapping::remove(fname.str().c_str());
-  }
+    if (delete_file) {
+      std::cout << "Deleting Mapped File." << std::endl;
+      bip::file_mapping::remove(fname.str().c_str());
+    }
 
   } //END Main MPI
-
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
 
   std::cout << "Before MPI_Finalize." << std::endl;
   CHK_MPI(MPI_Finalize());
-
   std::cout << "FIN." << std::endl;
 
   return 0;

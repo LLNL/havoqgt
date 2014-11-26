@@ -118,6 +118,7 @@
   template <typename SegementManager>
     const char construct_dynamicgraph<SegementManager>::kNoValue = 0;
 
+
 /**
  * Constructor
  *
@@ -146,25 +147,11 @@
     adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
     break;
 
-    case kUseRobinHoodHash:
-    robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
+    case kUseRHHAsArray:
+    rhh_single_array = new rhh_single_array_t(seg_allocator_);
     break;
 
-    case kUseDegreeAwareModel:
-    adjacency_matrix_map_vec_ = new adjacency_matrix_map_vec_t(seg_allocator_);
-    robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
-    break;
-
-    case kUseDegreeAwareModelRbhMtx:
-    robin_hood_hashing_ = new robin_hood_hashing_t(seg_allocator_);
-    adjacency_matrix_rbh_rbh_ = new adjacency_matrix_rbh_rbh_t(seg_allocator_);
-    std::srand(1);
-    std::cout << "Random seed is 1" << std::endl;
-    // std::srand(std::time(0));
-    // std::cout << "Random seed is time" << std::endl;
-    break;
-
-    case kUseDegreeAwareModelRHHAdjMx:
+    case kUseRHHAsMatrix:
     std::srand(1);
     std::cout << "Random seed is 1" << std::endl;
     // std::srand(std::time(0));
@@ -172,12 +159,11 @@
     rhh_matrix_ = new rhh_matrix_t(seg_allocator_);
     break;
 
-    case kUseDegreeAwareModelRHH:
+    case kUseHybridDegreeAwareModel:
     std::srand(1);
     std::cout << "Random seed is 1" << std::endl;
     alloc_holder = new RHH::AllocatorsHolder(seg_allocator_.get_segment_manager());
-    rhh_main = new RHH::RHHMain<uint64_t, uint64_t>(*alloc_holder, 2ULL);
-
+    hybrid_matrix = new RHH::RHHMain<uint64_t, uint64_t>(*alloc_holder, 2ULL);
     break;
 
     default:
@@ -201,15 +187,24 @@
 template <typename SegementManager>
  construct_dynamicgraph<SegementManager>::
  ~construct_dynamicgraph()
- {
-  delete adjacency_matrix_vec_vec_;
-  delete init_vec;
-  delete adjacency_matrix_map_vec_;
-  delete robin_hood_hashing_;
-  rhh_matrix_->free(seg_allocator_);
-  delete alloc_holder;
-  delete rhh_main;
-  delete rhh_matrix_;
+{
+  DEBUG("called");
+
+  if (data_structure_type_ == kUseRHHAsMatrix) {
+    rhh_matrix_->free(seg_allocator_);
+  }
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
+    hybrid_matrix->free(*alloc_holder);
+  }
+
+  delete adjacency_matrix_vec_vec_; /// kUseVecVecMatrix
+  delete init_vec; /// kUseVecVecMatrix
+  delete adjacency_matrix_map_vec_; /// kUseMapVecMatrix
+  delete rhh_single_array; /// kUseRHHAsArray
+  delete rhh_matrix_; /// kUseRHHAsMatrix
+  delete alloc_holder; /// kUseHybridDegreeAwareModel
+  delete hybrid_matrix; /// kUseHybridDegreeAwareModel
+
   delete io_info_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
@@ -217,6 +212,7 @@ template <typename SegementManager>
 #endif
 
 }
+
 
 /**
  * Add edges into vector-vector adjacency matrix using
@@ -302,7 +298,7 @@ add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_robin_hood_hash(Container req_itr, size_t length)
+add_edges_rhh_single_array(Container req_itr, size_t length)
 {
   io_info_->reset_baseline();
   double time_start = MPI_Wtime();
@@ -312,9 +308,9 @@ add_edges_robin_hood_hash(Container req_itr, size_t length)
     fout_debug_insertededges_ << edge.first << "\t" << edge.second << std::endl;
 #endif
 #if WITHOUT_DUPLICATE_INSERTION == 1
-    robin_hood_hashing_->insert_unique(edge.first, edge.second);
+    rhh_single_array->insert_unique(edge.first, edge.second);
 #else
-    robin_hood_hashing_->insert(edge.first, edge.second);
+    rhh_single_array->insert(edge.first, edge.second);
 #endif
   }
   flush_pagecache();
@@ -330,239 +326,7 @@ add_edges_robin_hood_hash(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_rbh_first(Container req_itr, size_t length)
-{
-  uint64_t count_new = 0;
-  uint64_t count_low = 0;
-  uint64_t count_non_low = 0;
-  uint64_t count_move = 0;
-
-  io_info_->reset_baseline();
-  double time_start = MPI_Wtime();
-  for (size_t k = 0; k < length; ++k, ++req_itr) {
-
-    const int64_t source_vtx = req_itr->edge.first;
-    const int64_t target_vtx = req_itr->edge.second;
-
-#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
-    fout_debug_insertededges_  << source_vtx << "\t" << target_vtx << std::endl;
-#endif
-
-    const uint64_t num_edges_rbh = robin_hood_hashing_->count(source_vtx);
-
-    if (num_edges_rbh == 0) {
-      // ---- These are 2 candidates ---- //
-      // 1. new vertex
-      // 2. non-low-degree edges
-
-      auto value = adjacency_matrix_map_vec_->find(source_vtx);
-      if (value == adjacency_matrix_map_vec_->end()) {
-        // -- 1. new vertex -- //
-        robin_hood_hashing_->insert(source_vtx, target_vtx);
-        ++count_new;
-      } else {
-        // -- 2. non-low-degree edges -- //
-        uint64_vector_t& adjacency_list_vec = value->second;
-#if WITHOUT_DUPLICATE_INSERTION == 1
-        if (boost::find<uint64_vector_t>(adjacency_list_vec, target_vtx) != adjacency_list_vec.end() )
-          continue; // Since this edge is duplicated, skip adding this edge.
-#endif
-        adjacency_list_vec.push_back(target_vtx);
-        ++count_non_low;
-      }
-
-
-    } else if (num_edges_rbh < kLowDegreeThreshold) {
-      // -- Low-degree edge -- //
-#if WITHOUT_DUPLICATE_INSERTION == 1
-      robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
-#else
-      robin_hood_hashing_->insert(source_vtx, target_vtx);
-#endif
-      ++count_low;
-
-    } else {
-      // -- degree exceed the low-degree-threshold -- //
-      auto itr_map = adjacency_matrix_map_vec_->insert(map_value_vec_t(source_vtx, uint64_vector_t(seg_allocator_))).first;
-      uint64_vector_t &adjacency_list_vec = itr_map->second;
-      adjacency_list_vec.reserve(kLowDegreeThreshold+1);
-
-      // - Move edges to the adjacency-matrix from the robin-hood-hashing - //
-      auto itr_rb = robin_hood_hashing_->find(source_vtx);
-      for (int64_t i = 0; i < kLowDegreeThreshold; ++i) {
-        auto trg_vtx = itr_rb->value;
-#if WITHOUT_DUPLICATE_INSERTION == 1
-         // Since we have already avoided duplicated edges when we add edges into robin_hood_hashing array,
-         // in this time, we only compare to the latest edge.
-         if (trg_vtx == target_vtx) goto NEXT_MOVING; // a duplicated edge
-#endif
-         adjacency_list_vec.push_back(trg_vtx);
-
-         NEXT_MOVING:
-        robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
-        ++itr_rb;
-      } // End of edges moving loop
-      adjacency_list_vec.push_back(target_vtx);
-      ++count_move;
-    }
-
-  } // End of a edges insertion loop
-  flush_pagecache();
-  double time_end = MPI_Wtime();
-
-  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
-  std::cout << "Count: # new inserted edges =\t" << count_new << std::endl;
-  std::cout << "Count: # low degree edges =\t" << count_low << std::endl;
-  std::cout << "Count: # non-low degree edges =\t" << count_non_low << std::endl;
-  std::cout << "Count: # moved vertices =\t" << count_move << std::endl;
-  std::cout << "Count: # moved edges =\t" << count_move * kLowDegreeThreshold << std::endl;
-  std::cout << "Allocated size for low-degree-edges =\t" << robin_hood_hashing_->allocated_size() << std::endl;
-  io_info_->log_diff();
-  total_exectution_time_ += time_end - time_start;
-}
-
-
-template <typename SegmentManager>
-template <typename Container>
-void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_rbh_first_rbh_mtrx(Container req_itr, size_t length)
-{
-  uint64_t count_new = 0;
-  uint64_t count_low = 0;
-  uint64_t count_non_low = 0;
-  uint64_t count_move = 0;
-  uint64_t count_delete = 0;
-
-  io_info_->reset_baseline();
-  double time_start = MPI_Wtime();
-  for (size_t k = 0; k < length; ++k, ++req_itr) {
-
-    const uint64_t source_vtx = req_itr->edge.first;
-    const uint64_t target_vtx = req_itr->edge.second;
-
-#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
-    fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
-#endif
-
-    if (req_itr->is_delete) {
-      count_delete += delete_edge_from_rbh_rbh_mtrx(source_vtx, target_vtx);
-#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
-      fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
-#endif
-      continue;
-    }
-
-    const uint64_t num_edges_rbh = robin_hood_hashing_->count(source_vtx);
-    if (num_edges_rbh == 0) {
-      auto itr_rbh_mtrx = adjacency_matrix_rbh_rbh_->find(source_vtx);
-      if (!itr_rbh_mtrx.is_valid_index()) {
-        // -- 1. new vertex -- //
-        robin_hood_hashing_->insert(source_vtx, target_vtx);
-
-        ++count_new;
-      } else {
-        // -- 2. Non-low-degree edges -- //
-        auto& adjacency_list_rbh = itr_rbh_mtrx->value;
-
-
-#if WITHOUT_DUPLICATE_INSERTION == 1
-        count_non_low += adjacency_list_rbh.insert_unique(target_vtx, kNoValue);
-#else
-        adjacency_list_rbh.insert(target_vtx, kNoValue);
-        ++count_non_low;
-#endif
-      }
-
-
-    } else if (num_edges_rbh < kLowDegreeThreshold) {
-      // -- 3. Low-degree edge -- //
-#if WITHOUT_DUPLICATE_INSERTION == 1
-      count_low += robin_hood_hashing_->insert_unique(source_vtx, target_vtx);
-#else
-      robin_hood_hashing_->insert(source_vtx, target_vtx);
-      ++count_low;
-#endif
-    } else {
-      // -- 4. degree exceed the low-degree-threshold -- //
-
-      /// If a new edge is same as existed edge which are stored in low-degree data structure
-      /// and low-degree threshold is 1, we don't make instance into adjacency-matrix.
-      auto itr_rb = robin_hood_hashing_->find(source_vtx);
-#if WITHOUT_DUPLICATE_INSERTION == 1
-      if (itr_rb->value == target_vtx && num_edges_rbh == 1) continue;
-#endif
-      adjacency_matrix_rbh_rbh_->insert(source_vtx, robin_hood_hashing_novalue_t(seg_allocator_));
-      robin_hood_hashing_novalue_t &adjacency_list_rbh = adjacency_matrix_rbh_rbh_->find(source_vtx)->value;
-      adjacency_list_rbh.insert(target_vtx, kNoValue);
-      ++count_move;
-
-      // - Move edges to the adjacency-matrix from the robin-hood-hashing - //
-      for (int64_t i = 0; i < kLowDegreeThreshold; ++i, ++itr_rb) {
-       const uint64_t trg_vtx = itr_rb->value;
-#if WITHOUT_DUPLICATE_INSERTION == 1
-        if (trg_vtx == target_vtx) goto NEXT_MOVING;
-#endif
-        adjacency_list_rbh.insert(trg_vtx, kNoValue);
-        ++count_move;
-
-        NEXT_MOVING:
-        robin_hood_hashing_->erase(itr_rb); // Delete the edge from robin_hood_hashing array
-      } // End of the edges moving loop
-    }
-
-  } // End of a edges insertion loop
-  flush_pagecache();
-  double time_end = MPI_Wtime();
-
-  std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
-  std::cout << "Count: # new inserted edges =\t" << count_new << std::endl;
-  std::cout << "Count: # low degree edges =\t" << count_low << std::endl;
-  std::cout << "Count: # non-low degree edges =\t" << count_non_low << std::endl;
-  std::cout << "Count: # moved edges =\t" << count_move << std::endl;
-  std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
-  std::cout << "Allocated size for low-degree-edges =\t" << robin_hood_hashing_->allocated_size() << std::endl;
-  std::cout << "Allocated size for non-low-degree-edges =\t" << adjacency_matrix_rbh_rbh_->allocated_size() << std::endl;
-  io_info_->log_diff();
-  total_exectution_time_ += time_end - time_start;
-}
-
-template <typename SegmentManager>
-bool construct_dynamicgraph<SegmentManager>::
-delete_edge_from_rbh_rbh_mtrx(const int64_t source_vtx, const int64_t target_vtx)
-{
-
-  /// Delete from the robin hood hashing 1-D array
-  if (robin_hood_hashing_->erase(source_vtx, target_vtx)) { return true; }
-
-  /// If there is no 'source_vtx', then return false.
-  auto itr_mtrx_rb = adjacency_matrix_rbh_rbh_->find(source_vtx);
-  if (!itr_mtrx_rb.is_valid_index()) { return false; }
-
-  /// Delete from the adjavency-list
-  /// If the edge is not existed, then return false.
-  auto& adjacency_list_rbh = itr_mtrx_rb->value;
-  if (!adjacency_list_rbh.erase(target_vtx, kNoValue)) { return false; }
-
-  /// If degree on the adjacency-list become equal to low-degree threshold,
-  /// move edges from the adjacency-list to the 1-D hash array.
-  uint64_t degree = adjacency_list_rbh.size();
-  if (degree == kLowDegreeThreshold) {
-    auto itr = adjacency_list_rbh.begin();
-    for (int64_t i = 0; i < kLowDegreeThreshold; ++i, ++itr) {
-      robin_hood_hashing_->insert(source_vtx, itr->key); /// Note: we don't need to call unique insert function.
-      //adjacency_list_rbh.erase(itr);
-    }
-    /// delete a element from the adjacency-matrix
-    adjacency_matrix_rbh_rbh_->erase(itr_mtrx_rb);
-  }
-
-  return true;
-}
-
-template <typename SegmentManager>
-template <typename Container>
-void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length)
+add_edges_rhh_matrix(Container req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_delete = 0;
@@ -603,7 +367,7 @@ add_edges_degree_aware_rbh_first_multi_rhh(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_rbh(Container req_itr, size_t length)
+add_edges_degree_aware_hybrid(Container req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_delete = 0;
@@ -628,7 +392,7 @@ add_edges_degree_aware_rbh(Container req_itr, size_t length)
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
     } else {
-      count_inserted += rhh_main->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
+      count_inserted += hybrid_matrix->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
     }
 
 
@@ -660,14 +424,15 @@ print_profile()
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS
   std::cout << "kFnameDebugInsertedEdges is " << kFnameDebugInsertedEdges << std::endl;
 #endif
-  if (data_structure_type_ == kUseRobinHoodHash ||
-      data_structure_type_ == kUseDegreeAwareModel ||
-      data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
+
+  if (data_structure_type_ == kUseRHHAsArray ||
+      data_structure_type_ == kUseRHHAsMatrix) {
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
-    //std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
+    //std::cout << "# elements in Robin-Hood-Hashing = " << rhh_single_array->size() << std::endl;
   }
-  if (data_structure_type_ == kUseDegreeAwareModelRHHAdjMx) {
+
+  if (data_structure_type_ == kUseRHHAsMatrix) {
     std::cout << "\n<Status of the data structure>" << std::endl;
     rhh_matrix_->disp_status();
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
@@ -675,26 +440,19 @@ print_profile()
     std::cout << "--------------------" << std::endl;
   }
 
-  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out | std::ios::app);
-    rhh_main->disp_adjlists_depth(fout);
+    hybrid_matrix->disp_adjlists_depth(fout);
     fout.close();
   }
-  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
-    std::ofstream fout;
-    fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out | std::ios::app);
-    rhh_main->disp_adjlists_prbdist(fout);
-    fout.close();
-  }
-
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream tmp;
   tmp.open(kFnameDebugInsertedEdges+"_graph", std::ios::trunc);
   tmp.close();
 
-  if (data_structure_type_ == kUseMapVecMatrix || data_structure_type_ == kUseDegreeAwareModel) {
+  if (data_structure_type_ == kUseMapVecMatrix) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
     for (auto itr = adjacency_matrix_map_vec_->begin(); itr != adjacency_matrix_map_vec_->end(); ++itr) {
@@ -706,32 +464,13 @@ print_profile()
     fout.close();
   }
 
-  if (data_structure_type_ == kUseRobinHoodHash || data_structure_type_ == kUseDegreeAwareModel || data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
-    std::cout << "# elements in Robin-Hood-Hashing = " << robin_hood_hashing_->size() << std::endl;
-    robin_hood_hashing_->dump_elements(kFnameDebugInsertedEdges+"_graph");
-    //robin_hood_hashing_->disp_elements();
+  if (data_structure_type_ == kUseRHHAsArray ) {
+    std::cout << "# elements in Robin-Hood-Hashing = " << rhh_single_array->size() << std::endl;
+    rhh_single_array->dump_elements(kFnameDebugInsertedEdges+"_graph");
+    //rhh_single_array->disp_elements();
   }
 
-  if (data_structure_type_ == kUseDegreeAwareModelRbhMtx) {
-    std::ofstream fout;
-    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
-    for(auto itr = adjacency_matrix_rbh_rbh_->begin(), itr_end=adjacency_matrix_rbh_rbh_->end();
-        itr!=itr_end;
-        ++itr)
-    {
-          auto& list = itr->value;
-          for (auto itr_lst = list.begin(), itr_lst_end = list.end();
-            itr_lst != itr_lst_end;
-            ++itr_lst)
-          {
-              fout << itr->key << "\t" << itr_lst->key << std::endl;
-          }
-    }
-    fout.close();
-    //robin_hood_hashing_->disp_elements();
-  }
-
-  if (data_structure_type_ == kUseDegreeAwareModelRHHAdjMx) {
+  if (data_structure_type_ == kUseRHHAsMatrix) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
     rhh_matrix_->dump_elements(kFnameDebugInsertedEdges+"_graph");
@@ -739,10 +478,16 @@ print_profile()
     fout.close();
   }
 
-  if (data_structure_type_ == kUseDegreeAwareModelRHH) {
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
-    rhh_main->disp_elems(fout);
+    hybrid_matrix->disp_elems(fout);
+    fout.close();
+  }
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
+    std::ofstream fout;
+    fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out | std::ios::app);
+    hybrid_matrix->disp_adjlists_prbdist(fout);
     fout.close();
   }
 
