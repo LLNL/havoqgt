@@ -24,18 +24,18 @@ namespace RHH {
     capacityRHHStatic_3 = 32ULL,
     capacityRHHStatic_4 = 64ULL,
     capacityRHHStatic_5 = 128ULL,
-    capacityRHHStatic_6 = 256ULL, // Approx. 2KiB
+    capacityRHHStatic_6 = 256ULL,
     capacityRHHStatic_7 = 512ULL,
     capacityRHHStatic_8 = 1024ULL,
-    capacityRHHStatic_9 = 4096ULL,
-    capacityRHHStatic_10 = 8192ULL,
-    capacityRHHStatic_11 = 16384ULL,
-    capacityRHHStatic_12 = 32768ULL,
-    capacityRHHStatic_13 = 65536ULL,
-    capacityRHHStatic_14 = 131072ULL,
-    capacityRHHStatic_15 = 262144ULL, // Approx. 1MiB
-    capacityRHHStatic_16 = 524288ULL,
-    capacityRHHStatic_17 = 1048576ULL
+    capacityRHHStatic_9 = 2048ULL,
+    capacityRHHStatic_10 = 4096ULL,
+    capacityRHHStatic_11 = 8192ULL,
+    capacityRHHStatic_12 = 16384ULL,
+    capacityRHHStatic_13 = 32768ULL,
+    capacityRHHStatic_14 = 65536ULL,
+    capacityRHHStatic_15 = 131072ULL,
+    capacityRHHStatic_16 = 262144ULL,
+    capacityRHHStatic_17 = 524288ULL
   };
 
   typedef RHHStatic<uint64_t, NoValueType, capacityRHHStatic_1> RHHStaticNoVal_1;

@@ -79,6 +79,7 @@
     RHHStatic()
     : m_next_(nullptr)
     {
+      assert(false);
       clear(false);
     }
 
@@ -325,6 +326,7 @@
         if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
+            disp_elems(0); // DBG
             assert(false);
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;

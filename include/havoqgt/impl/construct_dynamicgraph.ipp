@@ -188,7 +188,6 @@ template <typename SegementManager>
  construct_dynamicgraph<SegementManager>::
  ~construct_dynamicgraph()
 {
-  DEBUG("called");
 
   if (data_structure_type_ == kUseRHHAsMatrix) {
     rhh_matrix_->free(seg_allocator_);

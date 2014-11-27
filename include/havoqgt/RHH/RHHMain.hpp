@@ -78,7 +78,6 @@ template <typename KeyType, typename ValueType>
   /// --- Destructor --- //
     ~RHHMain()
     {
-      assert(m_ptr_ == nullptr);
     }
 
   ///  ------------------------------------------------------ ///
@@ -134,7 +133,8 @@ template <typename KeyType, typename ValueType>
         unsigned char dmy = 0;
         for (uint64_t i = 0; i < capacityNormalArray3; ++i) {
           /// TODO: don't need to check uniquely
-          adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, adj_list_size);
+          value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, adj_list_size);
+          ++adj_list_size;
         }
         adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, adj_list_size);
 
@@ -349,6 +349,9 @@ private:
   };
 
   // ---------  static variables ------------ ///
+  static constexpr double kFullCalacityFactor  = 0.9;
+  static const uint64_t kCapacityGrowingFactor = 2ULL;
+
   /// tombstone (1), size (48), bitmap (8), probe distance (7)
   static const PropertyBlockType kTombstoneMask               = 0x8000000000000000ULL; /// mask value to mark as deleted
   static const PropertyBlockType kPropertySize1               = 0x0000000000008000ULL; /// property value for size = 1

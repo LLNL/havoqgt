@@ -70,9 +70,6 @@ namespace RHH {
     kLongProbedistance
   };
 
-  static constexpr double kFullCalacityFactor  = 0.9;
-  static const uint64_t kCapacityGrowingFactor = 2ULL;
-
   typedef unsigned char NoValueType;
 
 }
