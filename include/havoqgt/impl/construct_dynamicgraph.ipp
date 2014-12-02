@@ -439,13 +439,6 @@ print_profile()
     std::cout << "--------------------" << std::endl;
   }
 
-  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
-    std::ofstream fout;
-    fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out | std::ios::app);
-    hybrid_matrix->disp_adjlists_depth(fout);
-    fout.close();
-  }
-
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::ofstream tmp;
   tmp.open(kFnameDebugInsertedEdges+"_graph", std::ios::trunc);
@@ -489,7 +482,12 @@ print_profile()
     hybrid_matrix->disp_adjlists_prbdist(fout);
     fout.close();
   }
-
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
+    std::ofstream fout;
+    fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out | std::ios::app);
+    hybrid_matrix->disp_adjlists_depth(fout);
+    fout.close();
+  }
 #endif
 }
 

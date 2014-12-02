@@ -244,7 +244,7 @@
     static const int64_t kInvaridIndex                = -1LL;
     static const uint64_t kMask = Capacity - 1ULL;
 
-    static const ProbeDistanceType kLongProbedistanceThreshold  = 120;  /// must be less than max value of probedirance
+    static const ProbeDistanceType kLongProbedistanceThreshold  = 30;  /// must be less than max value of probedirance
 
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
@@ -313,7 +313,6 @@
         if(existing_elem_property == kEmptyValue)
         {
           if (dist >= kLongProbedistanceThreshold) {
-            assert(false);
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;
           }
@@ -326,8 +325,6 @@
         if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
-            disp_elems(0); // DBG
-            assert(false);
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;
           }

@@ -118,10 +118,10 @@
       if (err == kDuplicated) return false;
       ++current_size;
 
-      if (err == kLongProbedistance) {
-        assert(false);
-        grow_rhh_static(allocators, current_size, true);
-      }
+      // if (err == kLongProbedistance) {
+      //   assert(false);
+      //   grow_rhh_static(allocators, current_size, true);
+      // }
 
       return true;
     }
@@ -295,18 +295,31 @@ private:
     ///              Private Member Functions
     ///  ------------------------------------------------------ ///
 
-#define INSERT_AND_CHECK_CAPACITY(OLD_C, NEW_C) \
+#define INSERT_AND_CHECK_CAPACITY(CUR_C, NEW_C) \
     do { \
-        RHHStaticNoVal_##OLD_C* rhh = reinterpret_cast<RHHStaticNoVal_##OLD_C*>(m_ptr_);\
+        RHHStaticNoVal_##CUR_C* rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
         if (!rhh->try_unique_key_insertion(key, val)) {\
           return kDuplicated;\
         }\
-        if ((current_size+1) >= capacityRHHStatic_##OLD_C * kFullCalacityFactor) {\
+        if ((current_size+1) >= capacityRHHStatic_##CUR_C * kFullCalacityFactor) {\
           grow_rhh_static(allocators, current_size, false);\
           RHHStaticNoVal_##NEW_C* rhh_new = reinterpret_cast<RHHStaticNoVal_##NEW_C*>(m_ptr_);\
           return rhh_new->insert_uniquely(key, val);\
         }\
-        return rhh->insert_uniquely(key, val);\
+        UpdateErrors err = rhh->insert_uniquely(key, val);\
+        if (err == kLongProbedistance) {\
+          m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_##CUR_C.allocate(1).get());\
+          RHHStaticNoVal_##CUR_C* new_rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
+          new_rhh->clear(false);\
+          new_rhh->m_next_ = rhh;\
+          const uint64_t old_capacity = rhh->capacity();\
+          for(uint64_t i = 0; i < old_capacity; ++i) {\
+            if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {\
+              new_rhh->insert_uniquely(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
+              rhh->delete_key(i);\
+            }\
+          }\
+        }\
     } while (0)
 
     /// TODO: use binary tree ?
@@ -383,12 +396,19 @@ private:
     new_rhh->m_next_ = nullptr;\
     new_rhh->clear(false);\
     const uint64_t old_capacity = old_rhh->capacity();\
-    for (uint64_t i = 0; i < old_capacity; ++i) {\
-      if (old_rhh->is_valid(i)) {\
-        new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
+    while (1) {\
+      RHHStaticNoVal_##OLD_C* old_nexxt_rhh = old_rhh->m_next_;\
+      for (uint64_t i = 0; i < old_capacity; ++i) {\
+        if (old_rhh->is_valid(i)) {\
+          new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
+        }\
       }\
+      allocators.allocator_rhh_noval_##OLD_C.deallocate(bip::offset_ptr<RHHStaticNoVal_##OLD_C>(old_rhh), 1);\
+      if (old_nexxt_rhh == nullptr) {\
+        break;\
+      }\
+      old_rhh = old_nexxt_rhh;\
     }\
-    allocators.allocator_rhh_noval_##OLD_C.deallocate(bip::offset_ptr<RHHStaticNoVal_##OLD_C>(old_rhh), 1);\
   }while(0)
 
   /// TODO: use binary tree ?
