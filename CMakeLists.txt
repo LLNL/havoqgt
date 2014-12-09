@@ -13,6 +13,8 @@ option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
 #
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
+include(CheckSymbolExists)
+
 #
 # MPI is required
 #
@@ -26,18 +28,19 @@ endmacro()
 # BOOST is required
 #
 find_package( Boost )
-find_package (Threads)
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-  #target_link_libraries (${target} pthread)
-  #target_link_libraries (${target} rt)
 endmacro() 
 
 #
 #  Posix_fallocate
 #
-CHECK_SYMBOL_EXISTS(posix_fallocate fcntl.h HAVE_POSIX_FALLOCATE)
+check_symbol_exists(posix_fallocate "fcntl.h" HAVE_POSIX_FALLOCATE)
+if (HAVE_POSIX_FALLOCATE)
+  add_definitions(-DHAVE_POSIX_FALLOCATE)
+endif()
+
 
 add_subdirectory (include)
 add_subdirectory (src)

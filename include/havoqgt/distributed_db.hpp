@@ -90,7 +90,11 @@ private:
     bool clean_close;
   };
 
-  typedef boost::interprocess::managed_mapped_file mapped_type;
+//  typedef boost::interprocess::managed_mapped_file mapped_type;
+  typedef boost::interprocess::basic_managed_mapped_file 
+          <char
+          ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family>
+          ,boost::interprocess::iset_index>                     mapped_type;
 
 public:
   typedef mapped_type::segment_manager segment_manager_type;
@@ -128,7 +132,7 @@ public:
       close(fd);
     }
     #else
-	#warning posix_fallocate not found
+	  #warning posix_fallocate not found
     #endif
 
     //

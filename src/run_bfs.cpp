@@ -128,7 +128,10 @@ using namespace havoqgt::mpi;
 
 
 int main(int argc, char** argv) {
-  typedef bip::managed_mapped_file mapped_t;
+  typedef bip::basic_managed_mapped_file
+    <char
+    ,bip::rbtree_best_fit<bip::null_mutex_family>
+    ,bip::iset_index>               mapped_t;
   typedef mapped_t::segment_manager segment_manager_t;
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
