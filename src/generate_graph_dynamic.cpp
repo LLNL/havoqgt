@@ -150,9 +150,10 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
   std::cout << "Generating edge update requests..." << std::endl;
   typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
   requests_vector_t *onmemory_edges = new requests_vector_t();
+  onmemory_edges->reserve(edges.size()); /// Note: this resize operation is not considering the size including delete operation
 #if 1
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
-    bool is_delete = std::rand()%100 < edges_delete_ratio;
+    bool is_delete = (std::rand()%100 < edges_delete_ratio);
     if (is_delete) {
       EdgeUpdateRequest delete_request(*edges_itr, true);
       onmemory_edges->push_back(delete_request);
@@ -161,6 +162,7 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
     onmemory_edges->push_back(request);
   }
   /// Randomize order of requests
+  std::cout << "Randomizing edge update requests..." << std::endl;
   std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
 #else
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
@@ -179,25 +181,27 @@ void add_and_delte_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_s
     }
   }
 #endif
-  std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
-  std::cout << "Status: ratio of delete requeste =\t"<< (static_cast<double>(onmemory_edges->size()) / static_cast<double>(num_original_edges) - 1.0) << std::endl;
   const double time_end = MPI_Wtime();
   std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-  std::cout << "Status: Generate edges memory size (GiB) =\t" << (double)onmemory_edges->capacity() * sizeof(requests_vector_t) / (1<<30ULL) << std::endl;
+  std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
+  std::cout << "Status: # delete requests =\t"<< (onmemory_edges->size() - num_original_edges) << std::endl;
+  std::cout << "Status: Vector capacity =\t" << onmemory_edges->capacity() << std::endl;
+  std::cout << "Status: Vector memory size (GiB) =\t" << (double)onmemory_edges->capacity() * sizeof(requests_vector_t) / (1<<30ULL) << std::endl;
   print_dram_usages();
 
   usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size =\t"<< usages << std::endl;
+  std::cout << "Usage: segment size (GiB) =\t"<< (double)usages  / (1<<30ULL) << std::endl;
 
   /// -------------- Edge update loop ----------- ////
   std::cout << "-- Apply update requests --" << std::endl;
   const uint64_t num_requests = onmemory_edges->size();
-  const uint64_t num_loops  = num_requests / chunk_size;
+  const uint64_t num_loops = num_requests / chunk_size;
   for (uint64_t i = 0; i < num_loops; ++i) {
     std::cout << "[" << i+1 << " / " << num_loops << "] :\t" << chunk_size << std::endl;
     graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
     usages = segment_manager->get_size() - segment_manager->get_free_memory();
     std::cout << "Usage: segment size =\t"<< usages << std::endl;
+    print_dram_usages();
     std::cout << std::endl;
   }
   uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loops;
@@ -395,9 +399,9 @@ int main(int argc, char** argv) {
         size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
         double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());
         std::cout << "[" << mpi_rank << "] "
-        << usages << " "
-        << segment_manager->get_free_memory()
-        << "/" << segment_manager->get_size()
+        << (double)usages / (1<<30ULL) << " "
+        << (double)segment_manager->get_free_memory()  / (1<<30ULL)
+        << "/" << (double)segment_manager->get_size() / (1<<30ULL)
         << " = " << percent << std::endl;
       }
       MPI_Barrier(MPI_COMM_WORLD);

@@ -75,13 +75,17 @@
     /// --- Constructor --- //
     explicit RHHMgrStatic(AllocatorsHolder& allocators)
     {
-      m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_1.allocate(1).get());
-      RHHStaticNoVal_1* new_rhh = reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_);
+      m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_2.allocate(1).get());
+      RHHStaticNoVal_2* new_rhh = reinterpret_cast<RHHStaticNoVal_2*>(m_ptr_);
       new_rhh->m_next_ = nullptr;
       new_rhh->clear(false);
     }
 
     /// --- Copy constructor --- //
+    RHHMgrStatic(const RHHMgrStatic &old_obj)
+    {
+      assert(false);
+    }
 
     /// --- Move constructor --- //
     RHHMgrStatic(RHHMgrStatic &&old_obj)
@@ -115,15 +119,7 @@
     inline bool insert_uniquely(AllocatorsHolder& allocators, KeyType& key, ValueType& val, uint64_t current_size)
     {
       UpdateErrors err = insert_uniquely_helper(allocators, key, val, current_size);
-      if (err == kDuplicated) return false;
-      ++current_size;
-
-      // if (err == kLongProbedistance) {
-      //   assert(false);
-      //   grow_rhh_static(allocators, current_size, true);
-      // }
-
-      return true;
+      return (err != kDuplicated);
     }
 
     inline void free(AllocatorsHolder &allocators, uint64_t size)
@@ -131,6 +127,226 @@
       free_buffer_rhh_static(allocators, size);
     }
 
+    inline bool delete_key(AllocatorsHolder& allocators, KeyType& key, uint64_t current_size)
+    {
+      return delete_key_helper(allocators, key, current_size);
+    }
+
+
+    template<typename CurRHH, typename CurRHHAllocator, uint64_t CurCapacity,
+             typename SrkRHH, typename SrkRHHAllocator, uint64_t SrkCapacity>
+    bool delete_key_and_shrink(AllocatorsHolder &allocators, CurRHHAllocator cur_rhh_allocator, SrkRHHAllocator srk_rhh_allocator,
+                              const KeyType& key, uint64_t current_size)
+    {
+      /// --- Delete target element --- ///
+      CurRHH* cur_rhh = reinterpret_cast<CurRHH*>(m_ptr_);
+      if (!cur_rhh->delete_key(key)) {
+        return false;
+      }
+      --current_size;
+
+      /// --- If current size is less than previous size capacity, shrink RHH --- ///
+      if (current_size <= SrkCapacity * kFullCalacityFactor) {
+        SrkRHH* srk_rhh = allocate_rhh_static<SrkRHHAllocator, SrkRHH>(srk_rhh_allocator);
+        insert_rhh_elements_and_free<CurRHHAllocator, CurRHH, CurCapacity>(allocators, cur_rhh_allocator, cur_rhh, current_size);
+      }
+      return true;
+    }
+
+    template<typename Allocator, typename RHH>
+    inline RHH *allocate_rhh_static(Allocator& allocator)
+    {
+      m_ptr_ = reinterpret_cast<void*>(allocator.allocate(1).get());
+      RHH* rhh = reinterpret_cast<RHH*>(m_ptr_);
+      rhh->m_next_ = nullptr;
+      rhh->clear();
+      return rhh;
+    }
+
+    template<typename Allocator, typename RHH>
+    inline void deallocate_rhh_static(Allocator& allocator, RHH *rhh)
+    {
+      allocator.deallocate(bip::offset_ptr<RHH>(rhh), 1);
+    }
+
+    template<typename RHHAllocator, typename RHH, uint64_t Capacity>
+    inline void insert_rhh_elements_and_free(AllocatorsHolder& allocators, RHHAllocator& rhh_allocator, RHH& rhh, const uint64_t current_size)
+    {
+      while (rhh) {
+        RHH* next_rhh = rhh->m_next_;
+        for (int i = 0; i < Capacity; ++i) {
+          if (rhh->is_valid(i))
+            insert_helper(allocators, rhh->m_key_block_[i], rhh->m_value_block_[i], current_size);
+        }
+        deallocate_rhh_static<RHHAllocator, RHH>(rhh_allocator, rhh);
+        rhh = next_rhh;
+      }
+    }
+
+#define DELETE_KEY_AND_SHRINK(SRK_C, CUR_C) \
+    do { \
+        RHHStaticNoVal_##CUR_C* cur_rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
+        if (!cur_rhh->delete_key(key)) {\
+          return false;\
+        }\
+        --current_size;\
+        if (current_size <= capacityRHHStatic_##SRK_C * kFullCalacityFactor) {\
+          m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_##SRK_C.allocate(1).get());\
+          RHHStaticNoVal_##SRK_C* prv_rhh = reinterpret_cast<RHHStaticNoVal_##SRK_C*>(m_ptr_);\
+          prv_rhh->m_next_ = nullptr;\
+          prv_rhh->clear(false);\
+          while (1) {\
+            RHHStaticNoVal_##CUR_C* cur_next_rhh = cur_rhh->m_next_;\
+            for (int i = 0; i < capacityRHHStatic_##CUR_C; ++i) {\
+              if (cur_rhh->is_valid(i)) {\
+                insert_helper(allocators, cur_rhh->m_key_block_[i], cur_rhh->m_value_block_[i], current_size);\
+              }\
+            }\
+            allocators.allocator_rhh_noval_##CUR_C.deallocate(bip::offset_ptr<RHHStaticNoVal_##CUR_C>(cur_rhh), 1);\
+            if (cur_next_rhh == nullptr) {\
+              break;\
+            }\
+            cur_rhh = cur_next_rhh;\
+          }\
+        }\
+        return true;\
+    } while (0)
+
+    /// TODO: use binary tree ?
+    bool delete_key_helper(AllocatorsHolder &allocators, const KeyType& key, uint64_t current_size)
+    {
+      if (current_size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+        assert(false);
+        RHHStaticNoVal_1* rhh = reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_);
+        return rhh->delete_key(key);
+
+      } else if (current_size <= capacityRHHStatic_2 * kFullCalacityFactor) {
+        /// NOTE: If current_size is equal or less than capacityRHHStatic_1,
+        /// we use normal array.
+        RHHStaticNoVal_2* rhh = reinterpret_cast<RHHStaticNoVal_2*>(m_ptr_);
+        return rhh->delete_key(key);
+
+      } else if (current_size <= capacityRHHStatic_3 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(2, 3);
+
+      } else if (current_size <= capacityRHHStatic_4 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(3, 4);
+
+      } else if (current_size <= capacityRHHStatic_5 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(4, 5);
+
+      } else if (current_size <= capacityRHHStatic_6 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(5, 6);
+
+      } else if (current_size <= capacityRHHStatic_7 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(6, 7);
+
+      } else if (current_size <= capacityRHHStatic_8 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(7, 8);
+
+      } else if (current_size <= capacityRHHStatic_9 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(8, 9);
+
+      } else if (current_size <= capacityRHHStatic_10 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(9, 10);
+
+      } else if (current_size <= capacityRHHStatic_11 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(10, 11);
+
+      } else if (current_size <= capacityRHHStatic_12 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(11, 12);
+
+      } else if (current_size <= capacityRHHStatic_13 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(12, 13);
+
+      } else if (current_size <= capacityRHHStatic_14 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(13, 14);
+
+      } else if (current_size <= capacityRHHStatic_15 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(14, 15);
+
+      } else if (current_size <= capacityRHHStatic_16 * kFullCalacityFactor) {
+        DELETE_KEY_AND_SHRINK(15, 16);
+
+      } else {
+        DELETE_KEY_AND_SHRINK(16, 17);
+
+      }
+
+    }
+
+    void get_elemnts_array(const uint64_t current_size, KeyType *key_array, ValueType *val_array)
+    {
+      if (current_size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+        RHHStaticNoVal_1* rhh = reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_2 * kFullCalacityFactor) {
+        RHHStaticNoVal_2* rhh = reinterpret_cast<RHHStaticNoVal_2*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_3 * kFullCalacityFactor) {
+        RHHStaticNoVal_3* rhh = reinterpret_cast<RHHStaticNoVal_3*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_4 * kFullCalacityFactor) {
+        RHHStaticNoVal_4* rhh = reinterpret_cast<RHHStaticNoVal_4*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_5 * kFullCalacityFactor) {
+        RHHStaticNoVal_5* rhh = reinterpret_cast<RHHStaticNoVal_5*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_6 * kFullCalacityFactor) {
+        RHHStaticNoVal_6* rhh = reinterpret_cast<RHHStaticNoVal_6*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_7 * kFullCalacityFactor) {
+        RHHStaticNoVal_7* rhh = reinterpret_cast<RHHStaticNoVal_7*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_8 * kFullCalacityFactor) {
+        RHHStaticNoVal_8* rhh = reinterpret_cast<RHHStaticNoVal_8*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_9 * kFullCalacityFactor) {
+        RHHStaticNoVal_9* rhh = reinterpret_cast<RHHStaticNoVal_9*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_10 * kFullCalacityFactor) {
+        RHHStaticNoVal_10* rhh = reinterpret_cast<RHHStaticNoVal_10*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_11 * kFullCalacityFactor) {
+        RHHStaticNoVal_11* rhh = reinterpret_cast<RHHStaticNoVal_11*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_12 * kFullCalacityFactor) {
+        RHHStaticNoVal_12* rhh = reinterpret_cast<RHHStaticNoVal_12*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_13 * kFullCalacityFactor) {
+        RHHStaticNoVal_13* rhh = reinterpret_cast<RHHStaticNoVal_13*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_14 * kFullCalacityFactor) {
+        RHHStaticNoVal_14* rhh = reinterpret_cast<RHHStaticNoVal_14*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_15 * kFullCalacityFactor) {
+        RHHStaticNoVal_15* rhh = reinterpret_cast<RHHStaticNoVal_15*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else if (current_size <= capacityRHHStatic_16 * kFullCalacityFactor) {
+        RHHStaticNoVal_16* rhh = reinterpret_cast<RHHStaticNoVal_16*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+
+      } else {
+        RHHStaticNoVal_17* rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+        rhh->get_elemnts_array(key_array, val_array);
+      }
+
+    }
 
 
 /// XXX: should use template function
@@ -301,21 +517,21 @@ private:
         if (!rhh->try_unique_key_insertion(key, val)) {\
           return kDuplicated;\
         }\
-        if ((current_size+1) >= capacityRHHStatic_##CUR_C * kFullCalacityFactor) {\
+        if (current_size+1 > capacityRHHStatic_##CUR_C * kFullCalacityFactor) {\
           grow_rhh_static(allocators, current_size, false);\
           RHHStaticNoVal_##NEW_C* rhh_new = reinterpret_cast<RHHStaticNoVal_##NEW_C*>(m_ptr_);\
-          return rhh_new->insert_uniquely(key, val);\
+          return rhh_new->insert(key, val);\
         }\
-        UpdateErrors err = rhh->insert_uniquely(key, val);\
+        const UpdateErrors err = rhh->insert(key, val);\
         if (err == kLongProbedistance) {\
           m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_##CUR_C.allocate(1).get());\
           RHHStaticNoVal_##CUR_C* new_rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
           new_rhh->clear(false);\
           new_rhh->m_next_ = rhh;\
-          const uint64_t old_capacity = rhh->capacity();\
-          for(uint64_t i = 0; i < old_capacity; ++i) {\
+          for(int i = 0; i < capacityRHHStatic_##CUR_C; ++i) {\
             if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {\
-              new_rhh->insert_uniquely(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
+              const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
+              assert(err2 != kLongProbedistance);\
               rhh->delete_key(i);\
             }\
           }\
@@ -326,6 +542,7 @@ private:
     UpdateErrors insert_uniquely_helper(AllocatorsHolder &allocators, KeyType& key, ValueType& val, const uint64_t current_size)
     {
       if (current_size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+        assert(false);
         INSERT_AND_CHECK_CAPACITY(1, 2);
 
       } else if (current_size <= capacityRHHStatic_2 * kFullCalacityFactor) {
@@ -380,14 +597,117 @@ private:
         if (current_size % (uint64_t)(capacityRHHStatic_17 * kFullCalacityFactor) == 0) {
           grow_rhh_static(allocators, current_size, false);
           RHHStaticNoVal_17* rhh_new = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
-          return rhh_new->insert_uniquely(key, val);
+          return rhh_new->insert(key, val);
         }
-        return rhh->insert_uniquely(key, val);
-
+        const UpdateErrors err = rhh->insert(key, val);
+        if (err == kLongProbedistance) {
+          m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_17.allocate(1).get());
+          RHHStaticNoVal_17* new_rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+          new_rhh->clear(false);
+          new_rhh->m_next_ = rhh;
+          for(int i = 0; i < capacityRHHStatic_17; ++i) {
+            if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {
+              const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);
+              assert(err2 != kLongProbedistance);
+              rhh->delete_key(i);
+            }
+          }
+        }
       }
       return kSucceed;
     }
 
+
+#define INSERT_WITHOUT_CAPACITY_CHECKING(CUR_C, NEW_C) \
+    do { \
+        RHHStaticNoVal_##CUR_C* rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
+        UpdateErrors err = rhh->insert(key, val);\
+        if (err == kLongProbedistance) {\
+          m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_##CUR_C.allocate(1).get());\
+          RHHStaticNoVal_##CUR_C* new_rhh = reinterpret_cast<RHHStaticNoVal_##CUR_C*>(m_ptr_);\
+          new_rhh->clear(false);\
+          new_rhh->m_next_ = rhh;\
+          for(int i = 0; i < capacityRHHStatic_##CUR_C; ++i) {\
+            if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {\
+              const UpdateErrors err = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
+              assert(err != kLongProbedistance);\
+              rhh->delete_key(i);\
+            }\
+          }\
+        }\
+    } while (0)
+
+    /// TODO: use binary tree ?
+    UpdateErrors insert_helper(AllocatorsHolder &allocators, KeyType& key, ValueType& val, const uint64_t current_size)
+    {
+      if (current_size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+        assert(false);
+        INSERT_WITHOUT_CAPACITY_CHECKING(1, 2);
+
+      } else if (current_size <= capacityRHHStatic_2 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(2, 3);
+
+      } else if (current_size <= capacityRHHStatic_3 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(3, 4);
+
+      } else if (current_size <= capacityRHHStatic_4 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(4, 5);
+
+      } else if (current_size <= capacityRHHStatic_5 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(5, 6);
+
+      } else if (current_size <= capacityRHHStatic_6 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(6, 7);
+
+      } else if (current_size <= capacityRHHStatic_7 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(7, 8);
+
+      } else if (current_size <= capacityRHHStatic_8 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(8, 9);
+
+      } else if (current_size <= capacityRHHStatic_9 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(9, 10);
+
+      } else if (current_size <= capacityRHHStatic_10 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(10, 11);
+
+      } else if (current_size <= capacityRHHStatic_11 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(11, 12);
+
+      } else if (current_size <= capacityRHHStatic_12 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(12, 13);
+
+      } else if (current_size <= capacityRHHStatic_13 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(13, 14);
+
+      } else if (current_size <= capacityRHHStatic_14 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(14, 15);
+
+      } else if (current_size <= capacityRHHStatic_15 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(15, 16);
+
+      } else if (current_size <= capacityRHHStatic_16 * kFullCalacityFactor) {
+        INSERT_WITHOUT_CAPACITY_CHECKING(16, 17);
+
+      } else {
+        RHHStaticNoVal_17* rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+        const UpdateErrors err = rhh->insert(key, val);
+        if (err == kLongProbedistance) {
+          m_ptr_ = reinterpret_cast<void*>(allocators.allocator_rhh_noval_17.allocate(1).get());
+          RHHStaticNoVal_17* new_rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+          new_rhh->clear(false);
+          new_rhh->m_next_ = rhh;
+          for(int i = 0; i < capacityRHHStatic_17; ++i) {
+            if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {
+              const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);
+              assert(err2 != kLongProbedistance);
+              rhh->delete_key(i);
+            }
+          }
+        }
+      }
+      return kSucceed;
+    }
     /// XXX: should use template function
   #define ALLOCATE_AND_MOVE(OLD_C, NEW_C) do{\
     RHHStaticNoVal_##OLD_C* old_rhh = reinterpret_cast<RHHStaticNoVal_##OLD_C*>(m_ptr_);\
@@ -395,19 +715,18 @@ private:
     RHHStaticNoVal_##NEW_C* new_rhh = reinterpret_cast<RHHStaticNoVal_##NEW_C*>(m_ptr_);\
     new_rhh->m_next_ = nullptr;\
     new_rhh->clear(false);\
-    const uint64_t old_capacity = old_rhh->capacity();\
     while (1) {\
-      RHHStaticNoVal_##OLD_C* old_nexxt_rhh = old_rhh->m_next_;\
-      for (uint64_t i = 0; i < old_capacity; ++i) {\
+      RHHStaticNoVal_##OLD_C* old_next_rhh = old_rhh->m_next_;\
+      for (uint64_t i = 0; i < capacityRHHStatic_##OLD_C; ++i) {\
         if (old_rhh->is_valid(i)) {\
-          new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
+          new_rhh->insert(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);\
         }\
       }\
       allocators.allocator_rhh_noval_##OLD_C.deallocate(bip::offset_ptr<RHHStaticNoVal_##OLD_C>(old_rhh), 1);\
-      if (old_nexxt_rhh == nullptr) {\
+      if (old_next_rhh == nullptr) {\
         break;\
       }\
-      old_rhh = old_nexxt_rhh;\
+      old_rhh = old_next_rhh;\
     }\
   }while(0)
 
@@ -415,6 +734,7 @@ private:
   void grow_rhh_static(AllocatorsHolder &allocators, uint64_t size, bool has_long_probedistance)
   {
     if (size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+      assert(false);
       ALLOCATE_AND_MOVE(1, 2);
     } else if (size <= capacityRHHStatic_2 * kFullCalacityFactor){
       ALLOCATE_AND_MOVE(2, 3);
@@ -460,7 +780,7 @@ private:
         const uint64_t old_capacity = old_rhh->capacity();
         for (uint64_t i = 0; i < old_capacity; ++i) {
           if (old_rhh->is_valid(i) && old_rhh->is_longprobedistance(i)) {
-            new_rhh->insert_uniquely(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);
+            new_rhh->insert(old_rhh->m_key_block_[i], old_rhh->m_value_block_[i]);
             old_rhh->delete_key(i);
           }
         }

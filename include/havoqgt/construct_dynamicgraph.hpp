@@ -90,7 +90,7 @@ namespace bip = boost::interprocess;
 #endif
 
 #ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
-  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
+  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 1
 #endif
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
@@ -255,7 +255,7 @@ class construct_dynamicgraph {
   RHH::AllocatorsHolder *alloc_holder;
   RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
 
-  IOInfo *io_info_;
+  // IOInfo *io_info_;
   double total_exectution_time_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1

@@ -101,7 +101,7 @@ template <typename KeyType, typename ValueType>
     if (size == 1ULL) {
       if (m_value_block_[pos_key].value == val) return false;
         /// 2. convert data structure to array model
-      ValueType* array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(2).get());
+      ValueType* array =  allocate_normal_array(allocators, 2);
       array[0] = m_value_block_[pos_key].value;
       array[1] = val;
       m_value_block_[pos_key].value_array = array;
@@ -116,7 +116,7 @@ template <typename KeyType, typename ValueType>
       /// 3. we already have a normal-array
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
-      uint64_t capacity = cal_next_pow2(size);
+      int capacity = cal_next_pow2(size);
 
       /// Check duplicated value
       for (int i=0; i < capacity; ++i) {
@@ -129,27 +129,24 @@ template <typename KeyType, typename ValueType>
         ValueWrapperType value_wrapper;
 
         new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
-        uint64_t adj_list_size = 0;
         unsigned char dmy = 0;
-        for (uint64_t i = 0; i < capacityNormalArray3; ++i) {
+        for (int i = 0; i < capacityNormalArray3; ++i) {
           /// TODO: don't need to check uniquely
-          value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, adj_list_size);
-          ++adj_list_size;
+          value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, capacityNormalArray3);
         }
-        adj_list_size += value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, adj_list_size);
-
         free_buffer_normal_array(allocators, array, capacity);
 
+        value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, capacityNormalArray3);
         m_value_block_[pos_key] = std::move(value_wrapper);
-        set_size(pos_key, adj_list_size);
+        set_size(pos_key, capacityNormalArray3 + 1);
 
-        return (adj_list_size == capacityNormalArray3+1ULL);
+        return true; // Since duplication check has alreadly done, always retrun true.
       }
 
       if (size == capacity) {
         /// grow array
-        const uint64_t new_capacity = capacity * kCapacityGrowingFactor;
-        ValueType* new_array = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(new_capacity).get());
+        const int new_capacity = capacity * 2;
+        ValueType* new_array = allocate_normal_array(allocators, new_capacity);
         memcpy(new_array, array, sizeof(ValueType)*capacity);
         free_buffer_normal_array(allocators, array, capacity);
         m_value_block_[pos_key].value_array = new_array;
@@ -166,27 +163,123 @@ template <typename KeyType, typename ValueType>
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
       unsigned char dmy = 0;
 
-      bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
-      if (err) set_size(pos_key, size+1);
+      /// DB
+      // if (key == 0) {
+      //   DEBUG("Before insertion");
+      //   DEBUG2(size);
+      //   RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+      //   rhh_adj_list.disp_elems(size);
+      // }
 
+      bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
+
+      /// DB
+      // if (key == 0) {
+      //   DEBUG("After insertion");
+      //   RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+      //   rhh_adj_list.disp_elems(size+err);
+      // }
+
+      if (err) set_size(pos_key, size+1);
       return err;
     }
 
     return true;
   }
 
-    // bool erase(KeyType &key)
-    // {
-    //   ProbeDistanceType dist = 0;
-    //   const int64_t pos = find_key(key, &dist, cal_mask());
-    //   if (pos == kInvaridIndex) {
-    //     return false;
-    //   }
+  bool delete_item(AllocatorsHolder& allocators, KeyType key, ValueType val)
+  {
 
-    //   delete_key(pos);
-    //   --m_num_elems_;
-    //   return true;
-    // }
+    const int64_t pos_key = find_key(key);
+
+    /// --- No key --- ///
+    if (pos_key == kInvaridIndex) {
+      return false;
+    }
+
+    uint64_t size = extract_size(property(pos_key));
+
+    /// --- just a velue is inserted --- ///
+    if (size == 1ULL) {
+      if (m_value_block_[pos_key].value != val) {
+        /// Not found
+        return false;
+      }
+      delete_elem(pos_key);
+      // set_size(pos_key, 0);
+      --m_num_elems_;
+      if (m_capacity_ > 2ULL && m_num_elems_ <= (m_capacity_ / kCapacityGrowingFactor) * kFullCalacityFactor) {
+        /// --- shrink RHH --- ///
+        shrink_rhh_main(allocators);
+      }
+      return true;
+    }
+
+    /// --- Normal-array --- ///
+    if (size <= capacityNormalArray3) {
+      NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
+      ValueType* array = m_value_block_[pos_key].value_array;
+      uint64_t capacity = cal_next_pow2(size);
+
+      for (int i=0; i < capacity; ++i) {
+
+        if (!((btmp >> i) & 0x01) || (array[i] != val)) {
+          /// --- deferent value is found --- ///
+          continue;
+        }
+
+        /// --- Delete the element --- ///
+        btmp -= (0x01 << i); /// clear flag
+        set_bitmap(pos_key, btmp);
+        set_size(pos_key, --size);
+
+        /// --- Depends on the capacity, change the data structore --- ///
+        if (size == 1) {
+          /// -- convert array data structure to simple value type -- ///
+          const int pos_val = ffs(btmp) - 1;
+          m_value_block_[pos_key].value = array[pos_val];
+          free_buffer_normal_array(allocators, array, 2);
+        } else if (size <= capacity/2) {
+          /// --- shrink array --- ///
+          const int new_capacity = capacity / 2;
+          ValueType* new_array =  allocate_normal_array(allocators, new_capacity);
+          int k = 0;
+          for (int j=0; j < capacity; ++j) {
+            if ((btmp >> j) & 0x01) {
+              new_array[k++] = array[j];
+            }
+          }
+          set_bitmap(pos_key, (0x01 << new_capacity)-1);
+          m_value_block_[pos_key].value_array = new_array;
+          free_buffer_normal_array(allocators, array, capacity);
+
+        }
+        return true;
+      }
+      return false;
+    } else {
+      RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+      bool err = rhh_adj_list.delete_key(allocators, val, size);
+      if (err) {
+        set_size(pos_key, --size);
+        if (size <= capacityNormalArray3) {
+          /// --- convert RHH to nomal array --- ///
+          ValueType* array =  allocate_normal_array(allocators, capacityNormalArray3);
+          NoValueType* dmy = reinterpret_cast<NoValueType*>(allocators.allocator_raw.allocate(sizeof(NoValueType) * capacityNormalArray3).get());
+          rhh_adj_list.get_elemnts_array(size, array, dmy);
+          allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(dmy), sizeof(NoValueType) * capacityNormalArray3);
+          rhh_adj_list.free(allocators, size+1ULL);
+          m_value_block_[pos_key].value_array = array;
+          set_bitmap(pos_key, (0x01 << size)-1);
+        }
+        return true;
+      }
+      return false;
+    }
+
+    assert(false);
+    return false;
+  }
 
   uint64_t size()
   {
@@ -406,15 +499,10 @@ private:
     return ((prop & kClearProbedistanceMask) | (probedistance & kProbedistanceMask));
   }
 
-  // inline void delete_elem(const int64_t positon)
-  // {
-  //   property(positon) |= kTombstoneMask;
-  // }
-
-  // inline void delete_key(const int64_t positon)
-  // {
-  //   property(positon) |= kTombstoneMask;
-  // }
+  inline void delete_elem(const int64_t positon)
+  {
+    property(positon) |= kTombstoneMask;
+  }
 
   inline static bool is_deleted(const PropertyBlockType prop)
   {
@@ -473,6 +561,33 @@ private:
     }
   }
 
+  void shrink_rhh_main(AllocatorsHolder &allocators)
+  {
+    const uint64_t old_capacity = m_capacity_;
+    unsigned char* old_ptr = m_ptr_;
+    PropertyBlockType* old_property_block = reinterpret_cast<PropertyBlockType*>(m_ptr_);
+    KeyType* old_key_block                = reinterpret_cast<KeyType*>(&m_property_block_[old_capacity]);
+    ValueWrapperType* old_value_block     = reinterpret_cast<ValueWrapperType*>(&m_key_block_[old_capacity]);
+
+    m_capacity_ = old_capacity / kCapacityGrowingFactor;
+    allocate_rhh_main(allocators);
+
+    /// now copy over old elems
+    bool is_long_probedistance = false;
+    for (uint64_t i = 0; i < old_capacity; ++i) {
+      const PropertyBlockType old_prop = old_property_block[i];
+      if (old_prop != kClearedValue && !is_deleted(old_prop)) {
+        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
+      }
+    }
+
+    free_buffer(allocators, old_ptr, old_capacity);
+
+    if (is_long_probedistance) {
+      grow_rhh_main(allocators);
+    }
+  }
+
   void allocate_rhh_main(AllocatorsHolder &allocators)
   {
     uint64_t mem_size = 0;
@@ -490,6 +605,13 @@ private:
     }
   }
 
+  inline ValueType* allocate_normal_array(AllocatorsHolder &allocators, size_t capacity)
+  {
+    ValueType* ptr = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(capacity).get());
+    // std::cout << "allocated: " << ptr << " " << capacity << std::endl; // DB
+    return ptr;
+  }
+
   inline void free_buffer(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
   {
     uint64_t mem_size = 0;
@@ -502,7 +624,8 @@ private:
 
   inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, uint64_t capacity)
   {
-    allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
+    // std::cout << "deallocate: " << ptr << " " << capacity << std::endl; // DB
+    // allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
   }
 
   /// ------ Private member functions: insertion ----- ///

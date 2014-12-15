@@ -88,7 +88,7 @@ def generate_shell_file():
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(1024*256*105) + " "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(1024*256*100) + " "
+		slurm_options += "--di-mmap=" + str(1024*256*60) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -272,8 +272,8 @@ if DEBUG:
 	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "DG_AW", 1, 10)
 
 else:
-	create_commands(24, 1, 25, 1, 1, 1, 1024, 1, "HY_DA", 1, 1)
-	#create_commands(24, 1, 25, 1, 1, 1, 1024, 1, "RH_MX", 1, 1)
+	create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1)
+	#create_commands(26, 1, 27, 1, 1, 1, 1024, 1, "RH_MX", 1, 1)
 
 #Data Scaling test spawning
 #create_commands(29, 1, 31, 1, 1, 1, 1024, 1)

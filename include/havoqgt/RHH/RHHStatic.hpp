@@ -63,7 +63,7 @@
   template <typename KeyType, typename ValueType, uint64_t Capacity>
   class RHHStatic {
 
-  public:
+   public:
 
     /// ---------  Typedefs and Enums ------------ ///
     typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
@@ -80,7 +80,7 @@
     : m_next_(nullptr)
     {
       assert(false);
-      clear(false);
+      clear();
     }
 
     /// --- Copy constructor --- //
@@ -108,52 +108,35 @@
     ///  ------------------------------------------------------ ///
     ///              Public Member Functions
     ///  ------------------------------------------------------ ///
-    inline bool try_unique_key_insertion (KeyType& key, ValueType& val)
+    inline bool try_unique_key_insertion (const KeyType& key, const ValueType& val) const
     {
       const int64_t pos_key = find_key(key, true);
-      if (pos_key == kInvaridIndex)
-        return true;
-      else
-        return false;
+      return (pos_key == kInvaridIndex);
     }
 
-    inline UpdateErrors insert_uniquely(KeyType key, ValueType val)
+    inline UpdateErrors insert(KeyType key, ValueType val)
     {
       return insert_helper(std::move(key), std::move(val));
     }
 
-
-    // UpdateErrors insert_uniquely(KeyType key, ValueType val)
-    // {
-    //   // if (m_next_ != nullptr)
-    //   //   std::cout << "!!" << std::hex << m_next_ << std::endl; //D
-
-    //   const int64_t pos_key = find_key(key, true);
-    //   if (pos_key != kInvaridIndex) {
-    //     return kDuplicated;
-    //   }
-
-    //   return insert_helper(std::move(key), std::move(val));
-    // }
-
-    bool erase(KeyType key)
+    bool delete_key(const KeyType& key)
     {
       ProbeDistanceType dist = 0;
       const int64_t pos = find_key(key, false);
       if (pos != kInvaridIndex) {
-        delete_key(pos);
+        delete_elem(pos);
         return true;
       }
 
       if (m_next_ != nullptr) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        return next_rhh->erase(key);
+        return next_rhh->delete_key(key);
       }
 
       return false;
     }
 
-    inline void clear(bool is_clear_recursively)
+    inline void clear(const bool is_clear_recursively = false)
     {
       for (uint64_t i = 0; i < Capacity; ++i) {
         m_property_block_[i] = kEmptyValue;
@@ -162,11 +145,6 @@
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
         next_rhh->clear(true);
       }
-    }
-
-    inline void delete_key(const int64_t positon)
-    {
-      property(positon) |= kTombstoneMask;
     }
 
     inline static uint64_t capacity()
@@ -184,6 +162,18 @@
       return extract_probedistance(property(positon)) >= kLongProbedistanceThreshold;
     }
 
+    inline void get_elemnts_array(KeyType *key_array, ValueType *val_array)
+    {
+      uint64_t pos = 0;
+      for (uint64_t i = 0; i < Capacity; ++i) {
+        if (is_valid(i)) {
+          key_array[pos] = m_key_block_[i];
+          val_array[pos] = m_value_block_[i];
+          ++pos;
+        }
+      }
+    }
+
 
     uint64_t cal_depth()
     {
@@ -198,7 +188,7 @@
     {
       // std::cout << ">> --------- disp ---------" << std::endl;
       for (uint64_t i = 0; i < Capacity; ++i) {
-        std::cout << "[" << i+Capacity*level << "] " << static_cast<int>(m_property_block_[i]) << " : " << m_key_block_[i] << " : " << static_cast<int>(m_value_block_[i]) << std::endl;
+        std::cout << "[" << level << " : " << i << " ]" << static_cast<int>(m_property_block_[i]) << " : " << m_key_block_[i] << " : " << static_cast<int>(m_value_block_[i]) << std::endl;
       }
       if (m_next_) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
@@ -243,14 +233,13 @@
     static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
     static const int64_t kInvaridIndex                = -1LL;
     static const uint64_t kMask = Capacity - 1ULL;
-
-    static const ProbeDistanceType kLongProbedistanceThreshold  = 30;  /// must be less than max value of probedirance
+    static const ProbeDistanceType kLongProbedistanceThreshold  = 120;  /// must be less than max value of probedirance
 
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
     ///  ------------------------------------------------------ ///
     /// ------ Private member functions: algorithm core ----- ///
-    inline HashType hash_key(KeyType& key)
+    inline HashType hash_key(const KeyType& key) const
     {
 #if 1
       return static_cast<HashType>(key);
@@ -260,12 +249,12 @@
 #endif
     }
 
-    inline int64_t cal_desired_pos(HashType hash)
+    inline int64_t cal_desired_pos(HashType hash) const
     {
       return hash & kMask;
     }
 
-    inline ProbeDistanceType cal_probedistance(HashType hash, const int64_t slot_index)
+    inline ProbeDistanceType cal_probedistance(HashType hash, const int64_t slot_index) const
     {
       return ((slot_index + (Capacity) - cal_desired_pos(hash)) & kMask);
     }
@@ -280,14 +269,19 @@
       return const_cast<RHHStaticType*>(this)->property(ix);
     }
 
-    inline PropertyBlockType cal_property(HashType hash, const int64_t slot_index)
+    inline PropertyBlockType cal_property(HashType hash, const int64_t slot_index) const
     {
       return cal_probedistance(hash, slot_index);
     }
 
-    inline PropertyBlockType cal_property(const ProbeDistanceType probedistance)
+    inline PropertyBlockType cal_property(const ProbeDistanceType probedistance) const
     {
       return probedistance;
+    }
+
+    inline void delete_elem(const int64_t positon)
+    {
+      property(positon) |= kTombstoneMask;
     }
 
     inline static bool is_deleted(const PropertyBlockType prop)
@@ -295,7 +289,7 @@
       return (prop & kTombstoneMask) == kTombstoneMask;
     }
 
-    inline static ProbeDistanceType extract_probedistance(PropertyBlockType prop)
+    inline static ProbeDistanceType extract_probedistance(const PropertyBlockType prop)
     {
       return prop & kProbedistanceMask;
     }
@@ -327,6 +321,9 @@
           if (dist >= kLongProbedistanceThreshold) {
             err = kLongProbedistance;
             dist = kLongProbedistanceThreshold;
+            /// TODO: in this case, should put current element into temporary position (blank space) and return immediately ?
+            ///        then, in the parent layer, move the element to new are.
+
           }
           if(is_deleted(existing_elem_property))
           {
@@ -354,7 +351,7 @@
     }
 
     /// ------ Private member functions: search ----- ///
-    int64_t find_key(KeyType& key, bool is_check_recursively)
+    int64_t find_key(const KeyType& key, const bool is_check_recursively) const
     {
 
       ProbeDistanceType dist = 0;
@@ -378,7 +375,6 @@
 
       /// Find a key from chained RHH
       if (is_check_recursively && m_next_ != nullptr) {
-        //std::cout << "* "; //D
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
         return next_rhh->find_key(key, true);
       }

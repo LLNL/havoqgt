@@ -81,12 +81,12 @@
 
     void IOInfo::get_status(int &r, int &w) {
       FILE *pipe;
-      char str[250];
+      char str[1024];
       std::string fname = "iostat -m | grep " + kDeviceName + " 2>&1";
       pipe = popen(fname.c_str(), "r" );
 
       float temp;
-      fscanf(pipe, "%s", str);
+      fscanf(pipe, "%256s", str);
       fscanf(pipe, "%f %f %f", &temp, &temp, &temp);
       fscanf(pipe, "%d %d \n", &r, &w);
       pclose(pipe);
@@ -172,7 +172,7 @@
     exit(-1);
   }
 
-  io_info_ = new IOInfo();
+  // io_info_ = new IOInfo();
   total_exectution_time_  = 0.0;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
@@ -204,7 +204,7 @@ template <typename SegementManager>
   delete alloc_holder; /// kUseHybridDegreeAwareModel
   delete hybrid_matrix; /// kUseHybridDegreeAwareModel
 
-  delete io_info_;
+  // delete io_info_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   fout_debug_insertededges_.close();
@@ -229,7 +229,7 @@ template <typename Container>
     adjacency_matrix_vec_vec_->resize(1, *init_vec);
   }
 
-  io_info_->reset_baseline();
+  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
     const auto &edge = req_itr->edge;
@@ -253,7 +253,7 @@ template <typename Container>
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   total_exectution_time_ += time_end - time_start;
 
-  io_info_->log_diff();
+  // io_info_->log_diff();
 
 }
 
@@ -263,7 +263,7 @@ void construct_dynamicgraph<SegmentManager>::
 add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
 {
 
-  io_info_->reset_baseline();
+  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
     const auto &edge = req_itr->edge;
@@ -290,7 +290,7 @@ add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
   total_exectution_time_ += time_end - time_start;
-  io_info_->log_diff();
+  // io_info_->log_diff();
 
 }
 
@@ -299,7 +299,7 @@ template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
 add_edges_rhh_single_array(Container req_itr, size_t length)
 {
-  io_info_->reset_baseline();
+  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
     const auto& edge = req_itr->edge;
@@ -318,7 +318,7 @@ add_edges_rhh_single_array(Container req_itr, size_t length)
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
 
   total_exectution_time_ += time_end - time_start;
-  io_info_->log_diff();
+  // io_info_->log_diff();
 }
 
 
@@ -328,9 +328,9 @@ void construct_dynamicgraph<SegmentManager>::
 add_edges_rhh_matrix(Container req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
-  uint64_t count_delete = 0;
+  uint64_t count_deleted = 0;
 
-  io_info_->reset_baseline();
+  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
 
@@ -342,7 +342,7 @@ add_edges_rhh_matrix(Container req_itr, size_t length)
 #endif
 
     if (req_itr->is_delete) {
-      count_delete += rhh_matrix_->erase(seg_allocator_, source_vtx, target_vtx);
+      count_deleted += rhh_matrix_->erase(seg_allocator_, source_vtx, target_vtx);
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
@@ -357,8 +357,8 @@ add_edges_rhh_matrix(Container req_itr, size_t length)
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
-  std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
-  io_info_->log_diff();
+  std::cout << "Count: # deleted edges =\t" << count_deleted << std::endl;
+  // io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
 
@@ -369,11 +369,11 @@ void construct_dynamicgraph<SegmentManager>::
 add_edges_degree_aware_hybrid(Container req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
-  uint64_t count_delete = 0;
+  uint64_t count_deleted = 0;
 
 //  uint64_t count[256] = {0};
 
-  io_info_->reset_baseline();
+  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
 
@@ -390,23 +390,27 @@ add_edges_degree_aware_hybrid(Container req_itr, size_t length)
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
+      count_deleted += hybrid_matrix->delete_item(*alloc_holder, source_vtx, target_vtx);
+
     } else {
       count_inserted += hybrid_matrix->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
     }
 
+    // std::ofstream fout;
+    // fout.open(kFnameDebugInsertedEdges+"test", std::ios::out | std::ios::app);
+    // fout << "------ " << source_vtx << "\t" << target_vtx << "\t" << req_itr->is_delete << "------" << std::endl;
+    // hybrid_matrix->disp_elems(fout);
+    // fout.close();
 
   } // End of a edges insertion loop
   flush_pagecache();
   double time_end = MPI_Wtime();
 
-//  for (int i =0; i < 256; i++) {
-//      std::cout << count[i] << " ";
-//  }
-
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
   std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
-  std::cout << "Count: # deleted edges =\t" << count_delete << std::endl;
-  io_info_->log_diff();
+  std::cout << "Count: # deleted edges =\t" << count_deleted << std::endl;
+
+  // io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
 
@@ -416,9 +420,9 @@ void construct_dynamicgraph<SegmentManager>::
 print_profile()
 {
   std::cout << "TIME: Total Execution time (sec.) =\t" << total_exectution_time_ << std::endl;
-  io_info_->log_diff(true);
+  // io_info_->log_diff(true);
 
-  std::cout << "WITHOUT_DUPLICATE_INSERTION is " << WITHOUT_DUPLICATE_INSERTION << std::endl;
+  // std::cout << "WITHOUT_DUPLICATE_INSERTION is " << WITHOUT_DUPLICATE_INSERTION << std::endl;
   std::cout << "DEBUG_DUMPUPDATEREQUESTANDRESULTS is " << DEBUG_DUMPUPDATEREQUESTANDRESULTS << std::endl;
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS
   std::cout << "kFnameDebugInsertedEdges is " << kFnameDebugInsertedEdges << std::endl;
@@ -472,19 +476,19 @@ print_profile()
 
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
-    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out | std::ios::app);
+    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out);
     hybrid_matrix->disp_elems(fout);
     fout.close();
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
-    fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out | std::ios::app);
+    fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out);
     hybrid_matrix->disp_adjlists_prbdist(fout);
     fout.close();
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
-    fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out | std::ios::app);
+    fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out);
     hybrid_matrix->disp_adjlists_depth(fout);
     fout.close();
   }
