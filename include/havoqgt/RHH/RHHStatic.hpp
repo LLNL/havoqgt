@@ -136,10 +136,20 @@
       return false;
     }
 
+    inline void delete_elem(const int64_t positon)
+    {
+      property(positon) |= kTombstoneMask;
+    }
+
+    inline void clear_elem(const int64_t positon)
+    {
+      property(positon) = kEmptyValue;
+    }
+
     inline void clear(const bool is_clear_recursively = false)
     {
       for (uint64_t i = 0; i < Capacity; ++i) {
-        m_property_block_[i] = kEmptyValue;
+        clear_elem(i);
       }
       if (is_clear_recursively && m_next_) {
         RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
@@ -154,7 +164,7 @@
 
     inline bool is_valid(uint64_t pos) const
     {
-      return ( (property(pos) != kEmptyValue) && !is_deleted(property(pos)) );
+      return (!is_empty(property(pos)) && !is_deleted(property(pos)));
     }
 
     inline bool is_longprobedistance(const int64_t positon)
@@ -233,7 +243,7 @@
     static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
     static const int64_t kInvaridIndex                = -1LL;
     static const uint64_t kMask = Capacity - 1ULL;
-    static const ProbeDistanceType kLongProbedistanceThreshold  = 120;  /// must be less than max value of probedirance
+    static const ProbeDistanceType kLongProbedistanceThreshold  = 10;  /// must be less than max value of probedirance
 
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
@@ -279,19 +289,32 @@
       return probedistance;
     }
 
-    inline void delete_elem(const int64_t positon)
-    {
-      property(positon) |= kTombstoneMask;
-    }
-
-    inline static bool is_deleted(const PropertyBlockType prop)
+    inline bool is_deleted(const PropertyBlockType prop) const
     {
       return (prop & kTombstoneMask) == kTombstoneMask;
     }
 
-    inline static ProbeDistanceType extract_probedistance(const PropertyBlockType prop)
+    inline bool is_empty(const PropertyBlockType prop) const
+    {
+      return (prop == kEmptyValue);
+    }
+
+
+    inline ProbeDistanceType extract_probedistance(const PropertyBlockType prop) const
     {
       return prop & kProbedistanceMask;
+    }
+
+    inline void insert_into_tempolayspace(KeyType &&key, ValueType &&val)
+    {
+      for (int64_t i = 0; i < Capacity; ++i) {
+        const PropertyBlockType elem_property = property(i);
+        if (is_empty(elem_property) || is_deleted(elem_property)) {
+          construct(i, kLongProbedistanceThreshold, std::move(key), std::move(val));
+          return;
+        }
+      }
+      assert(false);
     }
 
     UpdateErrors insert_helper(KeyType &&key, ValueType &&val)
@@ -304,11 +327,11 @@
 
         PropertyBlockType existing_elem_property = property(pos);
 
-        if(existing_elem_property == kEmptyValue)
+        if(is_empty(existing_elem_property))
         {
           if (dist >= kLongProbedistanceThreshold) {
-            err = kLongProbedistance;
-            dist = kLongProbedistanceThreshold;
+            insert_into_tempolayspace(std::move(key), std::move(val));
+            return kLongProbedistance;
           }
           construct(pos, dist, std::move(key), std::move(val));
           break;
@@ -319,11 +342,8 @@
         if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
-            err = kLongProbedistance;
-            dist = kLongProbedistanceThreshold;
-            /// TODO: in this case, should put current element into temporary position (blank space) and return immediately ?
-            ///        then, in the parent layer, move the element to new are.
-
+            insert_into_tempolayspace(std::move(key), std::move(val));
+            return kLongProbedistance;
           }
           if(is_deleted(existing_elem_property))
           {
@@ -340,8 +360,58 @@
         ++dist;
       }
 
-      return err;
+      return kSucceed;
     }
+
+
+    // UpdateErrors insert_helper(KeyType &&key, ValueType &&val)
+    // {
+    //   int64_t pos = cal_desired_pos(hash_key(key));
+    //   ProbeDistanceType dist = 0;
+    //   UpdateErrors err = kSucceed;
+
+    //   while(true) {
+
+    //     PropertyBlockType existing_elem_property = property(pos);
+
+    //     if(existing_elem_property == kEmptyValue)
+    //     {
+    //       if (dist >= kLongProbedistanceThreshold) {
+    //         err = kLongProbedistance;
+    //         dist = kLongProbedistanceThreshold;
+    //       }
+    //       construct(pos, dist, std::move(key), std::move(val));
+    //       break;
+    //     }
+
+    //     /// If the existing elem has probed equal or less than new, then swap places with existing
+    //     /// elem, and keep going to find another slot for that elem.
+    //     if (extract_probedistance(existing_elem_property) <= dist)
+    //     {
+    //       if (dist >= kLongProbedistanceThreshold) {
+    //         err = kLongProbedistance;
+    //         dist = kLongProbedistanceThreshold;
+    //         /// TODO: in this case, should put current element into temporary position (blank space) and return immediately ?
+    //         ///        then, in the parent layer, move the element to new are.
+
+    //       }
+    //       if(is_deleted(existing_elem_property))
+    //       {
+    //         construct(pos, dist, std::move(key), std::move(val));
+    //         break;
+    //       }
+    //       m_property_block_[pos] = dist;
+    //       std::swap(key, m_key_block_[pos]);
+    //       std::swap(val, m_value_block_[pos]);
+    //       dist = extract_probedistance(existing_elem_property);
+    //     }
+
+    //     pos = (pos+1) & kMask;
+    //     ++dist;
+    //   }
+
+    //   return err;
+    // }
 
     inline void construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
     {
@@ -361,7 +431,7 @@
       while(true) {
 
         ProbeDistanceType existing_elem_property = property(pos);
-        if (existing_elem_property == kEmptyValue) { /// free space is found
+        if (is_empty(existing_elem_property)) { /// free space is found
           break;
         } else if (dist > extract_probedistance(existing_elem_property)) {
           break;

@@ -532,9 +532,11 @@ private:
             if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {\
               const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
               assert(err2 != kLongProbedistance);\
-              rhh->delete_key(i);\
+              rhh->delete_elem(i);\
+              return kLongProbedistance;\
             }\
           }\
+          assert(false);\
         }\
     } while (0)
 
@@ -609,9 +611,11 @@ private:
             if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {
               const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);
               assert(err2 != kLongProbedistance);
-              rhh->delete_key(i);
+              rhh->delete_elem(i);
+              return kLongProbedistance;
             }
           }
+          assert(false);
         }
       }
       return kSucceed;
@@ -631,9 +635,11 @@ private:
             if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {\
               const UpdateErrors err = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);\
               assert(err != kLongProbedistance);\
-              rhh->delete_key(i);\
+              rhh->delete_elem(i);\
+              return kLongProbedistance;\
             }\
           }\
+          assert(false);\
         }\
     } while (0)
 
@@ -701,9 +707,11 @@ private:
             if (rhh->is_valid(i) && rhh->is_longprobedistance(i)) {
               const UpdateErrors err2 = new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);
               assert(err2 != kLongProbedistance);
-              rhh->delete_key(i);
+              rhh->delete_elem(i);
+              return kLongProbedistance;\
             }
           }
+          assert(false);
         }
       }
       return kSucceed;

@@ -90,9 +90,9 @@ namespace bip = boost::interprocess;
 #endif
 
 #ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
-  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
+  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 1
 #endif
-#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
+if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
   static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
