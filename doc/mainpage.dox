@@ -1,0 +1,60 @@
+/** \mainpage HavoqGT Documentation
+
+\section overview Overview
+
+
+HavoqGT is a framework for 
+expressing asynchronous vertex-centric graph algorithms.  It provides a visitor
+interface, where actions are defined at an individual vertex level.
+This code was developed at Lawrence Livermore National Laboratory, and as part
+of Roger Pearce's Ph.D. research.
+
+This manual is divided in the following sections:
+- \subpage getting_started 
+- \subpage basic_usage
+- \subpage developer_guide
+
+*/
+
+//-----------------------------------------------------------
+
+/** \page basic_usage Basic Usage
+This page introduces the user to the topic.
+
+\section basic_usage_input Generate or Input Graph
+
+asdf
+
+\section basic_usage_bfs Run Breadth-First Search
+
+asdf
+
+\section basic_usage_kcore Run K-Core Algorithm
+
+adsf
+
+*/
+
+//-----------------------------------------------------------
+
+/** \page developer_guide Developer Guide
+
+This guide is intended for people who want to develop new algorithms using HavoqGT.
+
+\section developer_guide_overview Overview
+
+adsf
+
+\section developer_guide_directory Directory Structure
+
+adsf
+
+\section developer_guide_structure Code Structure
+
+
+asdf
+
+*/
+
+//-----------------------------------------------------------
+

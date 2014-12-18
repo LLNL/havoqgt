@@ -41,9 +41,25 @@ if (HAVE_POSIX_FALLOCATE)
   add_definitions(-DHAVE_POSIX_FALLOCATE)
 endif()
 
+#
+# Doxygen
+#
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in 
+               ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
+add_custom_target(doc
+    ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc
+    COMMENT "Generating API documentation with Doxygen" VERBATIM
+    )
+endif(DOXYGEN_FOUND)
+
 
 add_subdirectory (include)
 add_subdirectory (src)
+enable_testing()
+add_subdirectory (test)
 
 #
 # Configuration Summary

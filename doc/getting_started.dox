@@ -1,0 +1,33 @@
+/** \page getting_started Getting Started 
+\section getting_started_download Download
+
+You can clone HavoqGT from the <a href="https://bitbucket.org/PerMA/havoqgt/">Bitbucket repository</a>:
+  
+\code{.sh}
+ 
+ $ git clone https://bitbucket.org/PerMA/havoqgt.git
+ 
+\endcode
+
+\section getting_started_dependencies Dependencies
+
+HavoqGT depends on fairly recent versions of Boost.  Compiling Boost is not necessary, because only the header-only libraries are used.
+
+\code{.sh}
+\ 
+ $ wget http://downloads.sourceforge.net/project/boost/boost/1.56.0/boost_1_56_0.tar.gz
+ $ tar -xzvf boost_1_56_0.tar.gz
+ 
+\endcode
+
+\todo Finish this!
+
+\section getting_started_compile Compile
+
+\code{.sh}
+$ cmake
+\endcode
+
+After successfully compiling, proceed to \ref basic_usage.
+
+*/
