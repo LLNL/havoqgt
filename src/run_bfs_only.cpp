@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
 
   int mpi_rank(0), mpi_size(0);
 
-  CHK_MPI(MPI_Init(&argc, &argv));
+  havoqgt::havoqgt_init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
@@ -117,9 +117,10 @@ int main(int argc, char** argv) {
 //    std::cout << "[0]Graph input file = " << graph_input << std::endl;
 //  }
 
+
   MPI_Barrier(MPI_COMM_WORLD);
 
-  havoqgt::distributed_db ddb(havoqgt::db_open(), MPI_COMM_WORLD, graph_input.c_str());
+  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
   // graph_mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
 
   // boost::interprocess::mapped_region::advice_types rand_advice;
@@ -177,7 +178,7 @@ int main(int argc, char** argv) {
     typedef bip::managed_heap_memory bfs_mapped_t;
     //uint64_t filesize = (21474836480/24.0);
     //uint64_t filesize = (4973120026ULL);
-    uint64_t filesize = 3616814565ULL;
+    uint64_t filesize = 256*1024*1024;
     bfs_mapped_t bfs_mapped_data(filesize);
     #endif
 
@@ -285,8 +286,7 @@ int main(int argc, char** argv) {
     }
   }  // End BFS Test
   }  // END Main MPI
-  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-  CHK_MPI(MPI_Finalize());
+  havoqgt::havoqgt_finalize();
 
   if (mpi_rank == 0) {
     std::cout << "FIN." << std::endl;

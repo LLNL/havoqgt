@@ -156,12 +156,12 @@ inline
 typename delegate_partitioned_graph<SegmentManager>::vertex_locator
 delegate_partitioned_graph<SegmentManager>::edge_iterator::target() const {
   if(m_source.is_delegate()) {
-    assert(m_edge_offset < m_ptr_graph->m_delegate_targets.size());
+    assert(m_edge_offset < m_ptr_graph->m_delegate_targets_size);
     assert(m_ptr_graph->m_delegate_targets[m_edge_offset].m_owner_dest <
           m_ptr_graph->m_mpi_size);
     return m_ptr_graph->m_delegate_targets[m_edge_offset];
   }
-  assert(m_edge_offset < m_ptr_graph->m_owned_targets.size());
+  assert(m_edge_offset < m_ptr_graph->m_owned_targets_size);
   assert(m_ptr_graph->m_owned_targets[m_edge_offset].m_owner_dest <
           m_ptr_graph->m_mpi_size);
   return m_ptr_graph->m_owned_targets[m_edge_offset];

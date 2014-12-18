@@ -58,19 +58,17 @@
 #include <cstdlib>
 #include <boost/lexical_cast.hpp>
 
-/** @page page1 Environment Variables
- *  @todo add documentation
- * List of Environment variables
- *    - HAVOQGT_VERBOSE           -- adsf
- *    - HAVOQGT_MAILBOX_NUM_IRECV -- adsf
- */
-
+#include <havoqgt/error.hpp>
+#include <havoqgt/mpi.hpp>
 
 namespace havoqgt {
-
-class environment {
+/** 
+ * @todo delete this 
+ * @todo add environment variable documentation 
+ */
+class old_environment {
 public:
-  environment() {
+  old_environment() {
     m_mailbox_num_irecv   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_IRECV", 8);
     m_mailbox_num_isend   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_ISEND", 8);
     m_mailbox_aggregation = get_env_var<uint32_t>("HAVOQGT_MAILBOX_AGGREGATION", 1024);
@@ -98,7 +96,7 @@ private:
 };
 
 inline void
-environment::print() const {
+old_environment::print() const {
   std::cout << "HAVOQGT_MAILBOX_NUM_IRECV        "<< " = " << m_mailbox_num_irecv << std::endl;
   std::cout << "HAVOQGT_MAILBOX_NUM_ISEND        "<< " = " << m_mailbox_num_isend << std::endl;
   std::cout << "HAVOQGT_MAILBOX_AGGREGATION      "<< " = " << m_mailbox_aggregation << std::endl;
@@ -109,7 +107,7 @@ environment::print() const {
 template <typename T>
 inline 
 T
-environment::get_env_var(const char* key, T default_val) const {
+old_environment::get_env_var(const char* key, T default_val) const {
   char* val = std::getenv( key );
   if(val != NULL) {
     try {
@@ -126,11 +124,136 @@ environment::get_env_var(const char* key, T default_val) const {
 }
 
 inline 
-environment& 
+old_environment& 
 get_environment() {
-  static environment env;
+  static old_environment env;
   return env;
 }
+
+
+///   Start 'new' environmet here
+
+class environment {
+public:
+  environment(int *argc, char*** argv) {
+    // Init MPI
+    MPI_Init(argc, argv);
+    
+    // Create communicators
+    m_world_comm = communicator(MPI_COMM_WORLD);
+    MPI_Comm tmp_node_local_comm  = split_node_local_comm(MPI_COMM_WORLD);
+    m_node_local_comm = communicator(tmp_node_local_comm);
+    MPI_Comm tmp_node_offset_comm = split_node_offset_comm(MPI_COMM_WORLD, tmp_node_local_comm);
+    m_node_offset_comm = communicator(tmp_node_offset_comm);
+  }
+  
+  ~environment() {
+    m_world_comm.barrier();
+    MPI_Finalize();
+  }
+  
+  const communicator& world_comm()       const { return m_world_comm; }
+  const communicator& node_local_comm()  const { return m_node_local_comm; }
+  const communicator& node_offset_comm() const { return m_node_offset_comm; }
+  
+private:
+  
+  MPI_Comm split_node_local_comm(MPI_Comm world_comm)
+  {
+    MPI_Comm to_return;
+    int rank;
+    MPI_Comm_rank(world_comm, &rank);
+
+    int color = 0;
+    char* cnodeid   = NULL;//getenv("SLURM_NODEID");
+    char chostname[256];
+    gethostname(chostname, 256);
+    if(cnodeid) {
+      color = boost::lexical_cast<int>(cnodeid);
+    } else if(chostname) {
+      std::string shostname(chostname);
+      std::hash<std::string> hasher;
+      color = hasher(shostname);
+      if(color < 0) color *= -1;
+    }
+
+    int key = rank;
+    int ret = MPI_Comm_split(world_comm, color, key, &to_return);
+
+    int node_local_rank, node_local_size;
+    MPI_Comm_rank(to_return, &node_local_rank);
+    MPI_Comm_size(to_return, &node_local_size);
+
+    if(rank < node_local_size)
+    {
+      if(rank != node_local_rank) {
+        std::cerr << "ERROR:   Only blocked task mapping is supported" << std::endl; exit(-1);
+      }
+    }
+
+
+
+    return to_return;
+  }
+
+  MPI_Comm split_node_offset_comm(MPI_Comm world_comm, MPI_Comm node_local_comm)
+  {
+    MPI_Comm to_return;
+    int world_rank, node_local_rank;
+    MPI_Comm_rank(world_comm, &world_rank);
+    MPI_Comm_rank(node_local_comm, &node_local_rank);
+
+    int color = node_local_rank;
+    int key   = world_rank;
+
+    int ret = MPI_Comm_split(world_comm, color, key, &to_return);
+
+    return to_return;
+  }
+
+  bool is_node_mapping_round_robin(MPI_Comm world_comm, MPI_Comm node_local_comm)
+  {
+
+  }
+
+  bool is_node_mapping_block(MPI_Comm world_comm, MPI_Comm node_local_comm)
+  {
+    int world_rank, world_size, node_local_rank, node_local_size;
+    MPI_Comm_rank(world_comm, &world_rank);
+    MPI_Comm_size(world_comm, &world_size);
+    MPI_Comm_rank(node_local_comm, &node_local_rank);
+    MPI_Comm_size(node_local_comm, &node_local_size);
+
+  }
+
+  communicator   m_world_comm;
+  communicator   m_node_local_comm;
+  communicator   m_node_offset_comm;
+};
+
+
+namespace detail {
+  inline environment*& priv_havoqgt_env() {
+    static environment* penv;
+    return penv;
+  }
+} 
+
+inline environment* havoqgt_env() {
+  return detail::priv_havoqgt_env();
+}
+
+
+inline void havoqgt_init( int *argc, char ***argv ) {
+  detail::priv_havoqgt_env() = new environment(argc, argv);
+}
+
+inline void havoqgt_finalize() {
+  delete detail::priv_havoqgt_env();
+}
+
+
+
 
 
 } //namespace havoqgt

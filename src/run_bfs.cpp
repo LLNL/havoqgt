@@ -57,7 +57,7 @@
 #include <havoqgt/single_source_shortest_path.hpp>
 #include <havoqgt/page_rank.hpp>
 #include <havoqgt/environment.hpp>
- #include <havoqgt/cache_utilities.hpp>
+#include <havoqgt/cache_utilities.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>

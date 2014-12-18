@@ -69,6 +69,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <havoqgt/environment.hpp>
+
 
 namespace havoqgt {
 
@@ -90,7 +92,6 @@ private:
     bool clean_close;
   };
 
-//  typedef boost::interprocess::managed_mapped_file mapped_type;
   typedef boost::interprocess::basic_managed_mapped_file 
           <char
           ,boost::interprocess::rbtree_best_fit<boost::interprocess::null_mutex_family>
@@ -102,18 +103,15 @@ public:
   /**
    *
    */
-  distributed_db(db_create, MPI_Comm comm, const char* base_fname)
+  distributed_db(db_create, const char* base_fname)
   {
-    int mpi_rank(0), mpi_size(0);
-    CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
-    CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_size = havoqgt_env()->world_comm().size();
 
-    init_rank_filename(comm, base_fname);
+    init_rank_filename(base_fname);
     if(rank_file_exists())
     {
-      std::stringstream error;
-      error << "ERROR: " << __FILE__ << ":" << __LINE__ << ": file already exists.";
-      throw std::runtime_error(error.str());
+      HAVOQGT_ERROR_MSG("File already exists.");
     }
 
     m_pm = new mapped_type(boost::interprocess::create_only, m_rank_filename.c_str(), get_file_size()); 
@@ -122,17 +120,17 @@ public:
     {
       int fd  = open(m_rank_filename.c_str(), O_RDWR);
       if(fd == -1) {
-        std::cerr << "ERROR opening file" << std::endl; exit(-1);
+        HAVOQGT_ERROR_MSG("Error opening file.");
       }
       int ret = posix_fallocate(fd,0,get_file_size());
       if(ret != 0)
       {
-        std::cerr << "ERROR:  posix_fallocate failed" << std::endl;
+        HAVOQGT_ERROR_MSG("posix_fallocate failed.");
       }
       close(fd);
     }
     #else
-	  #warning posix_fallocate not found
+	    #warning posix_fallocate not found;  OSX?
     #endif
 
     //
@@ -141,7 +139,7 @@ public:
     if(mpi_rank == 0) {
       phead->uuid = boost::uuids::random_generator()();
     }
-    mpi::mpi_bcast(phead->uuid,0,comm);
+    mpi::mpi_bcast(phead->uuid,0,havoqgt_env()->world_comm().comm());
     std::cout << "Rank = " << mpi_rank << ", UUID = " << phead->uuid << std::endl;
     phead->comm_rank = mpi_rank;
     phead->comm_size = mpi_size;
@@ -151,20 +149,19 @@ public:
   /**
    *
    */
-  distributed_db(db_open, MPI_Comm comm, const char* base_fname)
+  distributed_db(db_open, const char* base_fname)
   {
-    int mpi_rank(0), mpi_size(0);
-    CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
-    CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_size = havoqgt_env()->world_comm().size();
 
-    init_rank_filename(comm, base_fname);
+    init_rank_filename(base_fname);
     if(!rank_file_exists())
     {
       std::stringstream error;
       error << "ERROR: " << __FILE__ << ":" << __LINE__ << ": file not found.";
       throw std::runtime_error(error.str());
     }
-    
+     
     m_pm = new mapped_type(boost::interprocess::open_only, m_rank_filename.c_str()); 
 
     //
@@ -182,7 +179,7 @@ public:
     if(mpi_rank == 0) {
       uuid = ret.first->uuid;
     }
-    mpi::mpi_bcast(uuid,0,comm);
+    mpi::mpi_bcast(uuid,0,havoqgt_env()->world_comm().comm());
     if(uuid != ret.first->uuid)
     {
       std::stringstream error;
@@ -232,12 +229,14 @@ private:
   uint64_t get_file_size() 
   {
     const char* fsize = getenv("HAVOQGT_DB_SIZE");
-    if(fsize == NULL) 
+    if(fsize == NULL) {
       //return 700ULL * 1024ULL * 1024ULL * 1024ULL / 24;
       //return 799700000000ULL;
       //return 500ULL * 1024ULL * 1024ULL * 1024ULL;
       // causing probs return 799700000000ULL / 24ULL;
-      return 799595142400 / 24ULL;
+      // MAXES OUT CATALST!! return 799595142400 / 24ULL;
+      return 512*1024*1024 / havoqgt_env()->node_local_comm().size();
+    }
     return boost::lexical_cast<uint64_t>(fsize);
   } 
 
@@ -254,11 +253,10 @@ private:
   /**
    *
    */
-  void init_rank_filename(MPI_Comm comm, const char* base_fname)
+  void init_rank_filename(const char* base_fname)
   {
-    int mpi_rank(0), mpi_size(0);
-    CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
-    CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_size = havoqgt_env()->world_comm().size();
     std::stringstream sstr;
     sstr << base_fname << "_" << mpi_rank << "_of_" << mpi_size;
     m_rank_filename = sstr.str();

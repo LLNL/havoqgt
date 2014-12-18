@@ -597,8 +597,39 @@ inline int mpi_comm_size() {
 }
 
 
+} //end namespace mpi
 
-}} // end namespace havoqgt { namespace mpi {
+///
+/// Start "new" communicator here
+///
+
+class communicator {
+public:
+  communicator(MPI_Comm in_comm)
+    : m_comm( in_comm )
+  {
+    CHK_MPI( MPI_Comm_rank(m_comm, &m_rank) );
+    CHK_MPI( MPI_Comm_size(m_comm, &m_size) );
+  }
+  
+  communicator() {}
+  
+  MPI_Comm comm() const { return m_comm; }
+  int      size() const { return m_size; }
+  int      rank() const { return m_rank; }
+  
+  void barrier() const {
+    MPI_Barrier(m_comm);
+  }
+private:
+  MPI_Comm m_comm;
+  int      m_size;
+  int      m_rank;
+    
+};
+
+
+} // end namespace havoqgt 
 
 #endif //_HAVOQGT_MPI_HPP_
 
