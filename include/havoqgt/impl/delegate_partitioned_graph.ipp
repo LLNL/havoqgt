@@ -1649,52 +1649,9 @@ is_label_delegate(uint64_t label) const {
   return m_map_delegate_locator.count(label) > 0;
 }
 
-template <typename SegmentManager>
-template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
-  T, SegManagerOther>*
-delegate_partitioned_graph<SegmentManager>::
-create_vertex_data(SegManagerOther* segment_manager_o,
-    const char *obj_name) const {
-
-  typedef typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
-  T, SegManagerOther> mytype;
-
-  if (obj_name == nullptr) {
-    return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
-        (m_owned_info.size(), m_delegate_info.size(), segment_manager_o);
-  } else {
-    return segment_manager_o->template construct<mytype>(obj_name)
-        (m_owned_info.size(), m_delegate_info.size(), segment_manager_o);
-  }
-}
-
 /**
- * @param   init initial value for each vertex
- */
-template <typename SegmentManager>
-template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
-  T, SegManagerOther>*
-delegate_partitioned_graph<SegmentManager>::
-create_vertex_data(const T& init, SegManagerOther* segment_manager_o,
-    const char *obj_name) const {
-
-  typedef typename delegate_partitioned_graph<SegmentManager>::template vertex_data<
-  T, SegManagerOther> mytype;
-
-  if (obj_name == nullptr) {
-    return segment_manager_o->template construct<mytype>(bip::anonymous_instance)
-            (m_owned_info.size(), m_delegate_info.size(), init,
-              segment_manager_o);
-  } else {
-    return segment_manager_o->template construct<mytype>(obj_name)
-            (m_owned_info.size(), m_delegate_info.size(), init,
-              segment_manager_o);
-  }
-
-}
-
+ * @todo remove; make like vertex_data
+ */ 
 template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
 typename delegate_partitioned_graph<SegmentManager>::template edge_data<T, SegManagerOther>*
@@ -1717,6 +1674,7 @@ create_edge_data(SegManagerOther* segment_manager_o,
 
 /**
  * @param   init initial value for each vertex
+ * @todo remove; make like vertex_data
  */
 template <typename SegmentManager>
 template <typename T, typename SegManagerOther>

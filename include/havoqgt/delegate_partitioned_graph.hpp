@@ -126,7 +126,7 @@ class delegate_partitioned_graph {
   /// Vertex Iterator class for delegate partitioned graph
   class vertex_iterator;
   /// Vertex Data storage
-  template <typename T, typename SegManagerOther>
+  template <typename T, typename Allocator>
   class vertex_data;
   /// Edge Data storage
   template <typename T, typename SegManagerOther>
@@ -335,8 +335,9 @@ class delegate_partitioned_graph {
   void flush_graph();
 
   //////////////////////////////////////////////////////////////////////////////
-  // Private Data Members
+  // Protected Data Members
   //////////////////////////////////////////////////////////////////////////////
+ protected:
   const static uint64_t edge_chunk_size = EDGE_CHUNK_SIZE;
   const int processes_per_node = PROCESSES_PER_NODE;
   const int node_partitions = EDGE_PASS_PARTITIONS;

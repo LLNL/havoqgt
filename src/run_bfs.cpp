@@ -112,22 +112,10 @@ int main(int argc, char** argv) {
     graph_input = argv[pos++];
   }
 
-//  graph_input += "_" + std::to_string(mpi_rank);
-//  if (mpi_rank == 0) {
-//    std::cout << "[0]Graph input file = " << graph_input << std::endl;
-//  }
-
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
-  // graph_mapped_t graph_mapped_file(bip::open_read_only, graph_input.c_str());
-
-  // boost::interprocess::mapped_region::advice_types rand_advice;
-  // rand_advice = boost::interprocess::mapped_region::advice_types::advice_random;
-  // bool assert_res = graph_mapped_file.advise(rand_advice);
-  // assert(assert_res);
-
 
   graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
@@ -139,65 +127,17 @@ int main(int argc, char** argv) {
   }
   //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
-
-  //
-  // Calculate max degree
-  /*uint64_t max_degree = 0;//graph->max_vertex_id();
-  for (graph_type::vertex_iterator vitr = graph->vertices_begin();
-        vitr != graph->vertices_end(); ++vitr) {
-    max_degree = std::max(max_degree, graph->degree(*vitr));
-  }
-  for (graph_type::controller_iterator citr = graph->controller_begin();
-        citr != graph->controller_end(); ++citr) {
-    max_degree = std::max(max_degree, graph->degree(*citr));
-  }
-  uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree,
-        std::greater<uint64_t>(), MPI_COMM_WORLD);
-
-  if (mpi_rank == 0) {
-    std::cout << "Max Local Degree = " << global_max_degree << std::endl;
-  }
-*/
-  MPI_Barrier(MPI_COMM_WORLD);
  
-  //   NEED TO FIX LOCAL DATA!!
+
   // BFS Experiments
   {
-    #if 0
-    typedef bip::managed_mapped_file bfs_mapped_t;
-    uint64_t file_size = (173249084000.0/24.0);
-
-    std::string bfs_filename =  graph_input + std::to_string(mpi_rank) + "_bfs";
-    bfs_mapped_t bfs_mapped_data(bip::create_only, bfs_filename.c_str(),
-        file_size);
-    // assert_res = bfs_mapped_data.advise(rand_advice);
-    // assert(assert_res);
-
-    #else
-
-    typedef bip::managed_heap_memory bfs_mapped_t;
-    //uint64_t filesize = (21474836480/24.0);
-    //uint64_t filesize = (4973120026ULL);
-    uint64_t filesize = 256*1024*1024;
-    bfs_mapped_t bfs_mapped_data(filesize);
-    #endif
-
-
-    typedef bfs_mapped_t::segment_manager bfs_segment_manager_t;
-
-
-
-    graph_type::vertex_data<uint8_t, bfs_segment_manager_t >* bfs_level_data;
-    graph_type::vertex_data<graph_type::vertex_locator, bfs_segment_manager_t >* bfs_parent_data;
-
-    bfs_level_data = graph->create_vertex_data<uint8_t, bfs_segment_manager_t>(
-          bfs_mapped_data.get_segment_manager(), "bfs_level_data");
-    bfs_parent_data = graph->create_vertex_data<graph_type::vertex_locator, bfs_segment_manager_t>(
-          bfs_mapped_data.get_segment_manager(), "bfs_parent_data");
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (mpi_rank == 0) {
-    std::cout << "BFS data allocated." << std::endl;
-  }
+    
+    graph_type::vertex_data<uint8_t, std::allocator<uint8_t> >                      bfs_level_data(*graph);
+    graph_type::vertex_data<graph_type::vertex_locator, std::allocator<graph_type::vertex_locator> >  bfs_parent_data(*graph);
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (mpi_rank == 0) {
+      std::cout << "BFS data allocated." << std::endl;
+    }
 
     //  Run BFS experiments
     double time(0);
@@ -225,11 +165,11 @@ int main(int argc, char** argv) {
         std::cout << "degree = " << graph->degree(source) << std::endl;
       }
 
-      bfs_level_data->reset(128);
+      bfs_level_data.reset(128);
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      hmpi::breadth_first_search(graph, *bfs_level_data, *bfs_parent_data,
+      hmpi::breadth_first_search(graph, bfs_level_data, bfs_parent_data,
           source);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
@@ -241,7 +181,7 @@ int main(int argc, char** argv) {
         for (vitr = graph->vertices_begin();
              vitr != graph->vertices_end();
              ++vitr) {
-          if ((*bfs_level_data)[*vitr] == level) {
+          if (bfs_level_data[*vitr] == level) {
             ++local_count;
           }
         }
@@ -251,7 +191,7 @@ int main(int argc, char** argv) {
         for (citr = graph->controller_begin();
              citr != graph->controller_end();
              ++citr) {
-          if ((*bfs_level_data)[*citr] == level) {
+          if (bfs_level_data[*citr] == level) {
             ++local_count;
           }
         }
@@ -288,10 +228,5 @@ int main(int argc, char** argv) {
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 
-  if (mpi_rank == 0) {
-    std::cout << "FIN." << std::endl;
-    //print_system_info(false);
-    // print_dmesg();
-  }
   return 0;
 }
