@@ -48,7 +48,6 @@
  * purposes.
  *
  */
-
 #ifndef HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #include <fstream>
@@ -67,18 +66,17 @@ template <typename KeyType, typename ValueType>
   ///              Constructor / Destructor
   ///  ------------------------------------------------------ ///
   /// --- Constructor --- //
-    RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
-    : m_num_elems_(0)
-    , m_capacity_(initial_capasity)
-    , m_ptr_(nullptr)
-    {
-      allocate_rhh_main(allocators);
-    }
+  RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
+  : m_num_elems_(0)
+  , m_capacity_(initial_capasity)
+  , m_ptr_(nullptr)
+  {
+    allocate_rhh_main(allocators);
+  }
 
   /// --- Destructor --- //
-    ~RHHMain()
-    {
-    }
+  ~RHHMain()
+  { }
 
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions
@@ -161,15 +159,7 @@ template <typename KeyType, typename ValueType>
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
       unsigned char dmy = 0;
 
-      if (key == 0 && val == 11) {
-        DISP_LOG("insert");
-        rhh_adj_list.disp_elems(size); // DB
-      }
       bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
-      if (key == 0 && val == 11) {
-        DISP_LOG("insert done");
-        rhh_adj_list.disp_elems(size + err); // DB
-      }
       if (err) set_size(pos_key, size+1);
       return err;
     }
@@ -249,15 +239,7 @@ template <typename KeyType, typename ValueType>
       return false;
     } else {
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
-      if (key == 0 && val == 11) {
-        DISP_LOG("delete");
-        rhh_adj_list.disp_elems(size); // DB
-      }
       bool err = rhh_adj_list.delete_key(allocators, val, size);
-      if (key == 0 && val == 11) {
-        DISP_LOG("delete done");
-        rhh_adj_list.disp_elems(size - err); // DB
-      }
       if (err) {
         set_size(pos_key, --size);
         if (size <= capacityNormalArray3) {
@@ -416,7 +398,6 @@ private:
 
     ValueWrapperType()
     {
-    //DEBUG("union constructor");
     }
 
     ValueWrapperType(ValueWrapperType &&old_obj)
@@ -427,7 +408,6 @@ private:
 
     ~ValueWrapperType()
     {
-    //DEBUG("union destructor");
     }
 
     ValueWrapperType &operator=(ValueWrapperType &&old_obj)
