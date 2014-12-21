@@ -85,7 +85,6 @@ template <typename KeyType, typename ValueType>
   ///  ------------------------------------------------------ ///
    bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
    {
-
     const int64_t pos_key = find_key(key);
 
     if (pos_key == kInvaridIndex) {
@@ -97,7 +96,6 @@ template <typename KeyType, typename ValueType>
     }
 
     const uint64_t size = extract_size(property(pos_key));
-
     if (size == 1ULL) {
       if (m_value_block_[pos_key].value == val) return false;
         /// 2. convert data structure to array model
@@ -163,23 +161,15 @@ template <typename KeyType, typename ValueType>
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
       unsigned char dmy = 0;
 
-      /// DB
-      // if (key == 0) {
-      //   DEBUG("Before insertion");
-      //   DEBUG2(size);
-      //   RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
-      //   rhh_adj_list.disp_elems(size);
-      // }
-
+      if (key == 0 && val == 11) {
+        DISP_LOG("insert");
+        rhh_adj_list.disp_elems(size); // DB
+      }
       bool err = rhh_adj_list.insert_uniquely(allocators, val, dmy, size);
-
-      /// DB
-      // if (key == 0) {
-      //   DEBUG("After insertion");
-      //   RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
-      //   rhh_adj_list.disp_elems(size+err);
-      // }
-
+      if (key == 0 && val == 11) {
+        DISP_LOG("insert done");
+        rhh_adj_list.disp_elems(size + err); // DB
+      }
       if (err) set_size(pos_key, size+1);
       return err;
     }
@@ -259,7 +249,15 @@ template <typename KeyType, typename ValueType>
       return false;
     } else {
       RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+      if (key == 0 && val == 11) {
+        DISP_LOG("delete");
+        rhh_adj_list.disp_elems(size); // DB
+      }
       bool err = rhh_adj_list.delete_key(allocators, val, size);
+      if (key == 0 && val == 11) {
+        DISP_LOG("delete done");
+        rhh_adj_list.disp_elems(size - err); // DB
+      }
       if (err) {
         set_size(pos_key, --size);
         if (size <= capacityNormalArray3) {
@@ -320,7 +318,7 @@ template <typename KeyType, typename ValueType>
     std::cout << "-------------------------------------------" << std::endl;
   }
 
-  void disp_elems(std::ofstream& output_file)
+  void fprint_elems(std::ofstream& output_file)
   {
 
     for (uint64_t i = 0; i < m_capacity_; ++i) {
@@ -348,7 +346,7 @@ template <typename KeyType, typename ValueType>
     }
   }
 
-  void disp_adjlists_depth(std::ofstream& output_file)
+  void fprint_adjlists_depth(std::ofstream& output_file)
   {
     for (uint64_t i = 0; i < m_capacity_; ++i) {
       PropertyBlockType prop = property(i);
@@ -366,7 +364,7 @@ template <typename KeyType, typename ValueType>
     }
   }
 
-  void disp_adjlists_prbdist(std::ofstream& output_file)
+  void fprint_adjlists_prbdist(std::ofstream& output_file)
   {
     for (uint64_t i = 0; i < m_capacity_; ++i) {
       PropertyBlockType prop = property(i);
@@ -550,7 +548,7 @@ private:
     for (uint64_t i = 0; i < old_capacity; ++i) {
       const PropertyBlockType old_prop = old_property_block[i];
       if (old_prop != kClearedValue && !is_deleted(old_prop)) {
-        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
+        is_long_probedistance |= insert_capacity_selector(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
       }
     }
 
@@ -577,7 +575,7 @@ private:
     for (uint64_t i = 0; i < old_capacity; ++i) {
       const PropertyBlockType old_prop = old_property_block[i];
       if (old_prop != kClearedValue && !is_deleted(old_prop)) {
-        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
+        is_long_probedistance |= insert_capacity_selector(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
       }
     }
 
@@ -608,7 +606,6 @@ private:
   inline ValueType* allocate_normal_array(AllocatorsHolder &allocators, size_t capacity)
   {
     ValueType* ptr = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(capacity).get());
-    // std::cout << "allocated: " << ptr << " " << capacity << std::endl; // DB
     return ptr;
   }
 
@@ -624,22 +621,21 @@ private:
 
   inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, uint64_t capacity)
   {
-    // std::cout << "deallocate: " << ptr << " " << capacity << std::endl; // DB
-    // allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
+    allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
   }
 
   /// ------ Private member functions: insertion ----- ///
   inline void insert_directly_with_growing(AllocatorsHolder &allocators, KeyType&& key, ValueWrapperType&& value)
   {
     ++m_num_elems_;
-    bool is_long_probedistance = insert_helper(std::move(key), std::move(value), kPropertySize1);
+    bool is_long_probedistance = insert_capacity_selector(std::move(key), std::move(value), kPropertySize1);
 
     if (m_num_elems_ >= m_capacity_*kFullCalacityFactor || is_long_probedistance) {
       grow_rhh_main(allocators);
     }
   }
 
-  bool insert_helper(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
+  bool insert_capacity_selector(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
   {
     const uint64_t mask = cal_mask();
     int64_t pos = cal_desired_pos(hash_key(key), mask);

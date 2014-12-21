@@ -43,10 +43,10 @@ def init_test_dir():
 	global sbatch_file
 	global executable
 
-	time_stamp = str(time.time())
+	time_stamp = str(time.datetime())
 
 	while os.path.exists(log_dir+time_stamp):
-		time_stamp = str(time.time())
+		time_stamp = str(time.datetime())
 
 	if DEBUG:
 		log_dir += "debug/"

@@ -10,6 +10,8 @@
 namespace RHH {
 
   namespace bip = boost::interprocess;
+  typedef bip::managed_mapped_file  mapped_t;
+  typedef mapped_t::segment_manager segment_manager_t;
 
   /// Memory size (Byte) = capacity * (  1  /// property block
   ///                                  + 8  /// key block
@@ -56,6 +58,25 @@ namespace RHH {
   typedef RHHStatic<uint64_t, NoValueType, capacityRHHStatic_16> RHHStaticNoVal_16;
   typedef RHHStatic<uint64_t, NoValueType, capacityRHHStatic_17> RHHStaticNoVal_17;
 
+  typedef bip::node_allocator<RHHStaticNoVal_1, segment_manager_t,  47>  Allocator_RHH_NoVal_1;
+  typedef bip::node_allocator<RHHStaticNoVal_2, segment_manager_t,  24>  Allocator_RHH_NoVal_2;
+  typedef bip::node_allocator<RHHStaticNoVal_3, segment_manager_t,  12>  Allocator_RHH_NoVal_3;
+  typedef bip::node_allocator<RHHStaticNoVal_4, segment_manager_t,   6>  Allocator_RHH_NoVal_4;
+  typedef bip::node_allocator<RHHStaticNoVal_5, segment_manager_t,   3>  Allocator_RHH_NoVal_5;
+  typedef bip::node_allocator<RHHStaticNoVal_6, segment_manager_t,   1>  Allocator_RHH_NoVal_6;
+  typedef bip::node_allocator<RHHStaticNoVal_7, segment_manager_t,   1>  Allocator_RHH_NoVal_7;
+  typedef bip::node_allocator<RHHStaticNoVal_8, segment_manager_t,   1>  Allocator_RHH_NoVal_8;
+  typedef bip::node_allocator<RHHStaticNoVal_9, segment_manager_t,   1>  Allocator_RHH_NoVal_9;
+  typedef bip::node_allocator<RHHStaticNoVal_10, segment_manager_t,  1>  Allocator_RHH_NoVal_10;
+  typedef bip::node_allocator<RHHStaticNoVal_11, segment_manager_t,  1>  Allocator_RHH_NoVal_11;
+  typedef bip::node_allocator<RHHStaticNoVal_12, segment_manager_t,  1>  Allocator_RHH_NoVal_12;
+  typedef bip::node_allocator<RHHStaticNoVal_13, segment_manager_t,  1>  Allocator_RHH_NoVal_13;
+  typedef bip::node_allocator<RHHStaticNoVal_14, segment_manager_t,  1>  Allocator_RHH_NoVal_14;
+  typedef bip::node_allocator<RHHStaticNoVal_15, segment_manager_t,  1>  Allocator_RHH_NoVal_15;
+  typedef bip::node_allocator<RHHStaticNoVal_16, segment_manager_t,  1>  Allocator_RHH_NoVal_16;
+  typedef bip::node_allocator<RHHStaticNoVal_17, segment_manager_t,  1>  Allocator_RHH_NoVal_17;
+  typedef bip::node_allocator<uint64_t, segment_manager_t, 512> allocator_normalarray_t;
+  typedef bip::allocator<unsigned char, segment_manager_t> allocator_raw_t;
 
   ///  =========================================================================== ///
   ///                             Allocator Holder
@@ -63,8 +84,6 @@ namespace RHH {
   class AllocatorsHolder
   {
   public:
-    typedef bip::managed_mapped_file  mapped_t;
-    typedef mapped_t::segment_manager segment_manager_t;
     explicit AllocatorsHolder(segment_manager_t* segment_manager)
     : allocator_rhh_noval_1(segment_manager)
     , allocator_rhh_noval_2(segment_manager)
@@ -90,25 +109,25 @@ namespace RHH {
 
   /// size = capacity * (1 + 8 + 1) + 8
   /// probedistance = 1 byte, key = 8 byte, value block = 1 byte
-  bip::node_allocator<RHHStaticNoVal_1, segment_manager_t,  47>  allocator_rhh_noval_1;
-  bip::node_allocator<RHHStaticNoVal_2, segment_manager_t,  24>  allocator_rhh_noval_2;
-  bip::node_allocator<RHHStaticNoVal_3, segment_manager_t,  12>  allocator_rhh_noval_3;
-  bip::node_allocator<RHHStaticNoVal_4, segment_manager_t,   6>  allocator_rhh_noval_4;
-  bip::node_allocator<RHHStaticNoVal_5, segment_manager_t,   3>  allocator_rhh_noval_5;
-  bip::node_allocator<RHHStaticNoVal_6, segment_manager_t,   1>  allocator_rhh_noval_6;
-  bip::node_allocator<RHHStaticNoVal_7, segment_manager_t,   1>  allocator_rhh_noval_7;
-  bip::node_allocator<RHHStaticNoVal_8, segment_manager_t,   1>  allocator_rhh_noval_8;
-  bip::node_allocator<RHHStaticNoVal_9, segment_manager_t,   1>  allocator_rhh_noval_9;
-  bip::node_allocator<RHHStaticNoVal_10, segment_manager_t,  1>  allocator_rhh_noval_10;
-  bip::node_allocator<RHHStaticNoVal_11, segment_manager_t,  1>  allocator_rhh_noval_11;
-  bip::node_allocator<RHHStaticNoVal_12, segment_manager_t,  1>  allocator_rhh_noval_12;
-  bip::node_allocator<RHHStaticNoVal_13, segment_manager_t,  1>  allocator_rhh_noval_13;
-  bip::node_allocator<RHHStaticNoVal_14, segment_manager_t,  1>  allocator_rhh_noval_14;
-  bip::node_allocator<RHHStaticNoVal_15, segment_manager_t,  1>  allocator_rhh_noval_15;
-  bip::node_allocator<RHHStaticNoVal_16, segment_manager_t,  1>  allocator_rhh_noval_16;
-  bip::node_allocator<RHHStaticNoVal_17, segment_manager_t,  1>  allocator_rhh_noval_17;
-  bip::node_allocator<uint64_t, segment_manager_t, 512> allocator_normalarray;
-  bip::allocator<unsigned char, segment_manager_t> allocator_raw;
+  Allocator_RHH_NoVal_1 allocator_rhh_noval_1;
+  Allocator_RHH_NoVal_2 allocator_rhh_noval_2;
+  Allocator_RHH_NoVal_3 allocator_rhh_noval_3;
+  Allocator_RHH_NoVal_4 allocator_rhh_noval_4;
+  Allocator_RHH_NoVal_5 allocator_rhh_noval_5;
+  Allocator_RHH_NoVal_6 allocator_rhh_noval_6;
+  Allocator_RHH_NoVal_7 allocator_rhh_noval_7;
+  Allocator_RHH_NoVal_8 allocator_rhh_noval_8;
+  Allocator_RHH_NoVal_9 allocator_rhh_noval_9;
+  Allocator_RHH_NoVal_10 allocator_rhh_noval_10;
+  Allocator_RHH_NoVal_11 allocator_rhh_noval_11;
+  Allocator_RHH_NoVal_12 allocator_rhh_noval_12;
+  Allocator_RHH_NoVal_13 allocator_rhh_noval_13;
+  Allocator_RHH_NoVal_14 allocator_rhh_noval_14;
+  Allocator_RHH_NoVal_15 allocator_rhh_noval_15;
+  Allocator_RHH_NoVal_16 allocator_rhh_noval_16;
+  Allocator_RHH_NoVal_17 allocator_rhh_noval_17;
+  allocator_normalarray_t allocator_normalarray;
+  allocator_raw_t allocator_raw;
 
   private:
     // static inline uint64_t cal_next_highest_power_of_2(uint64_t x)

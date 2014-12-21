@@ -29,4 +29,3 @@ echo "Check done!!"  | tee -a  /l/ssd/edge_diff_check.log
 echo "-- wc --"  | tee -a  /l/ssd/edge_diff_check.log
 wc /l/ssd/tmp_del_uniq.dat  | tee -a  /l/ssd/edge_diff_check.log
 wc /l/ssd/graph_out.debug_edges_graph  | tee -a  /l/ssd/edge_diff_check.log
-echo "Fin."  | tee -a  /l/ssd/edge_diff_check.log

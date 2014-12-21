@@ -114,9 +114,9 @@
       return (pos_key == kInvaridIndex);
     }
 
-    inline UpdateErrors insert(KeyType key, ValueType val)
+    inline UpdateErrors insert(KeyType key, ValueType val, KeyType* key_long_prbdst = nullptr, ValueType* val_long_prbdst = nullptr)
     {
-      return insert_helper(std::move(key), std::move(val));
+      return insert_helper(std::move(key), std::move(val), key_long_prbdst, val_long_prbdst);
     }
 
     bool delete_key(const KeyType& key)
@@ -243,7 +243,7 @@
     static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
     static const int64_t kInvaridIndex                = -1LL;
     static const uint64_t kMask = Capacity - 1ULL;
-    static const ProbeDistanceType kLongProbedistanceThreshold  = 10;  /// must be less than max value of probedirance
+    static const ProbeDistanceType kLongProbedistanceThreshold  = 30;  /// must be less than max value of probedirance
 
     ///  ------------------------------------------------------ ///
     ///              Private Member Functions
@@ -291,7 +291,7 @@
 
     inline bool is_deleted(const PropertyBlockType prop) const
     {
-      return (prop & kTombstoneMask) == kTombstoneMask;
+      return (prop & kTombstoneMask);
     }
 
     inline bool is_empty(const PropertyBlockType prop) const
@@ -309,7 +309,7 @@
     {
       for (int64_t i = 0; i < Capacity; ++i) {
         const PropertyBlockType elem_property = property(i);
-        if (is_empty(elem_property) || is_deleted(elem_property)) {
+        if (!is_valid(i)) {
           construct(i, kLongProbedistanceThreshold, std::move(key), std::move(val));
           return;
         }
@@ -317,7 +317,7 @@
       assert(false);
     }
 
-    UpdateErrors insert_helper(KeyType &&key, ValueType &&val)
+    UpdateErrors insert_helper(KeyType &&key, ValueType &&val, KeyType* key_long_prbdst, ValueType* val_long_prbdst)
     {
       int64_t pos = cal_desired_pos(hash_key(key));
       ProbeDistanceType dist = 0;
@@ -330,7 +330,9 @@
         if(is_empty(existing_elem_property))
         {
           if (dist >= kLongProbedistanceThreshold) {
-            insert_into_tempolayspace(std::move(key), std::move(val));
+            *key_long_prbdst = key;
+            *val_long_prbdst = val;
+            //insert_into_tempolayspace(std::move(key), std::move(val));
             return kLongProbedistance;
           }
           construct(pos, dist, std::move(key), std::move(val));
@@ -342,7 +344,9 @@
         if (extract_probedistance(existing_elem_property) <= dist)
         {
           if (dist >= kLongProbedistanceThreshold) {
-            insert_into_tempolayspace(std::move(key), std::move(val));
+            *key_long_prbdst = key;
+            *val_long_prbdst = val;
+            // insert_into_tempolayspace(std::move(key), std::move(val));
             return kLongProbedistance;
           }
           if(is_deleted(existing_elem_property))
@@ -463,6 +467,7 @@
   PropertyBlockType m_property_block_[Capacity];
   KeyType m_key_block_[Capacity];
   ValueType m_value_block_[Capacity];
+
 };
 }
 

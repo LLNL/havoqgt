@@ -477,19 +477,19 @@ print_profile()
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out);
-    hybrid_matrix->disp_elems(fout);
+    hybrid_matrix->fprint_elems(fout);
     fout.close();
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open("/l/ssd/g_adjlistprobedist.log", std::ios::out);
-    hybrid_matrix->disp_adjlists_prbdist(fout);
+    hybrid_matrix->fprint_adjlists_prbdist(fout);
     fout.close();
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open("/l/ssd/g_adjlistdepth.log", std::ios::out);
-    hybrid_matrix->disp_adjlists_depth(fout);
+    hybrid_matrix->fprint_adjlists_depth(fout);
     fout.close();
   }
 #endif
