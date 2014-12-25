@@ -66,75 +66,75 @@ template <typename KeyType, typename ValueType>
   ///              Constructor / Destructor
   ///  ------------------------------------------------------ ///
   /// --- Constructor --- //
-  RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
-  : m_num_elems_(0)
-  , m_capacity_(initial_capasity)
-  , m_ptr_(nullptr)
-  {
-    allocate_rhh_main(allocators);
-  }
+    RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
+    : m_num_elems_(0)
+    , m_capacity_(initial_capasity)
+    , m_ptr_(nullptr)
+    {
+      allocate_rhh_main(allocators);
+    }
 
   /// --- Destructor --- //
-  ~RHHMain()
-  { }
+    ~RHHMain()
+    { }
 
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions
   ///  ------------------------------------------------------ ///
-   bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
-   {
-    const int64_t pos_key = find_key(key);
+    bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
+    {
+      const int64_t pos_key = find_key(key);
 
-    if (pos_key == kInvaridIndex) {
+      if (pos_key == kInvaridIndex) {
         /// 1. new vertex
-      ValueWrapperType value;
-      value.value = val;
-      insert_directly_with_growing(allocators, std::move(key), std::move(value));
-      return true;
-    }
-
-    const uint64_t size = extract_size(property(pos_key));
-    if (size == 1ULL) {
-      if (m_value_block_[pos_key].value == val) return false;
-        /// 2. convert data structure to array model
-      ValueType* array =  allocate_normal_array(allocators, 2);
-      array[0] = m_value_block_[pos_key].value;
-      array[1] = val;
-      m_value_block_[pos_key].value_array = array;
-
-      set_bitmap(pos_key, 0x03);
-      set_size(pos_key, 2ULL);
-
-      return true;
-    }
-
-    if (size <= capacityNormalArray3) {
-      /// 3. we already have a normal-array
-      NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
-      ValueType* array = m_value_block_[pos_key].value_array;
-      int capacity = cal_next_pow2(size);
-
-      /// Check duplicated value
-      for (int i=0; i < capacity; ++i) {
-        if (((btmp >> i) & 0x01) && (array[i] == val)) return false;
+        ValueWrapperType value;
+        value.value = val;
+        insert_directly_with_growing(allocators, std::move(key), std::move(value));
+        return true;
       }
 
-      if (size == capacityNormalArray3) {
-          /// 3-1. convert data strucure normal-array to RHHStatic
+      const uint64_t size = extract_size(property(pos_key));
+      if (size == 1ULL) {
+        if (m_value_block_[pos_key].value == val) return false;
+        /// 2. convert data structure to array model
+        ValueType* array =  allocate_normal_array(allocators, 2);
+        array[0] = m_value_block_[pos_key].value;
+        array[1] = val;
+        m_value_block_[pos_key].value_array = array;
+
+        set_bitmap(pos_key, 0x03);
+        set_size(pos_key, 2ULL);
+
+        return true;
+      }
+
+      if (size <= capacityNormalArray3) {
+      /// 3. we already have a normal-array
+        NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
         ValueType* array = m_value_block_[pos_key].value_array;
-        ValueWrapperType value_wrapper;
+        int capacity = cal_next_pow2(size);
 
-        new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
-        unsigned char dmy = 0;
-        for (int i = 0; i < capacityNormalArray3; ++i) {
-          /// TODO: don't need to check uniquely
-          value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, capacityNormalArray3);
+      /// Check duplicated value
+        for (int i=0; i < capacity; ++i) {
+          if (((btmp >> i) & 0x01) && (array[i] == val)) return false;
         }
-        free_buffer_normal_array(allocators, array, capacity);
 
-        value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, capacityNormalArray3);
-        m_value_block_[pos_key] = std::move(value_wrapper);
-        set_size(pos_key, capacityNormalArray3 + 1);
+        if (size == capacityNormalArray3) {
+          /// 3-1. convert data strucure normal-array to RHHStatic
+          ValueType* array = m_value_block_[pos_key].value_array;
+          ValueWrapperType value_wrapper;
+
+          new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
+          unsigned char dmy = 0;
+          for (int i = 0; i < capacityNormalArray3; ++i) {
+          /// TODO: don't need to check uniquely
+            value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, capacityNormalArray3);
+          }
+          free_buffer_normal_array(allocators, array, capacity);
+
+          value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, capacityNormalArray3);
+          m_value_block_[pos_key] = std::move(value_wrapper);
+          set_size(pos_key, capacityNormalArray3 + 1);
 
         return true; // Since duplication check has alreadly done, always retrun true.
       }
@@ -258,6 +258,42 @@ template <typename KeyType, typename ValueType>
     }
 
     assert(false);
+    return false;
+  }
+
+  /// This is a tempolary function
+  bool get_next(int64_t *current_key_pos, int64_t *current_val_pos, KeyType& key, ValueType *val)
+  {
+    if (*current_key_pos == kInvaridIndex) {
+      *current_key_pos = find_key(key);
+    }
+
+    if (*current_key_pos == kInvaridIndex) {
+      return false;
+    }
+
+    const uint64_t current_size = extract_size(property(*current_key_pos));
+    if (current_size == 1) {
+      *val = m_value_block_[*current_key_pos].value;
+      *current_key_pos = kInvaridIndex;
+      return true;
+    } else if (current_size <= capacityNormalArray3) {
+      NormalArrayBitmapType btmp = extract_bitmap(property(*current_key_pos));
+      ValueType* array = m_value_block_[*current_key_pos].value_array;
+      uint64_t capacity = cal_next_pow2(current_size);
+
+      for (; *current_val_pos < capacity; *current_val_pos = *current_val_pos + 1) {
+        if (!((btmp >> *current_val_pos) & 0x01)) {
+          *val = array[*current_val_pos];
+          *current_val_pos += *current_val_pos + 1;
+          return true;
+        }
+      }
+    } else {
+      RHHAdjalistType& rhh_adj_list = m_value_block_[*current_key_pos].adj_list;
+      return rhh_adj_list.get_next_key(current_val_pos, current_size, val);
+    }
+
     return false;
   }
 

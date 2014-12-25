@@ -396,6 +396,15 @@ add_edges_degree_aware_hybrid(Container req_itr, size_t length)
       count_inserted += hybrid_matrix->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
     }
 
+    // if (source_vtx == 0) {
+    //   uint64_t src = 0, trg;
+    //   int64_t pos_src = -1, pos_trg = 0;
+    //   std::cout << "-------------------------" << std::endl;
+    //   while (hybrid_matrix->get_next(&pos_src, &pos_trg, src, &trg)) {
+    //     std::cout << src << "\t" << trg << std::endl;
+    //     if (pos_src == -1) break;
+    //   }
+    // }
     // std::ofstream fout;
     // fout.open(kFnameDebugInsertedEdges+"test", std::ios::out | std::ios::app);
     // fout << "------ " << source_vtx << "\t" << target_vtx << "\t" << req_itr->is_delete << "------" << std::endl;

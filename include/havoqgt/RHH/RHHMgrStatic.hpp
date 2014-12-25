@@ -133,6 +133,83 @@ class RHHMgrStatic {
     get_elemnts_array_capacity_selector(current_size, key_array, val_array);
   }
 
+  bool get_next_key(int64_t *current_key_pos, const uint64_t current_size, KeyType *key)
+  {
+    return get_next_select_capacity(current_key_pos, current_size, key);
+  }
+
+  bool get_next_select_capacity(int64_t *current_key_pos, const uint64_t size, KeyType *key)
+  {
+    if (size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+      RHHStaticNoVal_1 *rhh = reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_2 * kFullCalacityFactor) {
+      RHHStaticNoVal_2 *rhh = reinterpret_cast<RHHStaticNoVal_2*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_3 * kFullCalacityFactor) {
+      RHHStaticNoVal_3 *rhh = reinterpret_cast<RHHStaticNoVal_3*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_4 * kFullCalacityFactor) {
+      RHHStaticNoVal_4 *rhh = reinterpret_cast<RHHStaticNoVal_4*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_5 * kFullCalacityFactor) {
+      RHHStaticNoVal_5 *rhh = reinterpret_cast<RHHStaticNoVal_5*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_6 * kFullCalacityFactor) {
+      RHHStaticNoVal_6 *rhh = reinterpret_cast<RHHStaticNoVal_6*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_7 * kFullCalacityFactor) {
+      RHHStaticNoVal_7 *rhh = reinterpret_cast<RHHStaticNoVal_7*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_8 * kFullCalacityFactor) {
+      RHHStaticNoVal_8 *rhh = reinterpret_cast<RHHStaticNoVal_8*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_9 * kFullCalacityFactor) {
+      RHHStaticNoVal_9 *rhh = reinterpret_cast<RHHStaticNoVal_9*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_10 * kFullCalacityFactor) {
+      RHHStaticNoVal_10 *rhh = reinterpret_cast<RHHStaticNoVal_10*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_11 * kFullCalacityFactor) {
+      RHHStaticNoVal_11 *rhh = reinterpret_cast<RHHStaticNoVal_11*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_12 * kFullCalacityFactor) {
+      RHHStaticNoVal_12 *rhh = reinterpret_cast<RHHStaticNoVal_12*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_13 * kFullCalacityFactor) {
+      RHHStaticNoVal_13 *rhh = reinterpret_cast<RHHStaticNoVal_13*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_14 * kFullCalacityFactor) {
+      RHHStaticNoVal_14 *rhh = reinterpret_cast<RHHStaticNoVal_14*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_15 * kFullCalacityFactor) {
+      RHHStaticNoVal_15 *rhh = reinterpret_cast<RHHStaticNoVal_15*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else if (size <= capacityRHHStatic_16 * kFullCalacityFactor) {
+      RHHStaticNoVal_16 *rhh = reinterpret_cast<RHHStaticNoVal_16*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    } else {
+      RHHStaticNoVal_17 *rhh = reinterpret_cast<RHHStaticNoVal_17*>(m_ptr_);
+      return rhh->get_next_key(current_key_pos, key);
+
+    }
+  }
 
 /// XXX: should use template function
 #define FPRINT_KEYS(C, PRFX, OF) \

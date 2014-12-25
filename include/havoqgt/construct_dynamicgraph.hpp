@@ -80,9 +80,8 @@
 #include <havoqgt/RHH/RHHAllocHolder.hpp>
 #include <havoqgt/RHH/RHHMain.hpp>
 
- namespace havoqgt {
-  namespace mpi {
-
+namespace havoqgt {
+namespace mpi {
 namespace bip = boost::interprocess;
 
 #ifndef WITHOUT_DUPLICATE_INSERTION
@@ -94,78 +93,77 @@ namespace bip = boost::interprocess;
 #endif
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
-  static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
+    static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
-class IOInfo {
-  public:
-    IOInfo();
-    void init();
-    void reset_baseline();
-    void get_status(int &r, int &w);
-    void log_diff(bool final);
+  class IOInfo {
+    public:
+      IOInfo();
+      void init();
+      void reset_baseline();
+      void get_status(int &r, int &w);
+      void log_diff(bool final);
 
-  private:
-    int read_previous_mb_;
-    int written_previous_mb_;
-    int read_total_mb_;
-    int written_total_mb_;
-};
+    private:
+      int read_previous_mb_;
+      int written_previous_mb_;
+      int read_total_mb_;
+      int written_total_mb_;
+  };
 
-
-struct EdgeUpdateRequest
-{
-  EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
+  struct EdgeUpdateRequest
   {
-    edge = _edge;
-    is_delete = _is_delete;
-  }
+    EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
+    {
+      edge = _edge;
+      is_delete = _is_delete;
+    }
 
-  std::pair<uint64_t, uint64_t> edge;
-  bool is_delete;
-};
+    std::pair<uint64_t, uint64_t> edge;
+    bool is_delete;
+  };
 
 template <typename SegmentManager>
-class construct_dynamicgraph {
- public:
+    class construct_dynamicgraph {
+    public:
 
   // ---------  Typedefs and Enums ------------ //
 
   template<typename T>
-  using SegmentAllocator = bip::allocator<T, SegmentManager>;
-  typedef bip::managed_mapped_file mapped_t;
+      using SegmentAllocator = bip::allocator<T, SegmentManager>;
+      typedef bip::managed_mapped_file mapped_t;
 
-  typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
-  typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
+      typedef bip::vector<uint64_t, SegmentAllocator<uint64_t>> uint64_vector_t;
+      typedef bip::vector<uint64_vector_t, SegmentAllocator<uint64_vector_t>> adjacency_matrix_vec_vec_t;
 
-  typedef std::pair<const uint64_t, uint64_vector_t> map_value_vec_t;
-  typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_vec_t>> adjacency_matrix_map_vec_t;
+      typedef std::pair<const uint64_t, uint64_vector_t> map_value_vec_t;
+      typedef boost::unordered_map<uint64_t, uint64_vector_t, boost::hash<uint64_t>, std::equal_to<uint64_t>, SegmentAllocator<map_value_vec_t>> adjacency_matrix_map_vec_t;
 
-  typedef robin_hood_hash<uint64_t, uint64_t, SegmentManager> rhh_single_array_t;
+      typedef robin_hood_hash<uint64_t, uint64_t, SegmentManager> rhh_single_array_t;
 
-  typedef RHHAdjacencyMatrix<uint64_t, uint64_t, SegmentAllocator<void>> rhh_matrix_t;
+      typedef RHHAdjacencyMatrix<uint64_t, uint64_t, SegmentAllocator<void>> rhh_matrix_t;
 
-  enum DataStructureMode {
-    kUseVecVecMatrix,
-    kUseMapVecMatrix,
-    kUseRHHAsArray,
-    kUseRHHAsMatrix,
-    kUseHybridDegreeAwareModel
-  };
+      enum DataStructureMode {
+        kUseVecVecMatrix,
+        kUseMapVecMatrix,
+        kUseRHHAsArray,
+        kUseRHHAsMatrix,
+        kUseHybridDegreeAwareModel
+      };
 
   ///  ------------------------------------------------------ ///
   ///              Constructor / Destructor
   ///  ------------------------------------------------------ ///
   //--  Constructor -- //
-  construct_dynamicgraph(
-    mapped_t& asdf,
-    SegmentAllocator<void>& seg_allocator,
-    const DataStructureMode mode,
-    const uint64_t n);
+      construct_dynamicgraph(
+        mapped_t& asdf,
+        SegmentAllocator<void>& seg_allocator,
+        const DataStructureMode mode,
+        const uint64_t n);
 
   //--  Deconstructors -- //
-  ~construct_dynamicgraph();
+      ~construct_dynamicgraph();
 
 
   ///  ------------------------------------------------------ ///
@@ -173,41 +171,41 @@ class construct_dynamicgraph {
   ///  ------------------------------------------------------ ///
   /// add edges controller
   template <typename Container>
-  inline void add_edges_adjacency_matrix(Container req_itr, size_t length)
-  {
-    switch(data_structure_type_) {
-      case kUseVecVecMatrix:
-        add_edges_adjacency_matrix_vector_vector(req_itr, length);
-        break;
+      inline void add_edges_adjacency_matrix(Container req_itr, size_t length)
+      {
+        switch(data_structure_type_) {
+          case kUseVecVecMatrix:
+          add_edges_adjacency_matrix_vector_vector(req_itr, length);
+          break;
 
-      case kUseMapVecMatrix:
-        add_edges_adjacency_matrix_map_vector(req_itr, length);
-        break;
+          case kUseMapVecMatrix:
+          add_edges_adjacency_matrix_map_vector(req_itr, length);
+          break;
 
-      case kUseRHHAsArray:
-        add_edges_rhh_single_array(req_itr, length);
-        break;
+          case kUseRHHAsArray:
+          add_edges_rhh_single_array(req_itr, length);
+          break;
 
-      case kUseRHHAsMatrix:
-        add_edges_rhh_matrix(req_itr, length);
-        break;
+          case kUseRHHAsMatrix:
+          add_edges_rhh_matrix(req_itr, length);
+          break;
 
-      case kUseHybridDegreeAwareModel:
-        add_edges_degree_aware_hybrid(req_itr, length);
-        break;
+          case kUseHybridDegreeAwareModel:
+          add_edges_degree_aware_hybrid(req_itr, length);
+          break;
 
-      default:
-        std::cerr << "Unknown data structure type" << std::endl;
-        exit(-1);
-    }
+          default:
+          std::cerr << "Unknown data structure type" << std::endl;
+          exit(-1);
+        }
 
-  }
-  void print_profile();
-  void reset_profile();
+      }
+      void print_profile();
+      void reset_profile();
 
- private:
+    private:
 
-  static const char kNoValue;
+      static const char kNoValue;
 
   ///  ------------------------------------------------------ ///
   ///              Private Member Functions
@@ -215,67 +213,67 @@ class construct_dynamicgraph {
 
   /// add edges vector-vector adjacency-matrix
   template <typename Container>
-  void add_edges_adjacency_matrix_vector_vector(Container req_itr, size_t length);
+      void add_edges_adjacency_matrix_vector_vector(Container req_itr, size_t length);
 
   /// add edges unsorted_map-vector adjacency-matrix
   template <typename Container>
-  void add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length);
+      void add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length);
 
   /// add edges array by using robin hood hash
   template <typename Container>
-  void add_edges_rhh_single_array(Container req_itr, size_t length);
+      void add_edges_rhh_single_array(Container req_itr, size_t length);
 
   template <typename Container>
-  void add_edges_rhh_matrix(Container req_itr, size_t length);
+      void add_edges_rhh_matrix(Container req_itr, size_t length);
 
   template <typename Container>
-  void add_edges_degree_aware_hybrid(Container req_itr, size_t length);
+      void add_edges_degree_aware_hybrid(Container req_itr, size_t length);
 
-  inline void flush_pagecache() {
-    asdf_.flush();
-  }
+      inline void flush_pagecache() {
+        asdf_.flush();
+      }
 
   ///  ------------------------------------------------------ ///
   ///              Private Member Variables
   ///  ------------------------------------------------------ ///
-  mapped_t& asdf_;
-  SegmentAllocator<void>& seg_allocator_;
-  const DataStructureMode data_structure_type_;
-  const uint64_t kLowDegreeThreshold;
+      mapped_t& asdf_;
+      SegmentAllocator<void>& seg_allocator_;
+      const DataStructureMode data_structure_type_;
+      const uint64_t kLowDegreeThreshold;
 
-  adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
-  uint64_vector_t *init_vec;
+      adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
+      uint64_vector_t *init_vec;
 
-  adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
+      adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
 
-  rhh_single_array_t *rhh_single_array;
+      rhh_single_array_t *rhh_single_array;
 
-  rhh_matrix_t *rhh_matrix_;
+      rhh_matrix_t *rhh_matrix_;
 
-  RHH::AllocatorsHolder *alloc_holder;
-  RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
+      RHH::AllocatorsHolder *alloc_holder;
+      RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
 
   // IOInfo *io_info_;
-  double total_exectution_time_;
+      double total_exectution_time_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
-  std::ofstream fout_debug_insertededges_;
+      std::ofstream fout_debug_insertededges_;
 #endif
 
-};
+    };
 
 
 
 /// Frees the container of edges
 template <typename Container>
-void free_edge_container(Container &edges) {};
+    void free_edge_container(Container &edges) {};
 
 
 template<>
-void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
-  std::vector< std::pair<uint64_t, uint64_t> >empty(0);
-  edges.swap(empty);
-};
+    void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
+      std::vector< std::pair<uint64_t, uint64_t> >empty(0);
+      edges.swap(empty);
+    };
 
 
 } // namespace mpi

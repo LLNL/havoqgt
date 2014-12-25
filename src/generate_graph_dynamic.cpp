@@ -74,24 +74,24 @@
 // take rank * 100 and make edges between (all local)
 // Make one vert per rank a hub.
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
-typedef bip::managed_mapped_file mapped_t;
-typedef mapped_t::segment_manager segment_manager_t;
-typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
+ namespace hmpi = havoqgt::mpi;
+ using namespace havoqgt::mpi;
+ typedef bip::managed_mapped_file mapped_t;
+ typedef mapped_t::segment_manager segment_manager_t;
+ typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 
 
-void print_dram_usages(void)
-{
-    struct sysinfo info;
-    sysinfo(&info);
-    std::cout << "Usage: mem_unit:\t" << info.mem_unit << std::endl;
-    std::cout << "Usage: totalram(GiB):\t" << (double)info.totalram / (1<<30ULL) << std::endl;
-    std::cout << "Usage: freeram(GiB):\t" << (double)info.freeram / (1<<30ULL) << std::endl;
-    std::cout << "Usage: usedram(GiB):\t" << (double)(info.totalram - info.freeram) / (1<<30ULL) << std::endl;
-    std::cout << "Usage: bufferram(GiB):\t" << (double)info.bufferram / (1<<30ULL) << std::endl;
-    std::cout << "Usage: totalswap(GiB):\t" << (double)info.totalswap / (1<<30ULL) << std::endl;
-    std::cout << "Usage: freeswap(GiB):\t" << (double)info.freeswap / (1<<30ULL) << std::endl;
+ void print_dram_usages(void)
+ {
+  struct sysinfo info;
+  sysinfo(&info);
+  std::cout << "Usage: mem_unit:\t" << info.mem_unit << std::endl;
+  std::cout << "Usage: totalram(GiB):\t" << (double)info.totalram / (1<<30ULL) << std::endl;
+  std::cout << "Usage: freeram(GiB):\t" << (double)info.freeram / (1<<30ULL) << std::endl;
+  std::cout << "Usage: usedram(GiB):\t" << (double)(info.totalram - info.freeram) / (1<<30ULL) << std::endl;
+  std::cout << "Usage: bufferram(GiB):\t" << (double)info.bufferram / (1<<30ULL) << std::endl;
+  std::cout << "Usage: totalswap(GiB):\t" << (double)info.totalswap / (1<<30ULL) << std::endl;
+  std::cout << "Usage: freeswap(GiB):\t" << (double)info.freeswap / (1<<30ULL) << std::endl;
 }
 
 template <typename Edges>

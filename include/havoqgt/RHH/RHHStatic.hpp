@@ -184,6 +184,18 @@
       }
     }
 
+    /// test code
+    inline bool get_next_key(int64_t* current_key_pos, KeyType* key)
+    {
+      for (; *current_key_pos < Capacity; *current_key_pos = *current_key_pos + 1) {
+        if (is_valid(*current_key_pos)) {
+          *key = m_key_block_[*current_key_pos];
+          *current_key_pos = *current_key_pos + 1;
+          return true;
+        }
+      }
+      return false;
+    }
 
     uint64_t cal_depth()
     {
