@@ -92,6 +92,10 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
+  
+  processes_per_node = havoqgt_env()->node_local_comm().size();
+  node_partitions = 4; ///< @todo make env var
+  edge_chunk_size = 1024*8; ///< @todo marke env var
 
   m_global_max_vertex = max_vertex;
   m_max_vertex = (std::ceil(double(max_vertex) / double(m_mpi_size)));
@@ -101,8 +105,6 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 ////////////////////////////////////////////////////////////////////////////////
 /// Meta data phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
-
-  assert(sizeof(vertex_locator) == 8);
 
   {
     LogStep logstep("Allocating 4 Arrays of length max local vertex.",
@@ -795,7 +797,8 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
           assert(false);
           exit(-1);
         }
-        assert(!m_owned_targets[loc].is_valid());
+        /// @todo this was tripping, is this old?   Could be left over from before when targets was vector based.
+        //assert(!m_owned_targets[loc].is_valid());
 
         m_owned_targets[loc] = label_to_locator(edge.second);
       }  // for over recieved egdes

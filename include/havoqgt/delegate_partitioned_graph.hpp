@@ -72,22 +72,6 @@
 #include <havoqgt/impl/edge_partitioner.hpp>
 #include <havoqgt/impl/edge_node_identifier.hpp>
 
-#ifndef PROCESSES_PER_NODE
- #define PROCESSES_PER_NODE 24
- #warning using default processer node of 24
-#endif
-
-#ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 6
- #warning using default edge pass partitions of 6
-#endif
-
-#ifndef EDGE_CHUNK_SIZE
- #define EDGE_CHUNK_SIZE 1024*8
- #warning using default send chunk size of 2^13
-#endif
-
-
 #ifdef DEBUG_DPG
  #warning Debug MACRO is for delegate_partitioned_graph.
  #define IS_DEBUGING true
@@ -338,9 +322,9 @@ class delegate_partitioned_graph {
   // Protected Data Members
   //////////////////////////////////////////////////////////////////////////////
  protected:
-  const static uint64_t edge_chunk_size = EDGE_CHUNK_SIZE;
-  const int processes_per_node = PROCESSES_PER_NODE;
-  const int node_partitions = EDGE_PASS_PARTITIONS;
+  uint64_t edge_chunk_size;
+  int processes_per_node;
+  int node_partitions;
   int m_mpi_size;
   int m_mpi_rank;
   MPI_Comm m_mpi_comm;
