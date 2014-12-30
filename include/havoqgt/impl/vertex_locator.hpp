@@ -69,18 +69,13 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     m_local_id     = std::numeric_limits<uint64_t>::max();
   }
 
-  bool is_valid() {
-    struct Temp {
-      uint64_t local_id : 31;//39;
-      uint32_t owner_dest : 14;//20;
-    };
-
-    Temp conv;
-    conv.local_id = std::numeric_limits<uint64_t>::max();
-    conv.owner_dest = std::numeric_limits<uint64_t>::max();
+  bool is_valid() const {
+    delegate_partitioned_graph<SegementManager>::vertex_locator conv;
+    conv.m_local_id = std::numeric_limits<uint64_t>::max();
+    conv.m_owner_dest = std::numeric_limits<uint64_t>::max();
 
 
-    return (m_local_id != conv.local_id || m_owner_dest != conv.owner_dest);
+    return (m_local_id != conv.m_local_id || m_owner_dest != conv.m_owner_dest);
   }
 
   bool is_delegate() const { return m_is_delegate == 1;}
@@ -120,8 +115,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
 
   unsigned int m_is_bcast     : 1;
   unsigned int m_is_intercept : 1;
-  unsigned int m_owner_dest   : 14;
-  uint64_t     m_local_id     : 31;
+  unsigned int m_owner_dest   : 20;
+  uint64_t     m_local_id     : 39;
 
   vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
 } __attribute__ ((packed)) ;
