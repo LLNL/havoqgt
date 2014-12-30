@@ -109,7 +109,17 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     m_delegate_data.resize(dpg.m_delegate_info.size());
     }
       
+  T local_accumulate() const {
+    T to_return = T();
+    to_return = std::accumulate(m_owned_vert_data.begin(), m_owned_vert_data.end(), to_return);
+    to_return = std::accumulate(m_delegate_data.begin(), m_delegate_data.end(), to_return);
+    return to_return;
+  }
   
+  T global_accumulate() const {
+    T local = local_accumulate();
+    return mpi_all_reduce(local,std::plus<T>(), MPI_COMM_WORLD);
+  }
 
  private:
   bip::vector<T, Allocator > m_owned_vert_data;
