@@ -75,31 +75,6 @@ To count triangles on a previously constructed graph, <i>test_rmat</i>, run:
 
 //-----------------------------------------------------------
 
-/** \page developer_guide Developer Guide
-
-\warning Coming Soon!
-
-<!--
-This guide is intended for people who want to develop new algorithms using HavoqGT.
-
-\section developer_guide_overview Overview
-
-adsf
-
-\section developer_guide_directory Directory Structure
-
-adsf
-
-\section developer_guide_structure Code Structure
-
-
-asdf
--->
-
-*/
-
-//-----------------------------------------------------------
-
 /** \page publications Publications
 Earlier incarnations of this code, and the asynchronous visitor queue techniques, have been
 presented in the following publications:
