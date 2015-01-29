@@ -75,6 +75,59 @@ using namespace havoqgt;
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
+void usage()  {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
+         << " -s <int>    - RMAT graph Scale (default 17)\n"
+         << " -d <int>    - delegate threshold (Default is 1048576)\n"
+         << " -o <string> - output graph base filename\n"
+         << " -h          - print help and exit\n\n";
+         
+  }
+}
+
+void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, std::string& output_filename) {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cout << "CMD line:";
+    for (int i=0; i<argc; ++i) {
+      std::cout << " " << argv[i];
+    }
+    std::cout << std::endl;
+  }
+  
+  bool found_output_filename = false;
+  scale = 17;
+  delegate_threshold = 1048576;
+  
+  char c;
+  bool prn_help = false;
+  while ((c = getopt(argc, argv, "s:d:o:h ")) != -1) {
+     switch (c) {
+       case 'h':  
+         prn_help = true;
+         break;
+      case 's':
+         scale = atoll(optarg);
+         break;
+      case 'd':
+         delegate_threshold = atoll(optarg);
+         break; 
+      case 'o':
+         found_output_filename = true;
+         output_filename = optarg;
+         break;
+      default:
+         std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
+         prn_help = true;
+         break;
+     }
+   } 
+   if (prn_help || !found_output_filename) {
+     usage();
+     exit(-1);
+   }
+}
+
 int main(int argc, char** argv) {
 
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
@@ -92,11 +145,6 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
 
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      std::cout << "CMD line:";
-      for (int i=0; i<argc; ++i) {
-        std::cout << " " << argv[i];
-      }
-      std::cout << std::endl;
       havoqgt::get_environment().print();
     }
     havoqgt_env()->world_comm().barrier();
@@ -104,22 +152,13 @@ int main(int argc, char** argv) {
     uint64_t num_vertices = 1;
     uint64_t vert_scale;
     uint64_t hub_threshold;
-    uint32_t load_from_disk;
-
-    std::string type;
     std::string fname_output;
-    if (argc < 4) {
-      std::cerr << "usage: <Scale> <hub_threshold> <file name>" << std::endl;
-      exit(-1);
-    } else {
-      int pos = 1;
-      vert_scale    = boost::lexical_cast<uint64_t>(argv[pos++]);
-      hub_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
-      fname_output = argv[pos++];
-    }
+        
+    parse_cmd_line(argc, argv, vert_scale, hub_threshold, fname_output);
+
     num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
-      std::cout << "Building Graph500 " << type << std::endl
+      std::cout << "Building Graph500"<< std::endl
         << "Building graph Scale: " << vert_scale << std::endl
         << "Hub threshold = " << hub_threshold << std::endl
         << "File name = " << fname_output << std::endl;
