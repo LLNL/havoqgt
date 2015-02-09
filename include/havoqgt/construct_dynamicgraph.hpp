@@ -82,7 +82,7 @@
 
 namespace havoqgt {
 namespace mpi {
-namespace bip = boost::interprocess;
+    namespace bip = boost::interprocess;
 
 #ifndef WITHOUT_DUPLICATE_INSERTION
   #define WITHOUT_DUPLICATE_INSERTION 1
@@ -97,32 +97,43 @@ namespace bip = boost::interprocess;
   //static const std::string kFnameDebugInsertedEdges = "/usr/localdisk/fusion/graph_out.debug_edges";
 #endif
 
-  class IOInfo {
-    public:
-      IOInfo();
-      void init();
-      void reset_baseline();
-      void get_status(int &r, int &w);
-      void log_diff(bool final);
+#ifndef DEBUG_DETAILPROFILE
+  #define DEBUG_DETAILPROFILE 0
+#endif
 
-    private:
-      int read_previous_mb_;
-      int written_previous_mb_;
-      int read_total_mb_;
-      int written_total_mb_;
-  };
+class IOInfo {
+public:
+  IOInfo();
+  void init();
+  void reset_baseline();
+  void get_status(int &r, int &w);
+  void log_diff(bool final);
 
-  struct EdgeUpdateRequest
+private:
+  int read_previous_mb_;
+  int written_previous_mb_;
+  int read_total_mb_;
+  int written_total_mb_;
+};
+
+
+struct EdgeUpdateRequest
+{
+  EdgeUpdateRequest(){}
+
+  EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
   {
-    EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
-    {
-      edge = _edge;
-      is_delete = _is_delete;
-    }
+    edge = _edge;
+    is_delete = _is_delete;
+  }
 
-    std::pair<uint64_t, uint64_t> edge;
-    bool is_delete;
-  };
+  std::pair<uint64_t, uint64_t> edge;
+  bool is_delete;
+};
+
+bool edgerequest_asc( const EdgeUpdateRequest& left, const EdgeUpdateRequest& right ) {
+  return left.edge.first < right.edge.first;
+}
 
 template <typename SegmentManager>
     class construct_dynamicgraph {
@@ -261,8 +272,6 @@ template <typename SegmentManager>
 #endif
 
     };
-
-
 
 /// Frees the container of edges
 template <typename Container>

@@ -359,6 +359,51 @@ void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
     }
   }
 
+// XXX: should use template function
+#define CAL_AVERAGE_PROBEDISTANCE(C) \
+  do{ \
+    RHHStaticNoVal_##C* rhh = reinterpret_cast<RHHStaticNoVal_##C*>(m_ptr_); \
+    rhh->cal_average_probedistance(total, n); \
+  } while (0)
+
+  void cal_average_probedistance(uint64_t size, uint64_t* total, uint64_t* n)
+  {
+    if (size <= capacityRHHStatic_1 * kFullCalacityFactor) {
+      CAL_AVERAGE_PROBEDISTANCE(1);
+    } else if (size <= capacityRHHStatic_2 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(2);
+    } else if (size <= capacityRHHStatic_3 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(3);
+    } else if (size <= capacityRHHStatic_4 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(4);
+    } else if (size <= capacityRHHStatic_5 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(5);
+    } else if (size <= capacityRHHStatic_6 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(6);
+    } else if (size <= capacityRHHStatic_7 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(7);
+    } else if (size <= capacityRHHStatic_8 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(8);
+    } else if (size <= capacityRHHStatic_9 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(9);
+    } else if (size <= capacityRHHStatic_10 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(10);
+    } else if (size <= capacityRHHStatic_11 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(11);
+    } else if (size <= capacityRHHStatic_12 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(12);
+    } else if (size <= capacityRHHStatic_13 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(13);
+    } else if (size <= capacityRHHStatic_14 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(14);
+    } else if (size <= capacityRHHStatic_15 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(15);
+    } else if (size <= capacityRHHStatic_16 * kFullCalacityFactor){
+      CAL_AVERAGE_PROBEDISTANCE(16);
+    } else {
+      CAL_AVERAGE_PROBEDISTANCE(17);
+    }
+  }
 
  private:
   ///  ------------------------------------------------------ ///

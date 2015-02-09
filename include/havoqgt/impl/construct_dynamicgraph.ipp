@@ -179,7 +179,7 @@
   fout_debug_insertededges_.open(kFnameDebugInsertedEdges+"_raw");
 #endif
 
-}
+ }
 
 /**
  * Deconstructor
@@ -187,7 +187,7 @@
 template <typename SegementManager>
  construct_dynamicgraph<SegementManager>::
  ~construct_dynamicgraph()
-{
+ {
 
   if (data_structure_type_ == kUseRHHAsMatrix) {
     rhh_matrix_->free(seg_allocator_);
@@ -370,17 +370,11 @@ add_edges_degree_aware_hybrid(Container req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_deleted = 0;
-
-//  uint64_t count[256] = {0};
-
-  // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
 
     const uint64_t source_vtx = req_itr->edge.first;
     const uint64_t target_vtx = req_itr->edge.second;
-
- //   count[target_vtx%256]++;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
     fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t0" << std::endl;
@@ -391,26 +385,9 @@ add_edges_degree_aware_hybrid(Container req_itr, size_t length)
       fout_debug_insertededges_ << source_vtx << "\t" << target_vtx << "\t1" << std::endl;
 #endif
       count_deleted += hybrid_matrix->delete_item(*alloc_holder, source_vtx, target_vtx);
-
     } else {
       count_inserted += hybrid_matrix->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
     }
-
-    // if (source_vtx == 0) {
-    //   uint64_t src = 0, trg;
-    //   int64_t pos_src = -1, pos_trg = 0;
-    //   std::cout << "-------------------------" << std::endl;
-    //   while (hybrid_matrix->get_next(&pos_src, &pos_trg, src, &trg)) {
-    //     std::cout << src << "\t" << trg << std::endl;
-    //     if (pos_src == -1) break;
-    //   }
-    // }
-    // std::ofstream fout;
-    // fout.open(kFnameDebugInsertedEdges+"test", std::ios::out | std::ios::app);
-    // fout << "------ " << source_vtx << "\t" << target_vtx << "\t" << req_itr->is_delete << "------" << std::endl;
-    // hybrid_matrix->disp_elems(fout);
-    // fout.close();
-
   } // End of a edges insertion loop
   flush_pagecache();
   double time_end = MPI_Wtime();
@@ -419,7 +396,6 @@ add_edges_degree_aware_hybrid(Container req_itr, size_t length)
   std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
   std::cout << "Count: # deleted edges =\t" << count_deleted << std::endl;
 
-  // io_info_->log_diff();
   total_exectution_time_ += time_end - time_start;
 }
 
@@ -433,12 +409,11 @@ print_profile()
 
   // std::cout << "WITHOUT_DUPLICATE_INSERTION is " << WITHOUT_DUPLICATE_INSERTION << std::endl;
   std::cout << "DEBUG_DUMPUPDATEREQUESTANDRESULTS is " << DEBUG_DUMPUPDATEREQUESTANDRESULTS << std::endl;
-#if DEBUG_DUMPUPDATEREQUESTANDRESULTS
+#if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   std::cout << "kFnameDebugInsertedEdges is " << kFnameDebugInsertedEdges << std::endl;
 #endif
 
-  if (data_structure_type_ == kUseRHHAsArray ||
-      data_structure_type_ == kUseRHHAsMatrix) {
+  if (data_structure_type_ == kUseRHHAsArray || data_structure_type_ == kUseRHHAsMatrix) {
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
     //std::cout << "# elements in Robin-Hood-Hashing = " << rhh_single_array->size() << std::endl;
@@ -450,6 +425,11 @@ print_profile()
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;
     std::cout << "--------------------" << std::endl;
+  }
+
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
+    std::cout << "\n<Status of the data structure>" << std::endl;
+    hybrid_matrix->disp_profileinfo();
   }
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
@@ -482,7 +462,15 @@ print_profile()
     rhh_matrix_->dump_probedistance(kFnameDebugInsertedEdges+"_probedistance");
     fout.close();
   }
+  if (data_structure_type_ == kUseHybridDegreeAwareModel) {
+    std::ofstream fout;
+    fout.open("/l/ssd/g_value_length.log", std::ios::out);
+    hybrid_matrix->fprint_value_lengths(fout);
+    fout.close();
+  }
+#endif
 
+#if DEBUG_DETAILPROFILE == 1
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
     fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out);

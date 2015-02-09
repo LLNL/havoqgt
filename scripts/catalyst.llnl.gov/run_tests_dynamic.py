@@ -3,8 +3,8 @@ import atexit
 import time
 import subprocess
 import os.path
+import datetime
 
-VERBOSE = True
 USE_PDEBUG = False
 DEBUG = False
 if DEBUG:
@@ -12,8 +12,9 @@ if DEBUG:
 USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = True
 NORUN = False
-
+VERBOSE = True
 USE_CATALYST = True
+DELETE_WORK_FILES = False
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -43,16 +44,17 @@ def init_test_dir():
 	global sbatch_file
 	global executable
 
-	time_stamp = str(time.datetime())
-
-	while os.path.exists(log_dir+time_stamp):
-		time_stamp = str(time.datetime())
-
 	if DEBUG:
 		log_dir += "debug/"
-	else:
-		log_dir += time_stamp + "/"
-		os.makedirs(log_dir)
+		if not os.path.exists(log_dir):
+			os.makedirs(log_dir)
+
+	time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+	while os.path.exists(log_dir+time_stamp):
+		time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+
+	log_dir += time_stamp + "/"
+	os.makedirs(log_dir)
 
 	log_file_name = log_dir + "run_tests.log"
 	log("Test Motivation:")
@@ -77,7 +79,7 @@ def init_test_dir():
 
 def generate_shell_file():
 	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
-	block_end = "echo -e \"------------------------------------\\n\\n\"\n"
+	block_end = "echo -e \"------------------------------------\"\n"
 	i = 0
 
 	if USE_CATALYST:
@@ -86,9 +88,12 @@ def generate_shell_file():
 		slurm_options = ""
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(1024*256*105) + " "
+		slurm_options += "--di-mmap=" + str(1024*256*12) + ",ver=1.1.20d --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(1024*256*60) + " "
+		slurm_options += "--di-mmap=" + str(15545139) + " "
+
+	if USE_PDEBUG:
+		slurm_options += "-ppdebug"
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -97,19 +102,9 @@ def generate_shell_file():
 			processes = cmd[1]
 			cmd_str = cmd[2]
 
-			if USE_PDEBUG:
-				slurm_options += "-ppdebug -w catalyst322"
-			elif (nodes >= 128):
-				slurm_options += "-pdit128"
-			elif (nodes >= 64):
-				slurm_options += "-pdit64_1"
-			elif (nodes >= 32):
-				slurm_options += "-pdit36"
-
-
 			if DEBUG:
-				cmd_log_fname = log_dir+"test_%j.out"
-				cmd_error_log_fname = log_dir+"test_%j.out"
+				cmd_log_fname = log_dir+"test_"+str(i)+".out"
+				cmd_error_log_fname = log_dir+"test_"+str(i)+".out"
 			else:
 				cmd_log_fname = log_dir+"test_"+str(i)+".out"
 				cmd_error_log_fname = log_dir+"test_"+str(i)+".out"
@@ -133,7 +128,7 @@ def generate_shell_file():
 			s += "ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10 \n"
 			if USE_CATALYST:
 				s += block_start + "echo df -h /l/ssd \n" + block_end
-				s += "df -h -h /l/ssd  \n"
+				s += "df -h /l/ssd  \n"
 			else:
 				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
 				s += "df -h /usr/localdisk/fusion \n"
@@ -164,9 +159,20 @@ def generate_shell_file():
 				s += block_start + "echo du -sh /usr/localdisk/fusion/out.graph* \n" + block_end
 				s += "du -sh /usr/localdisk/fusion/out.graph* \n"
 
-			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
-			s += "iostat -m | grep Device 2>&1 \n"
-			s += "iostat -m | grep md0 2>&1 \n"
+			if USE_DIMMAP:
+				s += block_start + "echo du -sh /dimmap/* \n" + block_end
+				s += "du -sh /dimmap/*\n"
+
+			if USE_CATALYST:
+				s += block_start + "echo ls -lsth /l/ssd/ \n" + block_end
+				s += "ls -lsth /l/ssd/\n"
+			else:
+				s += block_start + "echo ls -lsth /usr/localdisk/fusion/ \n" + block_end
+				s += "ls -lsth /usr/localdisk/fusion/ \n"
+
+			if USE_DIMMAP:
+				s += block_start + "echo ls -lsth /dimmap/ \n" + block_end
+				s += "ls -lsth /dimmap/\n"
 
 			if USE_DIMMAP:
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
@@ -175,21 +181,17 @@ def generate_shell_file():
 #			s += block_start + "echo dmesg \n" + block_end
 #			s += "dmesg\n"
 
-			if USE_CATALYST:
-				s += block_start + "echo ls -lst /l/ssd/ \n" + block_end
-				s += "ls -lst /l/ssd/\n"
-			else:
-				s += block_start + "echo ls -lst /usr/localdisk/fusion/ \n" + block_end
-				s += "ls -lst /usr/localdisk/fusion/ \n"
+			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
+			s += "iostat -m | grep Device 2>&1 \n"
+			s += "iostat -m | grep md0 2>&1 \n"
 
-			if USE_DIMMAP:
-				s += block_start + "echo ls /dimmap/ \n" + block_end
-				s += "ls /dimmap/\n"
-
-			if USE_CATALYST:
-				s += "rm /l/ssd/out.graph*\n"
-			else:
-				s += "rm /usr/localdisk/fusion/out.graph*\n"
+			if DELETE_WORK_FILES:
+				if USE_CATALYST:
+					s += "rm /l/ssd/out.graph*\n"
+					s += "rm /dimmap/out.graph*\n"
+				else:
+					s += "rm /usr/localdisk/fusion/out.graph*\n"
+					s += "rm /dimmap/out.graph*\n"
 
 			s += "EOF\n\n"
 
@@ -198,7 +200,6 @@ def generate_shell_file():
 			f.write(sbatch + s+ "\n\n")
 
 			i +=1
-
 
 
 def execute_shell_file():
@@ -232,16 +233,12 @@ def add_command(nodes, processes, cmd):
 def create_commands(initial_scale, scale_increments, max_scale,
 	inital_nodes, node_multipler, max_nodes,
 	intial_threshold, threshold_multiplier, data_type,
-	low_deg_tlh_s, low_deg_tlh_e):
-
+	low_deg_tlh_s, low_deg_tlh_e, delete_ratio_list):
 
 	graph_file = graph_dir+"out.graph"
 
-	delete_ratio_list = [0]
 	for k in delete_ratio_list:
-
 		for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :
-
 			save_file = 0
 			compare_files = 0
 			test_type = "RMAT"
@@ -261,31 +258,14 @@ def create_commands(initial_scale, scale_increments, max_scale,
 				scale += scale_increments
 				degree_threshold *= threshold_multiplier
 
-
 init_test_dir()
 
+delete_ratio_list = [0]
 
-if DEBUG:
-	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "VC_VC")
-	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "MP_VC", 1, 10)
-	#create_commands(17, 1, 17, 1, 1, 1, 1024, 1, "RB_HS")
-	create_commands(14, 1, 15, 1, 1, 1, 1024, 1, "DG_AW", 1, 10)
-
-else:
-	create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1)
-	#create_commands(26, 1, 27, 1, 1, 1, 1024, 1, "RH_MX", 1, 1)
-
-#Data Scaling test spawning
-#create_commands(29, 1, 31, 1, 1, 1, 1024, 1)
-
-
-#Weak Scaling test spawning
-#create_commands(20, 2, -1, 1, 2, 64, 1024, 2)
+create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
 execute_shell_file()
 
 log("Finished after generating %d Srun Tasks\n" %(test_count))
-
-

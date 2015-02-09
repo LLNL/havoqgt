@@ -55,426 +55,390 @@
 #include <fstream>
 #include "RHHCommon.hpp"
 
- namespace RHH {
+namespace RHH {
 
   /// --------------------------------------------------------------------------------------- ///
   ///                                RHH static class
   /// --------------------------------------------------------------------------------------- ///
-  template <typename KeyType, typename ValueType, uint64_t Capacity>
-  class RHHStatic {
+template <typename KeyType, typename ValueType, uint64_t Capacity>
+class RHHStatic {
 
-   public:
+ public:
 
-    /// ---------  Typedefs and Enums ------------ ///
-    typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
-    typedef unsigned char PropertyBlockType;
-    typedef unsigned char ProbeDistanceType;
+  /// ---------  Typedefs and Enums ------------ ///
+  typedef RHHStatic<KeyType, ValueType, Capacity> RHHStaticType;
+  typedef unsigned char PropertyBlockType;
+  typedef unsigned char ProbeDistanceType;
 
 
-    ///  ------------------------------------------------------ ///
-    ///              Constructor / Destructor
-    ///  ------------------------------------------------------ ///
+  ///  ------------------------------------------------------ ///
+  ///              Constructor / Destructor
+  ///  ------------------------------------------------------ ///
 
-    /// --- Constructor --- //
-    RHHStatic()
-    : m_next_(nullptr)
-    {
-      assert(false);
-      clear();
+  /// --- Constructor --- //
+  RHHStatic()
+  : m_next_(nullptr)
+  {
+    assert(false);
+    clear();
+  }
+
+  /// --- Copy constructor --- //
+
+  /// --- Move constructor --- //
+  RHHStatic(RHHStatic&& old_obj)
+  {
+    assert(false); ///
+  }
+
+  /// --- Destructor --- //
+  ~RHHStatic()
+  {
+
+  }
+
+  /// ---  Move assignment operator --- //
+  RHHStatic &operator=(RHHStatic&& old_obj)
+  {
+    assert(false);
+    return *this;
+  }
+
+
+  ///  ------------------------------------------------------ ///
+  ///              Public Member Functions
+  ///  ------------------------------------------------------ ///
+  inline bool try_unique_key_insertion (const KeyType& key, const ValueType& val) const
+  {
+    const int64_t pos_key = find_key(key, true);
+    return (pos_key == kInvaridIndex);
+  }
+
+  inline UpdateErrors insert(KeyType key, ValueType val, KeyType* key_long_prbdst = nullptr, ValueType* val_long_prbdst = nullptr)
+  {
+    return insert_helper(std::move(key), std::move(val), key_long_prbdst, val_long_prbdst);
+  }
+
+  bool delete_key(const KeyType& key)
+  {
+    ProbeDistanceType dist = 0;
+    const int64_t pos = find_key(key, false);
+    if (pos != kInvaridIndex) {
+      delete_elem(pos);
+      return true;
     }
 
-    /// --- Copy constructor --- //
-
-    /// --- Move constructor --- //
-    RHHStatic(RHHStatic&& old_obj)
-    {
-      assert(false); ///
+    if (m_next_ != nullptr) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      return next_rhh->delete_key(key);
     }
 
-    /// --- Destructor --- //
-    ~RHHStatic()
-    {
+    return false;
+  }
 
+  inline void delete_elem(const int64_t positon)
+  {
+    property(positon) |= kTombstoneMask;
+  }
+
+  inline void clear_elem(const int64_t positon)
+  {
+    property(positon) = kEmptyValue;
+  }
+
+  inline void clear(const bool is_clear_recursively = false)
+  {
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      clear_elem(i);
     }
-
-    /// ---  Move assignment operator --- //
-    RHHStatic &operator=(RHHStatic&& old_obj)
-    {
-      assert(false);
-      return *this;
+    if (is_clear_recursively && m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      next_rhh->clear(true);
     }
+  }
 
+  inline static uint64_t capacity()
+  {
+    return Capacity;
+  }
 
-    ///  ------------------------------------------------------ ///
-    ///              Public Member Functions
-    ///  ------------------------------------------------------ ///
-    inline bool try_unique_key_insertion (const KeyType& key, const ValueType& val) const
-    {
-      const int64_t pos_key = find_key(key, true);
-      return (pos_key == kInvaridIndex);
+  inline bool is_valid(uint64_t pos) const
+  {
+    return (!is_empty(property(pos)) && !is_deleted(property(pos)));
+  }
+
+  inline bool is_longprobedistance(const int64_t positon)
+  {
+    return extract_probedistance(property(positon)) >= kLongProbedistanceThreshold;
+  }
+
+  inline void get_elemnts_array(KeyType *key_array, ValueType *val_array)
+  {
+    uint64_t pos = 0;
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      if (is_valid(i)) {
+        key_array[pos] = m_key_block_[i];
+        val_array[pos] = m_value_block_[i];
+        ++pos;
+      }
     }
+  }
 
-    inline UpdateErrors insert(KeyType key, ValueType val, KeyType* key_long_prbdst = nullptr, ValueType* val_long_prbdst = nullptr)
-    {
-      return insert_helper(std::move(key), std::move(val), key_long_prbdst, val_long_prbdst);
-    }
-
-    bool delete_key(const KeyType& key)
-    {
-      ProbeDistanceType dist = 0;
-      const int64_t pos = find_key(key, false);
-      if (pos != kInvaridIndex) {
-        delete_elem(pos);
+  /// test code
+  inline bool get_next_key(int64_t* current_key_pos, KeyType* key)
+  {
+    for (; *current_key_pos < Capacity; *current_key_pos = *current_key_pos + 1) {
+      if (is_valid(*current_key_pos)) {
+        *key = m_key_block_[*current_key_pos];
+        *current_key_pos = *current_key_pos + 1;
         return true;
       }
-
-      if (m_next_ != nullptr) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        return next_rhh->delete_key(key);
-      }
-
-      return false;
     }
+    return false;
+  }
 
-    inline void delete_elem(const int64_t positon)
-    {
-      property(positon) |= kTombstoneMask;
+  uint64_t cal_depth()
+  {
+    if (m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      return next_rhh->cal_depth() + 1ULL;
     }
+    return 1;
+  }
 
-    inline void clear_elem(const int64_t positon)
-    {
-      property(positon) = kEmptyValue;
+  void disp_elems(const uint64_t level)
+  {
+    // std::cout << ">> --------- disp ---------" << std::endl;
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      std::cout << "[" << level << " : " << i << " ]" << static_cast<int>(m_property_block_[i]) << " : " << m_key_block_[i] << " : " << static_cast<int>(m_value_block_[i]) << std::endl;
     }
-
-    inline void clear(const bool is_clear_recursively = false)
-    {
-      for (uint64_t i = 0; i < Capacity; ++i) {
-        clear_elem(i);
-      }
-      if (is_clear_recursively && m_next_) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->clear(true);
-      }
+    if (m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      next_rhh->disp_elems(level+1ULL);
     }
+    // std::cout << "<< ------------------" << std::endl;
+  }
 
-    inline static uint64_t capacity()
-    {
-      return Capacity;
-    }
-
-    inline bool is_valid(uint64_t pos) const
-    {
-      return (!is_empty(property(pos)) && !is_deleted(property(pos)));
-    }
-
-    inline bool is_longprobedistance(const int64_t positon)
-    {
-      return extract_probedistance(property(positon)) >= kLongProbedistanceThreshold;
-    }
-
-    inline void get_elemnts_array(KeyType *key_array, ValueType *val_array)
-    {
-      uint64_t pos = 0;
-      for (uint64_t i = 0; i < Capacity; ++i) {
-        if (is_valid(i)) {
-          key_array[pos] = m_key_block_[i];
-          val_array[pos] = m_value_block_[i];
-          ++pos;
-        }
+  void fprint_keys(std::string prefix, std::ofstream& output_file)
+  {
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      if (is_valid(i)) {
+        output_file << prefix << "\t" << m_key_block_[i] << std::endl;
       }
     }
-
-    /// test code
-    inline bool get_next_key(int64_t* current_key_pos, KeyType* key)
-    {
-      for (; *current_key_pos < Capacity; *current_key_pos = *current_key_pos + 1) {
-        if (is_valid(*current_key_pos)) {
-          *key = m_key_block_[*current_key_pos];
-          *current_key_pos = *current_key_pos + 1;
-          return true;
-        }
-      }
-      return false;
+    if (m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      next_rhh->fprint_keys(prefix, output_file);
     }
+  }
 
-    uint64_t cal_depth()
-    {
-      if (m_next_) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        return next_rhh->cal_depth() + 1ULL;
+  void fprint_probedistance(std::ofstream& output_file)
+  {
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      if (!is_empty(property(i))) {
+        uint64_t d = extract_probedistance(property(i));
+        output_file << Capacity << " " << d << std::endl;
       }
-      return 1;
     }
-
-    void disp_elems(const uint64_t level)
-    {
-      // std::cout << ">> --------- disp ---------" << std::endl;
-      for (uint64_t i = 0; i < Capacity; ++i) {
-        std::cout << "[" << level << " : " << i << " ]" << static_cast<int>(m_property_block_[i]) << " : " << m_key_block_[i] << " : " << static_cast<int>(m_value_block_[i]) << std::endl;
-      }
-      if (m_next_) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->disp_elems(level+1ULL);
-      }
-      // std::cout << "<< ------------------" << std::endl;
+    if (m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      next_rhh->fprint_probedistance(output_file);
     }
+  }
 
-    void fprint_keys(std::string prefix, std::ofstream& output_file)
-    {
-      for (uint64_t i = 0; i < Capacity; ++i) {
-        if (is_valid(i)) {
-          output_file << prefix << "\t" << m_key_block_[i] << std::endl;
-        }
-      }
-      if (m_next_) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->fprint_keys(prefix, output_file);
+  void cal_average_probedistance(uint64_t* sum , uint64_t* n)
+  {
+    for (uint64_t i = 0; i < Capacity; ++i) {
+      if (!is_empty(property(i))) {
+        *sum += extract_probedistance(property(i));
+        ++(*n);
       }
     }
 
-    void fprint_probedistance(std::ofstream& output_file)
-    {
-      for (uint64_t i = 0; i < Capacity; ++i) {
-        if (is_valid(i)) {
-          uint64_t d = extract_probedistance(property(i));
-          output_file << Capacity << " " << d << std::endl;
-        }
-      }
-      if (m_next_) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        next_rhh->fprint_probedistance(output_file);
-      }
+    if (m_next_) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      next_rhh->cal_average_probedistance(sum, n);
     }
+  }
 
+private:
+  /// ---------  Typedefs and Enums ------------ ///
+  typedef uint64_t HashType;
+  static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
+  static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
+  static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
+  static const int64_t kInvaridIndex                = -1LL;
+  static const uint64_t kMask = Capacity - 1ULL;
+  static const ProbeDistanceType kLongProbedistanceThreshold  = 30;  /// must be less than max value of probedirance
 
-  private:
-    /// ---------  Typedefs and Enums ------------ ///
-    typedef uint64_t HashType;
-    static const PropertyBlockType kTombstoneMask     = 0x80; /// mask value to mark as deleted
-    static const PropertyBlockType kProbedistanceMask = 0x7F; /// mask value to extract probe distance
-    static const PropertyBlockType kEmptyValue        = 0x7F; /// value repsents cleared space
-    static const int64_t kInvaridIndex                = -1LL;
-    static const uint64_t kMask = Capacity - 1ULL;
-    static const ProbeDistanceType kLongProbedistanceThreshold  = 30;  /// must be less than max value of probedirance
-
-    ///  ------------------------------------------------------ ///
-    ///              Private Member Functions
-    ///  ------------------------------------------------------ ///
-    /// ------ Private member functions: algorithm core ----- ///
-    inline HashType hash_key(const KeyType& key) const
-    {
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Functions
+  ///  ------------------------------------------------------ ///
+  /// ------ Private member functions: algorithm core ----- ///
+  inline HashType hash_key(const KeyType& key) const
+  {
 #if 1
-      return static_cast<HashType>(key);
+    return static_cast<HashType>(key);
 #else
-      std::hash<KeyType> hash_fn;
-      return hash_fn(key);
+    std::hash<KeyType> hash_fn;
+    return hash_fn(key);
 #endif
-    }
+  }
 
-    inline int64_t cal_desired_pos(HashType hash) const
-    {
-      return hash & kMask;
-    }
+  inline int64_t cal_desired_pos(HashType hash) const
+  {
+    return hash & kMask;
+  }
 
-    inline ProbeDistanceType cal_probedistance(HashType hash, const int64_t slot_index) const
-    {
-      return ((slot_index + (Capacity) - cal_desired_pos(hash)) & kMask);
-    }
+  inline ProbeDistanceType cal_probedistance(HashType hash, const int64_t slot_index) const
+  {
+    return ((slot_index + (Capacity) - cal_desired_pos(hash)) & kMask);
+  }
 
-    inline PropertyBlockType& property(const int64_t ix)
-    {
-      return m_property_block_[ix];
-    }
+  inline PropertyBlockType& property(const int64_t ix)
+  {
+    return m_property_block_[ix];
+  }
 
-    inline PropertyBlockType property(const int64_t ix) const
-    {
-      return const_cast<RHHStaticType*>(this)->property(ix);
-    }
+  inline PropertyBlockType property(const int64_t ix) const
+  {
+    return const_cast<RHHStaticType*>(this)->property(ix);
+  }
 
-    inline PropertyBlockType cal_property(HashType hash, const int64_t slot_index) const
-    {
-      return cal_probedistance(hash, slot_index);
-    }
+  inline PropertyBlockType cal_property(HashType hash, const int64_t slot_index) const
+  {
+    return cal_probedistance(hash, slot_index);
+  }
 
-    inline PropertyBlockType cal_property(const ProbeDistanceType probedistance) const
-    {
-      return probedistance;
-    }
+  inline PropertyBlockType cal_property(const ProbeDistanceType probedistance) const
+  {
+    return probedistance;
+  }
 
-    inline bool is_deleted(const PropertyBlockType prop) const
-    {
-      return (prop & kTombstoneMask);
-    }
+  inline bool is_deleted(const PropertyBlockType prop) const
+  {
+    return (prop & kTombstoneMask);
+  }
 
-    inline bool is_empty(const PropertyBlockType prop) const
-    {
-      return (prop == kEmptyValue);
-    }
+  inline bool is_empty(const PropertyBlockType prop) const
+  {
+    return (prop == kEmptyValue);
+  }
 
 
-    inline ProbeDistanceType extract_probedistance(const PropertyBlockType prop) const
-    {
-      return prop & kProbedistanceMask;
-    }
+  inline ProbeDistanceType extract_probedistance(const PropertyBlockType prop) const
+  {
+    return prop & kProbedistanceMask;
+  }
 
-    inline void insert_into_tempolayspace(KeyType &&key, ValueType &&val)
-    {
-      for (int64_t i = 0; i < Capacity; ++i) {
-        const PropertyBlockType elem_property = property(i);
-        if (!is_valid(i)) {
-          construct(i, kLongProbedistanceThreshold, std::move(key), std::move(val));
-          return;
-        }
+  inline void insert_into_tempolayspace(KeyType &&key, ValueType &&val)
+  {
+    for (int64_t i = 0; i < Capacity; ++i) {
+      const PropertyBlockType elem_property = property(i);
+      if (!is_valid(i)) {
+        construct(i, kLongProbedistanceThreshold, std::move(key), std::move(val));
+        return;
       }
-      assert(false);
     }
+    assert(false);
+  }
 
-    UpdateErrors insert_helper(KeyType &&key, ValueType &&val, KeyType* key_long_prbdst, ValueType* val_long_prbdst)
-    {
-      int64_t pos = cal_desired_pos(hash_key(key));
-      ProbeDistanceType dist = 0;
-      UpdateErrors err = kSucceed;
+  UpdateErrors insert_helper(KeyType &&key, ValueType &&val, KeyType* key_long_prbdst, ValueType* val_long_prbdst)
+  {
+    int64_t pos = cal_desired_pos(hash_key(key));
+    ProbeDistanceType dist = 0;
+    UpdateErrors err = kSucceed;
 
-      while(true) {
+    while(true) {
 
-        PropertyBlockType existing_elem_property = property(pos);
+      PropertyBlockType existing_elem_property = property(pos);
 
-        if(is_empty(existing_elem_property))
+      if(is_empty(existing_elem_property))
+      {
+        if (dist >= kLongProbedistanceThreshold) {
+          *key_long_prbdst = key;
+          *val_long_prbdst = val;
+          //insert_into_tempolayspace(std::move(key), std::move(val));
+          return kLongProbedistance;
+        }
+        construct(pos, dist, std::move(key), std::move(val));
+        break;
+      }
+
+      /// If the existing elem has probed equal or less than new, then swap places with existing
+      /// elem, and keep going to find another slot for that elem.
+      if (extract_probedistance(existing_elem_property) <= dist)
+      {
+        if (dist >= kLongProbedistanceThreshold) {
+          *key_long_prbdst = key;
+          *val_long_prbdst = val;
+          // insert_into_tempolayspace(std::move(key), std::move(val));
+          return kLongProbedistance;
+        }
+        if(is_deleted(existing_elem_property))
         {
-          if (dist >= kLongProbedistanceThreshold) {
-            *key_long_prbdst = key;
-            *val_long_prbdst = val;
-            //insert_into_tempolayspace(std::move(key), std::move(val));
-            return kLongProbedistance;
-          }
           construct(pos, dist, std::move(key), std::move(val));
           break;
         }
-
-        /// If the existing elem has probed equal or less than new, then swap places with existing
-        /// elem, and keep going to find another slot for that elem.
-        if (extract_probedistance(existing_elem_property) <= dist)
-        {
-          if (dist >= kLongProbedistanceThreshold) {
-            *key_long_prbdst = key;
-            *val_long_prbdst = val;
-            // insert_into_tempolayspace(std::move(key), std::move(val));
-            return kLongProbedistance;
-          }
-          if(is_deleted(existing_elem_property))
-          {
-            construct(pos, dist, std::move(key), std::move(val));
-            break;
-          }
-          m_property_block_[pos] = dist;
-          std::swap(key, m_key_block_[pos]);
-          std::swap(val, m_value_block_[pos]);
-          dist = extract_probedistance(existing_elem_property);
-        }
-
-        pos = (pos+1) & kMask;
-        ++dist;
+        m_property_block_[pos] = dist;
+        std::swap(key, m_key_block_[pos]);
+        std::swap(val, m_value_block_[pos]);
+        dist = extract_probedistance(existing_elem_property);
       }
 
-      return kSucceed;
+      pos = (pos+1) & kMask;
+      ++dist;
     }
 
+    return kSucceed;
+  }
 
-    // UpdateErrors insert_helper(KeyType &&key, ValueType &&val)
-    // {
-    //   int64_t pos = cal_desired_pos(hash_key(key));
-    //   ProbeDistanceType dist = 0;
-    //   UpdateErrors err = kSucceed;
+  inline void construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
+  {
+    m_property_block_[ix] = static_cast<PropertyBlockType>(dist);
+    m_key_block_[ix] = std::move(key);
+    m_value_block_[ix] = std::move(val);
+  }
 
-    //   while(true) {
+  /// ------ Private member functions: search ----- ///
+  int64_t find_key(const KeyType& key, const bool is_check_recursively) const
+  {
 
-    //     PropertyBlockType existing_elem_property = property(pos);
+    ProbeDistanceType dist = 0;
+    const HashType hash = hash_key(key);
+    int64_t pos = cal_desired_pos(hash);
 
-    //     if(existing_elem_property == kEmptyValue)
-    //     {
-    //       if (dist >= kLongProbedistanceThreshold) {
-    //         err = kLongProbedistance;
-    //         dist = kLongProbedistanceThreshold;
-    //       }
-    //       construct(pos, dist, std::move(key), std::move(val));
-    //       break;
-    //     }
+    while(true) {
 
-    //     /// If the existing elem has probed equal or less than new, then swap places with existing
-    //     /// elem, and keep going to find another slot for that elem.
-    //     if (extract_probedistance(existing_elem_property) <= dist)
-    //     {
-    //       if (dist >= kLongProbedistanceThreshold) {
-    //         err = kLongProbedistance;
-    //         dist = kLongProbedistanceThreshold;
-    //         /// TODO: in this case, should put current element into temporary position (blank space) and return immediately ?
-    //         ///        then, in the parent layer, move the element to new are.
-
-    //       }
-    //       if(is_deleted(existing_elem_property))
-    //       {
-    //         construct(pos, dist, std::move(key), std::move(val));
-    //         break;
-    //       }
-    //       m_property_block_[pos] = dist;
-    //       std::swap(key, m_key_block_[pos]);
-    //       std::swap(val, m_value_block_[pos]);
-    //       dist = extract_probedistance(existing_elem_property);
-    //     }
-
-    //     pos = (pos+1) & kMask;
-    //     ++dist;
-    //   }
-
-    //   return err;
-    // }
-
-    inline void construct(const int64_t ix, const ProbeDistanceType dist, KeyType&& key, ValueType&& val)
-    {
-      m_property_block_[ix] = static_cast<PropertyBlockType>(dist);
-      m_key_block_[ix] = std::move(key);
-      m_value_block_[ix] = std::move(val);
-    }
-
-    /// ------ Private member functions: search ----- ///
-    int64_t find_key(const KeyType& key, const bool is_check_recursively) const
-    {
-
-      ProbeDistanceType dist = 0;
-      const HashType hash = hash_key(key);
-      int64_t pos = cal_desired_pos(hash);
-
-      while(true) {
-
-        ProbeDistanceType existing_elem_property = property(pos);
-        if (is_empty(existing_elem_property)) { /// free space is found
-          break;
-        } else if (dist > extract_probedistance(existing_elem_property)) {
-          break;
-        } else if (!is_deleted(existing_elem_property) && m_key_block_[pos] == key) {
-          /// found !
-          return pos;
-        }
-        pos = (pos+1) & kMask;
-        ++dist;
+      ProbeDistanceType existing_elem_property = property(pos);
+      if (is_empty(existing_elem_property)) { /// free space is found
+        break;
+      } else if (dist > extract_probedistance(existing_elem_property)) {
+        break;
+      } else if (!is_deleted(existing_elem_property) && m_key_block_[pos] == key) {
+        /// found !
+        return pos;
       }
-
-      /// Find a key from chained RHH
-      if (is_check_recursively && m_next_ != nullptr) {
-        RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
-        return next_rhh->find_key(key, true);
-      }
-
-      return kInvaridIndex;
+      pos = (pos+1) & kMask;
+      ++dist;
     }
 
-    /// ------ Private member functions: utility ----- ///
+    /// Find a key from chained RHH
+    if (is_check_recursively && m_next_ != nullptr) {
+      RHHStaticType *next_rhh = reinterpret_cast<RHHStaticType *>(m_next_);
+      return next_rhh->find_key(key, true);
+    }
+
+    return kInvaridIndex;
+  }
+
+  /// ------ Private member functions: utility ----- ///
 
 
-    ///  ------------------------------------------------------ ///
-    ///              Private Member Variables
-    ///  ------------------------------------------------------ ///
-  public: /// TODO: use friend class
+  ///  ------------------------------------------------------ ///
+  ///              Private Member Variables
+  ///  ------------------------------------------------------ ///
+ public: /// TODO: use friend class
   RHHStaticType* m_next_;
   PropertyBlockType m_property_block_[Capacity];
   KeyType m_key_block_[Capacity];

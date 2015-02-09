@@ -261,6 +261,36 @@ template <typename KeyType, typename ValueType>
     return false;
   }
 
+  bool get_valuelist(KeyType& key, ValueType* val_array, NoValueType* val_array2)
+  {
+    const int64_t pos_key = find_key(key);
+    if (pos_key == kInvaridIndex) return false;
+    const uint64_t current_size = extract_size(property(pos_key));
+
+    if (current_size == 1) {
+      val_array[0] = m_value_block_[pos_key].value;
+
+    } else if (current_size <= capacityNormalArray3) {
+      NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
+      ValueType* array = m_value_block_[pos_key].value_array;
+      uint64_t capacity = cal_next_pow2(current_size);
+
+      uint64_t pos = 0;
+      for (uint i = 0; i < capacity; ++i) {
+        if ((btmp >> i) & 0x01) {
+          val_array[pos++] = array[i];
+        }
+      }
+
+    } else {
+      RHHAdjalistType& rhh_adj_list = m_value_block_[pos_key].adj_list;
+      rhh_adj_list.get_elemnts_array(current_size, val_array, val_array2);
+    }
+
+    return true;
+  }
+
+
   /// This is a tempolary function
   bool get_next(int64_t *current_key_pos, int64_t *current_val_pos, KeyType& key, ValueType *val)
   {
@@ -283,7 +313,7 @@ template <typename KeyType, typename ValueType>
       uint64_t capacity = cal_next_pow2(current_size);
 
       for (; *current_val_pos < capacity; *current_val_pos = *current_val_pos + 1) {
-        if (!((btmp >> *current_val_pos) & 0x01)) {
+        if (((btmp >> *current_val_pos) & 0x01)) {
           *val = array[*current_val_pos];
           *current_val_pos += *current_val_pos + 1;
           return true;
@@ -300,6 +330,13 @@ template <typename KeyType, typename ValueType>
   uint64_t size()
   {
     return m_num_elems_;
+  }
+
+  uint64_t get_value_length(KeyType key)
+  {
+    const int64_t pos_key = find_key(key);
+    if (pos_key == kInvaridIndex) return 0;
+    else return extract_size(property(pos_key));
   }
 
   inline void free(AllocatorsHolder &allocators)
@@ -327,6 +364,44 @@ template <typename KeyType, typename ValueType>
     free_buffer(allocators, m_ptr_, m_capacity_);
   }
 
+  void disp_profileinfo()
+  {
+    std::cout << "------- profile data -------" << std::endl;
+    std::cout << "Capacity of RHHMain =\t" << m_capacity_ << std::endl;
+    std::cout << "# of elements in RHHMain =\t" << m_num_elems_ << std::endl;
+
+    uint64_t total = 0;
+    uint64_t n = 0;
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue) continue;
+      total += extract_probedistance(prop);
+      ++n;
+    }
+    std::cout << "Average probedistance of MainRHH =\t" << static_cast<double>(total) / n << std::endl;
+
+    total = 0;
+    n = 0;
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop)) continue;
+      const uint64_t current_size = extract_size(property(i));
+      if (current_size > capacityNormalArray3) {
+        RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
+        rhh_adj_list.cal_average_probedistance(current_size, &total, &n);
+      }
+    }
+    std::cout << "Average probedistance of RHHStatic =\t" << static_cast<double>(total) / n << std::endl;
+
+    total = 0;
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop)) continue;
+      total += extract_size(prop);
+    }
+    std::cout << "Average value length =\t" << static_cast<double>(total) / m_num_elems_ << std::endl;
+
+  }
 
   void disp_all()
   {
@@ -394,6 +469,16 @@ template <typename KeyType, typename ValueType>
         RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
         rhh_adj_list.fprint_probedistance(size, output_file);
       }
+    }
+  }
+
+  void fprint_value_lengths(std::ofstream& output_file)
+  {
+    for (uint64_t i = 0; i < m_capacity_; ++i) {
+      PropertyBlockType prop = property(i);
+      if (prop == kClearedValue || is_deleted(prop)) continue;
+      const uint64_t size = extract_size(prop);
+      output_file << size << std::endl;
     }
   }
 
