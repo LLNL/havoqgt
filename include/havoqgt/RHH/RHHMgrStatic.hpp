@@ -135,10 +135,10 @@ class RHHMgrStatic {
 
   bool get_next_key(int64_t *current_key_pos, const uint64_t current_size, KeyType *key)
   {
-    return get_next_select_capacity(current_key_pos, current_size, key);
+    return get_next_key_select_capacity(current_key_pos, current_size, key);
   }
 
-  bool get_next_select_capacity(int64_t *current_key_pos, const uint64_t size, KeyType *key)
+  bool get_next_key_select_capacity(int64_t *current_key_pos, const uint64_t size, KeyType *key)
   {
     if (size <= capacityRHHStatic_1 * kFullCalacityFactor) {
       RHHStaticNoVal_1 *rhh = reinterpret_cast<RHHStaticNoVal_1*>(m_ptr_);
@@ -447,6 +447,14 @@ void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
     return err;
   }
 
+  template<typename RHHAllocator, typename RHH, uint64_t Capacity>
+  inline void move_longprobedistance_element(RHHAllocator& rhh_allocator, RHH* rhh, KeyType& key_long_prbdst, ValueType& val_long_prbdst)
+  {
+    RHH* new_rhh = allocate_rhh_static<RHHAllocator, RHH>(rhh_allocator);
+    new_rhh->m_next_ = rhh;
+    new_rhh->insert(key_long_prbdst, val_long_prbdst);
+  }
+
   template<typename CurRHHAllocator, typename CurRHH, uint64_t CurCapacity,
   typename SrkRHHAllocator, typename SrkRHH, uint64_t SrkCapacity>
   inline bool delete_key_and_shrink(AllocatorsHolder &allocators, CurRHHAllocator& cur_rhh_allocator, SrkRHHAllocator& srk_rhh_allocator,
@@ -473,23 +481,6 @@ void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
     extract_old_rhh_elements<CurRHHAllocator, CurRHH, CurCapacity, NewRHHAllocator, NewRHH, NewCapacity>
                             (cur_rhh_allocator, new_rhh_allocator, cur_rhh);
     return new_rhh;
-  }
-
-  template<typename RHHAllocator, typename RHH, uint64_t Capacity>
-  inline void move_longprobedistance_element(RHHAllocator& rhh_allocator, RHH* rhh, KeyType& key_long_prbdst, ValueType& val_long_prbdst)
-  {
-    RHH* new_rhh = allocate_rhh_static<RHHAllocator, RHH>(rhh_allocator);
-    new_rhh->m_next_ = rhh;
-    new_rhh->insert(key_long_prbdst, val_long_prbdst);
-    // for(int i = 0; i < Capacity; ++i) {
-    //   if (rhh->is_longprobedistance(i) && rhh->is_valid(i)) {
-    //     /// --- Note: longprobeditance element is only one --- ///
-    //     new_rhh->insert(rhh->m_key_block_[i], rhh->m_value_block_[i]);
-    //     rhh->clear_elem(i);
-    //     return;
-    //   }
-    // }
-    // assert(false);
   }
 
   template<typename OldRHHAllocator, typename OldRHH, uint64_t OldCapacity,
@@ -527,6 +518,7 @@ void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
       RHH* next = rhh->m_next_;
       allocator.deallocate(bip::offset_ptr<RHH>(rhh), 1);
       rhh = next;
+      /// TODO: call deallocate_free_chunks() periodically
     }
   }
 
@@ -535,6 +527,7 @@ void fprint_keys(uint64_t size, std::string prefix, std::ofstream& output_file)
   {
     RHH *rhh = reinterpret_cast<RHH*>(ptr);
     allocator.deallocate(bip::offset_ptr<RHH>(rhh), 1);
+    /// TODO: call deallocate_free_chunks() periodically
   }
 
 

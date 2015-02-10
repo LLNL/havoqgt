@@ -6,11 +6,11 @@ import os.path
 import datetime
 
 USE_PDEBUG = False
-DEBUG = False
+DEBUG = True
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = True
+USE_DIMMAP_FOR_TUNE = False
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
@@ -262,7 +262,7 @@ init_test_dir()
 
 delete_ratio_list = [0]
 
-create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
+create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
