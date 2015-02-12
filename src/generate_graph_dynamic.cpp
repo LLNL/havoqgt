@@ -315,6 +315,11 @@ int main(int argc, char** argv) {
     std::cout << "\n<<Construct segment>>" << std::endl;
     uint64_t graph_capacity = std::pow(2, 39);
     mapped_t  asdf(bip::open_or_create, fname.str().c_str(), graph_capacity);
+#if 1
+    boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
+    assert(asdf.advise(advise));
+    std::cout << "Calling adise_randam" << std::endl;
+#endif
     int fd  = open(fname.str().c_str(), O_RDWR);
     assert(fd != -1);
     int ret = posix_fallocate(fd,0,graph_capacity);
