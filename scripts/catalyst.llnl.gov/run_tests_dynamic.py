@@ -16,6 +16,8 @@ VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
 
+MONITOR_IO = True
+
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
 else:
@@ -43,6 +45,7 @@ def init_test_dir():
 	global log_file_name
 	global sbatch_file
 	global executable
+	global io_monitoring_report_file
 
 	if DEBUG:
 		log_dir += "debug/"
@@ -76,6 +79,10 @@ def init_test_dir():
 		while (p.poll() == None):
 			pass
 		executable = log_dir+executable
+
+
+	if MONITOR_IO:
+		io_monitoring_report_file = log_dir + "io_monitering_report.log"
 
 def generate_shell_file():
 	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
@@ -137,10 +144,19 @@ def generate_shell_file():
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
-			s += "date \n"
+			if MONITOR_IO:
+				s += block_start + "echo start I/O monitoring \n" + block_end
+				s += "iostat -d -m -t -x 1 > " + io_monitoring_report_file + " 2>&1 & \n"
+
 			s += block_start + "echo Executable Log \n" + block_end
+			s += "date \n"
 			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
 			s += "date \n"
+
+			if MONITOR_IO:
+				s += block_start + "echo stop I/O monitoring \n" + block_end
+				s += "pkill iostat \n"
+				s += "ps -a \n"
 
 			s += block_start + "echo free -m \n" + block_end
 			s += "free -m \n"
@@ -262,7 +278,7 @@ init_test_dir()
 
 delete_ratio_list = [0]
 
-create_commands(25, 1, 25, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
+create_commands(20, 1, 20, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
