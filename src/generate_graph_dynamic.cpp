@@ -65,8 +65,8 @@
 
 #include <sys/sysinfo.h>
 
-#define SORT_BY_CHUNK 1
-#define SORT_WHALE_REQUESTS 0
+#define SORT_BY_CHUNK 0
+#define SORT_WHALE_REQUESTS 1
 
 // notes for how to setup a good test
 // take rank * 100 and make edges between (all local)
@@ -162,8 +162,11 @@ void add_and_delete_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_
 
 /// Randomize order of requests
 #if SORT_WHALE_REQUESTS
-  std::cout << "Sort edge update requests..." << std::endl;
+  std::cout << "Sorting whole edge update requests..." << std::endl;
+  double time_start1 = MPI_Wtime();
   std::sort(onmemory_edges->begin(), onmemory_edges->end(), edgerequest_asc);
+  double time_end1 = MPI_Wtime();
+  std::cout << "TIME: Sorting a chunk (sec.) =\t" << time_end - time_start << std::endl;
 #else
   std::cout << "Randomizing edge update requests..." << std::endl;
   std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
@@ -191,9 +194,9 @@ void add_and_delete_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_
     requests_vector_t *edge_chunk = new requests_vector_t();
     edge_chunk->resize(chunk_size);
     std::copy(onmemory_edges->begin() + chunk_size * i, onmemory_edges->begin() + chunk_size * (i+1), edge_chunk->begin());
-    double time_start = MPI_Wtime();
+    double time_start2 = MPI_Wtime();
     std::sort(edge_chunk->begin(), edge_chunk->end(), edgerequest_asc);
-    double time_end = MPI_Wtime();
+    double time_end2 = MPI_Wtime();
     std::cout << "TIME: Sorting a chunk (sec.) =\t" << time_end - time_start << std::endl;
     graph->add_edges_adjacency_matrix(edge_chunk->begin(), chunk_size);
     delete edge_chunk;

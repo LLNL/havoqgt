@@ -12,7 +12,8 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 make_figure_separately = True
-target_dir_list = ["./20150212_181159/", "./20150212_181356/", "./20150212_182833/", "./20150212_182937/"]
+target_dir_list = ["./logs/20150217_223445/", "./logs/20150217_222611/"]
+#target_dir_list = ["./20150212_181159/", "./20150212_181356/", "./20150212_182833/", "./20150212_182937/"]
 legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
 
 target_file = "io_monitering_report.log"

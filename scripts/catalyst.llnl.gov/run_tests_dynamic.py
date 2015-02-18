@@ -6,17 +6,17 @@ import os.path
 import datetime
 
 USE_PDEBUG = False
-DEBUG = True
+DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = False
+USE_DIMMAP_FOR_TUNE = True
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
 
-MONITOR_IO = False
+MONITOR_IO = True
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -97,7 +97,7 @@ def generate_shell_file():
 	if USE_DIMMAP:
 		slurm_options += "--di-mmap=" + str(1024*256*12) + ",ver=1.1.20d --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(6780275) + " "
+		slurm_options += "--di-mmap=" + str(15545139) + " "
 
 	if USE_PDEBUG:
 		slurm_options += "-ppdebug"
@@ -278,7 +278,7 @@ init_test_dir()
 
 delete_ratio_list = [0]
 
-create_commands(24, 1, 24, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
+create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
