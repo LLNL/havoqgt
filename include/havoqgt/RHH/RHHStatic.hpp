@@ -75,35 +75,13 @@ class RHHStatic {
   ///              Constructor / Destructor
   ///  ------------------------------------------------------ ///
 
-  /// --- Constructor --- //
-  RHHStatic()
-  : m_next_(nullptr)
-  {
-    assert(false);
-    clear();
-  }
-
-  /// --- Copy constructor --- //
-
-  /// --- Move constructor --- //
-  RHHStatic(RHHStatic&& old_obj)
-  {
-    assert(false); ///
-  }
-
-  /// --- Destructor --- //
-  ~RHHStatic()
-  {
-
-  }
-
-  /// ---  Move assignment operator --- //
-  RHHStatic &operator=(RHHStatic&& old_obj)
-  {
-    assert(false);
-    return *this;
-  }
-
+  /// --- Explicitly Deleted Functions -- ///
+  RHHStatic() =delete;
+  ~RHHStatic() =delete;
+  RHHStatic(const RHHStatic&) =delete;
+  RHHStatic& operator=(const RHHStatic&) =delete;
+  RHHStatic(const RHHStatic&&) =delete;
+  RHHStatic& operator=(RHHStatic&& old_obj) =delete;
 
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions

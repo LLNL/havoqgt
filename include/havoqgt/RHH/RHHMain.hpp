@@ -55,86 +55,94 @@
 #include "RHHAllocHolder.hpp"
 #include "RHHMgrStatic.hpp"
 
- namespace RHH {
+namespace RHH {
 
 template <typename KeyType, typename ValueType>
-  class RHHMain {
+class RHHMain {
 
-  public:
+ public:
 
   ///  ------------------------------------------------------ ///
   ///              Constructor / Destructor
   ///  ------------------------------------------------------ ///
   /// --- Constructor --- //
-    RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
-    : m_num_elems_(0)
-    , m_capacity_(initial_capasity)
-    , m_ptr_(nullptr)
-    {
-      allocate_rhh_main(allocators);
-    }
+  RHHMain(AllocatorsHolder &allocators, const uint64_t initial_capasity)
+  : m_num_elems_(0)
+  , m_capacity_(initial_capasity)
+  , m_ptr_(nullptr)
+  {
+    allocate_rhh_main(allocators);
+  }
 
   /// --- Destructor --- //
-    ~RHHMain()
-    { }
+  ~RHHMain()
+  {
+    assert(m_ptr_ == nullptr);
+  }
+
+  /// --- Explicitly Deleted Copy and Move Functions -- ///
+  RHHMain(const RHHMain&) =delete;
+  RHHMain& operator=(const RHHMain&) =delete;
+  RHHMain(const RHHMain&&) =delete;
+  RHHMain& operator=(RHHMain&& old_obj) =delete;
 
   ///  ------------------------------------------------------ ///
   ///              Public Member Functions
   ///  ------------------------------------------------------ ///
-    bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
-    {
-      const int64_t pos_key = find_key(key);
+  bool insert_uniquely(AllocatorsHolder& allocators, KeyType key, ValueType val)
+  {
+    const int64_t pos_key = find_key(key);
 
-      if (pos_key == kInvaridIndex) {
+    if (pos_key == kInvaridIndex) {
         /// 1. new vertex
-        ValueWrapperType value;
-        value.value = val;
-        insert_directly_with_growing(allocators, std::move(key), std::move(value));
-        return true;
-      }
+      ValueWrapperType value;
+      value.value = val;
+      insert_directly_with_growing(allocators, std::move(key), std::move(value));
+      return true;
+    }
 
-      const uint64_t size = extract_size(property(pos_key));
-      if (size == 1ULL) {
-        if (m_value_block_[pos_key].value == val) return false;
+    const uint64_t size = extract_size(property(pos_key));
+    if (size == 1ULL) {
+      if (m_value_block_[pos_key].value == val) return false;
         /// 2. convert data structure to array model
-        ValueType* array =  allocate_normal_array(allocators, 2);
-        array[0] = m_value_block_[pos_key].value;
-        array[1] = val;
-        m_value_block_[pos_key].value_array = array;
+      ValueType* array =  allocate_normal_array(allocators, 2);
+      array[0] = m_value_block_[pos_key].value;
+      array[1] = val;
+      m_value_block_[pos_key].value_array = array;
 
-        set_bitmap(pos_key, 0x03);
-        set_size(pos_key, 2ULL);
+      set_bitmap(pos_key, 0x03);
+      set_size(pos_key, 2ULL);
 
-        return true;
-      }
+      return true;
+    }
 
-      if (size <= capacityNormalArray3) {
+    if (size <= capacityNormalArray3) {
       /// 3. we already have a normal-array
-        NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
-        ValueType* array = m_value_block_[pos_key].value_array;
-        int capacity = cal_next_pow2(size);
+      NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
+      ValueType* array = m_value_block_[pos_key].value_array;
+      int capacity = cal_next_pow2(size);
 
       /// Check duplicated value
-        for (int i=0; i < capacity; ++i) {
-          if (((btmp >> i) & 0x01) && (array[i] == val)) return false;
-        }
+      for (int i=0; i < capacity; ++i) {
+        if (((btmp >> i) & 0x01) && (array[i] == val)) return false;
+      }
 
-        if (size == capacityNormalArray3) {
+      if (size == capacityNormalArray3) {
           /// 3-1. convert data strucure normal-array to RHHStatic
-          ValueType* array = m_value_block_[pos_key].value_array;
-          ValueWrapperType value_wrapper;
+        ValueType* array = m_value_block_[pos_key].value_array;
+        ValueWrapperType value_wrapper;
 
-          new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
-          unsigned char dmy = 0;
-          for (int i = 0; i < capacityNormalArray3; ++i) {
+        new(&value_wrapper.adj_list) RHHAdjalistType(allocators);
+        unsigned char dmy = 0;
+        for (int i = 0; i < capacityNormalArray3; ++i) {
           /// TODO: don't need to check uniquely
-            value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, capacityNormalArray3);
-          }
-          free_buffer_normal_array(allocators, array, capacity);
+          value_wrapper.adj_list.insert_uniquely(allocators, array[i], dmy, capacityNormalArray3);
+        }
+        free_buffer_normal_array(allocators, array, capacity);
 
-          value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, capacityNormalArray3);
-          m_value_block_[pos_key] = std::move(value_wrapper);
-          set_size(pos_key, capacityNormalArray3 + 1);
+        value_wrapper.adj_list.insert_uniquely(allocators, val, dmy, capacityNormalArray3);
+        m_value_block_[pos_key] = std::move(value_wrapper);
+        set_size(pos_key, capacityNormalArray3 + 1);
 
         return true; // Since duplication check has alreadly done, always retrun true.
       }
@@ -360,8 +368,10 @@ template <typename KeyType, typename ValueType>
         rhh_adj_list.free(allocators, size);
       }
     }
-
     free_buffer(allocators, m_ptr_, m_capacity_);
+
+    m_num_elems_ = 0;
+    m_capacity_ = 0;
   }
 
   void disp_profileinfo()
@@ -500,7 +510,7 @@ template <typename KeyType, typename ValueType>
   }
 
 
-private:
+ private:
   ///  ------------------------------------------------------ ///
   ///              Private
   ///  ------------------------------------------------------ ///
@@ -718,6 +728,7 @@ private:
     mem_size += sizeof(ValueType) * capacity;
 
     allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(ptr), mem_size);
+    ptr = nullptr;
   }
 
   inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, uint64_t capacity)

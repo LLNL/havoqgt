@@ -65,7 +65,7 @@
 
 #include <sys/sysinfo.h>
 
-#define SORT_BY_CHUNK 0
+#define SORT_BY_CHUNK 1
 #define SORT_WHALE_REQUESTS 0
 
 // notes for how to setup a good test
@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
     std::cout << "\n<<Construct segment>>" << std::endl;
     uint64_t graph_capacity = std::pow(2, 39);
     mapped_t  asdf(bip::open_or_create, fname.str().c_str(), graph_capacity);
-#if 1
+#if 0
     boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
     assert(asdf.advise(advise));
     std::cout << "Calling adise_randam" << std::endl;

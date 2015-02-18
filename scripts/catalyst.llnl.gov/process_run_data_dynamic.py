@@ -11,7 +11,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import matplotlib.pyplot as plt
 
-targer_dir = sys.argv[1]
+if len(sys.argv) != 6:
+	print "# of arguments is wrong"
+	sys.exit(1)
+
+target_dir = sys.argv[1]
 num_files = int(sys.argv[2])
 keyword = sys.argv[3]
 col_num = int(sys.argv[4]) # NOTE: [ awk -1 ]
@@ -20,7 +24,7 @@ is_cumulate = bool(int(sys.argv[5]))
 flist = []
 
 for i in range(num_files):
-	fname = targer_dir + "/test_" + str(i) + ".out"
+	fname = target_dir + "/test_" + str(i) + ".out"
 	flist.append(open(fname))
 
 results = []
@@ -45,6 +49,8 @@ if is_cumulate:
 			if i < len(results[j]):
 				results[j][i] = results[j][i-1] + results[j][i]
 
+
+# --- print result --- #
 for i in range (max_length):
 	for j in range (num_files):
 		if i < len(results[j]):
@@ -53,13 +59,20 @@ for i in range (max_length):
 	print "\n",
 
 
+# --- plot result --- #
 x_value = range(1, max_length+1)
-
 for i in range (num_files):
 	x_value = range(1, len(results[i])+1)
 	plt.plot(x_value, results[i], label="test_" + str(i) + ".out")
-
 plt.legend()
 
-outname = targer_dir + "/chart_" + sys.argv[2] + "_" + sys.argv[3] + "_" + sys.argv[4] + "_" + sys.argv[5] + ".pdf"
+x1,x2,y1,y2 = plt.axis()
+plt.axis((0, x2, 0, y2))
+
+plt.ylabel(keyword)
+plt.xlabel('inserted chunks')
+
+plt.grid()
+
+outname = target_dir + "/chart_" + sys.argv[2] + "_" + sys.argv[3].replace(" ", "_") + "_" + sys.argv[4] + "_" + sys.argv[5] + ".pdf"
 plt.savefig(outname ,format = 'pdf')

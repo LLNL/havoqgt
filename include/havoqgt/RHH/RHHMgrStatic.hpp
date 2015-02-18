@@ -68,45 +68,21 @@ class RHHMgrStatic {
 
  public:
 
-    ///  ------------------------------------------------------ ///
-    ///              Constructor / Destructor
-    ///  ------------------------------------------------------ ///
-    /// --- Constructor --- //
+  ///  ------------------------------------------------------ ///
+  ///              Constructor / Destructor
+  ///  ------------------------------------------------------ ///
+  /// --- Constructor --- //
   explicit RHHMgrStatic(AllocatorsHolder& allocators)
   {
     allocate_rhh_static<Allocator_RHH_NoVal_2, RHHStaticNoVal_2>(allocators.allocator_rhh_noval_2);
   }
 
-  /// --- Copy constructor --- //
-  RHHMgrStatic(const RHHMgrStatic &old_obj)
-  {
-    assert(false);
-  }
-
-  /// --- Move constructor --- //
-  RHHMgrStatic(RHHMgrStatic &&old_obj)
-  {
-    assert(false);
-    m_ptr_ = old_obj.m_ptr_;
-    old_obj.m_ptr_ = nullptr;
-  }
-
-  /// --- Destructor --- //
-  ~RHHMgrStatic()
-  {
-    assert(m_ptr_ != nullptr);
-  }
-
-  /// ---  Move assignment operator --- //
-  RHHMgrStatic &operator=(RHHMgrStatic&& old_obj)
-  {
-    assert(false);
-    m_ptr_ = old_obj.m_ptr_;
-    old_obj.m_ptr_ = nullptr;
-
-    return *this;
-  }
-
+  /// --- Explicitly Deleted Copy and Move Functions -- ///
+  ~RHHMgrStatic() =delete;
+  RHHMgrStatic(const RHHMgrStatic&) =delete;
+  RHHMgrStatic& operator=(const RHHMgrStatic&) =delete;
+  RHHMgrStatic(const RHHMgrStatic&&) =delete;
+  RHHMgrStatic& operator=(const RHHMgrStatic&&) =delete;
 
   ///  ------------------------------------------------------ ///
   ///              Public function
