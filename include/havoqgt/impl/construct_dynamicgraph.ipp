@@ -366,7 +366,7 @@ add_edges_rhh_matrix(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_hybrid(Container req_itr, size_t length)
+add_edges_degree_aware_hybrid(Container req_itr, const size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_deleted = 0;
@@ -464,8 +464,8 @@ print_profile()
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
-    fout.open("/l/ssd/g_value_length.log", std::ios::out);
-    hybrid_matrix->fprint_value_lengths(fout);
+    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out);
+    hybrid_matrix->fprint_elems(fout);
     fout.close();
   }
 #endif
@@ -473,8 +473,8 @@ print_profile()
 #if DEBUG_DETAILPROFILE == 1
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {
     std::ofstream fout;
-    fout.open(kFnameDebugInsertedEdges+"_graph", std::ios::out);
-    hybrid_matrix->fprint_elems(fout);
+    fout.open("/l/ssd/g_value_length.log", std::ios::out);
+    hybrid_matrix->fprint_value_lengths(fout);
     fout.close();
   }
   if (data_structure_type_ == kUseHybridDegreeAwareModel) {

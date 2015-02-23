@@ -236,7 +236,6 @@ int main (int argc, char** argv)
     uint64_t target_rank = rand() % mpi_size;
     send_buf_vec[target_rank].push_back(std::make_pair(src_vtx, dst_vtx));
     ++count;
-    if (count == 100) break;
   }
   source_file.close();
   std::cout << "rank: " << mpi_rank << " will sent " << count << " edges" << std::endl;

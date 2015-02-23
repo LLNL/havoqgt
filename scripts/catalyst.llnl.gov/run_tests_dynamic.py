@@ -10,13 +10,13 @@ DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = True
+USE_DIMMAP_FOR_TUNE = False
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
 
-MONITOR_IO = True
+MONITOR_IO = False
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"

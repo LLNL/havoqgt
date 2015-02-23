@@ -66,21 +66,18 @@
 #include <sys/sysinfo.h>
 
 #define SORT_BY_CHUNK 0
-#define SORT_WHALE_REQUESTS 1
 
-// notes for how to setup a good test
-// take rank * 100 and make edges between (all local)
-// Make one vert per rank a hub.
+namespace hmpi = havoqgt::mpi;
+using namespace havoqgt::mpi;
+typedef bip::managed_mapped_file mapped_t;
+typedef mapped_t::segment_manager segment_manager_t;
+typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
+typedef boost::container::vector<EdgeUpdateRequest> request_vector_type;
 
- namespace hmpi = havoqgt::mpi;
- using namespace havoqgt::mpi;
- typedef bip::managed_mapped_file mapped_t;
- typedef mapped_t::segment_manager segment_manager_t;
- typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
-
-
- void print_dram_usages(void)
- {
+void print_usages(segment_manager_t *const segment_manager)
+{
+  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  std::cout << "Usage: segment size =\t"<< usages << std::endl;
   struct sysinfo info;
   sysinfo(&info);
   std::cout << "Usage: mem_unit:\t" << info.mem_unit << std::endl;
@@ -92,137 +89,51 @@
   std::cout << "Usage: freeswap(GiB):\t" << (double)info.freeswap / (1<<30ULL) << std::endl;
 }
 
-template <typename Edges>
-void add_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager)
+double sort_requests(request_vector_type& requests)
 {
-
-  const uint64_t num_edges = edges.size();
-  chunk_size = std::min(chunk_size, num_edges);
-  const uint64_t num_loop  = num_edges / chunk_size;
-
-  auto edges_itr = edges.begin();
-
-  size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size =\t"<< usages << std::endl;
-
-  for (uint64_t i = 0; i < num_loop; ++i ) {
-    std::cout << "\n[" << i+1 << " / " << num_loop << "]" << std::endl;
-    boost::container::vector<std::pair<uint64_t, uint64_t>> onmemory_edges;
-    const double time_start = MPI_Wtime();
-    //onmemory_edges.resize(chunk_size);
-    auto edges_itr_end = edges.end();
-    for (uint64_t j = 0; j < chunk_size && edges_itr != edges_itr_end; ++j, ++edges_itr) {
-      onmemory_edges.push_back(*edges_itr);
-      //std::cerr << onmemory_edges[j].first << "\t" << onmemory_edges[j].second << std::endl;
-    }
-    const double time_end = MPI_Wtime();
-    std::cout << "TIME: Generation edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-    graph->add_edges_adjacency_matrix(onmemory_edges.begin(), chunk_size);
-    size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-    std::cout << "Usage: segment size =\t"<< usages << std::endl;
-  }
-  std::cout << "<< Results >>" << std::endl;
-  graph->print_profile();
-
+  const double time_start1 = MPI_Wtime();
+  std::sort(requests.begin(), requests.end(), edgerequest_asc);
+  return (MPI_Wtime() - time_start1);
 }
 
+template <typename Edges_itr>
+void generate_insertion_requests(Edges_itr& edges_itr, const uint64_t chunk_size, request_vector_type& requests)
+{
+  assert(requests.size() == 0);
+  requests.reserve(chunk_size);
+  const double time_start = MPI_Wtime();
+  for (uint64_t i = 0; i < chunk_size; ++i, ++edges_itr) {
+    EdgeUpdateRequest request(*edges_itr, false);
+    requests.push_back(request);
+  }
+  std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
+  std::cout << "Status: # insetion requests =\t"<< requests.size() << std::endl;
+#if SORT_BY_CHUNK
+  const double elapsed_time = sort_requests(requests);
+  std::cout << "TIME: Sorting chunk (sec.) =\t" << elapsed_time << std::endl;
+ #endif
+}
 
 template <typename Edges>
-void add_and_delete_edges_loop (graph_type *graph, Edges& edges, uint64_t chunk_size, segment_manager_t* segment_manager, uint64_t edges_delete_ratio)
+void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_manager_t *const segment_manager, const uint64_t chunk_size)
 {
   std::cout << "-- Disp status of before generation --" << std::endl;
-  size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size =\t"<< usages << std::endl;
-  print_dram_usages();
+  print_usages(segment_manager);
 
-
-  /// --------- Generate update requests  --------- ///
-  std::cout << "-- Generate edge update requests --" << std::endl;
-  const double time_start = MPI_Wtime();
-
-  /// -- Calucurate # of loops and chunk size -- ///
-  const uint64_t num_original_edges = edges.size();
-  std::cout << "Status: # generated edges (DIRECTED graph) =\t"<< num_original_edges << std::endl;
-  chunk_size = std::min(chunk_size, num_original_edges);
-
-  std::cout << "Generating edge update requests..." << std::endl;
-  typedef boost::container::vector<EdgeUpdateRequest> requests_vector_t;
-  requests_vector_t *onmemory_edges = new requests_vector_t();
-  onmemory_edges->reserve(edges.size()); /// Note: this resize operation is not considering the size including delete operation
-
-  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end(); edges_itr != edges_itr_end; ++edges_itr) {
-    bool is_delete = (std::rand()%100 < edges_delete_ratio);
-    if (is_delete) {
-      EdgeUpdateRequest delete_request(*edges_itr, true);
-      onmemory_edges->push_back(delete_request);
-    }
-    EdgeUpdateRequest request(*edges_itr, false);
-    onmemory_edges->push_back(request);
-  }
-
-/// Randomize order of requests
-#if SORT_WHALE_REQUESTS
-  std::cout << "Sorting whole edge update requests..." << std::endl;
-  double time_start1 = MPI_Wtime();
-  std::sort(onmemory_edges->begin(), onmemory_edges->end(), edgerequest_asc);
-  double time_end1 = MPI_Wtime();
-  std::cout << "TIME: Sorting a chunk (sec.) =\t" << time_end - time_start << std::endl;
-#else
-  std::cout << "Randomizing edge update requests..." << std::endl;
-  std::random_shuffle(onmemory_edges->begin(), onmemory_edges->end());
-#endif
-
-  const double time_end = MPI_Wtime();
-  std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << time_end - time_start << std::endl;
-  std::cout << "Status: # updated requests =\t"<< onmemory_edges->size() << std::endl;
-  std::cout << "Status: # delete requests =\t"<< (onmemory_edges->size() - num_original_edges) << std::endl;
-  std::cout << "Status: Vector capacity =\t" << onmemory_edges->capacity() << std::endl;
-  std::cout << "Status: Vector memory size (GiB) =\t" << (double)onmemory_edges->capacity() * sizeof(requests_vector_t) / (1<<30ULL) << std::endl;
-  print_dram_usages();
-
-  usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size (GiB) =\t"<< (double)usages  / (1<<30ULL) << std::endl;
-
-  /// -------------- Edge update loop ----------- ////
-  std::cout << "-- Apply update requests --" << std::endl;
-  const uint64_t num_requests = onmemory_edges->size();
+  const uint64_t num_edges = edges.size();
+  const uint64_t num_requests = num_edges;
   const uint64_t num_loops = num_requests / chunk_size;
+  auto edges_itr = edges.begin();
   for (uint64_t i = 0; i < num_loops; ++i) {
-    std::cout << "[" << i+1 << " / " << num_loops << "] :\t" << chunk_size << std::endl;
-
-#if SORT_BY_CHUNK
-    requests_vector_t *edge_chunk = new requests_vector_t();
-    edge_chunk->resize(chunk_size);
-    std::copy(onmemory_edges->begin() + chunk_size * i, onmemory_edges->begin() + chunk_size * (i+1), edge_chunk->begin());
-    double time_start2 = MPI_Wtime();
-    std::sort(edge_chunk->begin(), edge_chunk->end(), edgerequest_asc);
-    double time_end2 = MPI_Wtime();
-    std::cout << "TIME: Sorting a chunk (sec.) =\t" << time_end - time_start << std::endl;
-    graph->add_edges_adjacency_matrix(edge_chunk->begin(), chunk_size);
-    delete edge_chunk;
-#else
-    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * i, chunk_size);
-#endif
-
-    usages = segment_manager->get_size() - segment_manager->get_free_memory();
-    std::cout << "Usage: segment size =\t"<< usages << std::endl;
-    print_dram_usages();
-    std::cout << std::endl;
-
+    std::cout << "[" << i+1 << " / " << num_loops << "] : chunk_size =\t" << chunk_size << std::endl;
+    request_vector_type update_request_vec = request_vector_type();
+    generate_insertion_requests(edges_itr, chunk_size, update_request_vec);
+    graph->add_edges_adjacency_matrix(update_request_vec.begin(), chunk_size);
+    print_usages(segment_manager);
   }
-  uint64_t num_rest_edges = onmemory_edges->size() - chunk_size * num_loops;
-  if (num_rest_edges > 0) {
-    std::cout << "\n[" << "*" << " / " << num_loops << "] :\t" << num_rest_edges << std::endl;
-    graph->add_edges_adjacency_matrix(onmemory_edges->begin() + chunk_size * num_loops, num_rest_edges);
-    usages = segment_manager->get_size() - segment_manager->get_free_memory();
-    std::cout << "Usage: segment size =\t"<< usages << std::endl;
-  }
-
-  std::cout << "\n<< Results >>" << std::endl;
   graph->print_profile();
-
-  delete onmemory_edges;
 }
+
 
 int main(int argc, char** argv) {
 
@@ -304,7 +215,6 @@ int main(int argc, char** argv) {
       if (fname_compare != "") {
         std::cout << "Comparing graph to " << fname_compare << std::endl;
       }
-      print_dram_usages();
     }
 
     std::stringstream fname;
@@ -331,6 +241,7 @@ int main(int argc, char** argv) {
     asdf.flush();
     segment_manager_t* segment_manager = asdf.get_segment_manager();
     bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
+    print_usages(segment_manager);
 
     graph_type *graph;
     if (data_structure_type == "VC_VC") {
@@ -367,7 +278,10 @@ int main(int argc, char** argv) {
         havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
          false);
 
-        add_and_delete_edges_loop(graph, uptri, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
+        apply_edges_update_requests(graph,
+                                    uptri,
+                                    segment_manager,
+                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
       } else if(type == "RMAT") {
         uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
@@ -376,17 +290,25 @@ int main(int argc, char** argv) {
           vert_scale, num_edges_per_rank,
           0.57, 0.19, 0.19, 0.05, true, false);
 
-        add_and_delete_edges_loop(graph, rmat, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
+        apply_edges_update_requests(graph,
+                                    rmat,
+                                    segment_manager,
+                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
       } else if(type == "PA") {
         std::vector< std::pair<uint64_t, uint64_t> > input_edges;
         gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor), pa_beta, 0.0, MPI_COMM_WORLD);
 
-        add_and_delete_edges_loop(graph, input_edges, static_cast<uint64_t>(std::pow(2, chunk_size_exp)), segment_manager, edges_delete_ratio);
+        apply_edges_update_requests(graph,
+                                    input_edges,
+                                    segment_manager,
+                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+
         {
           std::vector< std::pair<uint64_t, uint64_t> > empty(0);
           input_edges.swap(empty);
         }
+
       } else {
         std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
       }
@@ -403,7 +325,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
 
-        print_dram_usages();
+        print_usages(segment_manager);
 
         size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
         double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());

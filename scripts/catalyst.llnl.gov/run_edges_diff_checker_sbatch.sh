@@ -41,7 +41,7 @@ date
 echo -e "\n\n------------------------------------"
 echo Executable Log
 echo -e "------------------------------------\n\n"
-srun -N1 -n1 ./scripts/run_edges_diff_check.sh $1 $2 $3 $4
+srun -N1 -n1 ./scripts/run_edges_diff_checker.sh $1 $2 $3 $4
 date
 echo -e "\n\n------------------------------------"
 echo free -m

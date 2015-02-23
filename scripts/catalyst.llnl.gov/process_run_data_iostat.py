@@ -11,10 +11,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import matplotlib.pyplot as plt
 
-make_figure_separately = True
-target_dir_list = ["./logs/20150217_223445/", "./logs/20150217_222611/"]
-#target_dir_list = ["./20150212_181159/", "./20150212_181356/", "./20150212_182833/", "./20150212_182937/"]
-legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
+make_figure_separately = False
+#target_dir_list = ["./logs/20150217_223445/", "./logs/20150217_222611/"]
+#legend_labels_list = ["full-memory, without-sort", "normal-mmap, sort-chunk"]
+#legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
+target_dir_list = ["./20150212_181356/", "./20150212_181159/", "./20150212_182833/"]
+legend_labels_list = ["normal-mmap, sort-chunk", "normal-mmap, without-sort", "di-mmap, without-sort", "di-mmap, sort-chunk"]
+#legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
 
 target_file = "io_monitering_report.log"
 column_labels = ["rrqm/s", "wrqm/s", "r/s", "w/s", "rMB/s", "wMB/s", "avgrq-sz", "avgqu-sz", "await", "svctm", "%%util"]
@@ -79,20 +82,21 @@ def plot_result(_target_dir_list, _index):
       column_for_a_file = columnwise_values_all_filse[f]
       x_value = range(0, len(column_for_a_file)*10, 10)
       #legend_label = _target_dir_list[i].split('/')[-2]
-      legend_label = legend_labels_list[_index]
+      legend_label = legend_labels_list[f_pos]
       column_for_a_file[0] = 0
       plt.plot(x_value, column_for_a_file, label=legend_label)
       plt.legend()
+      # plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+      #            ncol=2, mode="expand", borderaxespad=0.)
 
-      # ------------------------------ #
       x1,x2,y1,y2 = plt.axis()
+      # ------------------------------ #
       if ylabel == "r/s" or ylabel == "w/s":
         y2 = 80000
       elif  ylabel == "rMB/s" or ylabel == "wMB/s":
         y2 = 1200
       x2 = 250000
       # ------------------------------ #
-
       plt.axis((0, x2, 0, y2))
 
       plt.title("iostat-" + ylabel)
@@ -103,7 +107,11 @@ def plot_result(_target_dir_list, _index):
 
       tmp = ylabel.replace("/", "")
       tmp = tmp.replace("%%", "")
-      outname = _target_dir_list[0] + tmp + ".png"
+      outname = ""
+      if make_figure_separately:
+        outname = _target_dir_list[0] + tmp + ".png"
+      else:
+        outname = "/g/g90/iwabuchi/tmp/" + tmp + ".png"
       plt.savefig(outname, format = 'png')
 
       f_pos = f_pos + 1

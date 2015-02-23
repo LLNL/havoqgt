@@ -84,13 +84,9 @@ namespace havoqgt {
 namespace mpi {
     namespace bip = boost::interprocess;
 
-#ifndef WITHOUT_DUPLICATE_INSERTION
-  #define WITHOUT_DUPLICATE_INSERTION 1
-#endif
+#define WITHOUT_DUPLICATE_INSERTION 1
 
-#ifndef DEBUG_DUMPUPDATEREQUESTANDRESULTS
-  #define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
-#endif
+#define DEBUG_DUMPUPDATEREQUESTANDRESULTS 0
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
   #warning DEBUG_DUMPUPDATEREQUESTANDRESULTS is enabled.
     static const std::string kFnameDebugInsertedEdges = "/l/ssd/graph_out.debug_edges";
