@@ -271,52 +271,44 @@ int main(int argc, char** argv) {
 
 
     std::cout << "\n<<Update edges>>" << std::endl;
-    if (load_from_disk  == 0) {
+    if(type == "UPTRI") {
+      uint64_t num_edges = num_vertices * edge_factor;
+      havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
+       false);
 
-      if(type == "UPTRI") {
-        uint64_t num_edges = num_vertices * edge_factor;
-        havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
-         false);
+      apply_edges_update_requests(graph,
+                                  uptri,
+                                  segment_manager,
+                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
-        apply_edges_update_requests(graph,
-                                    uptri,
-                                    segment_manager,
-                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+    } else if(type == "RMAT") {
+      uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
 
-      } else if(type == "RMAT") {
-        uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
+      havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
+        vert_scale, num_edges_per_rank,
+        0.57, 0.19, 0.19, 0.05, true, false);
 
-        havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-          vert_scale, num_edges_per_rank,
-          0.57, 0.19, 0.19, 0.05, true, false);
+      apply_edges_update_requests(graph,
+                                  rmat,
+                                  segment_manager,
+                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
-        apply_edges_update_requests(graph,
-                                    rmat,
-                                    segment_manager,
-                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+    } else if(type == "PA") {
+      std::vector< std::pair<uint64_t, uint64_t> > input_edges;
+      gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor), pa_beta, 0.0, MPI_COMM_WORLD);
 
-      } else if(type == "PA") {
-        std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-        gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor), pa_beta, 0.0, MPI_COMM_WORLD);
+      apply_edges_update_requests(graph,
+                                  input_edges,
+                                  segment_manager,
+                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
-        apply_edges_update_requests(graph,
-                                    input_edges,
-                                    segment_manager,
-                                    static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
-        {
-          std::vector< std::pair<uint64_t, uint64_t> > empty(0);
-          input_edges.swap(empty);
-        }
-
-      } else {
-        std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
+      {
+        std::vector< std::pair<uint64_t, uint64_t> > empty(0);
+        input_edges.swap(empty);
       }
+
     } else {
-      if (mpi_rank == 0) {
-        std::cout << "Loading Graph from file." << std::endl;
-      }
-      graph = segment_manager->find<graph_type>("graph_obj").first;
+      std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 

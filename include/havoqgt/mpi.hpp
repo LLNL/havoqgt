@@ -53,7 +53,7 @@
 #define _HAVOQGT_MPI_HPP_
 
 #include <havoqgt/detail/null_ostream.hpp>
-
+#include <sched.h>
 #include <vector>
 #include <mpi.h>
 #include <assert.h>
@@ -153,20 +153,51 @@ private:
   bool init;
 };
 
+void mpi_yield_barrier(MPI_Comm mpi_comm) {
+  MPI_Request request;
+  CHK_MPI(MPI_Ibarrier(mpi_comm, &request));
+
+  for(; ;) {
+    MPI_Status status;
+    int is_done = false;
+    MPI_Test(&request, &is_done, &status);
+    if (is_done) {
+      return;
+    } else {
+      sched_yield();
+    }
+  }
+}
+
 
 //no std:: equivalent for MPI_BAND, MPI_BOR, MPI_LXOR, MPI_BXOR, MPI_MAXLOC, MPI_MINLOC
 
 template <typename T, typename Op>
 T mpi_all_reduce(T in_d, Op in_op, MPI_Comm mpi_comm) {
   T to_return;
-  CHK_MPI( MPI_Allreduce( &in_d, &to_return, 1, mpi_typeof(T()), mpi_typeof(in_op), mpi_comm));
+  CHK_MPI(
+    MPI_Allreduce( &in_d, &to_return, 1, mpi_typeof(T()), mpi_typeof(in_op),
+      mpi_comm)
+  );
   return to_return;
 }
 
+template <typename Vec, typename Op>
+void mpi_all_reduce_inplace(Vec &vec, Op in_op, MPI_Comm mpi_comm) {
+  CHK_MPI(
+    MPI_Allreduce(MPI_IN_PLACE, &(vec[0]), vec.size(),
+      mpi_typeof(typename Vec::value_type()), mpi_typeof(in_op), mpi_comm)
+  );
+}
+
 template <typename T, typename Op>
-void mpi_all_reduce(std::vector<T>& in_vec, std::vector<T>& out_vec, Op in_op, MPI_Comm mpi_comm) {
+void mpi_all_reduce(std::vector<T>& in_vec, std::vector<T>& out_vec, Op in_op,
+    MPI_Comm mpi_comm) {
   out_vec.resize(in_vec.size());
-  CHK_MPI( MPI_Allreduce( &(in_vec[0]), &(out_vec[0]), in_vec.size(), mpi_typeof(in_vec[0]), mpi_typeof(in_op), mpi_comm));
+  CHK_MPI(
+    MPI_Allreduce( &(in_vec[0]), &(out_vec[0]), in_vec.size(),
+      mpi_typeof(in_vec[0]), mpi_typeof(in_op), mpi_comm)
+  );
 }
 
 
@@ -524,6 +555,13 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
   }
 }
 
+template <typename T>
+void mpi_bcast(T& data, int root, MPI_Comm comm)
+{
+  CHK_MPI( MPI_Bcast(&data, sizeof(data), MPI_BYTE, root, comm));
+}
+
+
 inline std::ostream& cout_rank0() {
   int mpi_rank(0);
   CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
@@ -559,8 +597,39 @@ inline int mpi_comm_size() {
 }
 
 
+} //end namespace mpi
 
-}} // end namespace havoqgt { namespace mpi {
+///
+/// Start "new" communicator here
+///
+
+class communicator {
+public:
+  communicator(MPI_Comm in_comm)
+    : m_comm( in_comm )
+  {
+    CHK_MPI( MPI_Comm_rank(m_comm, &m_rank) );
+    CHK_MPI( MPI_Comm_size(m_comm, &m_size) );
+  }
+  
+  communicator() {}
+  
+  MPI_Comm comm() const { return m_comm; }
+  int      size() const { return m_size; }
+  int      rank() const { return m_rank; }
+  
+  void barrier() const {
+    MPI_Barrier(m_comm);
+  }
+private:
+  MPI_Comm m_comm;
+  int      m_size;
+  int      m_rank;
+    
+};
+
+
+} // end namespace havoqgt 
 
 #endif //_HAVOQGT_MPI_HPP_
 

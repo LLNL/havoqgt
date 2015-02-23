@@ -57,6 +57,7 @@
 #include <havoqgt/detail/reservable_priority_queue.hpp>
 #include <vector>
 #include <iterator>
+#include <sched.h>
 
 namespace havoqgt { namespace mpi {
 
@@ -171,6 +172,7 @@ public:
       }
       m_mailbox.flush_buffers_if_idle();
       } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      sched_yield();
     } while(!m_termination_detection.test_for_termination());
   }
 

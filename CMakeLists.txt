@@ -13,6 +13,8 @@ option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
 #
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
+include(CheckSymbolExists)
+
 #
 # MPI is required
 #
@@ -26,16 +28,38 @@ endmacro()
 # BOOST is required
 #
 find_package( Boost )
-find_package (Threads)
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-  target_link_libraries (${target} pthread)
-  target_link_libraries (${target} rt)
 endmacro() 
+
+#
+#  Posix_fallocate
+#
+check_symbol_exists(posix_fallocate "fcntl.h" HAVE_POSIX_FALLOCATE)
+if (HAVE_POSIX_FALLOCATE)
+  add_definitions(-DHAVE_POSIX_FALLOCATE)
+endif()
+
+#
+# Doxygen
+#
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in 
+               ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
+add_custom_target(doc
+    ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc
+    COMMENT "Generating API documentation with Doxygen" VERBATIM
+    )
+endif(DOXYGEN_FOUND)
+
 
 add_subdirectory (include)
 add_subdirectory (src)
+enable_testing()
+add_subdirectory (test)
 
 #
 # Configuration Summary

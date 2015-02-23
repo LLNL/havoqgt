@@ -59,14 +59,32 @@ namespace havoqgt {
 namespace mpi {
 
 template <typename SegementManager>
-template <typename T, typename SegManagerOther>
+template <typename T, typename Allocator >
 class delegate_partitioned_graph<SegementManager>::vertex_data {
  public:
   typedef T value_type;
   vertex_data() {}
 
-  T&       operator[] (const vertex_locator& locator);
-  const T& operator[] (const vertex_locator& locator) const;
+  T&       operator[] (const vertex_locator& locator)
+  {
+    if(locator.is_delegate()) {
+      assert(locator.local_id() < m_delegate_data.size());
+      return m_delegate_data[locator.local_id()];
+    }
+    assert(locator.local_id() < m_owned_vert_data.size());
+    return m_owned_vert_data[locator.local_id()];
+  }
+  
+  
+  const T& operator[] (const vertex_locator& locator) const 
+  {
+    if(locator.is_delegate()) {
+      assert(locator.local_id() < m_delegate_data.size());
+      return m_delegate_data[locator.local_id()];
+    }
+    assert(locator.local_id() < m_owned_vert_data.size());
+    return m_owned_vert_data[locator.local_id()];
+  }
 
   void reset(const T& r) {
     for(size_t i=0; i<m_owned_vert_data.size(); ++i) {
@@ -83,61 +101,30 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     mpi_all_reduce(tmp_in, tmp_out, std::plus<T>(), MPI_COMM_WORLD);
     std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
   }
-
-  vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-    SegManagerOther* segment_manager);
-  vertex_data(uint64_t owned_data_size, uint64_t delegate_size,
-    const T& init, SegManagerOther* segment_manager);
+    
+  vertex_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+    : m_owned_vert_data(allocate)
+    , m_delegate_data(allocate) {
+    m_owned_vert_data.resize(dpg.m_owned_info.size());
+    m_delegate_data.resize(dpg.m_delegate_info.size());
+    }
+      
+  T local_accumulate() const {
+    T to_return = T();
+    to_return = std::accumulate(m_owned_vert_data.begin(), m_owned_vert_data.end(), to_return);
+    to_return = std::accumulate(m_delegate_data.begin(), m_delegate_data.end(), to_return);
+    return to_return;
+  }
+  
+  T global_accumulate() const {
+    T local = local_accumulate();
+    return mpi_all_reduce(local,std::plus<T>(), MPI_COMM_WORLD);
+  }
 
  private:
-  bip::vector<T, bip::allocator<T, SegManagerOther>  > m_owned_vert_data;
-  bip::vector<T, bip::allocator<T, SegManagerOther>  > m_delegate_data;
+  bip::vector<T, Allocator > m_owned_vert_data;
+  bip::vector<T, Allocator > m_delegate_data;
 };
-
-////////////////////////////////////////////////////////////////////////////////
-//                                vertex_data                                 //
-////////////////////////////////////////////////////////////////////////////////
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegmentManager>::vertex_data<T,SegManagerOther>::
-vertex_data(uint64_t owned_data_size, uint64_t delegate_size, SegManagerOther* sm)
-  : m_owned_vert_data(sm->template get_allocator<T>())
-  , m_delegate_data(sm->template get_allocator<T>()) {
-  m_owned_vert_data.resize(owned_data_size);
-  m_delegate_data.resize(delegate_size);
-  }
-
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::
-vertex_data(uint64_t owned_data_size, uint64_t delegate_size, const T& init, SegManagerOther* sm)
-  : m_owned_vert_data(owned_data_size, init, sm->template get_allocator<T>())
-  , m_delegate_data(delegate_size, init, sm->template get_allocator<T>()) { }
-
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-T&
-delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::
-operator[](const vertex_locator& locator) {
-  if(locator.is_delegate()) {
-    assert(locator.local_id() < m_delegate_data.size());
-    return m_delegate_data[locator.local_id()];
-  }
-  assert(locator.local_id() < m_owned_vert_data.size());
-  return m_owned_vert_data[locator.local_id()];
-}
-
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-const T&
-delegate_partitioned_graph<SegmentManager>::vertex_data<T, SegManagerOther>::operator[](const vertex_locator& locator) const {
-  if(locator.is_delegate()) {
-    assert(locator.local_id() < m_delegate_data.size());
-    return m_delegate_data[locator.local_id()];
-  }
-  assert(locator.local_id() < m_owned_vert_data.size());
-  return m_owned_vert_data[locator.local_id()];
-}
 
 }  // mpi
 }  // namespace havoqgt

@@ -61,64 +61,8 @@
  namespace havoqgt {
   namespace mpi {
 
-    static const std::string kDeviceName = "md0";
-
-    IOInfo::IOInfo()
-    : read_total_mb_(0.0), written_total_mb_(0.0)
-    {
-      init();
-    }
-
-    void IOInfo::init() {
-      read_total_mb_ = 0.0;
-      written_total_mb_ = 0.0;
-      get_status(read_previous_mb_, written_previous_mb_);
-    }
-
-    void IOInfo::reset_baseline() {
-      get_status(read_previous_mb_, written_previous_mb_);
-    }
-
-    void IOInfo::get_status(int &r, int &w) {
-      FILE *pipe;
-      char str[1024];
-      std::string fname = "iostat -m | grep " + kDeviceName + " 2>&1";
-      pipe = popen(fname.c_str(), "r" );
-
-      float temp;
-      fscanf(pipe, "%256s", str);
-      fscanf(pipe, "%f %f %f", &temp, &temp, &temp);
-      fscanf(pipe, "%d %d \n", &r, &w);
-      pclose(pipe);
-    };
-
-    void IOInfo::log_diff(bool final = false) {
-      int read_current_mb, written_current_mb;
-      get_status(read_current_mb, written_current_mb);
-
-      int read    = read_current_mb    - read_previous_mb_;
-      int written = written_current_mb - written_previous_mb_;
-
-      read_total_mb_    += read;
-      written_total_mb_ += written;
-
-      std::cout << "MB Read:\t"     << read    << std::endl;
-      std::cout << "MB Written:\t"  << written << std::endl;
-      if (final) {
-        std::cout << "Total MB Read:\t"    << read_total_mb_     << std::endl;
-        std::cout << "Total MB Written:\t" << written_total_mb_  << std::endl;
-      }
-
-      read_previous_mb_    = read_current_mb;
-      written_previous_mb_ = written_current_mb;
-
-    };
-
-
   template <typename SegementManager>
     const char construct_dynamicgraph<SegementManager>::kNoValue = 0;
-
-
 /**
  * Constructor
  *
@@ -179,7 +123,7 @@
   fout_debug_insertededges_.open(kFnameDebugInsertedEdges+"_raw");
 #endif
 
- }
+}
 
 /**
  * Deconstructor

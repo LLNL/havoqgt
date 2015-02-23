@@ -1,0 +1,156 @@
+//-----------------------------------------------------------
+
+/** \page developer_guide Developer Guide
+
+This section of the guide is intended to help developers design new graph algorithms
+using the HavoqGT framework.  It is assumed that you've read the \ref getting_started sections, 
+and are familiar with basic compiling and running.  After introducing the \ref developer_visitor_queue, this section
+concludes with a \ref bfs_example.
+
+\section developer_visitor_queue  Visitor Queue
+Our framework uses an asynchronous visitor queue abstraction. The visitor queue provides the 
+parallelism and creates a data-driven flow of computation.  
+Traversal algorithm developers define vertex-centric procedures to execute on 
+traversed vertices.  Vertex visitors have the ability to pass visitor state to 
+other vertices. 
+
+<!--Parallel algorithms using this 
+framework have been developed for breadth-first search, single source shortest paths, 
+connected components, k-core, page-rank, and triangle counting. -->
+
+Each asynchronous traversal begins with an initial set of visitors, which may 
+create additional visitors dynamically depending on the algorithm and graph 
+topology. All visitors are asynchronously transmitted, scheduled, and executed. 
+When the visitors execute on a vertex, they are guaranteed exclusive access to the 
+vertex’s data. The traversal completes when all visitors have completed, 
+and the distributed queue is globally empty.
+
+Additional documentation for components of the visitor queue can be found:
+- \ref visitor_queue.hpp -- The visitor queue.
+- \ref mailbox.hpp -- The mailbox communication layer.   MPI point-to-point communication with routing and aggregation.
+- \ref termination_detection.hpp -- Asynchronous termination detection algorithm.
+
+\section bfs_example BFS Example
+To demonstrate how an algorithm is written in HavoqGT, we walk through a simple example of Breadth-First Search.   
+The full BFS code can be found in \ref breadth_first_search.hpp.
+
+An algorithm consists of two main things, a class called a \ref bfs_visitor, and an \ref bfs_init function.
+
+\subsection bfs_visitor Visitor
+
+A visitor is required to have three main functions:
+- pre_visit() -- Performs a preliminary evaluation of the state and returns true 
+if the visitation should proceed, this can be applied to delegate vertices.   
+For BFS, this simply checks if the vertex's level is greater than the visitors' level, 
+and returns true if so. If pre_visit() returns true, the visitor is added to the Visitor 
+Queue and its visit() function will be executed when pop'ed from the queue.
+
+- visit(Graph& , VisitorQueueHandle ) -- Main visitor procedure that is executed as a visitor is pop'ed from 
+the top of the Visitor Queue.   For BFS, this function loops over all neighbors of <i>vertex</i> and sends 
+them a new visitors with the BFS level incremented.
+
+- bool operator> (const visitor&, const visitor&) -- Less than comparison used to locally prioritize the 
+visitors in a min heap priority queue.
+
+Additional functions and data that are specific to BFS are:
+- level() and parent() -- these access the visitor's locally stored state holding the BFS level and BFS parent.
+- level_data() and parent_data() -- these access static pointers that point to the \ref vertex_data datastructures 
+that are used to store the level's and parent's of each vertex.
+
+\code{.cpp}
+template<typename Graph, typename LevelData, typename ParentData>
+class bfs_visitor {
+public:
+  typedef typename Graph::vertex_locator                 vertex_locator;
+
+  bfs_visitor(): m_level(std::numeric_limits<uint64_t>::max())  { }
+
+  bfs_visitor(vertex_locator _vertex, uint64_t _level, vertex_locator _parent)
+    : vertex(_vertex)
+    , m_parent(_parent)
+    , m_level(_level) { }
+
+  bfs_visitor(vertex_locator _vertex)
+    : vertex(_vertex)
+    , m_parent(_vertex)
+    , m_level(0) { }
+
+
+  bool pre_visit() const {
+    bool do_visit  = (*level_data())[vertex] > level();
+    if(do_visit) {
+      (*level_data())[vertex] = level();
+    }
+    return do_visit;
+  }
+
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    if(level() <= (*level_data())[vertex]) {
+      (*level_data())[vertex] = level();
+      (*parent_data())[vertex] = parent();
+
+      typedef typename Graph::edge_iterator eitr_type;
+      for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
+        vertex_locator neighbor = eitr.target();
+        bfs_visitor new_visitor(neighbor, level() + 1, vertex);
+        vis_queue->queue_visitor(new_visitor);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  uint64_t level() const {  return m_level; }
+
+  vertex_locator parent() const  { return m_parent; }
+
+  friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
+    return v1.level() > v2.level();
+  }
+
+  static void set_level_data(LevelData* _data) { level_data() = _data; }
+
+  static LevelData*& level_data() {
+    static LevelData* data;
+    return data;
+  }
+
+  static void set_parent_data(ParentData* _data) { parent_data() = _data; }
+
+  static ParentData*& parent_data() {
+    static ParentData* data;
+    return data;
+  }
+
+  vertex_locator   vertex;
+  vertex_locator   m_parent;
+  uint64_t         m_level;
+};
+\endcode
+
+\subsection bfs_init Initiator
+After a visitor has been created for an algorithm, an initiator is required to bootstrap the dataflow computation.
+For BFS this function first sets up a bfs_visitor with its required static state (level_data & parent_data).   Second, it
+instantiates a Visitor Queue.   Finally, it initializes the visitor traversal with a source vertex.
+
+\code{.cpp}
+template <typename TGraph, typename LevelData, typename ParentData>
+void breadth_first_search(TGraph* g,
+                          LevelData& level_data,
+                          ParentData& parent_data,
+                          typename TGraph::vertex_locator s) {
+
+  typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
+  visitor_type::set_level_data(&level_data);
+  visitor_type::set_parent_data(&parent_data);
+  typedef visitor_queue< visitor_type, bfs_priority_queue, TGraph >    visitor_queue_type;
+
+  visitor_queue_type vq(g);
+  vq.init_visitor_traversal(s);
+}
+\endcode
+
+
+
+*/

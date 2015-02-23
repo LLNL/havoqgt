@@ -95,26 +95,26 @@ class mailbox_routed {
     twod_router(uint32_t rank, uint32_t size) {
       procs_per_node = std::min(size,uint32_t(24));
       uint64_t rank_to_print = 2;
-      if(rank == rank_to_print)
-      std::cout << "Rank " << rank_to_print << "'s bcast_targets: ";
+      //if(rank == rank_to_print)
+      //std::cout << "Rank " << rank_to_print << "'s bcast_targets: ";
       my_node_base_rank = rank - (rank % procs_per_node);;
       for(uint32_t i=0; i<procs_per_node; ++i) {
         uint64_t target = my_node_base_rank + i;
         m_bcast_targets.push_back(target);
-        if(rank==rank_to_print)
-        std::cout << target << " ";
+        //if(rank==rank_to_print)
+        //std::cout << target << " ";
       }
-      if(rank==rank_to_print)
-        std::cout << std::endl << "Rank " << rank_to_print << "'s bcast_proxies: ";
+      //if(rank==rank_to_print)
+      //  std::cout << std::endl << "Rank " << rank_to_print << "'s bcast_proxies: ";
       uint64_t node_offset = rank % procs_per_node;
       for(uint32_t i=0; i<size / procs_per_node; ++i) {
         uint64_t proxy = (i * procs_per_node) + node_offset;
         m_bcast_proxies.push_back(proxy);
-        if(rank==rank_to_print)
-          std::cout << proxy << " ";
+        //if(rank==rank_to_print)
+        //  std::cout << proxy << " ";
       }
-      if(rank == rank_to_print)
-        std::cout << std::endl;
+      //if(rank == rank_to_print)
+      //  std::cout << std::endl;
     }
     uint32_t proxy_rank(uint32_t dest) {
       uint64_t dest_offset = dest % procs_per_node;

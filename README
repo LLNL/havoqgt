@@ -1,43 +1,25 @@
-Copyright (c) 2013, Lawrence Livermore National Security, LLC. 
+Copyright (c) 2013-2015, Lawrence Livermore National Security, LLC. 
 Produced at the Lawrence Livermore National Laboratory. 
 Written by Roger Pearce <rpearce@llnl.gov>. 
 LLNL-CODE-644630. 
 All rights reserved.
 
 This file is part of HavoqGT, Version 0.1. 
-For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
+For details, see https://havoqgt.bitbucket.org
 
 --------------------------------------------------------------------------------
 
 HavoqGT (Highly Asynchronous Visitor Queue Graph Toolkit) is a framework for 
 expressing asynchronous vertex-centric graph algorithms.  It provides a visitor
 interface, where actions are defined at an individual vertex level.
-This code was developed at Lawrence Livermore National Laboratory, and as part
-of Roger Pearce's Ph.D. research.
+This code was developed at Lawrence Livermore National Laboratory.
 
 Built in C++, the framework provides a runtime for parallel communication and
-algorithm termination detection.   V0.1 is an initial release with only 
-multi-threaded communication; future releases to provide MPI support.
+algorithm termination detection.   V0.1 is an initial release with only MPI support.
 All graph data is stored in mmaped files, using Boost.Interprocess and Memory 
 Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
 devices are preferred for external memory storage.
 
-V0.1 only provides a simple Graph500 example:
+For documentation, see http://havoqgt.bitbucket.org
 
-src/generate_graph.cpp
-======================
-
-This will generate an input graph following the Graph500 V1 specs.   The graph
-is stored in an adjacency list format through MMAPed files.   Example usage:
-
-./generate_graph <external_memory_file_name> <SCALE>
-
-
-src/run_bfs.cpp
-===============
-
-This will run BFS using OpenMP for threading.  Input graph needs to be
-previously generated.  Example usage:
-
-./run_bfs <external_memory_file_name> <SCALE>

@@ -69,27 +69,14 @@
 #include <havoqgt/utilities.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/detail/iterator.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_partitioner.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_node_identifier.hpp>
+#include <havoqgt/impl/edge_partitioner.hpp>
+#include <havoqgt/impl/edge_node_identifier.hpp>
 
-#ifndef PROCESSES_PER_NODE
- #define PROCESSES_PER_NODE 24
- #warning using default processer node of 24.
-#endif
-
-#ifndef EDGE_PASS_PARTITIONS
- #define EDGE_PASS_PARTITIONS 3
- #warning using default edge pass partitions of three.
-#endif
-
-#ifndef EDGE_CHUNK_SIZE
- #define EDGE_CHUNK_SIZE 1024*64
- #warning using default send chunk size of 2^16
-#endif
-
-#ifdef DEBUG
+#ifdef DEBUG_DPG
  #warning Debug MACRO is for delegate_partitioned_graph.
  #define IS_DEBUGING true
+#else
+ #define IS_DEBUGING false
 #endif
 
 namespace havoqgt {
@@ -123,7 +110,7 @@ class delegate_partitioned_graph {
   /// Vertex Iterator class for delegate partitioned graph
   class vertex_iterator;
   /// Vertex Data storage
-  template <typename T, typename SegManagerOther>
+  template <typename T, typename Allocator>
   class vertex_data;
   /// Edge Data storage
   template <typename T, typename SegManagerOther>
@@ -131,6 +118,8 @@ class delegate_partitioned_graph {
   /// Stores information about owned vertices
   class vert_info;
 
+  enum ConstructionState { New, MetaDataGenerated, EdgeStorageAllocated,
+    LowEdgesPartitioned, HighEdgesPartitioned, GraphReady};
 
   //////////////////////////////////////////////////////////////////////////////
   // Public Member Functions
@@ -141,13 +130,11 @@ class delegate_partitioned_graph {
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
                              uint64_t delegate_degree_threshold,
-                             std::function<void()> dont_need_graph);
+                             ConstructionState stop_after = GraphReady);
 
   template <typename Container>
-  void build_high_degree_csr(const SegmentAllocator<void>& seg_allocator,
-                             MPI_Comm mpi_comm, Container& edges,
-                             std::function<void()> dont_need_graph);
-
+  void complete_construction(const SegmentAllocator<void>& seg_allocator,
+    MPI_Comm mpi_comm, Container& edges);
   void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
@@ -205,7 +192,11 @@ class delegate_partitioned_graph {
     return m_owned_info.size();
   }
 
-  uint64_t max_vertex_id() {
+  uint64_t max_global_vertex_id() {
+    return m_global_max_vertex;
+  }
+
+  uint64_t max_local_vertex_id() {
     return m_max_vertex;
   }
 
@@ -229,21 +220,39 @@ class delegate_partitioned_graph {
     return m_controller_locators.end();
   }
 
-  inline bool operator==(delegate_partitioned_graph<SegementManager>&
-      other) {
-    return (m_mpi_size == other.m_mpi_size) &&
-          (m_mpi_rank == other.m_mpi_rank) &&
-          (m_owned_info == other.m_owned_info) &&
-          (m_owned_targets == other.m_owned_targets) &&
-          (m_delegate_info == other.m_delegate_info) &&
-          (m_delegate_degree == other.m_delegate_degree) &&
-          (m_delegate_label == other.m_delegate_label) &&
-          (m_delegate_targets == other.m_delegate_targets) &&
-          (m_map_delegate_locator != other.m_map_delegate_locator) &&
-          (m_delegate_degree_threshold == other.m_delegate_degree_threshold) &&
-          (m_controller_locators == other.m_controller_locators) &&
-          (m_local_outgoing_count == other.m_local_outgoing_count) &&
-          (m_local_incoming_count == other.m_local_incoming_count);
+  bool compare(delegate_partitioned_graph<SegementManager>* b) {
+    return *this==*b;
+  }
+
+  inline bool operator==(delegate_partitioned_graph<SegementManager>& other) {
+    if (m_mpi_size != other.m_mpi_size)
+      return false;
+    if (m_mpi_rank != other.m_mpi_rank)
+      return false;
+    if(m_owned_info != other.m_owned_info)
+      return false;
+    // if(m_owned_targets != other.m_owned_targets)
+    //   return false;
+    if(m_delegate_info != other.m_delegate_info)
+      return false;
+    if(m_delegate_degree != other.m_delegate_degree)
+      return false;
+    if(m_delegate_label != other.m_delegate_label)
+      return false;
+    // if(m_delegate_targets != other.m_delegate_targets)
+    //   return false;
+    if(m_map_delegate_locator != other.m_map_delegate_locator)
+      return false;
+    if(m_delegate_degree_threshold != other.m_delegate_degree_threshold)
+      return false;
+    if(m_controller_locators != other.m_controller_locators)
+      return false;
+    if(m_local_outgoing_count != other.m_local_outgoing_count)
+      return false;
+    if(m_local_incoming_count != other.m_local_incoming_count)
+      return false;
+
+    return true;
   }
 
   inline bool operator!=(delegate_partitioned_graph<SegementManager>&
@@ -260,22 +269,23 @@ class delegate_partitioned_graph {
                            boost::unordered_set<uint64_t>& global_hubs,
                            bool local_change);
 
-  void initialize_edge_storage(
-      boost::unordered_set<uint64_t>& global_hub_set,
-      uint64_t delegate_degree_threshold);
 
-  void initialize_delegate_target();
+  void initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hub_set);
+  void initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs);
 
+  void initialize_edge_storage(const SegmentAllocator<void>& seg_allocator);
+
+  template <typename Container>
+  void partition_low_degree(Container& unsorted_edges);
 
   template <typename InputIterator>
-  void partition_low_degree_count_high(InputIterator unsorted_itr,
+  void count_high_degree_edges(InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
-                 boost::unordered_set<uint64_t>& global_hub_set,
-                 uint64_t delegate_degree_threshold);
+                 boost::unordered_set<uint64_t>& global_hub_set);
 
-  template <typename InputIterator>
-  void partition_high_degree(InputIterator orgi_unsorted_itr,
-    InputIterator unsorted_itr_end,
+
+  template <typename Container>
+  void partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
 
@@ -297,36 +307,43 @@ class delegate_partitioned_graph {
       int maps_to_send_element_count);
 
 
-  void calculate_overflow(const uint64_t owned_low_count,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
+  void calculate_overflow(std::map< uint64_t, std::deque<OverflowSendInfo> >
+    &transfer_info);
 
   void generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
     int send_id,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
+  void flush_graph();
 
   //////////////////////////////////////////////////////////////////////////////
-  // Private Data Members
+  // Protected Data Members
   //////////////////////////////////////////////////////////////////////////////
-  const static uint64_t edge_chunk_size = EDGE_CHUNK_SIZE;
-  const int processes_per_node = PROCESSES_PER_NODE;
-  const int node_partitions = EDGE_PASS_PARTITIONS;
+ protected:
+  uint64_t edge_chunk_size;
+  int processes_per_node;
+  int node_partitions;
   int m_mpi_size;
   int m_mpi_rank;
   MPI_Comm m_mpi_comm;
 
-  std::function<void()> m_dont_need_graph;
+  ConstructionState m_graph_state {New};
+
 
   uint64_t m_max_vertex {0};
+  uint64_t m_global_max_vertex {0};
   uint64_t m_global_edge_count {0};
-  uint64_t m_edges_high_count;
+  uint64_t m_edges_high_count {0};
+  uint64_t m_edges_low_count {0};
 
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
   bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;
 
   bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
   bip::vector<uint32_t, SegmentAllocator<uint32_t>> m_owned_info_tracker;
-  bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+  //bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+  bip::offset_ptr<vertex_locator> m_owned_targets;
+  size_t m_owned_targets_size;
 
   // Delegate Storage
   uint64_t m_delegate_degree_threshold;
@@ -334,14 +351,18 @@ class delegate_partitioned_graph {
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
   bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
-  bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
-      m_delegate_targets;
+  // bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
+  //     m_delegate_targets;
+  bip::offset_ptr<vertex_locator> m_delegate_targets;
+  size_t m_delegate_targets_size;
 
   //Note: BIP only contains a map, not an unordered_map object.
-  boost::unordered_map<
+  /*boost::interprocess::unordered_map<
       uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
       SegmentAllocator< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
+  */
+  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
@@ -353,14 +374,14 @@ class delegate_partitioned_graph {
 } // namespace havoqgt
 
 
-#include <havoqgt/delegate_partitioned_graph/log_step.hpp>
-#include <havoqgt/delegate_partitioned_graph/vert_info.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_data.hpp>
-#include <havoqgt/delegate_partitioned_graph/edge_iterator.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_data.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_locator.hpp>
-#include <havoqgt/delegate_partitioned_graph/vertex_iterator.hpp>
+#include <havoqgt/impl/log_step.hpp>
+#include <havoqgt/impl/vert_info.hpp>
+#include <havoqgt/impl/edge_data.hpp>
+#include <havoqgt/impl/edge_iterator.hpp>
+#include <havoqgt/impl/vertex_data.hpp>
+#include <havoqgt/impl/vertex_locator.hpp>
+#include <havoqgt/impl/vertex_iterator.hpp>
 
-#include <havoqgt/delegate_partitioned_graph/delegate_partitioned_graph.ipp>
+#include <havoqgt/impl/delegate_partitioned_graph.ipp>
 
 #endif //HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
