@@ -53,6 +53,7 @@
 #define HAVOQGT_MPI_RHHSTATIC_HPP_INCLUDED
 
 #include <fstream>
+#include <havoqgt/detail/hash.hpp>
 #include "RHHCommon.hpp"
 
 namespace RHH {
@@ -258,8 +259,9 @@ private:
 #if 1
     return static_cast<HashType>(key);
 #else
-    std::hash<KeyType> hash_fn;
-    return hash_fn(key);
+    /// The below hash function can work very good for 'sparse' graphs
+    // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
+    return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key>>32ULL)) << 32ULL | havoqgt::detail::hash32(static_cast<uint32_t>(key)));
 #endif
   }
 

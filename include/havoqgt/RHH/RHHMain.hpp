@@ -51,6 +51,7 @@
 #ifndef HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #include <fstream>
+#include <havoqgt/detail/hash.hpp>
 #include "RHHCommon.hpp"
 #include "RHHAllocHolder.hpp"
 #include "RHHMgrStatic.hpp"
@@ -528,17 +529,15 @@ class RHHMain {
     RHHAdjalistType adj_list;
 
     ValueWrapperType()
-    {
-    }
+    { }
+
+    ~ValueWrapperType()
+    { }
 
     ValueWrapperType(ValueWrapperType &&old_obj)
     {
       value = old_obj.value;
       old_obj.value = 0;
-    }
-
-    ~ValueWrapperType()
-    {
     }
 
     ValueWrapperType &operator=(ValueWrapperType &&old_obj)
@@ -575,7 +574,17 @@ class RHHMain {
   /// XXX: we assume that key can use static_cast to HashType
   inline HashType hash_key(KeyType& key)
   {
+    #if 0
     return static_cast<HashType>(key);
+    #else
+    /// The below hash function works very good for 'sparse' graphs
+
+    /// No overhead in scale20 RMAT graph
+    // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
+
+    /// Note: 5 % of overhead in scale20 RMAT graph
+    return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key>>32ULL)) << 32ULL | havoqgt::detail::hash32(static_cast<uint32_t>(key)));
+    #endif
   }
 
   inline uint64_t cal_mask() const
