@@ -49,14 +49,14 @@
  *
  */
 
-// /usr/local/tools/mvapich2-gnu-1.9/bin/mpicxx ../havoqgt/scripts/catalyst.llnl.gov/sort_webgraph.cpp -std=c++11 -O3
+// /usr/local/tools/mvapich2-gnu-1.9/bin/mpicxx ../havoqgt/scripts/catalyst.llnl.gov/shuffle_webgraph.cpp -std=c++11 -O3
 // export MPICH_CXX=/opt/rh/devtoolset-1.1/root/usr/bin/g++
 
 #include <sched.h>
 #include <vector>
 #include <mpi.h>
 #include <assert.h>
-#include <stdlib.h>
+// #include <stdlib.h>
 #include <functional>
 #include <iostream>
 #include <algorithm>
@@ -66,6 +66,7 @@
 #include <iostream>
 #include <utility>
 #include <string>
+#include <random>
 
 #define CHK_MPI(a) { if (a != MPI_SUCCESS) {\
                       char* error_string = NULL; \
@@ -176,9 +177,9 @@ void mpi_all_to_all(std::vector< std::vector<T> >& in_p_vec,
   }
 }
 
-  using edge_type = std::pair<uint64_t, uint64_t>;
-  using edges_vec_type = std::vector<edge_type>;
-  using mpi_buf_vec_type = std::vector<edges_vec_type>;
+using edge_type = std::pair<uint64_t, uint64_t>;
+using edges_vec_type = std::vector<edge_type>;
+using mpi_buf_vec_type = std::vector<edges_vec_type>;
 
 int main (int argc, char** argv)
 {
@@ -211,6 +212,7 @@ int main (int argc, char** argv)
     recev_buf_vec[i] = edges_vec_type();
   }
 
+  /// -- Make file names--- ///
   std::string source_file_name("/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/sorted/part-r-00");
   if (mpi_rank < 10) {
     source_file_name += "0";
@@ -225,15 +227,28 @@ int main (int argc, char** argv)
   source_file.open(source_file_name);
   assert( source_file.is_open() );
 
+  /// -- Load edgelist and caluculate destination rank -- ///
    if (mpi_rank == 0) {
     t_start = MPI_Wtime();
     std::cout << "Loading data from sourcefiles...\n";
    }
   size_t count = 0;
+
+  // c++11 random function
+#if 0
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint64_t> dis(0, mpi_size);
+#endif
+
   while (source_file.good()) {
     uint64_t src_vtx, dst_vtx;
     source_file >> src_vtx >> dst_vtx;
+#if 1
     uint64_t target_rank = rand() % mpi_size;
+#else
+    uint64_t target_rank = dis(gen);
+#endif
     send_buf_vec[target_rank].push_back(std::make_pair(src_vtx, dst_vtx));
     ++count;
   }
