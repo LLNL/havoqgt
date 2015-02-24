@@ -28,10 +28,13 @@ endmacro()
 # BOOST is required
 #
 find_package( Boost )
+include(CheckSymbolExists)
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-endmacro() 
+  target_link_libraries (${target} pthread)
+  target_link_libraries (${target} rt)
+endmacro()
 
 #
 #  Posix_fallocate
@@ -46,7 +49,7 @@ endif()
 #
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
                ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
 add_custom_target(doc
     ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
@@ -58,8 +61,8 @@ endif(DOXYGEN_FOUND)
 
 add_subdirectory (include)
 add_subdirectory (src)
-enable_testing()
-add_subdirectory (test)
+#enable_testing()
+#add_subdirectory (test)
 
 #
 # Configuration Summary
@@ -81,6 +84,6 @@ message("   MPI_FOUND:          ${MPI_FOUND}")
 #message("   DOXYGEN_FOUND:      ${DOXYGEN_FOUND}")
 #MPI params found
 if(MPI_FOUND)
-  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS 
+  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS
           ${MPIEXEC_PREFLAGS} EXECUTABLE ${MPIEXEC_POSTFLAGS} ARGS")
 endif(MPI_FOUND)

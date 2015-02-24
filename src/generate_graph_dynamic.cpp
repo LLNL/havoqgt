@@ -54,6 +54,7 @@
 #include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
+#include <havoqgt/parallel_edge_list_reader.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -125,12 +126,21 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
   const uint64_t num_loops = num_requests / chunk_size;
   auto edges_itr = edges.begin();
   for (uint64_t i = 0; i < num_loops; ++i) {
-    std::cout << "[" << i+1 << " / " << num_loops << "] : chunk_size =\t" << chunk_size << std::endl;
+    std::cout << "\n[" << i+1 << " / " << num_loops << "] : chunk_size =\t" << chunk_size << std::endl;
     request_vector_type update_request_vec = request_vector_type();
     generate_insertion_requests(edges_itr, chunk_size, update_request_vec);
     graph->add_edges_adjacency_matrix(update_request_vec.begin(), chunk_size);
     print_usages(segment_manager);
+    graph->print_profile();
   }
+  const uint64_t remains = num_edges - num_loops*chunk_size;
+  if (remains > 0) {
+    std::cout << "\n[ * / " << num_loops << "] : remains =\t" << remains << std::endl;
+    request_vector_type update_request_vec = request_vector_type();
+    generate_insertion_requests(edges_itr, remains, update_request_vec);
+    graph->add_edges_adjacency_matrix(update_request_vec.begin(), remains);
+  }
+  print_usages(segment_manager);
   graph->print_profile();
 }
 
@@ -169,14 +179,14 @@ int main(int argc, char** argv) {
     uint64_t edges_delete_ratio = 0;
     std::string type;
     std::string fname_output;
-    std::string fname_compare = "";
     std::string data_structure_type;
+    std::vector<std::string> fname_edge_list;
 
-    if (argc < 13) {
+    if (argc < 12) {
       std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
       << " <load_from_disk> <delete file on exit>"
       << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/RB_MP/RB_MX> <low_degree_threshold>"
-      << " <file to compare to>"
+      << " <edgelist files>..."
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
@@ -188,13 +198,13 @@ int main(int argc, char** argv) {
       hub_threshold   = boost::lexical_cast<uint64_t>(argv[pos++]);
       fname_output    = argv[pos++];
       delete_file     = boost::lexical_cast<uint32_t>(argv[pos++]);
-      load_from_disk  = boost::lexical_cast<uint32_t>(argv[pos++]);
       chunk_size_exp  = boost::lexical_cast<uint64_t>(argv[pos++]);
       data_structure_type = argv[pos++];
       low_degree_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
       edges_delete_ratio = boost::lexical_cast<uint64_t>(argv[pos++]);
-      if (pos < argc) {
-        fname_compare = argv[pos++];
+      while(pos < argc) {
+        std::string fname(argv[pos++]);
+        fname_edge_list.push_back(fname);
       }
     }
     num_vertices <<= vert_scale;
@@ -206,14 +216,14 @@ int main(int argc, char** argv) {
       std::cout << "Hub threshold = " << hub_threshold << std::endl;
       std::cout << "PA-beta = " << pa_beta << std::endl;
       std::cout << "File name = " << fname_output << std::endl;
-      std::cout << "Load from disk = " << load_from_disk << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
       std::cout << "Data structure type: " << data_structure_type << std::endl;
       std::cout << "Low Degree Threshold = " << low_degree_threshold << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
-      if (fname_compare != "") {
-        std::cout << "Comparing graph to " << fname_compare << std::endl;
+      if (!fname_edge_list.empty()) {
+        for (auto itr = fname_edge_list.begin(), itr_end = fname_edge_list.end(); itr != itr_end; ++itr)
+        std::cout << "Load edge list from " << *itr << std::endl;
       }
     }
 
@@ -271,7 +281,14 @@ int main(int argc, char** argv) {
 
 
     std::cout << "\n<<Update edges>>" << std::endl;
-    if(type == "UPTRI") {
+    if (!fname_edge_list.empty()) {
+      havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
+      apply_edges_update_requests(graph,
+                                  edgelist,
+                                  segment_manager,
+                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
+
+    } else if(type == "UPTRI") {
       uint64_t num_edges = num_vertices * edge_factor;
       havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
        false);

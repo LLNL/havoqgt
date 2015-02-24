@@ -94,7 +94,7 @@ namespace mpi {
 #endif
 
 #ifndef DEBUG_DETAILPROFILE
-  #define DEBUG_DETAILPROFILE 0
+  #define DEBUG_DETAILPROFILE 1
 #endif
 
 class IOInfo {
