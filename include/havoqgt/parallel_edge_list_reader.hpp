@@ -159,7 +159,7 @@ public:
       local_max_vertex = std::max(edge.first, local_max_vertex);
       local_max_vertex = std::max(edge.second, local_max_vertex);
     }
-    m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+    // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
   }
 
 

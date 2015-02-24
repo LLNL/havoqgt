@@ -577,7 +577,7 @@ class RHHMain {
     #if 0
     return static_cast<HashType>(key);
     #else
-    /// The below hash function works very good for 'sparse' graphs
+    /// The below hash function can work very good for 'sparse' graphs
 
     /// No overhead in scale20 RMAT graph
     // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
@@ -668,7 +668,7 @@ class RHHMain {
     for (uint64_t i = 0; i < old_capacity; ++i) {
       const PropertyBlockType old_prop = old_property_block[i];
       if (old_prop != kClearedValue && !is_deleted(old_prop)) {
-        is_long_probedistance |= insert_capacity_selector(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
+        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
       }
     }
 
@@ -695,7 +695,7 @@ class RHHMain {
     for (uint64_t i = 0; i < old_capacity; ++i) {
       const PropertyBlockType old_prop = old_property_block[i];
       if (old_prop != kClearedValue && !is_deleted(old_prop)) {
-        is_long_probedistance |= insert_capacity_selector(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
+        is_long_probedistance |= insert_helper(std::move(old_key_block[i]), std::move(old_value_block[i]), kClearProbedistanceMask & old_prop);
       }
     }
 
@@ -749,14 +749,14 @@ class RHHMain {
   inline void insert_directly_with_growing(AllocatorsHolder &allocators, KeyType&& key, ValueWrapperType&& value)
   {
     ++m_num_elems_;
-    bool is_long_probedistance = insert_capacity_selector(std::move(key), std::move(value), kPropertySize1);
+    bool is_long_probedistance = insert_helper(std::move(key), std::move(value), kPropertySize1);
 
     if (m_num_elems_ >= m_capacity_*kFullCalacityFactor || is_long_probedistance) {
       grow_rhh_main(allocators);
     }
   }
 
-  bool insert_capacity_selector(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
+  bool insert_helper(KeyType &&key, ValueWrapperType &&value, PropertyBlockType prop)
   {
     const uint64_t mask = cal_mask();
     int64_t pos = cal_desired_pos(hash_key(key), mask);
