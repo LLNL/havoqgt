@@ -68,8 +68,10 @@
 
 #define SORT_BY_CHUNK 0
 
+using namespace havoqgt;
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
+
 typedef bip::managed_mapped_file mapped_t;
 typedef mapped_t::segment_manager segment_manager_t;
 typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
@@ -93,7 +95,7 @@ void print_usages(segment_manager_t *const segment_manager)
 double sort_requests(request_vector_type& requests)
 {
   const double time_start1 = MPI_Wtime();
-  std::sort(requests.begin(), requests.end(), edgerequest_asc);
+  //std::sort(requests.begin(), requests.end(), edgerequest_asc);
   return (MPI_Wtime() - time_start1);
 }
 
@@ -131,7 +133,6 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
     generate_insertion_requests(edges_itr, chunk_size, update_request_vec);
     graph->add_edges_adjacency_matrix(update_request_vec.begin(), chunk_size);
     print_usages(segment_manager);
-    graph->print_profile();
   }
   const uint64_t remains = num_edges - num_loops*chunk_size;
   if (remains > 0) {
@@ -147,12 +148,12 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
 
 int main(int argc, char** argv) {
 
+  int mpi_rank(0), mpi_size(0);
 
-  CHK_MPI(MPI_Init(&argc, &argv));
+  havoqgt_init(&argc, &argv);
   {
-    int mpi_rank(0), mpi_size(0);
-    CHK_MPI( MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank) );
-    CHK_MPI( MPI_Comm_size( MPI_COMM_WORLD, &mpi_size) );
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_size = havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
 
     if (mpi_rank == 0) {
@@ -170,32 +171,25 @@ int main(int argc, char** argv) {
     uint64_t num_vertices = 1;
     uint64_t vert_scale;
     uint64_t edge_factor;
-    double   pa_beta;
-    uint64_t hub_threshold;
-    uint32_t load_from_disk;
     uint32_t delete_file;
     uint64_t chunk_size_exp;
     uint64_t low_degree_threshold;
     uint64_t edges_delete_ratio = 0;
-    std::string type;
     std::string fname_output;
     std::string data_structure_type;
     std::vector<std::string> fname_edge_list;
 
-    if (argc < 12) {
-      std::cerr << "usage: <RMAT/PA> <Scale> <Edge factor> <PA-beta> <hub_threshold> <file name>"
-      << " <load_from_disk> <delete file on exit>"
-      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/RB_MP/RB_MX> <low_degree_threshold>"
+    if (argc < 9) {
+      std::cerr << "usage: <Scale> <Edge factor> <file name>"
+      << " <delete file on exit>"
+      << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/RB_MP/RB_MX> <low_degree_threshold> <edges_delete_ratio>"
       << " <edgelist files>..."
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
       int pos = 1;
-      type = argv[pos++];
       vert_scale      = boost::lexical_cast<uint64_t>(argv[pos++]);
       edge_factor     = boost::lexical_cast<uint64_t>(argv[pos++]);
-      pa_beta         = boost::lexical_cast<double>(argv[pos++]);
-      hub_threshold   = boost::lexical_cast<uint64_t>(argv[pos++]);
       fname_output    = argv[pos++];
       delete_file     = boost::lexical_cast<uint32_t>(argv[pos++]);
       chunk_size_exp  = boost::lexical_cast<uint64_t>(argv[pos++]);
@@ -210,11 +204,8 @@ int main(int argc, char** argv) {
     num_vertices <<= vert_scale;
 
     if (mpi_rank == 0) {
-      std::cout << "Building graph type: " << type << std::endl;
       std::cout << "Building graph Scale: " << vert_scale << std::endl;
       std::cout << "Building graph Edge factor: " << edge_factor << std::endl;
-      std::cout << "Hub threshold = " << hub_threshold << std::endl;
-      std::cout << "PA-beta = " << pa_beta << std::endl;
       std::cout << "File name = " << fname_output << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
@@ -227,13 +218,10 @@ int main(int argc, char** argv) {
       }
     }
 
+    /// --- create a segument file --- ///
     std::stringstream fname;
     fname << fname_output << "_" << mpi_rank;
-
-    if (load_from_disk  == 0) {
-      remove(fname.str().c_str());
-    }
-
+    remove(fname.str().c_str());
 
     std::cout << "\n<<Construct segment>>" << std::endl;
     uint64_t graph_capacity = std::pow(2, 39);
@@ -249,8 +237,10 @@ int main(int argc, char** argv) {
     assert(ret == 0);
     close(fd);
     asdf.flush();
+
+    /// --- create a segument --- ///
     segment_manager_t* segment_manager = asdf.get_segment_manager();
-    bip::allocator<void,segment_manager_t> alloc_inst(segment_manager);
+    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
     print_usages(segment_manager);
 
     graph_type *graph;
@@ -288,17 +278,7 @@ int main(int argc, char** argv) {
                                   segment_manager,
                                   static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
-    } else if(type == "UPTRI") {
-      uint64_t num_edges = num_vertices * edge_factor;
-      havoqgt::upper_triangle_edge_generator uptri(num_edges, mpi_rank, mpi_size,
-       false);
-
-      apply_edges_update_requests(graph,
-                                  uptri,
-                                  segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
-    } else if(type == "RMAT") {
+    } else {
       uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
 
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
@@ -310,59 +290,25 @@ int main(int argc, char** argv) {
                                   segment_manager,
                                   static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
 
-    } else if(type == "PA") {
-      std::vector< std::pair<uint64_t, uint64_t> > input_edges;
-      gen_preferential_attachment_edge_list(input_edges, uint64_t(5489), vert_scale, vert_scale+std::log2(edge_factor), pa_beta, 0.0, MPI_COMM_WORLD);
-
-      apply_edges_update_requests(graph,
-                                  input_edges,
-                                  segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
-      {
-        std::vector< std::pair<uint64_t, uint64_t> > empty(0);
-        input_edges.swap(empty);
-      }
-
-    } else {
-      std::cerr << "Unknown graph type: " << type << std::endl;  exit(-1);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-
+    havoqgt_env()->world_comm().barrier();
 
     std::cout << "\n<<Profile>>" << std::endl;
-    for (int i = 0; i < mpi_size; i++) {
-      if (i == mpi_rank) {
+    print_usages(segment_manager);
 
-        print_usages(segment_manager);
-
-        size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-        double percent = double(segment_manager->get_free_memory()) / double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] "
-        << (double)usages / (1<<30ULL) << " "
-        << (double)segment_manager->get_free_memory()  / (1<<30ULL)
-        << "/" << (double)segment_manager->get_size() / (1<<30ULL)
-        << " = " << percent << std::endl;
-      }
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-
+    havoqgt_env()->world_comm().barrier();
 
     std::cout << "\n<<Delete segment and files>>" << std::endl;
     /// this function call graph_type's destructor
     segment_manager->destroy<graph_type>("graph_obj");
-
     if (delete_file) {
       std::cout << "Deleting Mapped File." << std::endl;
       bip::file_mapping::remove(fname.str().c_str());
     }
+   havoqgt_env()->world_comm().barrier();
 
   } //END Main MPI
-  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-
-  std::cout << "Before MPI_Finalize." << std::endl;
-  CHK_MPI(MPI_Finalize());
-  std::cout << "FIN." << std::endl;
+  havoqgt_finalize();
 
   return 0;
 }

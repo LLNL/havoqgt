@@ -97,22 +97,6 @@ namespace mpi {
   #define DEBUG_DETAILPROFILE 0
 #endif
 
-class IOInfo {
-public:
-  IOInfo();
-  void init();
-  void reset_baseline();
-  void get_status(int &r, int &w);
-  void log_diff(bool final);
-
-private:
-  int read_previous_mb_;
-  int written_previous_mb_;
-  int read_total_mb_;
-  int written_total_mb_;
-};
-
-
 struct EdgeUpdateRequest
 {
   EdgeUpdateRequest(){}
@@ -260,7 +244,6 @@ template <typename SegmentManager>
       RHH::AllocatorsHolder *alloc_holder;
       RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
 
-  // IOInfo *io_info_;
       double total_exectution_time_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1

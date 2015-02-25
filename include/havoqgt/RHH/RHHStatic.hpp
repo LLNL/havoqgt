@@ -256,12 +256,13 @@ private:
   /// ------ Private member functions: algorithm core ----- ///
   inline HashType hash_key(const KeyType& key) const
   {
-#if 1
+#if 0
     return static_cast<HashType>(key);
 #else
     /// The below hash function can work very good for 'sparse' graphs
     // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
-    return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key>>32ULL)) << 32ULL | havoqgt::detail::hash32(static_cast<uint32_t>(key)));
+    using namespace havoqgt::detail;
+    return static_cast<HashType>(static_cast<uint64_t>(hash32(key>>32ULL)) << 32ULL | hash32(key));
 #endif
   }
 
