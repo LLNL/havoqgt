@@ -137,8 +137,8 @@ public:
 
   /// @todo Add undirected flag
   parallel_edge_list_reader(const std::vector< std::string >& filenames ) {
-    // int mpi_rank = havoqgt_env()->world_comm().rank();
-    // int mpi_size = havoqgt_env()->world_comm().size();
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_size = havoqgt_env()->world_comm().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
 
@@ -159,7 +159,7 @@ public:
       local_max_vertex = std::max(edge.first, local_max_vertex);
       local_max_vertex = std::max(edge.second, local_max_vertex);
     }
-    // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+    m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
   }
 
 
