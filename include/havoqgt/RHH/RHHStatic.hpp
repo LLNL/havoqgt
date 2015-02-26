@@ -256,13 +256,13 @@ private:
   /// ------ Private member functions: algorithm core ----- ///
   inline HashType hash_key(const KeyType& key) const
   {
-#if 0
-    return static_cast<HashType>(key);
-#else
+#if HASH_VERTEX_ID
     /// The below hash function can work very good for 'sparse' graphs
     // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
     using namespace havoqgt::detail;
     return static_cast<HashType>(static_cast<uint64_t>(hash32(key>>32ULL)) << 32ULL | hash32(key));
+#else
+    return static_cast<HashType>(key);
 #endif
   }
 

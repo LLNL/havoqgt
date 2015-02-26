@@ -6,17 +6,22 @@ import os.path
 import datetime
 
 USE_PDEBUG = False
-DEBUG = False
+
+# ---- Configuration ----- #
+DEBUG = True
 if DEBUG:
 	USE_PDEBUG = True
-USE_DIMMAP = False
-USE_DIMMAP_FOR_TUNE = False
+USE_DIMMAP = True
+USE_DIMMAP_FOR_TUNE = True
+MONITOR_IO = False
+
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments.log"
+
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
-
-MONITOR_IO = False
+# --------------------------- #
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -46,6 +51,7 @@ def init_test_dir():
 	global sbatch_file
 	global executable
 	global io_monitoring_report_file
+	global motivation
 
 	if DEBUG:
 		log_dir += "debug/"
@@ -63,11 +69,15 @@ def init_test_dir():
 	log("Test Motivation:")
 	if len(sys.argv) == 2:
 		log(str(sys.argv[1]))
+		motivation = str(sys.argv[1])
 	elif DEBUG:
 		log("Debuging...")
+		log(log_dir)
+		motivation = "Debuging..."
 	else:
 		var = raw_input("Please test motivation: ")
-		log(var)
+		log(log_dir + ": " + var)
+		motivation = var
 
 	sbatch_file = log_dir + "batch.sh"
 
@@ -95,9 +105,11 @@ def generate_shell_file():
 		slurm_options = ""
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(1024*256*12) + ",ver=1.1.20d --enable-hyperthreads "
+		slurm_options += "--di-mmap=" + str(1024*256*12) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(15545139) + " "
+		slurm_options += "--di-mmap=" + str(1024*256*103) + ",ver=1.1.21d,ra_tune=0 "
+	# else:
+	# 	slurm_options += "--di-mmap=" + str(1024*256) + ",ver=none,vm_tune=1,ra_tune=0 "
 
 	if USE_PDEBUG:
 		slurm_options += "-ppdebug"
@@ -219,9 +231,11 @@ def generate_shell_file():
 
 
 def execute_shell_file():
+	global job_id
+
 	if not NORUN:
 		cmd = ['sh', sbatch_file]
-		subprocess.call(cmd)
+		job_id = subprocess.check_output(cmd)
 
 def add_command(nodes, processes, cmd):
 	global test_count
@@ -247,41 +261,62 @@ def add_command(nodes, processes, cmd):
 	command_strings.append([nodes, processes, " ".join(cmd)])
 
 def create_commands(initial_scale, scale_increments, max_scale,
-	inital_nodes, node_multipler, max_nodes,
-	intial_threshold, threshold_multiplier, data_type,
-	low_deg_tlh_s, low_deg_tlh_e, delete_ratio_list):
+										data_structure_type, low_deg_tlh_list, delete_ratio_list):
 
 	graph_file = graph_dir+"out.graph"
 
 	for k in delete_ratio_list:
-		for i in range(low_deg_tlh_s, low_deg_tlh_e+1) :
-			save_file = 0
-			compare_files = 0
-			test_type = "RMAT"
+		for i in low_deg_tlh_list:
+			delete_segment_file = 0
 			chunk_size = 20
 			edges_factor = 16
 			scale = initial_scale
-			nodes = inital_nodes
-			degree_threshold = intial_threshold
 
-			while (nodes <= max_nodes and (scale <= max_scale or max_scale == -1) ):
-				processes = 1 * nodes
-
-				cmd = [executable, test_type, str(scale), str(edges_factor), str(0), str(degree_threshold), graph_file, str(save_file), str(compare_files), str(chunk_size), data_type, str(i), str(k)]
-				add_command(nodes, processes, cmd)
-
-				nodes *= node_multipler
-				scale += scale_increments
-				degree_threshold *= threshold_multiplier
+			while (scale <= max_scale):
+				# cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k)]
+				cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k),
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00000",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00001",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00002",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00003",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00004",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00005",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00006",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00007",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00008",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00009",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00010",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00011",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00012",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00013",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00014",
+				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00015"]
+				add_command(1, 1, cmd)
+				scale = scale + scale_increments
 
 init_test_dir()
 
+low_deg_tlh_list = [0]
 delete_ratio_list = [0]
 
-create_commands(27, 1, 27, 1, 1, 1, 1024, 1, "HY_DA", 1, 1, delete_ratio_list)
+create_commands(27, 1, 27, "HY_DA", low_deg_tlh_list, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
 execute_shell_file()
 
 log("Finished after generating %d Srun Tasks\n" %(test_count))
+
+fl = open(GLOBAL_LOG_FILE, 'a')
+fl.write("Job ID: " + job_id + "\n")
+fl.write("Log dir: " + log_dir + "\n")
+fl.write("graph_dir: " + graph_dir + "\n")
+fl.write("motivation: " + motivation + "\n")
+fl.write("DEBUG: " + str(DEBUG) + ", ")
+fl.write("USE_DIMMAP: " + str(USE_DIMMAP) + ", ")
+fl.write("USE_DIMMAP_FOR_TUNE: " + str(USE_DIMMAP_FOR_TUNE) + ", ")
+fl.write("USE_CATALYST: " + str(USE_CATALYST) + ", ")
+fl.write("DELETE_WORK_FILES: " + str(DELETE_WORK_FILES) + ", ")
+fl.write("MONITOR_IO: " + str(MONITOR_IO) + "\n\n")
+fl.close()
+

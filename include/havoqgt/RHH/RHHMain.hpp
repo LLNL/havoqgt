@@ -383,13 +383,24 @@ class RHHMain {
 
     uint64_t total = 0;
     uint64_t n = 0;
+    size_t table[kLongProbedistanceThreshold+1];
+    for (uint64_t i = 0; i < kLongProbedistanceThreshold+1ULL; ++i) {
+      table[i] = 0;
+    }
     for (uint64_t i = 0; i < m_capacity_; ++i) {
       PropertyBlockType prop = property(i);
       if (prop == kClearedValue) continue;
-      total += extract_probedistance(prop);
+      const uint64_t d = extract_probedistance(prop);
+      total += d;
+      ++table[d];
       ++n;
     }
     std::cout << "Average probedistance of MainRHH =\t" << static_cast<double>(total) / n << std::endl;
+    std::cout << "Histogram of probe distance\n";
+    for (uint64_t i = 0; i < kLongProbedistanceThreshold+1ULL; ++i) {
+      std::cout << table[i] << " ";
+    }
+    std::cout << std::endl;
 
     total = 0;
     n = 0;
@@ -411,6 +422,7 @@ class RHHMain {
       total += extract_size(prop);
     }
     std::cout << "Average value length =\t" << static_cast<double>(total) / m_num_elems_ << std::endl;
+    std::cout << std::endl;
 
   }
 
@@ -574,16 +586,16 @@ class RHHMain {
   /// XXX: we assume that key can use static_cast to HashType
   inline HashType hash_key(KeyType& key)
   {
-    #if 0
-    return static_cast<HashType>(key);
-    #else
+#if HASH_VERTEX_ID
     /// The below hash function can work very good for 'sparse' graphs
     /// No overhead in scale20 RMAT graph
     // return static_cast<HashType>(havoqgt::detail::hash32(static_cast<uint32_t>(key)));
     /// 13.2 % overhead in SCALE 22 RMAT. Due to hash conflict ?
     using namespace havoqgt::detail;
     return static_cast<HashType>(static_cast<uint64_t>(hash32(key>>32ULL)) << 32ULL | hash32(key));
-    #endif
+#else
+    return static_cast<HashType>(key);
+#endif
   }
 
   inline uint64_t cal_mask() const

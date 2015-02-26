@@ -53,15 +53,7 @@
 
 namespace RHH {
 
-#define DISP_LOG(msg) \
-  do { \
-    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
-  while (0)
-
-#define DISP_LOG_VAR(x) \
-  do { \
-    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
-  while (0)
+#define HASH_VERTEX_ID 0
 
   enum UpdateErrors {
     kSucceed = 0,
@@ -72,6 +64,20 @@ namespace RHH {
 
   typedef unsigned char NoValueType;
 
+#define DISP_LOG(msg) \
+  do { \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
+  while (0)
+
+#define DISP_LOG_VAR(x) \
+  do { \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
+  while (0)
+
+  void disp_configuration(void)
+  {
+    DISP_LOG_VAR(HASH_VERTEX_ID);
+  }
 }
 
 #endif
