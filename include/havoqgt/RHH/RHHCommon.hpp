@@ -53,7 +53,7 @@
 
 namespace RHH {
 
-#define HASH_VERTEX_ID 0
+#define HASH_VERTEX_ID 1
 
   enum UpdateErrors {
     kSucceed = 0,

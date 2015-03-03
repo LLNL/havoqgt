@@ -81,7 +81,13 @@
  , kLowDegreeThreshold(n)
  {
 
-  switch(data_structure_type_) {
+  std::srand(1);
+  std::cout << "Random seed is 1" << "\n";
+  std::cout << "#define DEBUG_DUMPUPDATEREQUESTANDRESULTS " << DEBUG_DUMPUPDATEREQUESTANDRESULTS << "\n";
+  // std::srand(std::time(0));
+  // std::cout << "Random seed is time" << std::endl;
+
+  switch (data_structure_type_) {
     case kUseVecVecMatrix:
     adjacency_matrix_vec_vec_ = new adjacency_matrix_vec_vec_t(seg_allocator_);
     init_vec = new uint64_vector_t(seg_allocator_);
@@ -96,16 +102,11 @@
     break;
 
     case kUseRHHAsMatrix:
-    std::srand(1);
-    std::cout << "Random seed is 1" << std::endl;
-    // std::srand(std::time(0));
-    // std::cout << "Random seed is time" << std::endl;
     rhh_matrix_ = new rhh_matrix_t(seg_allocator_);
     break;
 
     case kUseHybridDegreeAwareModel:
-    std::srand(1);
-    std::cout << "Random seed is 1" << std::endl;
+    RHH::disp_configuration();
     alloc_holder = new RHH::AllocatorsHolder(seg_allocator_.get_segment_manager());
     hybrid_matrix = new RHH::RHHMain<uint64_t, uint64_t>(*alloc_holder, 2ULL);
     break;
@@ -166,7 +167,7 @@ template <typename SegementManager>
 template <typename SegementManager>
 template <typename Container>
  void construct_dynamicgraph<SegementManager>::
- add_edges_adjacency_matrix_vector_vector(Container req_itr, size_t length)
+ add_edges_adjacency_matrix_vector_vector(Container& req_itr, size_t length)
  {
   // TODO: make initializer
   if (adjacency_matrix_vec_vec_->size() == 0) {
@@ -204,7 +205,7 @@ template <typename Container>
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
+add_edges_adjacency_matrix_map_vector(Container& req_itr, size_t length)
 {
 
   // io_info_->reset_baseline();
@@ -241,7 +242,7 @@ add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_rhh_single_array(Container req_itr, size_t length)
+add_edges_rhh_single_array(Container& req_itr, size_t length)
 {
   // io_info_->reset_baseline();
   double time_start = MPI_Wtime();
@@ -269,7 +270,7 @@ add_edges_rhh_single_array(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_rhh_matrix(Container req_itr, size_t length)
+add_edges_rhh_matrix(Container& req_itr, size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_deleted = 0;
@@ -310,11 +311,11 @@ add_edges_rhh_matrix(Container req_itr, size_t length)
 template <typename SegmentManager>
 template <typename Container>
 void construct_dynamicgraph<SegmentManager>::
-add_edges_degree_aware_hybrid(Container req_itr, const size_t length)
+add_edges_degree_aware_hybrid(Container& req_itr, const size_t length)
 {
   uint64_t count_inserted = 0;
   uint64_t count_deleted = 0;
-  double time_start = MPI_Wtime();
+  const double time_start = MPI_Wtime();
   for (size_t k = 0; k < length; ++k, ++req_itr) {
 
     const uint64_t source_vtx = req_itr->edge.first;
@@ -333,12 +334,15 @@ add_edges_degree_aware_hybrid(Container req_itr, const size_t length)
       count_inserted += hybrid_matrix->insert_uniquely(*alloc_holder, source_vtx, target_vtx);
     }
   } // End of a edges insertion loop
+  const double time_start_flush = MPI_Wtime();
   flush_pagecache();
-  double time_end = MPI_Wtime();
+  const double time_end = MPI_Wtime();
 
   std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+std::cout << "TIME: Fulush (sec.) =\t" << time_end - time_start_flush << std::endl;
   std::cout << "Count: # inserted edges =\t" << count_inserted << std::endl;
   std::cout << "Count: # deleted edges =\t" << count_deleted << std::endl;
+  // print_profile();
 
   total_exectution_time_ += time_end - time_start;
 }
@@ -364,7 +368,7 @@ print_profile()
   }
 
   if (data_structure_type_ == kUseRHHAsMatrix) {
-    std::cout << "\n<Status of the data structure>" << std::endl;
+    std::cout << "<Status of the data structure>" << std::endl;
     rhh_matrix_->disp_status();
     std::cout << "USE_SEPARATE_HASH_ARRAY is " << USE_SEPARATE_HASH_ARRAY << std::endl;
     std::cout << "USE_TOMBSTONE is " << USE_TOMBSTONE << std::endl;

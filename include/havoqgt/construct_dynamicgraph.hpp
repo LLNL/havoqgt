@@ -162,7 +162,7 @@ template <typename SegmentManager>
   ///  ------------------------------------------------------ ///
   /// add edges controller
   template <typename Container>
-      inline void add_edges_adjacency_matrix(Container req_itr, size_t length)
+      inline void add_edges_adjacency_matrix(Container& req_itr, size_t length)
       {
         switch(data_structure_type_) {
           case kUseVecVecMatrix:
@@ -204,25 +204,25 @@ template <typename SegmentManager>
 
   /// add edges vector-vector adjacency-matrix
   template <typename Container>
-      void add_edges_adjacency_matrix_vector_vector(Container req_itr, size_t length);
+      void add_edges_adjacency_matrix_vector_vector(Container& req_itr, size_t length);
 
   /// add edges unsorted_map-vector adjacency-matrix
   template <typename Container>
-      void add_edges_adjacency_matrix_map_vector(Container req_itr, size_t length);
+      void add_edges_adjacency_matrix_map_vector(Container& req_itr, size_t length);
 
   /// add edges array by using robin hood hash
   template <typename Container>
-      void add_edges_rhh_single_array(Container req_itr, size_t length);
+      void add_edges_rhh_single_array(Container& req_itr, size_t length);
 
   template <typename Container>
-      void add_edges_rhh_matrix(Container req_itr, size_t length);
+      void add_edges_rhh_matrix(Container& req_itr, size_t length);
 
   template <typename Container>
-      void add_edges_degree_aware_hybrid(Container req_itr, size_t length);
+      void add_edges_degree_aware_hybrid(Container& req_itr, size_t length);
 
-      inline void flush_pagecache() {
-        asdf_.flush();
-      }
+  inline void flush_pagecache() {
+    asdf_.flush();
+  }
 
   ///  ------------------------------------------------------ ///
   ///              Private Member Variables

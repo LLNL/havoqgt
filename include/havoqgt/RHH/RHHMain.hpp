@@ -51,6 +51,7 @@
 #ifndef HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #define HAVOQGT_MPI_RHHMAIN_HPP_INCLUDED
 #include <fstream>
+#include <type_traits>
 #include <havoqgt/detail/hash.hpp>
 #include "RHHCommon.hpp"
 #include "RHHAllocHolder.hpp"
@@ -71,7 +72,15 @@ class RHHMain {
   : m_num_elems_(0)
   , m_capacity_(initial_capasity)
   , m_ptr_(nullptr)
+  , m_property_block_(nullptr)
+  , m_key_block_(nullptr)
+  , m_value_block_(nullptr)
   {
+    /// --- Check Configuration Errors ---- ///
+    static_assert(sizeof(ValueType) >= sizeof(void *), "sizeof(ValueType) is too small");
+    static_assert(sizeof(ValueType) >= sizeof(RHHAdjalistType), "sizeof(ValueType) is too small");
+    static_assert((kLongProbedistanceThreshold & kClearProbedistanceMask) == 0x0ULL, "kLongProbedistanceThreshold is bigger than max probedistance");
+
     allocate_rhh_main(allocators);
   }
 
@@ -104,9 +113,12 @@ class RHHMain {
 
     const uint64_t size = extract_size(property(pos_key));
     if (size == 1ULL) {
-      if (m_value_block_[pos_key].value == val) return false;
-        /// 2. convert data structure to array model
+      if (m_value_block_[pos_key].value == val) return false; /// same element is hound
+      /// 2. convert data structure to a array
       ValueType* array =  allocate_normal_array(allocators, 2);
+      /// DEBUG
+      // assert(array);
+
       array[0] = m_value_block_[pos_key].value;
       array[1] = val;
       m_value_block_[pos_key].value_array = array;
@@ -121,7 +133,10 @@ class RHHMain {
       /// 3. we already have a normal-array
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
-      int capacity = cal_next_pow2(size);
+      int capacity = cal_next_pow2_8bit(size);
+
+      /// DEBUG
+      // assert(array);
 
       /// Check duplicated value
       for (int i=0; i < capacity; ++i) {
@@ -208,7 +223,7 @@ class RHHMain {
     if (size <= capacityNormalArray3) {
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
-      uint64_t capacity = cal_next_pow2(size);
+      uint64_t capacity = cal_next_pow2_8bit(size);
 
       for (int i=0; i < capacity; ++i) {
 
@@ -282,7 +297,7 @@ class RHHMain {
     } else if (current_size <= capacityNormalArray3) {
       NormalArrayBitmapType btmp = extract_bitmap(property(pos_key));
       ValueType* array = m_value_block_[pos_key].value_array;
-      uint64_t capacity = cal_next_pow2(current_size);
+      uint64_t capacity = cal_next_pow2_8bit(current_size);
 
       uint64_t pos = 0;
       for (uint i = 0; i < capacity; ++i) {
@@ -319,7 +334,7 @@ class RHHMain {
     } else if (current_size <= capacityNormalArray3) {
       NormalArrayBitmapType btmp = extract_bitmap(property(*current_key_pos));
       ValueType* array = m_value_block_[*current_key_pos].value_array;
-      uint64_t capacity = cal_next_pow2(current_size);
+      uint64_t capacity = cal_next_pow2_8bit(current_size);
 
       for (; *current_val_pos < capacity; *current_val_pos = *current_val_pos + 1) {
         if (((btmp >> *current_val_pos) & 0x01)) {
@@ -336,7 +351,7 @@ class RHHMain {
     return false;
   }
 
-  uint64_t size()
+  uint64_t size() const
   {
     return m_num_elems_;
   }
@@ -362,14 +377,14 @@ class RHHMain {
         continue;
       } else if (size <= capacityNormalArray3) {
         ValueType* array = m_value_block_[i].value_array;
-        uint64_t capacity = cal_next_pow2(size);
+        uint64_t capacity = cal_next_pow2_8bit(size);
         free_buffer_normal_array(allocators, array, capacity);
       } else {
         RHHAdjalistType& rhh_adj_list = m_value_block_[i].adj_list;
         rhh_adj_list.free(allocators, size);
       }
     }
-    free_buffer(allocators, m_ptr_, m_capacity_);
+    free_buffer(allocators, &m_ptr_, m_capacity_);
 
     m_num_elems_ = 0;
     m_capacity_ = 0;
@@ -448,7 +463,7 @@ class RHHMain {
       } else if (size <= capacityNormalArray3) {
         NormalArrayBitmapType btmp = extract_bitmap(prop);
         ValueType* array = m_value_block_[i].value_array;
-        uint64_t capacity = cal_next_pow2(size);
+        uint64_t capacity = cal_next_pow2_8bit(size);
         for (unsigned int j=0; j < capacity; ++j) {
           if ((btmp >> j) & 0x01)
             output_file << m_key_block_[i] << "\t" << array[j] << std::endl;;
@@ -535,16 +550,18 @@ class RHHMain {
   typedef uint64_t HashType;
   typedef unsigned char NormalArrayBitmapType;
 
+  /// We assume that sizeof(ValueType) is same or bigger than
+  /// the sizeof(ValueType*) and sizeof(RHHAdjalistType)
   union ValueWrapperType {
     ValueType value;
     ValueType* value_array;
     RHHAdjalistType adj_list;
 
-    ValueWrapperType()
-    { }
-
-    ~ValueWrapperType()
-    { }
+    /// --- Explicitly Delete -- ///
+    ValueWrapperType() {};
+    ~ValueWrapperType() {};
+    ValueWrapperType(const ValueWrapperType&) =delete;
+    ValueWrapperType& operator=(const ValueWrapperType&) =delete;
 
     ValueWrapperType(ValueWrapperType &&old_obj)
     {
@@ -559,24 +576,27 @@ class RHHMain {
       return *this;
     }
 
+    inline void swap(ValueWrapperType& other)
+    {
+      using std::swap;
+      swap(value, other.value);
+    }
   };
 
   // ---------  static variables ------------ ///
   static constexpr double kFullCalacityFactor  = 0.9;
   static const uint64_t kCapacityGrowingFactor = 2ULL;
+  static const ProbeDistanceType kLongProbedistanceThreshold  = 120ULL;  /// must be less than the max probedirance
 
   /// tombstone (1), size (48), bitmap (8), probe distance (7)
   static const PropertyBlockType kTombstoneMask               = 0x8000000000000000ULL; /// mask value to mark as deleted
-  static const PropertyBlockType kPropertySize1               = 0x0000000000008000ULL; /// property value for size = 1
+  static const PropertyBlockType kPropertySize1               = 0x0000000000008000ULL; /// mask value represents size = 1
   static const PropertyBlockType kProbedistanceMask           = 0x000000000000007FULL; /// mask value to extract probe distance
   static const PropertyBlockType kClearProbedistanceMask      = 0xFFFFFFFFFFFFFF80ULL; /// mask value to clear probe distance
-  //static const PropertyBlockType kSizeMask                    = 0x7FFFFFFFFFFF8000LL; /// mask value to extract size
   static const PropertyBlockType kClearSize                   = 0x8000000000007FFFULL; /// mask value to clear size
-  static const PropertyBlockType kClearBitmap                 = 0xFFFFFFFFFFFF807FULL;
-  static const PropertyBlockType kClearedValue                = 0x7FFFFFFFFFFFFFFFULL; /// value repsents cleared space
+  static const PropertyBlockType kClearBitmap                 = 0xFFFFFFFFFFFF807FULL; /// mask value to clear bitmap
+  static const PropertyBlockType kClearedValue                = 0x7FFFFFFFFFFFFFFFULL; /// mask value taht represents cleared space
   static const int64_t kInvaridIndex                          = -1LL;
-
-  static const ProbeDistanceType kLongProbedistanceThreshold  = 120ULL;  /// must be less than max value of probedirance
 
   ///  ------------------------------------------------------ ///
   ///              Private Member Functions
@@ -665,11 +685,13 @@ class RHHMain {
 
   void grow_rhh_main(AllocatorsHolder &allocators)
   {
+    // disp_profileinfo();  /// DEBUG
+
     const uint64_t old_capacity = m_capacity_;
     unsigned char* old_ptr = m_ptr_;
-    PropertyBlockType* old_property_block = reinterpret_cast<PropertyBlockType*>(m_ptr_);
-    KeyType* old_key_block                = reinterpret_cast<KeyType*>(&m_property_block_[old_capacity]);
-    ValueWrapperType* old_value_block     = reinterpret_cast<ValueWrapperType*>(&m_key_block_[old_capacity]);
+    PropertyBlockType* const old_property_block = reinterpret_cast<PropertyBlockType*>(m_ptr_);
+    KeyType* const old_key_block                = reinterpret_cast<KeyType*>(&m_property_block_[old_capacity]);
+    ValueWrapperType* const old_value_block     = reinterpret_cast<ValueWrapperType*>(&m_key_block_[old_capacity]);
 
     m_capacity_ = old_capacity * kCapacityGrowingFactor;
     allocate_rhh_main(allocators);
@@ -683,20 +705,21 @@ class RHHMain {
       }
     }
 
-    free_buffer(allocators, old_ptr, old_capacity);
+    free_buffer(allocators, &old_ptr, old_capacity);
 
     if (is_long_probedistance) {
       grow_rhh_main(allocators);
     }
+    // disp_profileinfo();     /// DEBUG
   }
 
   void shrink_rhh_main(AllocatorsHolder &allocators)
   {
     const uint64_t old_capacity = m_capacity_;
     unsigned char* old_ptr = m_ptr_;
-    PropertyBlockType* old_property_block = reinterpret_cast<PropertyBlockType*>(m_ptr_);
-    KeyType* old_key_block                = reinterpret_cast<KeyType*>(&m_property_block_[old_capacity]);
-    ValueWrapperType* old_value_block     = reinterpret_cast<ValueWrapperType*>(&m_key_block_[old_capacity]);
+    PropertyBlockType* const old_property_block = reinterpret_cast<PropertyBlockType*>(m_ptr_);
+    KeyType*  const old_key_block                = reinterpret_cast<KeyType*>(&m_property_block_[old_capacity]);
+    ValueWrapperType*  const old_value_block     = reinterpret_cast<ValueWrapperType*>(&m_key_block_[old_capacity]);
 
     m_capacity_ = old_capacity / kCapacityGrowingFactor;
     allocate_rhh_main(allocators);
@@ -710,7 +733,7 @@ class RHHMain {
       }
     }
 
-    free_buffer(allocators, old_ptr, old_capacity);
+    free_buffer(allocators, &old_ptr, old_capacity);
 
     if (is_long_probedistance) {
       grow_rhh_main(allocators);
@@ -719,10 +742,9 @@ class RHHMain {
 
   void allocate_rhh_main(AllocatorsHolder &allocators)
   {
-    uint64_t mem_size = 0;
-    mem_size += sizeof(PropertyBlockType) * m_capacity_;
-    mem_size += sizeof(KeyType) * m_capacity_;
-    mem_size += sizeof(ValueWrapperType) * m_capacity_;
+    const uint64_t mem_size = sizeof(PropertyBlockType) * m_capacity_ +
+                              sizeof(KeyType) * m_capacity_ +
+                              sizeof(ValueWrapperType) * m_capacity_;
 
     m_ptr_ = reinterpret_cast<unsigned char *>(allocators.allocator_raw.allocate(mem_size).get());
     m_property_block_ = reinterpret_cast<PropertyBlockType*>(m_ptr_);
@@ -734,24 +756,22 @@ class RHHMain {
     }
   }
 
-  inline ValueType* allocate_normal_array(AllocatorsHolder &allocators, size_t capacity)
+  inline ValueType* allocate_normal_array(AllocatorsHolder &allocators, const size_t capacity)
   {
-    ValueType* ptr = reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(capacity).get());
-    return ptr;
+    return reinterpret_cast<ValueType*>(allocators.allocator_normalarray.allocate(capacity).get());
   }
 
-  inline void free_buffer(AllocatorsHolder &allocators, unsigned char* ptr, uint64_t capacity)
+  inline void free_buffer(AllocatorsHolder &allocators, unsigned char** ptr, const uint64_t capacity)
   {
-    uint64_t mem_size = 0;
-    mem_size += sizeof(PropertyBlockType) * capacity;
-    mem_size += sizeof(KeyType) * capacity;
-    mem_size += sizeof(ValueType) * capacity;
+    const uint64_t mem_size = sizeof(PropertyBlockType) * m_capacity_ +
+                              sizeof(KeyType) * m_capacity_ +
+                              sizeof(ValueWrapperType) * m_capacity_;
 
-    allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(ptr), mem_size);
-    ptr = nullptr;
+    allocators.allocator_raw.deallocate(bip::offset_ptr<unsigned char>(*ptr), mem_size);
+    *ptr = nullptr;
   }
 
-  inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, uint64_t capacity)
+  inline void free_buffer_normal_array(AllocatorsHolder &allocators, ValueType* ptr, const uint64_t capacity)
   {
     allocators.allocator_normalarray.deallocate(bip::offset_ptr<ValueType>(ptr), capacity);
   }
@@ -760,7 +780,7 @@ class RHHMain {
   inline void insert_directly_with_growing(AllocatorsHolder &allocators, KeyType&& key, ValueWrapperType&& value)
   {
     ++m_num_elems_;
-    bool is_long_probedistance = insert_helper(std::move(key), std::move(value), kPropertySize1);
+    const bool is_long_probedistance = insert_helper(std::move(key), std::move(value), kPropertySize1);
 
     if (m_num_elems_ >= m_capacity_*kFullCalacityFactor || is_long_probedistance) {
       grow_rhh_main(allocators);
@@ -801,8 +821,17 @@ class RHHMain {
           break;
         }
         m_property_block_[pos] = update_probedistance(prop, dist);
-        std::swap(key, m_key_block_[pos]);
-        std::swap(value, m_value_block_[pos]);
+        using std::swap;
+        swap(key, m_key_block_[pos]);
+        value.swap(m_value_block_[pos]);
+
+        /// DEBUG
+        // if (extract_size(m_property_block_[pos]) > 1 && !m_value_block_[pos].value_array) {
+        //   disp_profileinfo();
+        //   std::cout << "Error\n";
+        //   assert(false);
+        // }
+
         dist = extract_probedistance(existing_elem_property);
         prop = existing_elem_property;
       }
@@ -818,6 +847,12 @@ class RHHMain {
     m_property_block_[ix] = update_probedistance(prop, dist);
     m_key_block_[ix] = std::move(key);
     m_value_block_[ix] = std::move(val);
+
+    /// DEBUG
+    // if (extract_size(prop) > 1 && !m_value_block_[ix].value_array) {
+    //   std::cout << "Error\n";
+    //   assert(false);
+    // }
   }
 
 
@@ -846,7 +881,7 @@ class RHHMain {
 
   /// ------ Private member functions: utility ----- ///
 
-  inline unsigned char cal_next_pow2(unsigned char n)
+  inline unsigned char cal_next_pow2_8bit(unsigned char n)
   {
     --n;
     n |= (n >> 1);

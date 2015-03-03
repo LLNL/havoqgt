@@ -64,7 +64,9 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
+#ifdef __linux__
 #include <sys/sysinfo.h>
+#endif
 
 #define SORT_BY_CHUNK 0
 
@@ -77,25 +79,77 @@ typedef mapped_t::segment_manager segment_manager_t;
 typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
 typedef boost::container::vector<EdgeUpdateRequest> request_vector_type;
 
+bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, size_t* const freeram, size_t* const usedram,
+                               size_t* const bufferram, size_t* const totalswap, size_t* const freeswap )
+{
+  bool is_succeed = false;
+#ifdef __linux__
+  struct sysinfo info;
+  if (sysinfo(&info) == 0) {
+    *mem_unit = static_cast<size_t>(info.mem_unit);
+    *totalram = static_cast<size_t>(info.totalram);
+    *freeram = static_cast<size_t>(info.freeram);
+    *usedram = static_cast<size_t>(info.totalram - info.freeram);
+    *bufferram = static_cast<size_t>(info.bufferram);
+    *totalswap = static_cast<size_t>(info.totalswap);
+    *freeswap = static_cast<size_t>(info.freeswap);
+    is_succeed = true;
+  }
+#endif
+  return is_succeed;
+}
+
+
+bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* const share,
+                          size_t* const text, size_t* const lib, size_t* const data, size_t* const dt)
+{
+  bool is_succeed = false;
+#ifdef __linux__
+  const char* statm_path = "/proc/self/statm";
+  FILE *f = fopen(statm_path, "r");
+  if (f) {
+    if (7 == fscanf(f,"%ld %ld %ld %ld %ld %ld %ld", size, resident, share, text, lib, data, dt)) {
+      is_succeed = true;
+    }
+  }
+  fclose(f);
+#endif
+  return is_succeed;
+}
+
 void print_usages(segment_manager_t *const segment_manager)
 {
   const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size =\t"<< usages << std::endl;
-  struct sysinfo info;
-  sysinfo(&info);
-  std::cout << "Usage: mem_unit:\t" << info.mem_unit << std::endl;
-  std::cout << "Usage: totalram(GiB):\t" << (double)info.totalram / (1<<30ULL) << std::endl;
-  std::cout << "Usage: freeram(GiB):\t" << (double)info.freeram / (1<<30ULL) << std::endl;
-  std::cout << "Usage: usedram(GiB):\t" << (double)(info.totalram - info.freeram) / (1<<30ULL) << std::endl;
-  std::cout << "Usage: bufferram(GiB):\t" << (double)info.bufferram / (1<<30ULL) << std::endl;
-  std::cout << "Usage: totalswap(GiB):\t" << (double)info.totalswap / (1<<30ULL) << std::endl;
-  std::cout << "Usage: freeswap(GiB):\t" << (double)info.freeswap / (1<<30ULL) << std::endl;
+  std::cout << "Usage: segment size =\t"<< usages << "\n";
+  std::cout << "----------------------------" << std::endl;
+  size_t mem_unit, totalram, freeram, usedram, bufferram, totalswap, freeswap;
+  if (get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
+    std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
+    std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: freeram(GiB):\t" << static_cast<double>(freeram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: usedram(GiB):\t" << static_cast<double>(usedram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
+    std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
+  }
+  std::cout << "----------------------------" << std::endl;
+  size_t size, resident, share, text, lib, data, dt;
+  if (get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
+    std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
+    std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
+    std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
+    std::cout << "Usage: text(GiB):\t" << static_cast<double>(text) / (1<<30ULL) << "\n";
+    std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
+    std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
+    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
+  }
+  std::cout << "----------------------------" << std::endl;
 }
 
 double sort_requests(request_vector_type& requests)
 {
   const double time_start1 = MPI_Wtime();
-  //std::sort(requests.begin(), requests.end(), edgerequest_asc);
+  std::sort(requests.begin(), requests.end(), edgerequest_asc);
   return (MPI_Wtime() - time_start1);
 }
 
@@ -131,7 +185,8 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
     std::cout << "\n[" << i+1 << " / " << num_loops << "] : chunk_size =\t" << chunk_size << std::endl;
     request_vector_type update_request_vec = request_vector_type();
     generate_insertion_requests(edges_itr, chunk_size, update_request_vec);
-    graph->add_edges_adjacency_matrix(update_request_vec.begin(), chunk_size);
+    auto requests_itr = update_request_vec.begin();
+    graph->add_edges_adjacency_matrix(requests_itr, chunk_size);
     print_usages(segment_manager);
   }
   const uint64_t remains = num_edges - num_loops*chunk_size;
@@ -139,7 +194,8 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
     std::cout << "\n[ * / " << num_loops << "] : remains =\t" << remains << std::endl;
     request_vector_type update_request_vec = request_vector_type();
     generate_insertion_requests(edges_itr, remains, update_request_vec);
-    graph->add_edges_adjacency_matrix(update_request_vec.begin(), remains);
+    auto requests_itr = update_request_vec.begin();
+    graph->add_edges_adjacency_matrix(requests_itr, remains);
   }
   print_usages(segment_manager);
   graph->print_profile();
@@ -183,7 +239,7 @@ int main(int argc, char** argv) {
       std::cerr << "usage: <Scale> <Edge factor> <file name>"
       << " <delete file on exit>"
       << " <chunk_size_exp> <VC_VC/MP_VC/RB_HS/RB_MP/RB_MX> <low_degree_threshold> <edges_delete_ratio>"
-      << " <edgelist files>..."
+      << " <edgelist file>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
@@ -196,23 +252,31 @@ int main(int argc, char** argv) {
       data_structure_type = argv[pos++];
       low_degree_threshold = boost::lexical_cast<uint64_t>(argv[pos++]);
       edges_delete_ratio = boost::lexical_cast<uint64_t>(argv[pos++]);
-      while(pos < argc) {
-        std::string fname(argv[pos++]);
-        fname_edge_list.push_back(fname);
+      if (pos < argc) {
+        std::string fname(argv[pos]);
+        std::ifstream fin(fname);
+        std::string line;
+        if (!fin.is_open()) {
+          HAVOQGT_ERROR_MSG("Unable to open a file");
+        }
+        while(std::getline(fin, line)) {
+          fname_edge_list.push_back(line);
+        }
       }
     }
     num_vertices <<= vert_scale;
 
     if (mpi_rank == 0) {
-      std::cout << "Building graph Scale: " << vert_scale << std::endl;
-      std::cout << "Building graph Edge factor: " << edge_factor << std::endl;
       std::cout << "File name = " << fname_output << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
       std::cout << "Data structure type: " << data_structure_type << std::endl;
       std::cout << "Low Degree Threshold = " << low_degree_threshold << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
-      if (!fname_edge_list.empty()) {
+      if (fname_edge_list.empty()) {
+        std::cout << "Building RMAT graph Scale: " << vert_scale << std::endl;
+        std::cout << "Building RMAT graph Edge factor: " << edge_factor << std::endl;
+      } else {
         for (auto itr = fname_edge_list.begin(), itr_end = fname_edge_list.end(); itr != itr_end; ++itr)
         std::cout << "Load edge list from " << *itr << std::endl;
       }
@@ -221,11 +285,16 @@ int main(int argc, char** argv) {
     /// --- create a segument file --- ///
     std::stringstream fname;
     fname << fname_output << "_" << mpi_rank;
-    remove(fname.str().c_str());
+    if (std::ifstream(fname.str().c_str()).good())
+    {
+      HAVOQGT_ERROR_MSG("File already exists.");
+    }
+
 
     std::cout << "\n<<Construct segment>>" << std::endl;
     uint64_t graph_capacity = std::pow(2, 39);
-    mapped_t  asdf(bip::open_or_create, fname.str().c_str(), graph_capacity);
+    mapped_t asdf = mapped_t(bip::create_only, fname.str().c_str(), graph_capacity);
+
 #if 0
     boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
     assert(asdf.advise(advise));
@@ -271,25 +340,23 @@ int main(int argc, char** argv) {
 
 
     std::cout << "\n<<Update edges>>" << std::endl;
-    if (!fname_edge_list.empty()) {
-      havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
-      apply_edges_update_requests(graph,
-                                  edgelist,
-                                  segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
-    } else {
+    if (fname_edge_list.empty()) {
       uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
-
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
         vert_scale, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
-
       apply_edges_update_requests(graph,
                                   rmat,
                                   segment_manager,
                                   static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
-
+    } else {
+      double time_start = MPI_Wtime();
+      havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
+      std::cout << "TIME: Initializing a edge list reader (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
+      apply_edges_update_requests(graph,
+                                  edgelist,
+                                  segment_manager,
+                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)));
     }
     havoqgt_env()->world_comm().barrier();
 
@@ -298,11 +365,11 @@ int main(int argc, char** argv) {
 
     havoqgt_env()->world_comm().barrier();
 
-    std::cout << "\n<<Delete segment and files>>" << std::endl;
+    std::cout << "\nDelete the segment" << std::endl;
     /// this function call graph_type's destructor
     segment_manager->destroy<graph_type>("graph_obj");
     if (delete_file) {
-      std::cout << "Deleting Mapped File." << std::endl;
+      std::cout << "Delete the mapped file" << std::endl;
       bip::file_mapping::remove(fname.str().c_str());
     }
    havoqgt_env()->world_comm().barrier();

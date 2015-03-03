@@ -125,8 +125,9 @@ public:
     void get_next() {
       bool ret = m_ptr_reader->try_read_edge(m_current);
       ++m_count;
-      assert(m_current.first <= m_ptr_reader->max_vertex_id());
-      assert(m_current.second <= m_ptr_reader->max_vertex_id());
+      /// Since there is no assumption on the edges in dynamic graph, comment out the below codes
+      // assert(m_current.first <= m_ptr_reader->max_vertex_id());
+      // assert(m_current.second <= m_ptr_reader->max_vertex_id());
     }
 
     parallel_edge_list_reader* m_ptr_reader;
@@ -144,22 +145,32 @@ public:
 
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
-      // if(i % mpi_size == mpi_rank) {
+      if(i % mpi_size == mpi_rank) {
         m_local_filenames.push_back(filenames[i]);
-      // }
+      }
     }
 
-    // First pass to calc max vertex and count edges.
-    open_files();
-    std::cout << "files open" << std::endl;
-    edge_type edge;
-    uint64_t local_max_vertex = 0;
-    while(try_read_edge(edge)) {
-      ++m_local_edge_count;
-      local_max_vertex = std::max(edge.first, local_max_vertex);
-      local_max_vertex = std::max(edge.second, local_max_vertex);
+    /// TODO: this is a temporal implementation for dynamicgraph
+    std::cout << "get m_global_max_vertex from a environment variable" << std::endl;
+    char* p;
+    p = getenv ("NUM_EDGES");
+    if (p == NULL) {
+      HAVOQGT_ERROR_MSG("Failed to get the environment variable: NUM_EDGES.");
     }
-    m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+    m_local_edge_count = std::stoll(std::string(p));
+
+    /// First pass to calc max vertex and count edges.
+    // open_files();
+    // std::cout << "files open" << std::endl;
+    // edge_type edge;
+    // uint64_t local_max_vertex = 0;
+    // while(try_read_edge(edge)) {
+    //   ++m_local_edge_count;
+    //   local_max_vertex = std::max(edge.first, local_max_vertex);
+    //   local_max_vertex = std::max(edge.second, local_max_vertex);
+    // }
+    // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+
   }
 
 
@@ -176,9 +187,9 @@ public:
   }
 
   /// @todo implement
-  uint64_t max_vertex_id() {
-    return m_global_max_vertex;
-  }
+  // uint64_t max_vertex_id() {
+  //   return m_global_max_vertex;
+  // }
 
   size_t size() {
   	return m_local_edge_count;
