@@ -14,7 +14,7 @@ if DEBUG:
 USE_DIMMAP = True
 USE_DIMMAP_FOR_TUNE = True
 MONITOR_IO = False
-
+MEMSIZE_DIMMAP = 1024*256*4
 GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments.log"
 
 NORUN = False
@@ -45,6 +45,24 @@ def log(s):
 	with open(log_file_name, 'a') as f:
 		f.write(s + "\n")
 
+def log_global():
+	fl = open(GLOBAL_LOG_FILE, 'a')
+	if not NORUN:
+	 fl.write("Job ID: " + job_id + "\n")
+	fl.write("Log dir: " + log_dir + "\n")
+	fl.write("graph_dir: " + graph_dir + "\n")
+	fl.write("motivation: " + motivation + "\n")
+	fl.write("DEBUG: " + str(DEBUG) + ", ")
+	fl.write("USE_DIMMAP: " + str(USE_DIMMAP) + ", ")
+	fl.write("USE_DIMMAP_FOR_TUNE: " + str(USE_DIMMAP_FOR_TUNE) + ", ")
+	if USE_DIMMAP or USE_DIMMAP_FOR_TUNE:
+		fl.write("MEMSIZE_DIMMAP: " + str(MEMSIZE_DIMMAP) + ", ")
+	fl.write("USE_CATALYST: " + str(USE_CATALYST) + ", ")
+	fl.write("DELETE_WORK_FILES: " + str(DELETE_WORK_FILES) + ", ")
+	fl.write("MONITOR_IO: " + str(MONITOR_IO) + "\n")
+	fl.write("---------------------------------------------\n\n")
+	fl.close()
+
 def init_test_dir():
 	global log_dir
 	global log_file_name
@@ -62,6 +80,9 @@ def init_test_dir():
 	while os.path.exists(log_dir+time_stamp):
 		time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
 
+	if USE_PDEBUG:
+		log_dir += "pdebug_"
+
 	log_dir += time_stamp + "/"
 	os.makedirs(log_dir)
 
@@ -75,7 +96,7 @@ def init_test_dir():
 		log(log_dir)
 		motivation = "Debuging..."
 	else:
-		var = raw_input("Please test motivation: ")
+		var = raw_input("Please input test motivation: ")
 		log(log_dir + ": " + var)
 		motivation = var
 
@@ -105,11 +126,11 @@ def generate_shell_file():
 		slurm_options = ""
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(1024*256*12) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+		slurm_options += "--di-mmap=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(1024*256*103) + ",ver=1.1.21d,ra_tune=0 "
-	# else:
-	# 	slurm_options += "--di-mmap=" + str(1024*256) + ",ver=none,vm_tune=1,ra_tune=0 "
+		slurm_options += "--di-mmap=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
+	else:
+	 	slurm_options += "--di-mmap=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
 	if USE_PDEBUG:
 		slurm_options += "-ppdebug"
@@ -160,6 +181,8 @@ def generate_shell_file():
 				s += block_start + "echo start I/O monitoring \n" + block_end
 				s += "iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + " 2>&1 & \n"
 
+			s += "export NUM_EDGES=157286400000\n"
+
 			s += block_start + "echo Executable Log \n" + block_end
 			s += "date \n"
 			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
@@ -206,8 +229,8 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-#			s += block_start + "echo dmesg \n" + block_end
-#			s += "dmesg\n"
+			s += block_start + "echo dmesg \n" + block_end
+			s += "dmesg\n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -274,23 +297,9 @@ def create_commands(initial_scale, scale_increments, max_scale,
 
 			while (scale <= max_scale):
 				# cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k)]
+				# cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k), "/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/logs/debug/webgraph_file_list_srt.txt"]
 				cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k),
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00000",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00001",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00002",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00003",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00004",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00005",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00006",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00007",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00008",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00009",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00010",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00011",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00012",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00013",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00014",
-				"/p/lscratchf/iwabuchi/WebDataCommons/2012/edges/random_shuffled/part-r-00015"]
+				"/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/logs/debug/webgraph_file_list_rnd.txt"]
 				add_command(1, 1, cmd)
 				scale = scale + scale_increments
 
@@ -306,17 +315,6 @@ generate_shell_file()
 execute_shell_file()
 
 log("Finished after generating %d Srun Tasks\n" %(test_count))
+log_global()
 
-fl = open(GLOBAL_LOG_FILE, 'a')
-fl.write("Job ID: " + job_id + "\n")
-fl.write("Log dir: " + log_dir + "\n")
-fl.write("graph_dir: " + graph_dir + "\n")
-fl.write("motivation: " + motivation + "\n")
-fl.write("DEBUG: " + str(DEBUG) + ", ")
-fl.write("USE_DIMMAP: " + str(USE_DIMMAP) + ", ")
-fl.write("USE_DIMMAP_FOR_TUNE: " + str(USE_DIMMAP_FOR_TUNE) + ", ")
-fl.write("USE_CATALYST: " + str(USE_CATALYST) + ", ")
-fl.write("DELETE_WORK_FILES: " + str(DELETE_WORK_FILES) + ", ")
-fl.write("MONITOR_IO: " + str(MONITOR_IO) + "\n\n")
-fl.close()
 
