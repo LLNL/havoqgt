@@ -49,22 +49,23 @@
  *
  */
 
-#include <havoqgt/construct_dynamicgraph.hpp>
-#include <havoqgt/rmat_edge_generator.hpp>
-#include <havoqgt/upper_triangle_edge_generator.hpp>
-#include <havoqgt/gen_preferential_attachment_edge_list.hpp>
-#include <havoqgt/environment.hpp>
-#include <havoqgt/parallel_edge_list_reader.hpp>
 #include <iostream>
 #include <assert.h>
 #include <deque>
 #include <utility>
 #include <algorithm>
 #include <functional>
+#include <fcntl.h>
+#include <havoqgt/construct_dynamicgraph.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
+#include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/upper_triangle_edge_generator.hpp>
+#include <havoqgt/gen_preferential_attachment_edge_list.hpp>
+#include <havoqgt/environment.hpp>
+#include <havoqgt/parallel_edge_list_reader.hpp>
 
-#ifdef __linux__
+#if __linux__
 #include <sys/sysinfo.h>
 #endif
 
@@ -83,7 +84,7 @@ bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, s
                                size_t* const bufferram, size_t* const totalswap, size_t* const freeswap )
 {
   bool is_succeed = false;
-#ifdef __linux__
+#if __linux__
   struct sysinfo info;
   if (sysinfo(&info) == 0) {
     *mem_unit = static_cast<size_t>(info.mem_unit);
@@ -154,14 +155,15 @@ double sort_requests(request_vector_type& requests)
 }
 
 template <typename Edges_itr>
-void generate_insertion_requests(Edges_itr& edges_itr, const uint64_t chunk_size, request_vector_type& requests)
+void generate_insertion_requests(Edges_itr& edges_itr, const uint64_t num_edges, request_vector_type& requests)
 {
   assert(requests.size() == 0);
-  requests.reserve(chunk_size);
+  requests.reserve(num_edges);
   const double time_start = MPI_Wtime();
-  for (uint64_t i = 0; i < chunk_size; ++i, ++edges_itr) {
+  for (uint64_t i = 0; i < num_edges; ++i, ++edges_itr) {
     EdgeUpdateRequest request(*edges_itr, false);
     requests.push_back(request);
+    //    std::cout << edges_itr->first << ":" << edges_itr->second << "\n";
   }
   std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
   std::cout << "Status: # insetion requests =\t"<< requests.size() << std::endl;
@@ -257,6 +259,7 @@ int main(int argc, char** argv) {
         std::ifstream fin(fname);
         std::string line;
         if (!fin.is_open()) {
+          std::cerr << fname << std::endl;
           HAVOQGT_ERROR_MSG("Unable to open a file");
         }
         while(std::getline(fin, line)) {
@@ -293,19 +296,23 @@ int main(int argc, char** argv) {
 
     std::cout << "\n<<Construct segment>>" << std::endl;
     uint64_t graph_capacity = std::pow(2, 39);
+    std::cout << "Create and map a segument file" << std::endl;
     mapped_t asdf = mapped_t(bip::create_only, fname.str().c_str(), graph_capacity);
 
 #if 0
     boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
     assert(asdf.advise(advise));
-    std::cout << "Calling adise_randam" << std::endl;
+    std::cout << "Call adise_randam" << std::endl;
 #endif
+#if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L
+    std::cout << "Call posix_fallocate\n";
     int fd  = open(fname.str().c_str(), O_RDWR);
     assert(fd != -1);
     int ret = posix_fallocate(fd,0,graph_capacity);
     assert(ret == 0);
     close(fd);
     asdf.flush();
+#endif
 
     /// --- create a segument --- ///
     segment_manager_t* segment_manager = asdf.get_segment_manager();

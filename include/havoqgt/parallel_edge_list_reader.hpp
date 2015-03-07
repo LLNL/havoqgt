@@ -52,6 +52,16 @@
 #ifndef HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 #define HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 
+#define DIRECT_IO_IN_EDGELIST_READER 1
+#if DIRECT_IO_IN_EDGELIST_READER
+#include <cstdio>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <havoqgt/graphstore_utilities.hpp>
+#include <memory>
+#endif
+
 #include <vector>
 #include <fstream>
 #include <deque>
@@ -62,28 +72,28 @@
 
 #include <havoqgt/environment.hpp>
 
-namespace havoqgt {
+ namespace havoqgt {
 
 /// Parallel edge list reader
 ///
-class parallel_edge_list_reader {
+  class parallel_edge_list_reader {
 
-public:
-  typedef uint64_t                      vertex_descriptor;
-  typedef std::pair<uint64_t, uint64_t> edge_type;
+  public:
+    typedef uint64_t                      vertex_descriptor;
+    typedef std::pair<uint64_t, uint64_t> edge_type;
 
 
   ///
   /// InputIterator class for rmat_edge_generator
 
-  class input_iterator_type : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t, const edge_type*, const edge_type&> {
+    class input_iterator_type : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t, const edge_type*, const edge_type&> {
 
-  public:
-    input_iterator_type(parallel_edge_list_reader* ptr_reader, uint64_t count)
-    	: m_ptr_reader(ptr_reader)
-    	, m_count(count){
-      if(m_count == 0) {
-        get_next();
+    public:
+      input_iterator_type(parallel_edge_list_reader* ptr_reader, uint64_t count)
+      : m_ptr_reader(ptr_reader)
+      , m_count(count){
+        if(m_count == 0) {
+          get_next();
         m_count = 0; //reset to zero
       }
     }
@@ -125,7 +135,7 @@ public:
     void get_next() {
       bool ret = m_ptr_reader->try_read_edge(m_current);
       ++m_count;
-      /// Since there is no assumption on the edges in dynamic graph, comment out the below codes
+      /// Since there is no assumption on edge in dynamic graph, comment out the below codes
       // assert(m_current.first <= m_ptr_reader->max_vertex_id());
       // assert(m_current.second <= m_ptr_reader->max_vertex_id());
     }
@@ -171,6 +181,16 @@ public:
     // }
     // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
+#if DIRECT_IO_IN_EDGELIST_READER
+    m_alligned_buffer = graphstore::aligned_alloc(kReadSize, 512);
+#ifdef O_DIRECT
+    std::cout << "Direct I/O mode\n";
+#else
+    std::cout << "System call without direct I/O mode\n";
+#endif
+#else
+    std::cout << "ifstream mode\n"
+#endif
   }
 
 
@@ -192,23 +212,77 @@ public:
   // }
 
   size_t size() {
-  	return m_local_edge_count;
+    return m_local_edge_count;
   }
 
 protected:
 
+#if DIRECT_IO_IN_EDGELIST_READER
+  static const size_t kReadSize = (1ULL << 25);
+#endif
+
   bool try_read_edge(edge_type& edge) {
-    std::string line;
+#if DIRECT_IO_IN_EDGELIST_READER
+    /// If thre are no buffered edges, read a data from the files
+    if (m_buffered_edges.empty()) {
+      m_buffered_edges.shrink_to_fit();
+      // std::cout << m_buffered_edges.size() << std::endl;
+      while (!m_ptr_ifstreams.empty()) {
+        const int fd = m_ptr_ifstreams.front();
+        const size_t read_size = read(fd, m_alligned_buffer, kReadSize);
+
+        if (read_size == -1) {
+           perror("Reading file");
+           exit(1);
+
+         } else if (read_size == 0) {
+            /// Failed reading data
+          close(m_ptr_ifstreams.front());
+          m_ptr_ifstreams.pop_front();
+
+        } else {
+          size_t last_endl_pos = 0;
+          char tmp_buf[512];
+          for (size_t i = 0, j = 0; i < read_size; ++i, ++j)  {
+            tmp_buf[j] = static_cast<char>(reinterpret_cast<char *>(m_alligned_buffer)[i]);
+            if (tmp_buf[j] == '\n') {
+              std::string line(tmp_buf);
+              std::stringstream ssline(line);
+              edge_type* e = new edge_type();
+              ssline >> e->first >> e->second;
+              m_buffered_edges.push_back(e);
+              j = 0;
+              last_endl_pos = i;
+            }
+          }
+          size_t back_length = read_size - last_endl_pos - 1;
+          lseek(fd, -back_length, SEEK_CUR);
+          break;
+        }
+      }
+    }
+
+    if (!m_buffered_edges.empty()) {
+          /// return from the buffer
+      edge_type* e = m_buffered_edges.front();
+      edge.first = e->first;
+      edge.second = e->second;
+      delete m_buffered_edges.front();
+      m_buffered_edges.pop_front();
+      return true;
+    }
+#else
     while(!m_ptr_ifstreams.empty()) {
+      std::string line;
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
         std::stringstream ssline(line);
         ssline >> edge.first >> edge.second;
         return true;
       } else { //No remaining lines, close file.
-        delete m_ptr_ifstreams.front();
         m_ptr_ifstreams.pop_front();
       }
     }
+#endif
     return false;
   }
 
@@ -217,17 +291,37 @@ protected:
       HAVOQGT_ERROR_MSG("m_ptr_ifstreams not empty.");
     }
     for(auto itr=m_local_filenames.begin(); itr!=m_local_filenames.end(); ++itr) {
+#if DIRECT_IO_IN_EDGELIST_READER
+      int flags = O_RDONLY;
+#ifdef O_DIRECT
+      flags |= flags;
+#endif
+      const int fd = open(itr->c_str(), flags);
+      if (fd != -1) {
+        m_ptr_ifstreams.push_back(fd);
+      } else {
+        perror("Error opening file:");
+        std::cerr << *itr << std::endl;
+      }
+#else
       std::ifstream* ptr = new std::ifstream(*itr);
       if(ptr->good()) {
         m_ptr_ifstreams.push_back(ptr);
       } else {
         std::cerr << "Error opening filename: " << *itr;
       }
+#endif
     }
   }
 
   std::vector< std::string >     m_local_filenames;
+#if DIRECT_IO_IN_EDGELIST_READER
+  std::deque<int> m_ptr_ifstreams;
+  std::deque<edge_type *> m_buffered_edges;
+  void *m_alligned_buffer;
+#else
   std::deque< std::ifstream* > m_ptr_ifstreams;
+#endif
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
 
