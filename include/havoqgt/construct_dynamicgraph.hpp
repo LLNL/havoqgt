@@ -227,42 +227,30 @@ template <typename SegmentManager>
   ///  ------------------------------------------------------ ///
   ///              Private Member Variables
   ///  ------------------------------------------------------ ///
-      mapped_t& asdf_;
-      SegmentAllocator<void>& seg_allocator_;
-      const DataStructureMode data_structure_type_;
-      const uint64_t kLowDegreeThreshold;
+  mapped_t& asdf_;
+  SegmentAllocator<void>& seg_allocator_;
+  const DataStructureMode data_structure_type_;
+  const uint64_t kLowDegreeThreshold;
 
-      adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
-      uint64_vector_t *init_vec;
+  adjacency_matrix_vec_vec_t *adjacency_matrix_vec_vec_;
+  uint64_vector_t *init_vec;
 
-      adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
+  adjacency_matrix_map_vec_t *adjacency_matrix_map_vec_;
 
-      rhh_single_array_t *rhh_single_array;
+  rhh_single_array_t *rhh_single_array;
 
-      rhh_matrix_t *rhh_matrix_;
+  rhh_matrix_t *rhh_matrix_;
 
-      RHH::AllocatorsHolder *alloc_holder;
-      RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
+  RHH::AllocatorsHolder *alloc_holder;
+  RHH::RHHMain<uint64_t, uint64_t> *hybrid_matrix;
 
-      double total_exectution_time_;
+  double total_exectution_time_;
 
 #if DEBUG_DUMPUPDATEREQUESTANDRESULTS == 1
       std::ofstream fout_debug_insertededges_;
 #endif
 
     };
-
-/// Frees the container of edges
-template <typename Container>
-    void free_edge_container(Container &edges) {};
-
-
-template<>
-    void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vector<std::pair<uint64_t, uint64_t> > &edges){
-      std::vector< std::pair<uint64_t, uint64_t> >empty(0);
-      edges.swap(empty);
-    };
-
 
 } // namespace mpi
 } // namespace havoqgt

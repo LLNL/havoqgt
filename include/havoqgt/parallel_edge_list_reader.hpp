@@ -82,7 +82,6 @@
     typedef uint64_t                      vertex_descriptor;
     typedef std::pair<uint64_t, uint64_t> edge_type;
 
-
   ///
   /// InputIterator class for rmat_edge_generator
 
@@ -182,7 +181,8 @@
     // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
 #if DIRECT_IO_IN_EDGELIST_READER
-    m_alligned_buffer = graphstore::aligned_alloc(kReadSize, 512);
+    /// TODO: copy constructor
+    graphstore::aligned_alloc(&m_alligned_buffer, 4096, kReadSize);
 #ifdef O_DIRECT
     std::cout << "Direct I/O mode\n";
 #else
@@ -229,7 +229,7 @@ protected:
       // std::cout << m_buffered_edges.size() << std::endl;
       while (!m_ptr_ifstreams.empty()) {
         const int fd = m_ptr_ifstreams.front();
-        const size_t read_size = read(fd, m_alligned_buffer, kReadSize);
+        const ssize_t read_size = read(fd, m_alligned_buffer, kReadSize);
 
         if (read_size == -1) {
            perror("Reading file");
@@ -294,7 +294,7 @@ protected:
 #if DIRECT_IO_IN_EDGELIST_READER
       int flags = O_RDONLY;
 #ifdef O_DIRECT
-      flags |= flags;
+      flags |= O_DIRECT;
 #endif
       const int fd = open(itr->c_str(), flags);
       if (fd != -1) {

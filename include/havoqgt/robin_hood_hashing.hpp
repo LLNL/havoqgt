@@ -52,6 +52,7 @@
 #ifndef HAVOQGT_MPI_ROBIN_HOOD_HASHING_HPP_INCLUDED
 #define HAVOQGT_MPI_ROBIN_HOOD_HASHING_HPP_INCLUDED
 
+#include <utility>
 #include <boost/interprocess/allocators/allocator.hpp>
 
 
@@ -648,7 +649,7 @@ private:
 
 
   /// ----- Private functions: search, delete, inset etc. ----- ///
-  int64_t lookup_index_first(const Key& key, int64_t& dist=0) const
+  int64_t lookup_index_first(const Key& key, int64_t& dist) const
   {
     const uint64_t hash = hash_key(key);
     int64_t pos = desired_pos(hash);
