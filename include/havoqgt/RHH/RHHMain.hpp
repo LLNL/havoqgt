@@ -825,7 +825,7 @@ class RHHMain {
         swap(key, m_key_block_[pos]);
         value.swap(m_value_block_[pos]);
 
-        /// DEBUG
+        ///// DEBUG
         // if (extract_size(m_property_block_[pos]) > 1 && !m_value_block_[pos].value_array) {
         //   disp_profileinfo();
         //   std::cout << "Error\n";

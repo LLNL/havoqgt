@@ -64,10 +64,8 @@
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
-
-#if __linux__
-#include <sys/sysinfo.h>
-#endif
+#include <havoqgt/graphstore_utilities.hpp>
+#include <havoqgt/graphstore_common.hpp>
 
 #define SORT_BY_CHUNK 0
 
@@ -78,45 +76,8 @@ using namespace havoqgt::mpi;
 typedef bip::managed_mapped_file mapped_t;
 typedef mapped_t::segment_manager segment_manager_t;
 typedef hmpi::construct_dynamicgraph<segment_manager_t> graph_type;
+typedef graphstore::EdgeUpdateRequest EdgeUpdateRequest;
 typedef boost::container::vector<EdgeUpdateRequest> request_vector_type;
-
-bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, size_t* const freeram, size_t* const usedram,
-                               size_t* const bufferram, size_t* const totalswap, size_t* const freeswap )
-{
-  bool is_succeed = false;
-#if __linux__
-  struct sysinfo info;
-  if (sysinfo(&info) == 0) {
-    *mem_unit = static_cast<size_t>(info.mem_unit);
-    *totalram = static_cast<size_t>(info.totalram);
-    *freeram = static_cast<size_t>(info.freeram);
-    *usedram = static_cast<size_t>(info.totalram - info.freeram);
-    *bufferram = static_cast<size_t>(info.bufferram);
-    *totalswap = static_cast<size_t>(info.totalswap);
-    *freeswap = static_cast<size_t>(info.freeswap);
-    is_succeed = true;
-  }
-#endif
-  return is_succeed;
-}
-
-
-bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* const share,
-                          size_t* const text, size_t* const lib, size_t* const data, size_t* const dt)
-{
-  bool is_succeed = false;
-#ifdef __linux__
-  const char* statm_path = "/proc/self/statm";
-  FILE *f = fopen(statm_path, "r");
-  if (f) {
-    if (7 == fscanf(f,"%ld %ld %ld %ld %ld %ld %ld", size, resident, share, text, lib, data, dt)) {
-      is_succeed = true;
-    }
-  }
-  fclose(f);
-#endif
-  return is_succeed;
-}
 
 void print_usages(segment_manager_t *const segment_manager)
 {
@@ -124,7 +85,7 @@ void print_usages(segment_manager_t *const segment_manager)
   std::cout << "Usage: segment size =\t"<< usages << "\n";
   std::cout << "----------------------------" << std::endl;
   size_t mem_unit, totalram, freeram, usedram, bufferram, totalswap, freeswap;
-  if (get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
+  if (graphstore::utility::get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
     std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
     std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
     std::cout << "Usage: freeram(GiB):\t" << static_cast<double>(freeram) / (1<<30ULL) << "\n";
@@ -132,10 +93,10 @@ void print_usages(segment_manager_t *const segment_manager)
     std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
     std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
     std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
+    std::cout << "----------------------------" << std::endl;
   }
-  std::cout << "----------------------------" << std::endl;
   size_t size, resident, share, text, lib, data, dt;
-  if (get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
+  if (graphstore::utility::get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
     std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
     std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
     std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
@@ -143,8 +104,8 @@ void print_usages(segment_manager_t *const segment_manager)
     std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
     std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
     std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
+    std::cout << "----------------------------" << std::endl;
   }
-  std::cout << "----------------------------" << std::endl;
 }
 
 double sort_requests(request_vector_type& requests)
@@ -155,12 +116,12 @@ double sort_requests(request_vector_type& requests)
 }
 
 template <typename Edges_itr>
-void generate_insertion_requests(Edges_itr& edges_itr, const uint64_t num_edges, request_vector_type& requests)
+void generate_insertion_requests(Edges_itr& edges_itr, Edges_itr& edges_itr_end, const uint64_t num_edges, request_vector_type& requests)
 {
   assert(requests.size() == 0);
   requests.reserve(num_edges);
   const double time_start = MPI_Wtime();
-  for (uint64_t i = 0; i < num_edges; ++i, ++edges_itr) {
+  for (size_t cnt = 0; edges_itr != edges_itr_end && cnt < num_edges; ++edges_itr, ++cnt) {
     EdgeUpdateRequest request(*edges_itr, false);
     requests.push_back(request);
     //    std::cout << edges_itr->first << ":" << edges_itr->second << "\n";
@@ -179,25 +140,19 @@ void apply_edges_update_requests(graph_type *const graph, Edges& edges, segment_
   std::cout << "-- Disp status of before generation --" << std::endl;
   print_usages(segment_manager);
 
-  const uint64_t num_edges = edges.size();
-  const uint64_t num_requests = num_edges;
-  const uint64_t num_loops = num_requests / chunk_size;
+  uint64_t loop_cnt = 0;
   auto edges_itr = edges.begin();
-  for (uint64_t i = 0; i < num_loops; ++i) {
-    std::cout << "\n[" << i+1 << " / " << num_loops << "] : chunk_size =\t" << chunk_size << std::endl;
+  auto edges_itr_end = edges.end();
+  while (edges_itr != edges_itr_end) {
+    std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+
     request_vector_type update_request_vec = request_vector_type();
-    generate_insertion_requests(edges_itr, chunk_size, update_request_vec);
-    auto requests_itr = update_request_vec.begin();
-    graph->add_edges_adjacency_matrix(requests_itr, chunk_size);
+    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec);
+
+    auto itr = update_request_vec.begin();
+    graph->add_edges_adjacency_matrix(itr, update_request_vec.size());
     print_usages(segment_manager);
-  }
-  const uint64_t remains = num_edges - num_loops*chunk_size;
-  if (remains > 0) {
-    std::cout << "\n[ * / " << num_loops << "] : remains =\t" << remains << std::endl;
-    request_vector_type update_request_vec = request_vector_type();
-    generate_insertion_requests(edges_itr, remains, update_request_vec);
-    auto requests_itr = update_request_vec.begin();
-    graph->add_edges_adjacency_matrix(requests_itr, remains);
+    ++loop_cnt;
   }
   print_usages(segment_manager);
   graph->print_profile();

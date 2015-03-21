@@ -49,13 +49,13 @@
  *
  */
 
-namespace havoqgt {
+#ifndef GRAPHSTORE_COMMON_HPP
+#define GRAPHSTORE_COMMON_HPP
+
 namespace graphstore {
 
 struct EdgeUpdateRequest
 {
-  EdgeUpdateRequest(){}
-
   EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
   {
     edge = _edge;
@@ -66,9 +66,11 @@ struct EdgeUpdateRequest
   bool is_delete;
 };
 
+
 bool edgerequest_asc( const EdgeUpdateRequest& left, const EdgeUpdateRequest& right ) {
   return left.edge.first < right.edge.first;
 }
 
+
 }
-}
+#endif

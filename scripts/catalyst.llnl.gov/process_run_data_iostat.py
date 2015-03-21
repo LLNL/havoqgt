@@ -15,7 +15,7 @@ make_figure_separately = False
 #target_dir_list = ["./logs/20150217_223445/", "./logs/20150217_222611/"]
 #legend_labels_list = ["full-memory, without-sort", "normal-mmap, sort-chunk"]
 #legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
-target_dir_list = ["./20150212_181356/", "./20150212_181159/", "./20150212_182833/"]
+target_dir_list = ["./20150224_180659/", "./20150224_180917/", "./20150224_181010/", "./20150224_181211/"]
 legend_labels_list = ["normal-mmap, sort-chunk", "normal-mmap, without-sort", "di-mmap, without-sort", "di-mmap, sort-chunk"]
 #legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
 
@@ -49,7 +49,7 @@ def read_data(_target_dir_list):
     for line in open(f, "r"):
       if re.search(device_name, line):
         rowwise_values = line.split()
-        rowwise_values = rowwise_values[1:] # Delete first element since it is a device name
+        rowwise_values = rowwise_values[1:] # Delete a first element since it is a device name
         for i, val in enumerate(rowwise_values):
           # if val == device_name:
           #   continue
@@ -91,11 +91,11 @@ def plot_result(_target_dir_list, _index):
 
       x1,x2,y1,y2 = plt.axis()
       # ------------------------------ #
-      if ylabel == "r/s" or ylabel == "w/s":
-        y2 = 80000
-      elif  ylabel == "rMB/s" or ylabel == "wMB/s":
-        y2 = 1200
-      x2 = 250000
+      # if ylabel == "r/s" or ylabel == "w/s":
+      #   y2 = 80000
+      # elif  ylabel == "rMB/s" or ylabel == "wMB/s":
+      #   y2 = 1200
+      # x2 = 250000
       # ------------------------------ #
       plt.axis((0, x2, 0, y2))
 

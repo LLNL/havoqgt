@@ -79,10 +79,12 @@
 
 #include <havoqgt/RHH/RHHAllocHolder.hpp>
 #include <havoqgt/RHH/RHHMain.hpp>
+#include <havoqgt/graphstore_common.hpp>
 
 namespace havoqgt {
 namespace mpi {
     namespace bip = boost::interprocess;
+    using EdgeUpdateRequestType = graphstore::EdgeUpdateRequest;
 
 #define WITHOUT_DUPLICATE_INSERTION 1
 
@@ -97,21 +99,7 @@ namespace mpi {
   #define DEBUG_DETAILPROFILE 0
 #endif
 
-struct EdgeUpdateRequest
-{
-  EdgeUpdateRequest(){}
-
-  EdgeUpdateRequest(std::pair<uint64_t, uint64_t> _edge, bool _is_delete)
-  {
-    edge = _edge;
-    is_delete = _is_delete;
-  }
-
-  std::pair<uint64_t, uint64_t> edge;
-  bool is_delete;
-};
-
-bool edgerequest_asc( const EdgeUpdateRequest& left, const EdgeUpdateRequest& right ) {
+bool edgerequest_asc( const EdgeUpdateRequestType& left, const EdgeUpdateRequestType& right ) {
   return left.edge.first < right.edge.first;
 }
 

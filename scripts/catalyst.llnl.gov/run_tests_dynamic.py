@@ -10,7 +10,7 @@ USE_PDEBUG = False
 # ---- Configuration ----- #
 DEBUG = True
 if DEBUG:
-	USE_PDEBUG = True
+	USE_PDEBUG = False
 USE_DIMMAP = True
 USE_DIMMAP_FOR_TUNE = True
 MONITOR_IO = False
@@ -181,7 +181,7 @@ def generate_shell_file():
 				s += block_start + "echo start I/O monitoring \n" + block_end
 				s += "iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + " 2>&1 & \n"
 
-			s += "export NUM_EDGES=157286400000\n"
+			# s += "export NUM_EDGES=157286400000\n"
 
 			s += block_start + "echo Executable Log \n" + block_end
 			s += "date \n"
