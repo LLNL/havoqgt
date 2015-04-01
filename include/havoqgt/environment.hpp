@@ -155,6 +155,14 @@ public:
   const communicator& world_comm()       const { return m_world_comm; }
   const communicator& node_local_comm()  const { return m_node_local_comm; }
   const communicator& node_offset_comm() const { return m_node_offset_comm; }
+
+  std::string whoami() const {
+    std::stringstream sstr;
+    sstr << "(R" <<  world_comm().rank() 
+         << ",N" << node_offset_comm().rank() 
+         << ",C" << node_local_comm().rank() << ")";
+    return sstr.str();
+  }
   
 private:
   
@@ -253,6 +261,24 @@ inline void havoqgt_finalize() {
 }
 
 
+template <typename T>
+inline 
+T
+havoqgt_getenv(const char* key, T default_val) {
+  char* val = std::getenv( key );
+  if(val != NULL) {
+    try {
+      default_val = boost::lexical_cast<T>(val);
+    } catch (...) {
+      std::stringstream err;
+      err << "havoqgt::environment -- Unable to parse environment variable: "
+          << key << "=" << val << std::endl;
+      throw std::runtime_error(err.str());
+    }
+  }
+
+  return default_val;
+}
 
 
 

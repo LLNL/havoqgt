@@ -52,7 +52,7 @@
 #include <havoqgt/environment.hpp>
 #include <havoqgt/mpi.hpp>
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/mailbox.hpp>
+#include <havoqgt/new_mailbox.hpp>
 #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/hash.hpp>
 
@@ -66,6 +66,7 @@
 #include <iostream>
 
 using namespace havoqgt;
+
 
 class msg_hopper {
 public:
@@ -112,7 +113,6 @@ public:
   uint32_t m_dest;
   uint32_t m_hop_count;
   uint32_t m_hop_state;
-  uint32_t pad;
   static uint32_t s_hop_limit;
   static uint32_t s_mpi_size;
 };
@@ -120,6 +120,7 @@ public:
 uint32_t msg_hopper::s_hop_limit;
 uint32_t msg_hopper::s_mpi_size;
 
+uint64_t count_finished, count_fwd;
 
 class receive_iterator
       : public std::iterator<std::output_iterator_tag, void, void, void, void> {
@@ -130,11 +131,16 @@ public:
 
   template <typename T>
   receive_iterator& operator=(const T& value) {
+    if(value.dest() != havoqgt_env()->world_comm().rank()) {
+      HAVOQGT_ERROR_MSG("Invalid receive!!");
+    }
     if(value.finished()) {
       ptd->inc_completed();
-      //std::cout << "Hop Finished!!!" << std::endl;
+      ++count_finished;
+      //std::cout << "Hop Finished on Rank " << havoqgt_env()->world_comm().rank()  << "!!!" << std::endl;
     } else {
       //std::cout << "Just received hop " << value.m_hop_count << ", rank = " << havoqgt_env()->world_comm().rank() << std::endl;
+      ++count_fwd;
       T next = value.next();
       ppending->push_back(next);
     }
@@ -157,14 +163,17 @@ public:
 
 int main(int argc, char** argv) {
 
+  count_finished = 0;
+  count_fwd = 0;
+
   havoqgt::havoqgt_init(&argc, &argv);
   {
     havoqgt::get_environment();
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
-    if(mpi_rank == 0) {
-      havoqgt::get_environment().print();
-    }
+    std::stringstream gmon;
+    gmon << "havoqgt_rank_" << mpi_rank;
+    setenv("GMON_OUT_PREFIX", gmon.str().c_str(), 1);
 
     if(argc != 3) {
       std::cerr << "Usage: <num hoppers> <hop length>" << std::endl;
@@ -179,7 +188,8 @@ int main(int argc, char** argv) {
     std::cout << "Hop Limit = " << msg_hopper::s_hop_limit << std::endl;
     }
 
-    mpi::mailbox_routed<msg_hopper> mailbox(havoqgt_env()->world_comm().comm(), 1);
+  
+    mailbox<msg_hopper> mailbox(/*havoqgt_env()->world_comm().comm(),*/ 1);
     mpi::termination_detection<uint64_t> td(MPI_COMM_WORLD);
     std::vector<msg_hopper> pending;
 
@@ -190,6 +200,7 @@ int main(int argc, char** argv) {
     havoqgt_env()->world_comm().barrier();   
     double time_start = MPI_Wtime();
 
+    uint64_t recv_counter = 0;
     do {
       do {
         if(seq_beg != seq_end) {
@@ -206,7 +217,9 @@ int main(int argc, char** argv) {
         }
       } while(!pending.empty() || seq_beg != seq_end);
       mailbox.receive(receive_iterator(&td, &pending));
-      mailbox.flush_buffers_if_idle();
+      if(pending.empty()) {
+        mailbox.flush_buffers_if_idle();
+      }
     } while(!pending.empty() || !mailbox.is_idle() || !td.test_for_termination());
 
     havoqgt_env()->world_comm().barrier();   
@@ -218,6 +231,8 @@ int main(int argc, char** argv) {
       std::cout << "Ellapsed time = " << time << std::endl;
       std::cout << "Total hops = " << hops << std::endl;
       std::cout << "Rate = " << double(hops) / time << " hops/sec" << std::endl;
+      std::cout << "Count Finished = " << count_finished << std::endl;
+      std::cout << "Count Fwd = " << count_fwd << std::endl;
     }
 
   }

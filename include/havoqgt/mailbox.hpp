@@ -200,6 +200,11 @@ public:
     m_tree_parent = m_mpi_rank / 2;
     m_tree_child1 = (m_mpi_rank * 2) + 1;
     m_tree_child2 = (m_mpi_rank * 2) + 2;
+
+    if(m_mpi_rank ==0) {
+      std::cout << "sizeof(message_type) = " << sizeof(message_type) << std::endl;
+    }
+
   }
 
   ~mailbox_routed() {

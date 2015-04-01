@@ -25,6 +25,15 @@ macro(include_link_mpi target)
 endmacro()
 
 #
+# PThreads is required
+#
+find_package (Threads)
+macro(include_link_threads target)
+  target_link_libraries(${target} ${CMAKE_THREAD_LIBS_INIT})
+endmacro()
+
+
+#
 # BOOST is required
 #
 find_package( Boost )
