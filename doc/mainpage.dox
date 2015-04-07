@@ -15,7 +15,7 @@ All graph data is stored in mmaped files, using Boost.Interprocess and Memory Ma
 mmap as external memory. For best results, high speed Flash devices are preferred 
 for external memory storage.
 
-Copyright (c) 2013, Lawrence Livermore National Security, LLC. Produced at the 
+Copyright (c) 2013-2015, Lawrence Livermore National Security, LLC. Produced at the 
 Lawrence Livermore National Laboratory. Written by <a href="http://people.llnl.gov/rpearce">Roger Pearce</a>, rpearce@llnl.gov. 
 LLNL-CODE-644630. All rights reserved.
 
@@ -32,7 +32,6 @@ This manual is divided in the following sections:
 //-----------------------------------------------------------
 
 /** \page basic_usage Basic Usage
-This page introduces the user to the topic.
 
 \section running_mpi_program Running MPI Program
 Familiarize yourself with how to execute an MPI program for your system.   For this manual, we will
@@ -40,29 +39,51 @@ use <i>mpiexec</i> for launching an MPI job, but your system my require <i>srun<
 Contact your local system administrator if you are unfamiliar with using MPI on your system.
 
 
-\section basic_usage_input Generate Input Graph
+\section basic_usage_input Generate or Ingest Input Graph
 
 To generate an input RMAT graph, a few parameters must be set.  As an example:
 
 \code{.sh}
-  $  mpiexec -np 4 src/generate_rmat 17 1024 test_rmat
+  $  mpiexec -np 4 src/generate_rmat -s 17 -o outgraph 
 \endcode
 
 This configures the following settings:
--  4 --  Number of MPI processes
--  17 -- the Scale of the graph (Log2 the number of vertices)
--  1024 -- the high-degree threshold 
--  test_rmat -- The base filename for graph storage.   There will be one file per MPI rank, each with a unique name based on this string
+-  -np 4        -- Number of MPI processes
+-  -s 17        -- the Scale of the graph (Log2 the number of vertices)
+-  -o test_rmat -- The base filename for graph storage.   There will be one file per MPI rank, each with a unique name based on this string
 
-Once the number of MPI processes has been chosen during graph construction, it must be set to the same value for subsequent algorithms.
+To ingest an input graph from a simple edge list, run:
+\code{.sh}
+  mpiexec -np 4 src/ingest_edge_list -o outgraph [Files...]
+\endcode
+-  -np 4        -- Number of MPI processes
+-  -o test_rmat -- The base filename for graph storage.   There will be one file per MPI rank, each with a unique name based on this string
+-  [Files...]   -- Input edge list files.   Can be split over multiple files.   Each file is read independently to achieve parallel I/O
+
+The edge list format is a simple ASCII edge list, for example:
+\verbatim
+ 0 1
+ 1 2
+ 2 3
+ 3 0
+\endverbatim
+
+
+Once the number of MPI processes has been chosen during graph construction or ingestion, it must be set to the same value for subsequent algorithms.
 
 \section basic_usage_bfs Run Breadth-First Search
 
 To run BFS on a previously constructed graph, <i>test_rmat</i>, run:
 
 \code{.sh}
- $ mpiexec -np 4 src/run_bfs test_rmat
+ $ mpiexec -np 4 src/run_bfs -i outgraph -s 0 
 \endcode
+
+This runs BFS with the following settings:
+-  -np 4       -- Number of MPI processes
+-  -i outgraph -- The base filename for graph storage
+-  -s 0        -- Source vertex for BFS traversal
+
 
 \section basic_usage_kcore Run Triangle Counting Algorithm
 
@@ -71,31 +92,6 @@ To count triangles on a previously constructed graph, <i>test_rmat</i>, run:
 \code{.sh}
  $  mpiexec -np 4 src/run_triangle_count test_rmat
 \endcode
-*/
-
-//-----------------------------------------------------------
-
-/** \page developer_guide Developer Guide
-
-\warning Coming Soon!
-
-<!--
-This guide is intended for people who want to develop new algorithms using HavoqGT.
-
-\section developer_guide_overview Overview
-
-adsf
-
-\section developer_guide_directory Directory Structure
-
-adsf
-
-\section developer_guide_structure Code Structure
-
-
-asdf
--->
-
 */
 
 //-----------------------------------------------------------

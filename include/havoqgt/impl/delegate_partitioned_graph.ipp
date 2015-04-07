@@ -94,7 +94,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
   
   processes_per_node = havoqgt_env()->node_local_comm().size();
-  node_partitions = 4; ///< @todo make env var
+  node_partitions = std::min(4,processes_per_node); ///< @todo make env var
   edge_chunk_size = 1024*8; ///< @todo marke env var
 
   m_global_max_vertex = max_vertex;
@@ -191,14 +191,14 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
   case EdgeStorageAllocated:
     {
       LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
-      partition_low_degree(edges.begin(), edges.end());
+      partition_low_degree(edges);
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = LowEdgesPartitioned;
 
     {
       LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
-      partition_high_degree(edges.begin(), edges.end(), transfer_info);
+      partition_high_degree(edges, transfer_info);
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = HighEdgesPartitioned;
@@ -677,11 +677,10 @@ initialize_edge_storage(const SegmentAllocator<void>& seg_allocator) {
  *
  */
 template <typename SegmentManager>
-template <typename InputIterator>
+template <typename Container>
 void
 delegate_partitioned_graph<SegmentManager>::
-partition_low_degree(InputIterator orgi_unsorted_itr,
-                 InputIterator unsorted_itr_end) {
+partition_low_degree(Container& unsorted_edges) {
 
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -692,7 +691,8 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
 
   for (size_t node_turn = 0; node_turn < node_partitions; node_turn++) {
 
-    InputIterator unsorted_itr = orgi_unsorted_itr;
+    auto unsorted_itr     = unsorted_edges.begin();
+    auto unsorted_itr_end = unsorted_edges.end();
     if (m_mpi_rank == 0) {
       double curr_time = MPI_Wtime();
 
@@ -793,6 +793,7 @@ partition_low_degree(InputIterator orgi_unsorted_itr,
                    loc << " < " <<  m_owned_info[new_vertex_id+1].low_csr_idx
                    << ", new_vertex_id = " << new_vertex_id
                    << ", temp_offset = " << temp_offset
+                   << ", edge = (" << edge.first << "," << edge.second << ")"
           << std::endl << std::flush;
           assert(false);
           exit(-1);
@@ -1250,11 +1251,10 @@ generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
  * used to determine where overflowed edges go.
  */
 template <typename SegmentManager>
-template <typename InputIterator>
+template <typename Container>
 void
 delegate_partitioned_graph<SegmentManager>::
-partition_high_degree(InputIterator orgi_unsorted_itr,
-    InputIterator unsorted_itr_end,
+partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
 
   // Initates the paritioner, which determines where overflowed edges go
@@ -1289,7 +1289,8 @@ partition_high_degree(InputIterator orgi_unsorted_itr,
     MPI_Barrier(m_mpi_comm);
 
 
-    InputIterator unsorted_itr = orgi_unsorted_itr;
+    auto unsorted_itr     = unsorted_edges.begin();
+    auto unsorted_itr_end = unsorted_edges.end();
 
     while (!detail::global_iterator_range_empty(unsorted_itr, unsorted_itr_end,
          m_mpi_comm)) {

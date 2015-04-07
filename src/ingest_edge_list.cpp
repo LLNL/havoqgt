@@ -52,9 +52,7 @@
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/rmat_edge_generator.hpp>
-#include <havoqgt/upper_triangle_edge_generator.hpp>
-#include <havoqgt/gen_preferential_attachment_edge_list.hpp>
+#include <havoqgt/parallel_edge_list_reader.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
@@ -65,6 +63,7 @@
 #include <algorithm>
 #include <functional>
 #include <fstream>      // std::ifstream
+#include <unistd.h>
 
 
 // notes for how to setup a good test
@@ -75,18 +74,20 @@ using namespace havoqgt;
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 
+typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
-    std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
-         << " -s <int>    - RMAT graph Scale (default 17)\n"
-         << " -d <int>    - delegate threshold (Default is 1048576)\n"
-         << " -o <string> - output graph base filename\n"
-         << " -h          - print help and exit\n\n";
-         
+    std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
+         << " -o <string>   - output graph base filename (required)\n"
+         << " -d <int>      - delegate threshold (Default is 1048576)\n"
+         << " -h            - print help and exit\n"
+         << "[file ...] - list of edge list files to ingest\n\n";
   }
 }
 
-void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, std::string& output_filename) {
+void parse_cmd_line(int argc, char** argv, std::string& output_filename, uint64_t& delegate_threshold, std::vector< std::string >& input_filenames) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -96,22 +97,19 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
   }
   
   bool found_output_filename = false;
-  scale = 17;
   delegate_threshold = 1048576;
+  input_filenames.clear();
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:d:o:h ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
          break;
-      case 's':
-         scale = atoll(optarg);
-         break;
-      case 'd':
+       case 'd':
          delegate_threshold = atoll(optarg);
-         break; 
+         break;
       case 'o':
          found_output_filename = true;
          output_filename = optarg;
@@ -126,13 +124,15 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
      usage();
      exit(-1);
    }
+
+   for (int index = optind; index < argc; index++) {
+     std::cout << "Input file = " << argv[index] << std::endl;
+     input_filenames.push_back(argv[index]);
+   }
 }
 
+
 int main(int argc, char** argv) {
-
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -143,37 +143,28 @@ int main(int argc, char** argv) {
     havoqgt::get_environment();
     
     if (mpi_rank == 0) {
-
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
       havoqgt::get_environment().print();
     }
     havoqgt_env()->world_comm().barrier();
 
-    uint64_t num_vertices = 1;
-    uint64_t vert_scale;
-    uint64_t hub_threshold;
-    std::string fname_output;
-        
-    parse_cmd_line(argc, argv, vert_scale, hub_threshold, fname_output);
+    std::string                output_filename;
+    uint64_t                   delegate_threshold;
+    std::vector< std::string > input_filenames;
+    
+    parse_cmd_line(argc, argv, output_filename, delegate_threshold, input_filenames);
 
-    num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
-      std::cout << "Building Graph500"<< std::endl
-        << "Building graph Scale: " << vert_scale << std::endl
-        << "Hub threshold = " << hub_threshold << std::endl
-        << "File name = " << fname_output << std::endl;
+      std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), fname_output.c_str());
+    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str());
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-    //Generate RMAT graph
-    uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
-    havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-                                      vert_scale, num_edges_per_rank,
-                                      0.57, 0.19, 0.19, 0.05, true, true);
+    //Setup edge list reader
+    havoqgt::parallel_edge_list_reader pelr(input_filenames);
 
 
     if (mpi_rank == 0) {
@@ -181,7 +172,7 @@ int main(int argc, char** argv) {
     }
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
+        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold);
 
 
     havoqgt_env()->world_comm().barrier();

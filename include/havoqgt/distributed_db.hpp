@@ -140,7 +140,7 @@ public:
       phead->uuid = boost::uuids::random_generator()();
     }
     mpi::mpi_bcast(phead->uuid,0,havoqgt_env()->world_comm().comm());
-    std::cout << "Rank = " << mpi_rank << ", UUID = " << phead->uuid << std::endl;
+    //std::cout << "Rank = " << mpi_rank << ", UUID = " << phead->uuid << std::endl;
     phead->comm_rank = mpi_rank;
     phead->comm_size = mpi_size;
     phead->clean_close = false;
@@ -186,7 +186,7 @@ public:
       error << "ERROR: " << __FILE__ << ":" << __LINE__ << ": UUIDs don't match.";
       throw std::runtime_error(error.str());
     }
-    std::cout << "Rank = " << mpi_rank << ", UUID = " << ret.first->uuid << std::endl;
+    //std::cout << "Rank = " << mpi_rank << ", UUID = " << ret.first->uuid << std::endl;
     if(ret.first->comm_rank != mpi_rank ||
        ret.first->comm_size != mpi_size ||
        !ret.first->clean_close) {

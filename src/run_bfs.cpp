@@ -75,6 +75,54 @@
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
+using namespace havoqgt;
+
+void usage()  {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cerr << "Usage: -i <string> -s <int>\n"
+         << " -i <string>   - input graph base filename (required)\n"
+         << " -s <int>      - Source vertex of BFS (Default is 0)\n"
+         << " -h            - print help and exit\n\n";
+  }
+}
+
+void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t& source_vertex) {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cout << "CMD line:";
+    for (int i=0; i<argc; ++i) {
+      std::cout << " " << argv[i];
+    }
+    std::cout << std::endl;
+  }
+  
+  bool found_input_filename = false;
+  source_vertex = 0;
+  
+  char c;
+  bool prn_help = false;
+  while ((c = getopt(argc, argv, "i:s:h ")) != -1) {
+     switch (c) {
+       case 'h':  
+         prn_help = true;
+         break;
+       case 's':
+         source_vertex = atoll(optarg);
+         break;
+      case 'i':
+         found_input_filename = true;
+         input_filename = optarg;
+         break;
+      default:
+         std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
+         prn_help = true;
+         break;
+     }
+   } 
+   if (prn_help || !found_input_filename) {
+     usage();
+     exit(-1);
+   }
+}
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
@@ -90,11 +138,6 @@ int main(int argc, char** argv) {
 
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    std::cout << "CMD line:";
-    for (int i = 0; i < argc; ++i) {
-      std::cout << " " << argv[i];
-    }
-    std::cout << std::endl;
     havoqgt::get_environment().print();
     //print_system_info(false);
   }
@@ -102,16 +145,9 @@ int main(int argc, char** argv) {
 
 
   std::string graph_input;
-
-  if (argc < 2) {
-    std::cerr << "usage: <graph input file name>"
-      << " (argc:" << argc << " )." << std::endl;
-    exit(-1);
-  } else {
-    int pos = 1;
-    graph_input = argv[pos++];
-  }
-
+  uint64_t source_vertex = 0;
+  
+  parse_cmd_line(argc, argv, graph_input, source_vertex);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -136,19 +172,18 @@ int main(int argc, char** argv) {
     graph_type::vertex_data<graph_type::vertex_locator, std::allocator<graph_type::vertex_locator> >  bfs_parent_data(*graph);
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {
-      std::cout << "BFS data allocated." << std::endl;
+      std::cout << "BFS data allocated.  Starting BFS from vertex " << source_vertex << std::endl;
     }
 
     //  Run BFS experiments
     double time(0);
     int count(0);
-    uint64_t isource = 0;
-    for (int nrbfs = 0; nrbfs < 16; ++nrbfs) {
+    uint64_t isource = source_vertex;
       graph_type::vertex_locator source = graph->label_to_locator(isource);
       uint64_t global_degree(0);
       do {
         uint64_t local_degree = 0;
-        source = graph->label_to_locator(isource++);
+        source = graph->label_to_locator(isource);
         if (source.is_delegate()) {
           break;
         }
@@ -157,9 +192,14 @@ int main(int argc, char** argv) {
         }
         global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(),
             MPI_COMM_WORLD);
+        if(global_degree == 0) ++isource;
       } while (global_degree == 0);
       if (uint32_t(mpi_rank) == source.owner()) {
-        std::cout << "Starting vertex = " << isource << std::endl;
+        if(isource != source_vertex) {
+          std::cout << "Vertex " << source_vertex << " has a degree of 0.   New source vertex = " << isource << std::endl;
+        } else {
+          std::cout << "Starting vertex = " << isource << std::endl;
+        }
         std::cout << "delegate? = " << source.is_delegate() << std::endl;
         std::cout << "local_id = " << source.local_id() << std::endl;
         std::cout << "degree = " << graph->degree(source) << std::endl;
@@ -208,18 +248,14 @@ int main(int argc, char** argv) {
       }  // end for level
 
       if (mpi_rank == 0) {
-        if (visited_total > 1000) {
+        if (visited_total > 1) {
           std::cout
-            << "Visited total = " << visited_total
-            << ", percentage visited = "
-            << double(visited_total) / double(graph->max_global_vertex_id()) * 100
-            << "%" << std::endl
+            << "Visited total = " << visited_total << std::endl
             << "BFS Time = " << time_end - time_start << std::endl;
           time += time_end - time_start;
           ++count;
         }
       }
-    }
     if (mpi_rank == 0) {
       std::cout << "Count BFS = " << count << std::endl;
       std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;

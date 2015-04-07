@@ -16,11 +16,15 @@ HavoqGT depends on fairly recent versions of Boost.  Compiling Boost is not nece
  $ tar -xzvf boost_1_56_0.tar.gz
 \endcode
 
-A C++11 compiler is also required.  GCC 4.7 has been primarily used during development.
+A C++11 compiler is also required.  GCC 4.7 has been primarily used during development.  
+
+A MPI library is also required.  On OSX using Macports, MPICH 3.1.3 has been primarily used for development.   
+On Linux, MVAPICH2 1.9 has been primarily used.
 
 \section getting_started_compile Compile
-
-HavoqGT uses <a href="www.cmake.org">CMake</a> for its build system, and needs to be configured for your system and Boost library location.
+HavoqGT has two main parts to its source code, a library portion and some example executable projects.   The library portion
+lives in "/include/havoqgt" and could be used as a header-only library.   The example executables use 
+<a href="www.cmake.org">CMake</a> for its build system, and needs to be configured for your system and Boost library location.
 Configurations have been saved for a few systems at LLNL, for example on Catalyst do:
 
 \code{.sh}

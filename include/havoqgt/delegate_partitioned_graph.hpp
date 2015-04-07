@@ -275,9 +275,8 @@ class delegate_partitioned_graph {
 
   void initialize_edge_storage(const SegmentAllocator<void>& seg_allocator);
 
-  template <typename InputIterator>
-  void partition_low_degree(InputIterator unsorted_itr,
-                 InputIterator unsorted_itr_end);
+  template <typename Container>
+  void partition_low_degree(Container& unsorted_edges);
 
   template <typename InputIterator>
   void count_high_degree_edges(InputIterator unsorted_itr,
@@ -285,9 +284,8 @@ class delegate_partitioned_graph {
                  boost::unordered_set<uint64_t>& global_hub_set);
 
 
-  template <typename InputIterator>
-  void partition_high_degree(InputIterator orgi_unsorted_itr,
-    InputIterator unsorted_itr_end,
+  template <typename Container>
+  void partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
 
 
