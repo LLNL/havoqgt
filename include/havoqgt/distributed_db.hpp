@@ -235,7 +235,8 @@ private:
       //return 500ULL * 1024ULL * 1024ULL * 1024ULL;
       // causing probs return 799700000000ULL / 24ULL;
       // MAXES OUT CATALST!! return 799595142400 / 24ULL;
-      return 512*1024*1024 / havoqgt_env()->node_local_comm().size();
+      //return 512*1024*1024 / havoqgt_env()->node_local_comm().size();
+      return 64ULL * 1024 *1024 *1024 / 24;
     }
     return boost::lexical_cast<uint64_t>(fsize);
   } 
