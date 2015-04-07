@@ -75,20 +75,10 @@ class visitor_queue {
   //    std::vector<visitor_type>, std::greater<visitor_type> > local_queue_type;
   typedef  Queue<visitor_type> local_queue_type;
 
-  struct visitor_wrapper {
-    uint32_t dest() const { return m_visitor.vertex.owner(); }
-    uint32_t     get_bcast() const { return m_visitor.vertex.get_bcast(); }
-    void set_bcast(uint32_t bcast) {m_visitor.vertex.set_bcast(bcast); }
-    void set_dest(uint32_t dest)  {m_visitor.vertex.set_dest(dest); }
-    bool is_intercept() const { return m_visitor.vertex.is_intercept(); }
-    void set_intercept(bool intercept) {m_visitor.vertex.set_intercept(intercept); }
-    TVisitor  m_visitor;
-  };
-
 #ifdef __bgp__
-  typedef mailbox_bgp_torus<visitor_wrapper> mailbox_type;
+  typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
-  typedef mailbox_routed<visitor_wrapper> mailbox_type;
+  typedef mailbox_routed<visitor_type> mailbox_type;
 #endif
 
 
@@ -116,14 +106,14 @@ public:
         : public std::iterator<std::output_iterator_tag, void, void, void, void> {
   public:
     visitor_queue_inserter(visitor_queue* _vq):m_vq(_vq) { }
-    visitor_queue_inserter& operator=(const visitor_wrapper& __value) {
+    visitor_queue_inserter& operator=(const visitor_type& __value) {
       m_vq->handle_mailbox_receive(__value);
       return *this;
     }
 
-    bool intercept(const visitor_wrapper& __value) {
+    bool intercept(const visitor_type& __value) {
       assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
-      bool ret = __value.m_visitor.pre_visit();
+      bool ret = __value.pre_visit();
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
       }
@@ -162,10 +152,7 @@ public:
         vertex_locator v = this_visitor.vertex;
         bool ret = this_visitor.visit(*m_ptr_graph, this);
         if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
-          visitor_wrapper vw;
-          vw.m_visitor = this_visitor;
-          vw.set_bcast(true);
-          m_mailbox.bcast(vw, visitor_queue_inserter(this));
+          m_mailbox.bcast(this_visitor, visitor_queue_inserter(this));
           m_termination_detection.inc_queued(m_mailbox.comm_size());
         }
         m_termination_detection.inc_completed();
@@ -181,10 +168,8 @@ public:
     vertex_locator v = this_visitor.vertex;
     bool ret = this_visitor.visit(*m_ptr_graph, this);
     if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
-      visitor_wrapper vw;
-      vw.m_visitor = this_visitor;
-      vw.set_bcast(true);
-      m_mailbox.bcast(vw, visitor_queue_inserter(this));
+      visitor_type v = this_visitor;
+      m_mailbox.bcast(v, visitor_queue_inserter(this));
       m_termination_detection.inc_queued(m_mailbox.comm_size());
     }
   }
@@ -230,10 +215,9 @@ public:
           m_termination_detection.inc_queued();
         }
       } else {
-        visitor_wrapper vw;
+        visitor_type vw = v;
         //vw.m_dest = v.vertex.owner();
-        vw.m_visitor = v;
-        m_mailbox.send(v.vertex.owner(), vw, visitor_queue_inserter(this));
+        m_mailbox.send(v.vertex.owner(), vw, visitor_queue_inserter(this), false);
         m_termination_detection.inc_queued();
       }
     }
@@ -254,12 +238,8 @@ private:
         m_mailbox.bcast(vw, visitor_queue_inserter(this));
         m_termination_detection.inc_queued(m_mailbox.comm_size());*/
       } else { //send interceptable to parent
-        visitor_wrapper vw;
-        vw.m_visitor = v;
-        vw.set_intercept(true);
         uint32_t master_rank = m_ptr_graph->master(v.vertex);
-        vw.set_dest(master_rank);
-        m_mailbox.send(master_rank, vw, visitor_queue_inserter(this));
+        m_mailbox.send(master_rank, v, visitor_queue_inserter(this), true);
         //delegate_parent(v);
         m_termination_detection.inc_queued();
       }
@@ -306,11 +286,11 @@ private:
     }
   }
 
-  void handle_mailbox_receive(visitor_wrapper vw) {
-    if(vw.m_visitor.vertex.is_delegate()) {
-      if(vw.m_visitor.vertex.get_bcast()) {
+  void handle_mailbox_receive(visitor_type v) {
+    if(v.vertex.is_delegate()) {
+      if(v.vertex.get_bcast()) {
         //delegate_bcast(vw.m_visitor);
-        if(m_ptr_graph->master(vw.m_visitor.vertex) == uint32_t(m_mailbox.comm_rank())) {
+        if(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank())) {
           //This is because the mailbox bcast returns to self -- this should be fixed!
           m_termination_detection.inc_completed();
         } else {
@@ -320,14 +300,14 @@ private:
           vw.m_visitor.visit(*m_ptr_graph, this);
           m_termination_detection.inc_completed();
           */
-          m_local_controller_queue.push(vw.m_visitor);
+          m_local_controller_queue.push(v);
         }
       } else {
-        assert(m_ptr_graph->master(vw.m_visitor.vertex) == uint32_t(m_mailbox.comm_rank()));
-        if(vw.m_visitor.pre_visit()) {
+        assert(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank()));
+        if(v.pre_visit()) {
           //if(m_ptr_graph->master(vw.m_visitor.vertex) == m_mailbox.comm_rank()) {
             //delegate_bcast(vw.m_visitor);
-            push(vw.m_visitor);
+            push(v);
             /* This was working, trying new way for master bcast
             vw.set_bcast(true);
             vw.set_intercept(false);
@@ -341,11 +321,11 @@ private:
         }
       }
     } else {
-      assert(vw.m_visitor.vertex.owner() == uint32_t(m_mailbox.comm_rank()));
+      assert(v.vertex.owner() == uint32_t(m_mailbox.comm_rank()));
       //
       // Now handle owned vertices
-      if(vw.m_visitor.pre_visit()) {
-        push(vw.m_visitor);
+      if(v.pre_visit()) {
+        push(v);
       } else {
         m_termination_detection.inc_completed();
       }
