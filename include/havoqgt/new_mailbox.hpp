@@ -107,12 +107,14 @@ public:
   }
 
   ~mailbox() {
-    if(m_world_rank == 0) {
+    if(m_world_rank == 1) {
     std::cout << "ISend Count = " << m_isend_count << std::endl;
     std::cout << "ISend Bytes = " << m_isend_bytes << std::endl;
     double ave = (m_isend_count) ? (double(m_isend_bytes) / double(m_isend_count)) : double(0);
     std::cout << "Ave size = " << ave << std::endl;
     std::cout << "m_shm_transfer_count = " << m_shm_transfer_count << std::endl;
+    std::cout << "m_shm_transfer_bytes = " << m_shm_transfer_bytes << std::endl;
+    std::cout << "m_free_shm_list.size() = " << m_free_shm_list.size() << std::endl;
     }
     //if (m_world_rank == 0)
     //  std::cout << "Lock Time = " << lock_time << std::endl;
@@ -164,7 +166,7 @@ private:
   void init_managed_shared_memory() {
     //
     //Open Shared Mem segment
-    size_t shm_file_size = msg_bundle_shm::padded_size * shm_exchange::capacity * m_shm_size * 2;
+    size_t shm_file_size = msg_bundle_shm::padded_size * shm_exchange::capacity * m_shm_size * 4;
 
     m_shm_rank = havoqgt_env()->node_local_comm().rank();
     if(m_shm_rank == 0) {
@@ -185,6 +187,7 @@ private:
     m_my_exchange = new (aligned) shm_exchange(m_shm_rank);
     m_poffset_exchange[m_shm_rank] = m_my_exchange;
     m_shm_transfer_count=0;
+    m_shm_transfer_bytes=0;
     havoqgt_env()->node_local_comm().barrier();
     m_pp_exchange.resize(m_shm_size, nullptr);
     for(size_t i=0; i<m_shm_size; ++i) {
@@ -197,15 +200,13 @@ private:
     //
     // Allocate large chunk to help NUMA page pacement.  
     // Local rank always touches pages before sending to other ranks.
-    char* chunk = (char*) m_pmsm->allocate_aligned( msg_bundle_shm::padded_size * (shm_exchange::capacity), 4096);
-    for(size_t i=0; i<(shm_exchange::capacity); ++i) {
+    char* chunk = (char*) m_pmsm->allocate( msg_bundle_shm::padded_size * (shm_exchange::capacity/5));
+    for(size_t i=0; i<(shm_exchange::capacity/5); ++i) {
       void* addr = chunk + i*msg_bundle_shm::padded_size;
-      msg_bundle_shm* ptr = new (addr) msg_bundle_shm(m_shm_rank);
+      msg_bundle_shm* ptr = new (addr) msg_bundle_shm();
       assert(ptr->size == 0);
-      assert(ptr->source_core == m_shm_rank );
-      m_my_exchange->free(ptr);
+      m_free_shm_list.push_back(ptr);
     }
-    m_my_exchange->count_returned = 0;
     //
     // Allocate per_rank data
     m_bundle_per_shm_rank.resize(m_shm_size, nullptr);
@@ -255,10 +256,29 @@ private:
     m_free_mpi_list.push_back(tofree);
   }
 
+  msg_bundle_shm* get_free_shm_bundle() {
+    msg_bundle_shm* to_return;
+    if(m_free_shm_list.empty()) {
+      void* addr = (void*) m_pmsm->allocate( msg_bundle_shm::padded_size ); 
+      to_return = new (addr) msg_bundle_shm();
+    } else {
+      to_return = m_free_shm_list.back();
+      m_free_shm_list.pop_back();
+    }
+    to_return->size = 0;
+    return to_return;
+  }
+
+  void free_shm_bundle(msg_bundle_shm* tofree) {
+    tofree->size = 0;
+    m_free_shm_list.push_back(tofree);
+  }
+
 public:
 
   template <typename OutputIterator>
   void send(size_t world_dest, const T& raw_msg, OutputIterator oitr) {
+    //std::cout << havoqgt_env()->whoami() << " send to " << world_dest << std::endl;
     ++m_send_recv_balance;
     if(world_dest == m_world_rank) {
       *oitr = raw_msg;
@@ -297,17 +317,17 @@ public:
       }
     }
 
-    if(b_sent) {
-      receive(oitr);
-      bool print = false;
-      while(shm_transfer_slots_full() || isend_slots_full()) {
+    /*if(b_sent) {
+      do{
         receive(oitr);
-        if(print) {
-          print = false;
-          std::cout << havoqgt_env()->whoami() << " is stuck in send" << std::endl;
-        }
-      }
+        cleanup_pending_isend_requests();
+      } while(shm_transfer_slots_full() || isend_slots_full());
+    }*/
+    while(shm_transfer_slots_full() || isend_slots_full()) {
+      receive(oitr);
+      cleanup_pending_isend_requests();
     }
+
   }
 
   template <typename OutputIterator>
@@ -323,9 +343,9 @@ public:
   }
 
   void flush_buffers_if_idle() {
-    static double last_time = 0;
-    double new_time = MPI_Wtime();
-    if(new_time - last_time < 1e-6) return;
+    //static double last_time = 0;
+    //double new_time = MPI_Wtime();
+    //if(new_time - last_time < 1e-6) return;
     static bool flopper = false;
     cleanup_pending_isend_requests();
     if(m_isend_request_list.empty() && shm_count_transfers_pending() == 0 && !m_my_exchange->probe()) {
@@ -333,12 +353,12 @@ public:
       if(flopper) {
         if(!m_shm_pending_list.empty()) {
           try_transfer_shm(m_shm_pending_list.front());
-          last_time = new_time;
+          //last_time = new_time;
         }
       } else {
         if(!m_mpi_pending_list.empty()) {
           post_isend(m_mpi_pending_list.front());
-          last_time = new_time;
+          //last_time = new_time;
         }
       }
     }
@@ -358,29 +378,21 @@ public:
     }*/
   }
 
-  uint64_t shm_count_transfers_pending() { return m_shm_transfer_count - m_my_exchange->get_count_returned(); }
+  uint64_t shm_count_transfers_pending() { return m_shm_request_list.size(); }
 
 private:
 
   template <typename OutputIterator>
   bool route_shm(size_t shm_rank, msg_wrapper& wrapped, OutputIterator oitr) {
+    assert(shm_rank != m_shm_rank);
+    //std::cout << havoqgt_env()->whoami() << " route_shm to rank " << shm_rank << std::endl;
     bool to_return = false;
     if(m_bundle_per_shm_rank[shm_rank] == nullptr) {
       bool print = true;
-      while(!m_my_exchange->has_free()) {
-        receive_shm(oitr);    // While shm is waiting on free buffer, receive mpi
-        receive_mpi(oitr);
-        if(print) {
-          print = false;
-          std::cout <<  havoqgt_env()->whoami() << " Please don't be here..." << std::endl;
-        }
-      }
-      msg_bundle_shm* bundle = m_my_exchange->get_free();
-
+      msg_bundle_shm* bundle = get_free_shm_bundle();
       //std::cout << havoqgt_env()->whoami() << " route_shm size = " << bundle->size << ", source_core = " << bundle->get_source_core() << std::endl;
       m_bundle_per_shm_rank[shm_rank] = bundle;
       assert(m_bundle_per_shm_rank[shm_rank]->size == 0);
-      assert(m_bundle_per_shm_rank[shm_rank]->source_core == m_shm_rank);
       assert(m_pending_iterator_per_shm_rank[shm_rank] == m_shm_pending_list.end());
       m_shm_pending_list.push_back(shm_rank);
       m_pending_iterator_per_shm_rank[shm_rank] = --(m_shm_pending_list.end());
@@ -400,15 +412,18 @@ private:
           }
         }
       }*/
-      bool print = false;
+      //double stuck_time = 0.0;
       while(!try_transfer_shm(shm_rank)) {
-        if(print) {
-          print = true;
-          std::cout << havoqgt_env()->whoami() << " is stuck in route_shm, try_transfer_shm" << std::endl;
-        }
-        receive_shm(oitr);  
-        receive_mpi(oitr);
+        //if(stuck_time == 0.0) stuck_time = MPI_Wtime();
+        //receive_shm(oitr);  
+        //receive_mpi(oitr);
       }
+      /*if(stuck_time > 0.0) {
+        stuck_time = MPI_Wtime() - stuck_time;
+        if(stuck_time > 0.5) {
+          std::cout << havoqgt_env()->whoami() << " is stuck in route_shm, try_transfer_shm for "<< stuck_time << " seconds"  << std::endl;
+        }
+      }*/
     }
     return to_return;
   }
@@ -418,12 +433,13 @@ private:
   }
 
   bool isend_slots_full() {
-    cleanup_pending_isend_requests(); 
     return m_isend_request_list.size() > s_num_isend;
   }
 
   template <typename OutputIterator>
   bool route_mpi(size_t mpi_rank, msg_wrapper& wrapped, OutputIterator oitr) {
+    assert(mpi_rank != m_mpi_rank);
+    //std::cout << havoqgt_env()->whoami() << " route_mpi sending to " << mpi_rank << std::endl;
     bool to_return = false;
     if(m_bundle_per_mpi_rank[mpi_rank] == nullptr) {
       m_bundle_per_mpi_rank[mpi_rank] = get_free_mpi_bundle();
@@ -447,11 +463,14 @@ private:
   bool try_transfer_shm(size_t rank) {
     assert(*(m_pending_iterator_per_shm_rank[rank]) == rank);
     msg_bundle_shm* to_transfer = m_bundle_per_shm_rank[rank];
+    assert(to_transfer->size > 0);
     if(m_pp_exchange[rank]->try_send(to_transfer)) {
       m_bundle_per_shm_rank[rank] = nullptr;
       m_shm_pending_list.erase(m_pending_iterator_per_shm_rank[rank]);
       m_pending_iterator_per_shm_rank[rank] = m_shm_pending_list.end();
       m_shm_transfer_count++;
+      m_shm_transfer_bytes+=to_transfer->size * sizeof(msg_wrapper);
+      m_shm_request_list.push_back(to_transfer);
       return true;
     }
     //std::cout << havoqgt_env()->whoami() << " transfer_shm FAILED dest_core = " << rank << std::endl;
@@ -470,8 +489,19 @@ private:
     size_t size_in_bytes = to_transfer->message_size();
     //std::cout << havoqgt_env()->whoami() << " posting ISend to node " << rank << std::endl;
     //std::cout << "Inspecting contents, byte_size = " << size_in_bytes << " size = " << to_transfer->size << ", first hop_count = " << to_transfer->data[0].msg.m_hop_count << std::endl;
-    CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
-
+    size_t world_dest;
+    if(s_b_route_on_dest) {
+      world_dest = (rank * m_shm_size)+(m_mpi_rank % m_shm_size);
+    } else {
+      world_dest = (rank * m_shm_size) + m_shm_rank;
+    }
+    if(m_isend_count % 5 == 0) {
+      //CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
+      CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
+    } else {
+      //CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
+      CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
+    }
     m_isend_count++;
     m_isend_bytes+=size_in_bytes;
 
@@ -489,7 +519,7 @@ private:
   void receive_mpi(OutputIterator oitr) {
     m_send_recv_balance = 0;
     int flag(0);
-    do {
+    //do {
     MPI_Request* request_ptr = &(m_irecv_request_list.front().first);
     CHK_MPI( MPI_Test( request_ptr, &flag, MPI_STATUS_IGNORE) );
     if(flag) {
@@ -514,7 +544,7 @@ private:
       ptr->size = 0;
       post_new_irecv(ptr);
     }
-    } while(flag);
+    //} while(flag);
   }
 
   template <typename OutputIterator> 
@@ -558,10 +588,15 @@ private:
 
 #else
       msg_bundle_shm* recvptr = *itr;
-    if(recvptr != nullptr) {
+      assert(recvptr != nullptr);
+      assert(recvptr->size > 0);
       for(int i=0; i<recvptr->size; ++i) {
         if(s_b_route_on_dest) {
-          if(recvptr->data[i].dest_node == m_mpi_rank && recvptr->data[i].dest_core == m_shm_rank) {
+          if(recvptr->data[i].dest_node == m_mpi_rank/* && recvptr->data[i].dest_core == m_shm_rank*/) {
+            if(recvptr->data[i].dest_core != m_shm_rank) {
+              std::cout << havoqgt_env()->whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
+            }
+            assert(recvptr->data[i].dest_core == m_shm_rank);
             *oitr = recvptr->data[i].msg; 
             ++oitr; 
           } else {
@@ -577,8 +612,7 @@ private:
           }
         }
       }
-      m_pp_exchange[recvptr->source_core]->free(recvptr);
-    }
+      recvptr->mark_read();
  #endif
     }
   }
@@ -586,6 +620,15 @@ private:
 
 
   void cleanup_pending_isend_requests() {
+    while(!m_shm_request_list.empty()) {
+      if(m_shm_request_list.front()->is_read()) {
+        free_shm_bundle(m_shm_request_list.front());
+        m_shm_request_list.pop_front();
+      } else {
+        break;
+      }
+    }
+
     while(!m_isend_request_list.empty()) {
       int flag(0);
       MPI_Request* request_ptr = &(m_isend_request_list.front().first);
@@ -603,7 +646,8 @@ private:
     std::pair<MPI_Request, msg_bundle_mpi*> irecv_req;
     irecv_req.second = buff;
     MPI_Request* request_ptr = &irecv_req.first;
-    CHK_MPI( MPI_Irecv( (void*) buff, msg_bundle_mpi::padded_size, MPI_BYTE, MPI_ANY_SOURCE, m_mpi_tag, m_mpi_comm, request_ptr) );
+    //CHK_MPI( MPI_Irecv( (void*) buff, msg_bundle_mpi::padded_size, MPI_BYTE, MPI_ANY_SOURCE, m_mpi_tag, m_mpi_comm, request_ptr) );
+    CHK_MPI( MPI_Irecv( (void*) buff, msg_bundle_mpi::padded_size, MPI_BYTE, MPI_ANY_SOURCE, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
     m_irecv_request_list.push_back(irecv_req);
   }
 
@@ -638,6 +682,9 @@ private:
   std::vector< std::list<size_t>::iterator >          m_pending_iterator_per_shm_rank;
   std::list<size_t>                                   m_shm_pending_list;
   uint64_t                  m_shm_transfer_count;
+  uint64_t                  m_shm_transfer_bytes;
+  std::vector<msg_bundle_shm*>                        m_free_shm_list;
+  std::deque< msg_bundle_shm* >                       m_shm_request_list;
 
   //
   // Satic Configs
@@ -668,69 +715,23 @@ template<typename T>
 struct mailbox<T>::shm_exchange {
   using mutex = boost::interprocess::interprocess_mutex;
   using scoped_lock = boost::interprocess::scoped_lock<mutex>;
-  static const uint32_t capacity = 2400;
-  volatile uint64_t count_returned;
-  volatile uint64_t size_free;
-  char pad1[64-sizeof(count_returned)-sizeof(size_free)];
+  static const uint32_t capacity = 2048;
   volatile uint64_t recv_end;
   char pad2[65-sizeof(recv_end)];
   volatile uint64_t recv_beg;
   uint64_t source_core;
-  mutex free_mutex;
   mutex recv_mutex;
-  offset_ptr<msg_bundle_shm> free_list[capacity];
   offset_ptr<msg_bundle_shm> recv_list[capacity];
   shm_exchange(uint32_t core) { 
-    size_free = 0;
     recv_end = 0;
     recv_beg = 0;
     source_core = core;
-    count_returned = 0;
-  }
-  void free(msg_bundle_shm* to_free) {
-    //if(size_free >= capacity-5) {
-    //  //std::cout << "size_free >= capacity -- Rank = " << havoqgt_env()->node_local_comm().rank() << ", source_core == " << source_core << ", to_free->source_core = " << to_free->get_source_core() << " size_free = " << size_free << std::endl;
-    //}
-    to_free->size = 0;
-    //double lock_start = MPI_Wtime();
-    scoped_lock lock(free_mutex, boost::interprocess::try_to_lock);
-    while(!lock) lock.try_lock();
-    //lock_time += MPI_Wtime() - lock_start;
-    ++count_returned;
-    assert(size_free < capacity);
-    free_list[size_free++] = to_free;
-  }
-
-  uint64_t get_count_returned() {
-    //scoped_lock lock(free_mutex);
-    __sync_synchronize();
-    return count_returned;
-  }
-
-  msg_bundle_shm* get_free() {
-    //std::cout << havoqgt_env()->whoami() << " get_free() size_free = " << size_free;
-    //double lock_start = MPI_Wtime();
-    scoped_lock lock(free_mutex, boost::interprocess::try_to_lock);
-    while(!lock) lock.try_lock();
-    //lock_time += MPI_Wtime() - lock_start;
-    assert(size_free > 0);
-    if(size_free == 0) {
-      HAVOQGT_ERROR_MSG("BAD SHIT HAPPENED");
+    for(size_t i=0; i<capacity; ++i) {
+      recv_list[i] = offset_ptr<msg_bundle_shm>();
     }
-    msg_bundle_shm* to_return = free_list[--size_free].get();
-    //std::cout << " source_core = " << free_list[size_free]->get_source_core() << ", size = " << free_list[size_free]->size << std::endl;
-    assert(to_return->size == 0);
-    return to_return;
   }
 
-  bool has_free() {
-    //scoped_lock lock(free_mutex);
-    __sync_synchronize();
-    bool to_return = size_free > 0;
-    __sync_synchronize();
-    return to_return;
-  }
-
+#if 0
   bool try_send(msg_bundle_shm* to_send) {
     assert(to_send->get_source_core() == havoqgt_env()->node_local_comm().rank());
     //std::cout << havoqgt_env()->whoami() << " sending to " << source_core << ", size = " << to_send->size << std::endl;
@@ -753,12 +754,29 @@ struct mailbox<T>::shm_exchange {
     //std::cout << havoqgt_env()->whoami() << ": Try_send Failed, sending_to_core = " << source_core << ", recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
     return false;
   }
-
+#else 
+  bool try_send(msg_bundle_shm* to_send) { 
+    __sync_synchronize();
+    if(recv_end - recv_beg >= capacity-100) {
+      return false;
+    }
+    uint64_t pos = __sync_fetch_and_add(&recv_end, 1);
+    pos %= capacity;
+    if(recv_list[pos] == offset_ptr<msg_bundle_shm>()) {
+      recv_list[pos] = to_send;
+      __sync_synchronize();
+      return true;
+    }
+    std::cout << "recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
+    HAVOQGT_ERROR_MSG("Failed to try_send");
+  }
+  
+#endif
   bool probe() {
     __sync_synchronize();
     return recv_end > recv_beg;
   }
-
+#if 0
   void try_recv(std::vector<msg_bundle_shm*>& to_recv) {
     //double lock_start = MPI_Wtime();
     to_recv.clear();
@@ -785,6 +803,24 @@ struct mailbox<T>::shm_exchange {
     }
     //return nullptr;
   }
+#else
+  void try_recv(std::vector<msg_bundle_shm*>& to_recv) {
+    to_recv.clear();
+    __sync_synchronize();
+    to_recv.reserve(recv_end - recv_beg);
+    while(recv_end > recv_beg) {
+      uint64_t pos = (recv_beg) % capacity;
+      if(recv_list[pos] != offset_ptr<msg_bundle_shm>()) {
+        to_recv.push_back(recv_list[pos].get());
+        recv_list[pos] = offset_ptr<msg_bundle_shm>();
+        ++recv_beg;
+        __sync_synchronize();
+      } else {
+        break;
+      }
+    }
+  }
+#endif
 };
 
 
@@ -800,15 +836,11 @@ struct mailbox<T>::msg_wrapper {
 template<typename T>
 struct mailbox<T>::msg_bundle_shm {
   // Data Members
-  uint8_t  source_core;
-  uint32_t size;
+  volatile uint32_t size;
   msg_wrapper data[0];
-  msg_bundle_shm(size_t core)
-    : source_core(core)
-    , size(0)
+  msg_bundle_shm()
+    : size(0)
   {
-    assert(core == source_core);
-    assert(source_core == havoqgt_env()->node_local_comm().rank());
   }
   // Static Members & Functions
   static uint32_t capacity;
@@ -822,8 +854,21 @@ struct mailbox<T>::msg_bundle_shm {
     return ++size;
   }
 
-  size_t get_source_core() {
-    return source_core;
+  void mark_read() {
+    __atomic_store_n(&size, 0, __ATOMIC_SEQ_CST);
+    /*assert(size > 0);
+    __sync_synchronize();
+    size = 0;
+    __sync_synchronize();*/
+  }
+
+  bool is_read() {
+    return __atomic_load_n(&size,__ATOMIC_SEQ_CST) == 0;
+    /*__sync_synchronize();
+    bool to_return = (size == 0);
+    __sync_synchronize();
+    return to_return;*/
+
   }
 
 };

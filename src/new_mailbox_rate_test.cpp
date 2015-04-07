@@ -196,6 +196,8 @@ int main(int argc, char** argv) {
     uint64_t count_per_rank = count / uint64_t(mpi_size);
     boost::counting_iterator<uint64_t> seq_beg(uint64_t(mpi_rank) * count_per_rank);
     boost::counting_iterator<uint64_t> seq_end(uint64_t(mpi_rank+1) * count_per_rank);
+    //boost::counting_iterator<uint64_t> seq_beg(0);
+    //boost::counting_iterator<uint64_t> seq_end((mpi_rank == 0) ? 1 : 0);
 
     havoqgt_env()->world_comm().barrier();   
     double time_start = MPI_Wtime();
