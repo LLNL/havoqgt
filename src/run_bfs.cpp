@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
   // BFS Experiments
   {
     
-    graph_type::vertex_data<uint8_t, std::allocator<uint8_t> >                      bfs_level_data(*graph);
+    graph_type::vertex_data<uint16_t, std::allocator<uint16_t> >                      bfs_level_data(*graph);
     graph_type::vertex_data<graph_type::vertex_locator, std::allocator<graph_type::vertex_locator> >  bfs_parent_data(*graph);
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
         std::cout << "degree = " << graph->degree(source) << std::endl;
       }
 
-      bfs_level_data.reset(128);
+      bfs_level_data.reset(std::numeric_limits<uint16_t>::max());
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
       double time_end = MPI_Wtime();
 
       uint64_t visited_total(0);
-      for (uint64_t level = 0; level < 15; ++level) {
+      for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
         uint64_t local_count(0);
         graph_type::vertex_iterator vitr;
         for (vitr = graph->vertices_begin();

@@ -243,7 +243,7 @@ public:
   vertex_locator   vertex;
   //uint64_t         m_parent : 40;
   vertex_locator  m_parent;
-  uint64_t         m_level : 8;
+  uint64_t         m_level : 16;
 } __attribute__ ((packed));
 
 
