@@ -103,18 +103,38 @@ public:
   /**
    *
    */
-  distributed_db(db_create, const char* base_fname)
+  static void transfer(const char* src_base_fname, const char* dest_base_fname, bool shrink = false) {
+    std::string src_fname  = generate_filename(src_base_fname);
+    std::string dest_fname = generate_filename(dest_base_fname);
+
+    {
+      std::ifstream  src(src_fname.c_str(), std::ios::binary);
+      std::ofstream  dst(dest_fname.c_str(),   std::ios::binary);
+      dst << src.rdbuf();
+    }
+//    if(shrink) {
+//      mapped_type::shrink_to_fit(dest_fname.c_str());
+//    }
+  }
+
+  /**
+   *
+   */
+  distributed_db(db_create, const char* base_fname, double gbyte_per_rank)
   {
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
 
+    uint64_t file_size = uint64_t(gbyte_per_rank * 1024 * 1024) * 1024ULL;
+
     init_rank_filename(base_fname);
+    //std::cout << "file_size = file_size, " << file_size << ", fname = " << m_rank_filename << std::endl;
     if(rank_file_exists())
     {
       HAVOQGT_ERROR_MSG("File already exists.");
     }
 
-    m_pm = new mapped_type(boost::interprocess::create_only, m_rank_filename.c_str(), get_file_size()); 
+    m_pm = new mapped_type(boost::interprocess::create_only, m_rank_filename.c_str(), file_size); 
 
     #ifdef HAVE_POSIX_FALLOCATE
     {
@@ -122,7 +142,7 @@ public:
       if(fd == -1) {
         HAVOQGT_ERROR_MSG("Error opening file.");
       }
-      int ret = posix_fallocate(fd,0,get_file_size());
+      int ret = posix_fallocate(fd,0,file_size);
       if(ret != 0)
       {
         HAVOQGT_ERROR_MSG("posix_fallocate failed.");
@@ -213,7 +233,9 @@ public:
 
     delete m_pm;
     m_pm = nullptr;
+    havoqgt_env()->node_local_comm().barrier();
     bool shrink_ret = mapped_type::shrink_to_fit(m_rank_filename.c_str());
+    havoqgt_env()->node_local_comm().barrier();
   }
 
   segment_manager_type* get_segment_manager()
@@ -226,7 +248,7 @@ private:
   /**
    *
    */
-  uint64_t get_file_size() 
+  /*uint64_t get_file_size() 
   {
     const char* fsize = getenv("HAVOQGT_DB_SIZE");
     if(fsize == NULL) {
@@ -239,7 +261,7 @@ private:
       return 64ULL * 1024 *1024 *1024 / 24;
     }
     return boost::lexical_cast<uint64_t>(fsize);
-  } 
+  }*/
 
 
   /**
@@ -256,11 +278,15 @@ private:
    */
   void init_rank_filename(const char* base_fname)
   {
+    m_rank_filename = generate_filename(base_fname);
+  }
+
+  static std::string generate_filename(const char* base_fname) {
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
     std::stringstream sstr;
     sstr << base_fname << "_" << mpi_rank << "_of_" << mpi_size;
-    m_rank_filename = sstr.str();
+    return sstr.str();
   }
 
 

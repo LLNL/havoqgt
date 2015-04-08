@@ -130,6 +130,8 @@ class delegate_partitioned_graph {
                              MPI_Comm mpi_comm,
                              Container& edges, uint64_t max_vertex,
                              uint64_t delegate_degree_threshold,
+                             uint64_t _node_partitions,
+                             uint64_t chunk_size,
                              ConstructionState stop_after = GraphReady);
 
   template <typename Container>

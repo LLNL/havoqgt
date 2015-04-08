@@ -72,6 +72,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            MPI_Comm mpi_comm,
                            Container& edges, uint64_t max_vertex,
                            uint64_t delegate_degree_threshold,
+                           uint64_t _node_partitions,
+                           uint64_t _chunk_size,  
                            ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
@@ -94,8 +96,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
   
   processes_per_node = havoqgt_env()->node_local_comm().size();
-  node_partitions = std::min(4,processes_per_node); ///< @todo make env var
-  edge_chunk_size = 1024*8; ///< @todo marke env var
+  node_partitions = std::min(_node_partitions,size_t(processes_per_node));
+  edge_chunk_size = _chunk_size;
 
   m_global_max_vertex = max_vertex;
   m_max_vertex = (std::ceil(double(max_vertex) / double(m_mpi_size)));
@@ -328,7 +330,10 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
           high_vertex_count++;
         }
       } else {
-        maps_to_send.at(owner)[local_id].first++;
+        int c = maps_to_send.at(owner)[local_id].first++;
+        if (c == 0 && maps_to_send.at(owner)[local_id].second ==0) {
+          maps_to_send_element_count++;
+        }
       }
 
       // Update the vertex's incoming edge count (second member of the pair)
@@ -341,7 +346,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
         // }
       } else {
         int c = maps_to_send.at(owner)[local_id].second++;
-        if (c == 0) {
+        if (c == 0 && maps_to_send.at(owner)[local_id].first ==0) {
           maps_to_send_element_count++;
         }
       }
