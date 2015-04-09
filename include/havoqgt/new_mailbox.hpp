@@ -205,8 +205,9 @@ private:
     //
     // Allocate large chunk to help NUMA page pacement.  
     // Local rank always touches pages before sending to other ranks.
-    char* chunk = (char*) m_pmsm->allocate( msg_bundle_shm::padded_size * (shm_exchange::capacity/5));
-    for(size_t i=0; i<(shm_exchange::capacity/5); ++i) {
+    size_t num_to_preallocate = m_shm_size * 2;
+    char* chunk = (char*) m_pmsm->allocate( msg_bundle_shm::padded_size * num_to_preallocate);
+    for(size_t i=0; i<num_to_preallocate; ++i) {
       void* addr = chunk + i*msg_bundle_shm::padded_size;
       msg_bundle_shm* ptr = new (addr) msg_bundle_shm();
       assert(ptr->size == 0);
