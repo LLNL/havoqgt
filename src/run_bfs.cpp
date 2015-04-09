@@ -49,14 +49,10 @@
  *
  */
 
-#include <havoqgt/page_rank.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/breadth_first_search.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/upper_triangle_edge_generator.hpp>
-#include <havoqgt/single_source_shortest_path.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 
 #include <boost/bind.hpp>
