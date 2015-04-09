@@ -119,19 +119,25 @@ public:
       bool dest_direct_padded = false;
       size_t buff_size = 1024*1024*1;
       posix_memalign(&buf, 4096, buff_size);
-      int source = open(src_fname.c_str(), O_RDONLY | O_DIRECT, 0);
+      int source = -1;
+#ifdef O_DIRECT
+      source = open(src_fname.c_str(), O_RDONLY | O_DIRECT, 0);
       if(source == -1) { //Attempt w/o O_DIRECT
          source = open(src_fname.c_str(), O_RDONLY /*| O_DIRECT*/, 0);
       }
+#endif
       if(source == -1) {
         HAVOQGT_ERROR_MSG("Unable to open source file");
       }
       bool dest_direct = true;
-      int dest = open(dest_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+      int dest = -1;
+#ifdef O_DIRECT
+      dest = open(dest_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0644);
       if(dest == -1) { //Attempt w/o O_DIRECT
         dest_direct = false;
         dest = open(dest_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC /*| O_DIRECT*/, 0644);
       }
+#endif
       if(dest == -1) {
         HAVOQGT_ERROR_MSG("Unable to open dest file");
       }
