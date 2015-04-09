@@ -1653,7 +1653,11 @@ inline
 typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
 delegate_partitioned_graph<SegmentManager>::
 vertices_end() const {
-  return vertex_iterator(m_owned_info.size()-1,this);
+  size_t last_index = m_owned_info.empty() ? 0 : m_owned_info.size()-1;
+  while(last_index > 1 && (m_owned_info[last_index-1].low_csr_idx == m_owned_info[last_index].low_csr_idx)) {
+    --last_index;
+  }
+  return vertex_iterator(last_index,this);
 }
 
 template <typename SegmentManager>
