@@ -82,7 +82,8 @@ public:
   public:
     input_iterator_type(parallel_edge_list_reader* ptr_reader, uint64_t count)
     	: m_ptr_reader(ptr_reader)
-    	, m_count(count){
+    	, m_count(count)
+      , m_make_undirected(false) {
       if(m_count == 0) {
         get_next();
         m_count = 0; //reset to zero
@@ -124,8 +125,14 @@ public:
     input_iterator_type();
 
     void get_next() {
-      bool ret = m_ptr_reader->try_read_edge(m_current);
-      ++m_count;
+      if(m_ptr_reader->m_undirected && m_make_undirected) {
+        std::swap(m_current.first, m_current.second);
+        m_make_undirected = false;
+      } else {
+        bool ret = m_ptr_reader->try_read_edge(m_current);
+        ++m_count;
+        m_make_undirected = true;
+      }
       assert(m_current.first <= m_ptr_reader->max_vertex_id());
       assert(m_current.second <= m_ptr_reader->max_vertex_id());
     }
@@ -133,11 +140,13 @@ public:
     parallel_edge_list_reader* m_ptr_reader;
     uint64_t m_count;
     edge_type m_current;
+    bool m_make_undirected;
   };
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames ) {
+  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected )
+    : m_undirected(undirected) {
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
@@ -228,6 +237,7 @@ protected:
   std::deque< std::ifstream* > m_ptr_ifstreams;
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
+  bool m_undirected;
 
 };
 

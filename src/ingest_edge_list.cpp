@@ -87,13 +87,15 @@ void usage()  {
          << " -p <int>      - number of Low & High partition passes (Default is 1)\n"
          << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
          << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
+         << " -u <bool>     - Treat edgelist as undirected (Default is 0)\n"
          << "[file ...] - list of edge list files to ingest\n\n";
   }
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
                     uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
-                    double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size) {
+                    double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
+                    bool& undirected) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -108,11 +110,12 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   gbyte_per_rank = 0.25;
   partition_passes = 1;
   chunk_size = 8*1024;
+  undirected = false;
 
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:b:h ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -135,6 +138,9 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          break;
       case 'c':
          chunk_size = atoll(optarg);
+         break;
+      case 'u':
+         undirected = atoi(optarg);
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -178,8 +184,9 @@ int main(int argc, char** argv) {
     uint64_t                   partition_passes;
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
+    bool                       undirected;
     
-    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size);
+    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
@@ -191,7 +198,7 @@ int main(int argc, char** argv) {
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
     //Setup edge list reader
-    havoqgt::parallel_edge_list_reader pelr(input_filenames);
+    havoqgt::parallel_edge_list_reader pelr(input_filenames, undirected);
 
 
     if (mpi_rank == 0) {
