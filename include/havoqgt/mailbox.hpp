@@ -162,9 +162,8 @@ class mailbox_routed {
 public:
   typedef TMsg message_type;
 
-  mailbox_routed( MPI_Comm _mpi_comm,
-                  int _mpi_tag):
-              m_mpi_comm(_mpi_comm),
+  mailbox_routed(int _mpi_tag):
+              m_mpi_comm(MPI_COMM_WORLD),
               m_mpi_tag(_mpi_tag) {
     m_pending_partial_buffers = 0;
     m_num_pending_isend = 0;
@@ -297,6 +296,7 @@ public:
 
   template <typename OutputIterator>
   void bcast(TMsg _raw_msg, OutputIterator _oitr) {
+    _raw_msg.vertex.set_bcast(true);
     routed_msg_type msg;
     msg.bcast = true;
     msg.msg = _raw_msg;

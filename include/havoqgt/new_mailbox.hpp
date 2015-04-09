@@ -85,6 +85,7 @@ public:
     m_shm_rank = havoqgt_env()->node_local_comm().rank();
     m_shm_size = havoqgt_env()->node_local_comm().size();
     m_world_rank = havoqgt_env()->world_comm().rank();
+    m_world_size = havoqgt_env()->world_comm().size();
   
     init_environment_config();
 
@@ -276,8 +277,80 @@ private:
 
 public:
 
+  size_t comm_size() const { return m_world_size; }
+  size_t comm_rank() const { return m_world_rank; }
+
   template <typename OutputIterator>
-  void send(size_t world_dest, const T& raw_msg, OutputIterator oitr) {
+  void bcast(T raw_msg, OutputIterator oitr) {
+    raw_msg.vertex.set_bcast(true);
+    msg_wrapper wrapped;
+    wrapped.intercept = 0;
+    wrapped.msg =  raw_msg;
+    
+    wrapped.bcast = 1;
+    for(size_t i=0; i<m_shm_size; ++i) {
+      if(i != m_shm_rank) {
+        route_shm(i, wrapped, oitr);
+      }
+    }
+
+    wrapped.bcast = 2;
+    for(size_t i=0; i<m_mpi_size; ++i) {
+      if(s_b_route_on_dest) {
+        if(i%m_shm_size == m_shm_rank && i != m_mpi_rank) {
+          route_mpi(i, wrapped, oitr);
+        }
+      } else {
+        if(i != m_mpi_rank) {
+          route_mpi(i, wrapped, oitr);
+        }
+      }
+    }
+
+    *oitr = raw_msg;
+    ++oitr;
+    hold_receive(oitr);
+  }
+
+  template <typename OutputIterator>
+  void route_bcast(msg_wrapper wrapped, OutputIterator oitr) {
+    size_t orig_bcast = wrapped.bcast;
+    if(s_b_route_on_dest) {
+      if(orig_bcast == 1) {
+        wrapped.bcast = 2;
+        for(size_t i=0; i<m_mpi_size; ++i) {
+          if(i%m_shm_size == m_shm_rank && i != m_mpi_rank) {
+            route_mpi(i, wrapped, oitr);
+          }
+        }
+      } else if(orig_bcast == 2) {
+        wrapped.bcast = 3;
+        for(size_t i=0; i<m_shm_size; ++i) {
+          if(i != m_shm_rank) {
+            route_shm(i, wrapped, oitr);
+          }
+        }
+      } else {
+        if(orig_bcast != 3) HAVOQGT_ERROR_MSG("orig_bcast != 3");
+      }
+    } else {
+      if(orig_bcast == 1) {
+        wrapped.bcast = 2;
+        for(size_t i=0; i<m_mpi_size; ++i) {
+          if(i != m_mpi_rank) {
+            route_mpi(i, wrapped, oitr);
+          }
+        }
+      } else {
+        if(orig_bcast != 2) HAVOQGT_ERROR_MSG("orig_bcast != 2");
+      }
+    }
+    *oitr = wrapped.msg;
+    ++oitr;
+  } 
+
+  template <typename OutputIterator>
+  void send(size_t world_dest, const T& raw_msg, OutputIterator oitr, bool intercept) {
     //std::cout << havoqgt_env()->whoami() << " send to " << world_dest << std::endl;
     ++m_send_recv_balance;
     if(world_dest == m_world_rank) {
@@ -289,9 +362,9 @@ public:
     msg_wrapper wrapped;
     wrapped.dest_node = world_dest / m_shm_size;
     wrapped.dest_core = world_dest % m_shm_size;
-    wrapped.bcast = false;
-    wrapped.intercept = false;
+    wrapped.bcast = 0;
     wrapped.msg = raw_msg;
+    wrapped.intercept = intercept;
 
     bool b_sent = false;
 
@@ -323,11 +396,15 @@ public:
         cleanup_pending_isend_requests();
       } while(shm_transfer_slots_full() || isend_slots_full());
     }*/
+    hold_receive(oitr);
+  }
+
+  template <typename OutputIterator>
+  void hold_receive(OutputIterator oitr) {
     while(shm_transfer_slots_full() || isend_slots_full()) {
       receive(oitr);
       cleanup_pending_isend_requests();
     }
-
   }
 
   template <typename OutputIterator>
@@ -525,12 +602,17 @@ private:
     if(flag) {
       msg_bundle_mpi* ptr = m_irecv_request_list.front().second;
       for(size_t i=0; i<ptr->size; ++i) {
-        if(s_b_route_on_dest) {
+        if(ptr->data[i].bcast > 0) {
+            route_bcast(ptr->data[i], oitr);
+        } else  if(s_b_route_on_dest) {
           assert(ptr->data[i].dest_node == m_mpi_rank);
           if(ptr->data[i].dest_core == m_shm_rank) {
             *oitr = ptr->data[i].msg; 
             ++oitr;
           } else {
+            if(ptr->data[i].intercept) {
+              if(!oitr.intercept(ptr->data[i].msg)) { continue; }
+            }
             route_shm(ptr->data[i].dest_core, ptr->data[i], oitr);
           }
         } else {
@@ -591,15 +673,20 @@ private:
       assert(recvptr != nullptr);
       assert(recvptr->size > 0);
       for(int i=0; i<recvptr->size; ++i) {
-        if(s_b_route_on_dest) {
+        if(recvptr->data[i].bcast > 0) {
+          route_bcast(recvptr->data[i], oitr);
+        } else if(s_b_route_on_dest) {
           if(recvptr->data[i].dest_node == m_mpi_rank/* && recvptr->data[i].dest_core == m_shm_rank*/) {
             if(recvptr->data[i].dest_core != m_shm_rank) {
-              std::cout << havoqgt_env()->whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
+              //std::cout << havoqgt_env()->whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
             }
             assert(recvptr->data[i].dest_core == m_shm_rank);
             *oitr = recvptr->data[i].msg; 
             ++oitr; 
           } else {
+            if(recvptr->data[i].intercept) {
+              if(!oitr.intercept(recvptr->data[i].msg)) { continue; }
+            }
             route_mpi(recvptr->data[i].dest_node, recvptr->data[i], oitr);
           }
         } else {
@@ -608,6 +695,9 @@ private:
             *oitr = recvptr->data[i].msg;
             ++oitr;
           } else {
+            if(recvptr->data[i].intercept) {
+              if(!oitr.intercept(recvptr->data[i].msg)) { continue; }
+            }
             route_mpi(recvptr->data[i].dest_node, recvptr->data[i], oitr);
           }
         }
@@ -655,6 +745,7 @@ private:
 private:
 
   int m_world_rank;
+  int m_world_size;
 
   //
   // MPI Related
@@ -828,7 +919,7 @@ template<typename T>
 struct mailbox<T>::msg_wrapper {
   uint64_t dest_node : 16;
   uint64_t dest_core : 8;
-  uint64_t bcast     : 1;
+  uint64_t bcast     : 2;
   uint64_t intercept : 1;
   T        msg;
 };

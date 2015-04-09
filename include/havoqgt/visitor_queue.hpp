@@ -52,6 +52,7 @@
 #ifndef HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
 #define HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
 
+#include <havoqgt/new_mailbox.hpp>
 #include <havoqgt/mailbox.hpp>
 #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/reservable_priority_queue.hpp>
@@ -78,13 +79,14 @@ class visitor_queue {
 #ifdef __bgp__
   typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
-  typedef mailbox_routed<visitor_type> mailbox_type;
+  //typedef mailbox_routed<visitor_type> mailbox_type;
+  typedef mailbox<visitor_type> mailbox_type;
 #endif
 
 
 public:
   visitor_queue(TGraph* _graph)
-    : m_mailbox(MPI_COMM_WORLD, 0)
+    : m_mailbox(/*MPI_COMM_WORLD,*/ 0)
     , m_termination_detection(MPI_COMM_WORLD, 2, 2, 3, 4)
     , m_ptr_graph(_graph) {
     //m_localqueue_owned.reserve(_graph->num_local_vertices());

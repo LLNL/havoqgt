@@ -179,7 +179,7 @@ int main(int argc, char** argv) {
     std::cout << "Hop Limit = " << msg_hopper::s_hop_limit << std::endl;
     }
 
-    mpi::mailbox_routed<msg_hopper> mailbox(havoqgt_env()->world_comm().comm(), 1);
+    mpi::mailbox_routed<msg_hopper> mailbox(1);
     mpi::termination_detection<uint64_t> td(MPI_COMM_WORLD);
     std::vector<msg_hopper> pending;
 

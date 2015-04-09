@@ -208,14 +208,14 @@ int main(int argc, char** argv) {
         if(seq_beg != seq_end) {
           msg_hopper msg(*seq_beg);
           ++seq_beg;
-          mailbox.send(msg.dest(), msg, receive_iterator(&td, &pending));
+          mailbox.send(msg.dest(), msg, receive_iterator(&td, &pending),false);
           td.inc_queued();
         }
         while(!pending.empty()) {
           msg_hopper msg;
           msg = pending.back();
           pending.pop_back();
-          mailbox.send(msg.dest(), msg, receive_iterator(&td, &pending));
+          mailbox.send(msg.dest(), msg, receive_iterator(&td, &pending),false);
         }
       } while(!pending.empty() || seq_beg != seq_end);
       mailbox.receive(receive_iterator(&td, &pending));
