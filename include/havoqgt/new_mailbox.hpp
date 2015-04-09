@@ -96,12 +96,12 @@ public:
 
     init_alloc_bundle_mpi();
 
-    if(m_world_rank == 0) {
-      std::cout << "Number of nodes = " << m_mpi_size << std::endl;
-      std::cout << "Ranks per node = " << m_shm_size << std::endl;
-      std::cout << "Sizeof(shm_exchange) = " << sizeof(shm_exchange) << std::endl;
-      std::cout << "Sizeof(msg_wrapper) = " << sizeof(msg_wrapper) << std::endl;
-    }
+    // if(m_world_rank == 0) {
+    //   std::cout << "Number of nodes = " << m_mpi_size << std::endl;
+    //   std::cout << "Ranks per node = " << m_shm_size << std::endl;
+    //   std::cout << "Sizeof(shm_exchange) = " << sizeof(shm_exchange) << std::endl;
+    //   std::cout << "Sizeof(msg_wrapper) = " << sizeof(msg_wrapper) << std::endl;
+    // }
     //lock_time = 0;
     m_send_recv_balance = 0;
     m_isend_count = 0;
@@ -109,14 +109,18 @@ public:
   }
 
   ~mailbox() {
-    if(m_world_rank == 1) {
-    std::cout << "ISend Count = " << m_isend_count << std::endl;
-    std::cout << "ISend Bytes = " << m_isend_bytes << std::endl;
-    double ave = (m_isend_count) ? (double(m_isend_bytes) / double(m_isend_count)) : double(0);
-    std::cout << "Ave size = " << ave << std::endl;
-    std::cout << "m_shm_transfer_count = " << m_shm_transfer_count << std::endl;
-    std::cout << "m_shm_transfer_bytes = " << m_shm_transfer_bytes << std::endl;
-    std::cout << "m_free_shm_list.size() = " << m_free_shm_list.size() << std::endl;
+    // if(m_world_rank == 0) {
+    // std::cout << "ISend Count = " << m_isend_count << std::endl;
+    // std::cout << "ISend Bytes = " << m_isend_bytes << std::endl;
+    // double ave = (m_isend_count) ? (double(m_isend_bytes) / double(m_isend_count)) : double(0);
+    // std::cout << "Ave size = " << ave << std::endl;
+    // std::cout << "m_shm_transfer_count = " << m_shm_transfer_count << std::endl;
+    // std::cout << "m_shm_transfer_bytes = " << m_shm_transfer_bytes << std::endl;
+    // std::cout << "m_free_shm_list.size() = " << m_free_shm_list.size() << std::endl;
+    // }
+
+    while(!m_shm_request_list.empty() || !m_isend_request_list.empty()) {
+      cleanup_pending_isend_requests();
     }
     //if (m_world_rank == 0)
     //  std::cout << "Lock Time = " << lock_time << std::endl;
