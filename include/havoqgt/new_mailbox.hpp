@@ -122,14 +122,13 @@ public:
     while(!m_shm_request_list.empty() || !m_isend_request_list.empty()) {
       cleanup_pending_isend_requests();
     }
-    //if (m_world_rank == 0)
-    //  std::cout << "Lock Time = " << lock_time << std::endl;
-
-    /*lots to free here.....
-
-      Should we use try_send() -- look at old OpenMP code
-     */
-
+    
+    while(!m_irecv_request_list.empty()) {
+      CHK_MPI( MPI_Cancel( &(m_irecv_request_list.front().first) ) );
+      free(m_irecv_request_list.front().second);
+      m_irecv_request_list.pop_front();
+    }
+    
     m_my_exchange->~shm_exchange(); //frees mutexes
     delete m_pmsm;        //frees managed_shared_memory
     havoqgt_env()->node_local_comm().barrier();
