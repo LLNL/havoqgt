@@ -103,14 +103,76 @@ public:
   /**
    *
    */
-  static void transfer(const char* src_base_fname, const char* dest_base_fname, bool shrink = false) {
+  static void transfer(const char* src_base_fname, const char* dest_base_fname) {
     std::string src_fname  = generate_filename(src_base_fname);
     std::string dest_fname = generate_filename(dest_base_fname);
 
+    havoqgt_env()->world_comm().barrier();
+    double transfer_time = MPI_Wtime();
     {
-      std::ifstream  src(src_fname.c_str(), std::ios::binary);
+      /*std::ifstream  src(src_fname.c_str(), std::ios::binary);
       std::ofstream  dst(dest_fname.c_str(),   std::ios::binary);
-      dst << src.rdbuf();
+      dst << src.rdbuf();*/
+
+      void* buf;
+      uint64_t src_total_size(0);
+      bool dest_direct_padded = false;
+      size_t buff_size = 1024*1024*1;
+      posix_memalign(&buf, 4096, buff_size);
+      int source = open(src_fname.c_str(), O_RDONLY | O_DIRECT, 0);
+      if(source == -1) { //Attempt w/o O_DIRECT
+         source = open(src_fname.c_str(), O_RDONLY /*| O_DIRECT*/, 0);
+      }
+      if(source == -1) {
+        HAVOQGT_ERROR_MSG("Unable to open source file");
+      }
+      bool dest_direct = true;
+      int dest = open(dest_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+      if(dest == -1) { //Attempt w/o O_DIRECT
+        dest_direct = false;
+        dest = open(dest_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC /*| O_DIRECT*/, 0644);
+      }
+      if(dest == -1) {
+        HAVOQGT_ERROR_MSG("Unable to open dest file");
+      }
+      size_t rsize;
+      while ((rsize = read(source, buf, buff_size)) > 0) {
+        src_total_size += rsize;
+        if(dest_direct && (rsize % 4096 != 0)) {
+          dest_direct_padded = true;
+          char* bytes = (char*) buf;
+          for(size_t i = rsize; i < buff_size; ++i) {
+            bytes[i] = 0;
+          }
+          rsize += 4096 - (rsize % 4096);
+        }
+        size_t wsize = write(dest, buf, rsize);
+        if(wsize != rsize) {
+          HAVOQGT_ERROR_MSG("Write Error");
+        }
+      }
+      if(rsize == -1) {
+        HAVOQGT_ERROR_MSG("Read Error");
+      }
+      //@todo need to truncate dest if used O_DIRECT
+      close(source);
+      close(dest);
+      free(buf);
+      if(dest_direct_padded) {
+        // Truncate dest file if used O_DIRECT, because dest was padded;
+        off_t off_t_src_total_size = src_total_size;
+        if(off_t_src_total_size == src_total_size) {
+          truncate(dest_fname.c_str(), src_total_size);
+        }
+      }
+    }
+    havoqgt_env()->node_local_comm().barrier();
+    if(havoqgt_env()->node_local_comm().rank() == 0) {
+      sync();
+    }
+    havoqgt_env()->world_comm().barrier();
+    if(havoqgt_env()->world_comm().rank() == 0) {
+      std::cout << "Transfer time = " << MPI_Wtime() - transfer_time << std::endl;
     }
 //    if(shrink) {
 //      mapped_type::shrink_to_fit(dest_fname.c_str());
@@ -131,7 +193,8 @@ public:
     //std::cout << "file_size = file_size, " << file_size << ", fname = " << m_rank_filename << std::endl;
     if(rank_file_exists())
     {
-      HAVOQGT_ERROR_MSG("File already exists.");
+      //HAVOQGT_ERROR_MSG("File already exists.");
+      ::remove(m_rank_filename.c_str());
     }
 
     m_pm = new mapped_type(boost::interprocess::create_only, m_rank_filename.c_str(), file_size); 

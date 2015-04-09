@@ -81,12 +81,13 @@ void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
+         << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
          << " -s <int>      - Source vertex of BFS (Default is 0)\n"
          << " -h            - print help and exit\n\n";
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t& source_vertex) {
+void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, uint64_t& source_vertex) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -100,7 +101,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -111,6 +112,9 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t
       case 'i':
          found_input_filename = true;
          input_filename = optarg;
+         break;
+      case 'b':
+         backup_filename = optarg;
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -145,11 +149,16 @@ int main(int argc, char** argv) {
 
 
   std::string graph_input;
+  std::string backup_filename;
   uint64_t source_vertex = 0;
   
-  parse_cmd_line(argc, argv, graph_input, source_vertex);
+  parse_cmd_line(argc, argv, graph_input, backup_filename, source_vertex);
+
 
   MPI_Barrier(MPI_COMM_WORLD);
+  if(backup_filename.size() > 0) {
+    distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
+  }
 
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 

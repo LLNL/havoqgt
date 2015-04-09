@@ -81,15 +81,18 @@ void usage()  {
          << " -s <int>    - RMAT graph Scale (default 17)\n"
          << " -d <int>    - delegate threshold (Default is 1048576)\n"
          << " -o <string> - output graph base filename\n"
+         << " -b <string>   - backup graph base filename \n"
          << " -p <int>    - number of Low & High partition passes (Default is 1)\n"
          << " -f <float>  - Gigabytes reserved per rank (Default is 0.25)\n"
-         << " -f <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
+         << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
          << " -h          - print help and exit\n\n";
          
   }
 }
 
-void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, std::string& output_filename, double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size) {
+void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, 
+                    std::string& output_filename, std::string& backup_filename, double& gbyte_per_rank, 
+                    uint64_t& partition_passes, uint64_t& chunk_size) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -107,7 +110,7 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:d:o:p:f:c:h ")) != -1) {
+  while ((c = getopt(argc, argv, "s:d:o:b:p:f:c:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -121,6 +124,9 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
       case 'o':
          found_output_filename = true;
          output_filename = optarg;
+         break;
+      case 'b':
+         backup_filename = optarg;
          break;
       case 'p':
          partition_passes = atoll(optarg);
@@ -152,7 +158,10 @@ int main(int argc, char** argv) {
   int mpi_rank(0), mpi_size(0);
 
   havoqgt_init(&argc, &argv);
-  {
+  {    
+    std::string                output_filename;
+    std::string                backup_filename;
+    { // Build Distributed_DB
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
@@ -167,24 +176,24 @@ int main(int argc, char** argv) {
     uint64_t      num_vertices = 1;
     uint64_t      vert_scale;
     uint64_t      hub_threshold;
-    std::string   fname_output;
     uint64_t      partition_passes;
     double        gbyte_per_rank;
     uint64_t      chunk_size;
         
-    parse_cmd_line(argc, argv, vert_scale, hub_threshold, fname_output, gbyte_per_rank, partition_passes, chunk_size);
+    parse_cmd_line(argc, argv, vert_scale, hub_threshold, output_filename, backup_filename, 
+                   gbyte_per_rank, partition_passes, chunk_size);
 
     num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
       std::cout << "Building Graph500"<< std::endl
         << "Building graph Scale: " << vert_scale << std::endl
         << "Hub threshold = " << hub_threshold << std::endl
-        << "File name = " << fname_output << std::endl
+        << "File name = " << output_filename << std::endl
         << "Reserved Gigabytes per Rank = " << gbyte_per_rank << std::endl
         << "High/Low partition passes = " << partition_passes << std::endl; 
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), fname_output.c_str(), gbyte_per_rank);
+    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -240,7 +249,15 @@ int main(int argc, char** argv) {
     }
 
     havoqgt_env()->world_comm().barrier();
-
+    } // Complete build distributed_db
+    if(backup_filename.size() > 0) {
+      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
+    }
+    havoqgt_env()->world_comm().barrier();
+    if(havoqgt_env()->node_local_comm().rank() == 0) {
+      sync();
+    }
+    havoqgt_env()->world_comm().barrier();
   } //END Main MPI
   havoqgt_finalize();
   return 0;

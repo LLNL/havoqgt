@@ -81,11 +81,12 @@ void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
          << " -o <string>   - output graph base filename (required)\n"
+         << " -b <string>   - backup graph base filename \n"
          << " -d <int>      - delegate threshold (Default is 1048576)\n"
          << " -h            - print help and exit\n"
          << " -p <int>      - number of Low & High partition passes (Default is 1)\n"
          << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
-         << " -f <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
+         << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
          << "[file ...] - list of edge list files to ingest\n\n";
   }
 }
@@ -239,7 +240,7 @@ int main(int argc, char** argv) {
     havoqgt_env()->world_comm().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
-      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str(), true);
+      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
     }
     havoqgt_env()->world_comm().barrier();
     if(havoqgt_env()->node_local_comm().rank() == 0) {
