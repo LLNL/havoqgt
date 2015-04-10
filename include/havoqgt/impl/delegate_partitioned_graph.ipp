@@ -746,7 +746,7 @@ partition_low_degree(Container& unsorted_edges) {
 
         for (size_t i = 0;
           unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-          ++unsorted_itr) {
+          ++unsorted_itr, ++i) {
           // Get next edge
           const auto edge = *unsorted_itr;
 
@@ -760,7 +760,7 @@ partition_low_degree(Container& unsorted_edges) {
 
           if (m_map_delegate_locator.count(unsorted_itr->first) == 0) {
             to_send_edges_low.push_back(*unsorted_itr);
-            ++i;
+            //++i;
           } else {
             continue;
           }
@@ -884,7 +884,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
     int maps_to_send_element_count = 0;
     {
       for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-           ++unsorted_itr) {
+           ++unsorted_itr, ++i) {
 
         // Get next edge
         const auto edge = *unsorted_itr;
@@ -913,7 +913,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
             int c = maps_to_send.at(owner)[unsorted_itr->first]++;
             if (c == 0) {
               maps_to_send_element_count++;
-              i++;
+              //i++;
             }
           }
         } else {
@@ -1321,9 +1321,9 @@ partition_high_degree(Container& unsorted_edges,
       }
       loop_counter++;
 
-
+      size_t i=0;
       while (unsorted_itr != unsorted_itr_end &&
-             to_send_edges_high.size() < edge_chunk_size) {
+             /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
         const auto edge = *unsorted_itr;
         ++unsorted_itr;
