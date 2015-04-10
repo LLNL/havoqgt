@@ -83,7 +83,7 @@ void usage()  {
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, uint64_t& source_vertex) {
+void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -93,17 +93,13 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
   }
   
   bool found_input_filename = false;
-  source_vertex = 0;
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:b:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
-         break;
-       case 's':
-         source_vertex = atoll(optarg);
          break;
       case 'i':
          found_input_filename = true;
@@ -146,9 +142,8 @@ int main(int argc, char** argv) {
 
   std::string graph_input;
   std::string backup_filename;
-  uint64_t source_vertex = 0;
   
-  parse_cmd_line(argc, argv, graph_input, backup_filename, source_vertex);
+  parse_cmd_line(argc, argv, graph_input, backup_filename);
 
 
   MPI_Barrier(MPI_COMM_WORLD);
