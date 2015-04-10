@@ -108,7 +108,7 @@ template<typename Graph, typename PRData>
 class pr_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
-  pr_visitor(): rank(0)  { }
+  pr_visitor(): rank(std::numeric_limits<double>::min())  { }
 
   pr_visitor(vertex_locator _vertex, double _rank)
     : vertex(_vertex)
@@ -116,19 +116,23 @@ public:
 
   pr_visitor(vertex_locator _vertex)
     : vertex(_vertex)
-    , rank(0) { }      
+    , rank(std::numeric_limits<double>::min()) { }      
 
   
   bool pre_visit() const {
-    rank_data()[vertex] += rank;
+    if(rank == std::numeric_limits<double>::min()) {
+      return true;
+    }
+    (*pnext_rank)[vertex] += rank;  //change to next_rank
     return false;
   }
 
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    double old_rank = 1;
+    //change to cur_rank
+    double old_rank = (*pcurr_rank)[vertex];
     uint64_t degree = g.degree(vertex);
-    double send_rank = 1;//old_rank / double(degree);
+    double send_rank = old_rank / double(degree);
 
 
     typedef typename Graph::edge_iterator eitr_type;
@@ -138,7 +142,6 @@ public:
       vis_queue->queue_visitor(new_visitor);
     }
     return true;
-
   }
 
 
@@ -150,27 +153,33 @@ public:
     return false;
   }
 
-  static PRData& rank_data(PRData* _data = NULL) {
-    static PRData* data;
-    if(_data) data = _data;
-    return *data;
-  }
-
-
+  static PRData*   pcurr_rank;
+  static PRData*   pnext_rank;
   vertex_locator   vertex;
   double           rank;
 };
 
+template<typename Graph, typename PRData>
+PRData* pr_visitor<Graph,PRData>::pcurr_rank = nullptr;
+
+template<typename Graph, typename PRData>
+PRData* pr_visitor<Graph,PRData>::pnext_rank = nullptr;
+
  
 template <typename TGraph, typename PRData>
-void page_rank(TGraph& g, PRData& pr_data) {
+void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
   typedef  pr_visitor<TGraph, PRData>    visitor_type;
-  visitor_type::rank_data(&pr_data);
+  visitor_type::pcurr_rank = &cur_rank;
+  visitor_type::pnext_rank = &next_rank;
   typedef visitor_queue< visitor_type, pr_queue, TGraph >    visitor_queue_type;
+  
+  if(initial) {
+    cur_rank.reset(double(1)/double(g.max_global_vertex_id()));
+  }
    
   visitor_queue_type vq(&g);
   vq.init_visitor_traversal();
-  pr_data.all_reduce();
+  next_rank.all_reduce();
 }
 
 
