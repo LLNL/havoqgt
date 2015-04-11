@@ -170,26 +170,27 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
     
-    std::map<uint64_t, uint64_t> cc_count;
-    for(auto vitr=graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
-      cc_count[graph->locator_to_label(cc_data[*vitr])]++;
-    }
-    auto cc_count_itr = cc_count.begin();
-    uint64_t largest_cc = 0;
-    uint64_t num_ccs = 0;
-    while(!mpi::detail::global_iterator_range_empty(cc_count_itr, cc_count.end(), MPI_COMM_WORLD)) {
-      uint64_t local_next_cc = cc_count_itr->first;
-      uint64_t global_next_cc = mpi_all_reduce(local_next_cc, std::less<uint64_t>(), MPI_COMM_WORLD);
-      uint64_t local_count = (local_next_cc == global_next_cc) ?  (cc_count_itr++)->second : 0;
-      uint64_t global_cc_count = mpi_all_reduce(local_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
-      //if(mpi_rank == 0 ) {
-      //  std::cout << "CC " << global_next_cc << ", size = " << global_cc_count << std::endl;
-      //}
-      largest_cc = std::max(global_cc_count, largest_cc);
-      num_ccs ++;
-    }
+    // std::map<uint64_t, uint64_t> cc_count;
+    // for(auto vitr=graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
+    //   cc_count[graph->locator_to_label(cc_data[*vitr])]++;
+    // }
+    // auto cc_count_itr = cc_count.begin();
+    // uint64_t largest_cc = 0;
+    // uint64_t num_ccs = 0;
+    // while(!mpi::detail::global_iterator_range_empty(cc_count_itr, cc_count.end(), MPI_COMM_WORLD)) {
+    //   uint64_t local_next_cc = cc_count_itr->first;
+    //   uint64_t global_next_cc = mpi_all_reduce(local_next_cc, std::less<uint64_t>(), MPI_COMM_WORLD);
+    //   uint64_t local_count = (local_next_cc == global_next_cc) ?  (cc_count_itr++)->second : 0;
+    //   uint64_t global_cc_count = mpi_all_reduce(local_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
+    //   //if(mpi_rank == 0 ) {
+    //   //  std::cout << "CC " << global_next_cc << ", size = " << global_cc_count << std::endl;
+    //   //}
+    //   largest_cc = std::max(global_cc_count, largest_cc);
+    //   num_ccs ++;
+    // }
     if(mpi_rank == 0){
-      std::cout << "Num CCs = " << num_ccs << ", largest CC = " << largest_cc << ", Traversal Time = " << time_end - time_start << std::endl;
+      //std::cout << "Num CCs = " << num_ccs << ", largest CC = " << largest_cc << ", Traversal Time = " << time_end - time_start << std::endl;
+      std::cout << "Traversal Time = " << time_end - time_start << std::endl;
     }
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
