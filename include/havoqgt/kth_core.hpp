@@ -209,8 +209,8 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     if(havoqgt_env()->world_comm().rank() == 0) {
       std::cout << "Core " << visitor_type::kth_core << ", size = " << count_alive << ", time = " << time_end-time_start << std::endl;
     }
-    ++visitor_type::kth_core;
-  } while(count_alive);
+  } while(count_alive && ++(visitor_type::kth_core) < 50);
+  
   //
   // for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
   //   if(k_core_data[*vitr].get_alive()) ++to_return;
