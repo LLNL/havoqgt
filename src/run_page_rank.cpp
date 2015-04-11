@@ -78,7 +78,6 @@ void usage()  {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
          << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
-         << " -s <int>      - Source vertex of BFS (Default is 0)\n"
          << " -h            - print help and exit\n\n";
   }
 }

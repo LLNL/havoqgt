@@ -78,7 +78,6 @@ void usage()  {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
          << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
-         << " -s <int>      - Source vertex of BFS (Default is 0)\n"
          << " -h            - print help and exit\n\n";
   }
 }
@@ -166,19 +165,27 @@ int main(int argc, char** argv) {
  
   graph_type::vertex_data<mpi::kth_core_data, std::allocator<mpi::kth_core_data> >  vert_kcore_data(*graph);
 
-  uint64_t count_alive = 0;
-  uint64_t core = 0;
-  do {
+  // uint64_t count_alive = 0;
+  // uint64_t core = 0;
+  // do {
+  //   MPI_Barrier(MPI_COMM_WORLD);
+  //   double time_start = MPI_Wtime();
+  //   count_alive = mpi::kth_core(*graph, vert_kcore_data, core++);
+  //   MPI_Barrier(MPI_COMM_WORLD);
+  //   double time_end = MPI_Wtime();
+  //
+  //   if(mpi_rank == 0){
+  //     std::cout << "Core " << core-1 << " size = " << count_alive << ", time = " << time_end - time_start << std::endl;
+  //   }
+  // } while(count_alive);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_start = MPI_Wtime();
-    count_alive = mpi::kth_core(*graph, vert_kcore_data, core++);
+    mpi::kth_core(*graph, vert_kcore_data);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
-      
     if(mpi_rank == 0){
-      std::cout << "Core " << core-1 << " size = " << count_alive << ", time = " << time_end - time_start << std::endl;
+      std::cout << "Total Time = " << time_end - time_start << std::endl;
     }
-  } while(count_alive);
   
   }  // END Main MPI
   havoqgt::havoqgt_finalize();

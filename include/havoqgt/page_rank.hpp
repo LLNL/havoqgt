@@ -121,10 +121,16 @@ public:
   
   bool pre_visit() const {
     if(rank == std::numeric_limits<double>::min()) {
+      HAVOQGT_ERROR_MSG("This is a damn logic error!");
       return true;
     }
     (*pnext_rank)[vertex] += rank;  //change to next_rank
     return false;
+  }
+  
+  template<typename VisitorQueueHandle>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    return visit(g, vis_queue);
   }
 
   template<typename VisitorQueueHandle>
@@ -178,7 +184,7 @@ void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
   }
    
   visitor_queue_type vq(&g);
-  vq.init_visitor_traversal();
+  vq.init_visitor_traversal_new();
   next_rank.all_reduce();
 }
 

@@ -138,6 +138,15 @@ public:
     }
     return false;
   }
+  
+  template<typename VisitorQueueHandle>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    if((*k_core_data)[vertex].get_alive() && (*k_core_data)[vertex].get_core_bound() < kth_core) {
+      (*k_core_data)[vertex].set_alive(false);
+      return visit(g, vis_queue);
+    }
+    return false;
+  }
 
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
@@ -162,35 +171,54 @@ KCoreData* kth_core_visitor<Graph,KCoreData>::k_core_data;
 
 
 template <typename TGraph, typename KCoreData>
-uint64_t kth_core(TGraph& graph, KCoreData& k_core_data, uint32_t kthcore) {
+void kth_core(TGraph& graph, KCoreData& k_core_data) {
   
   uint64_t to_return(0);
   typedef kth_core_visitor<TGraph, KCoreData>           visitor_type;
-  visitor_type::kth_core = kthcore;
+  visitor_type::kth_core = 0;
   visitor_type::k_core_data = &k_core_data;
 
   //reset graph data
   for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
     k_core_data[*vitr].set_alive(true);
-    k_core_data[*vitr].set_core_bound(graph.degree(*vitr) + 1);
+    k_core_data[*vitr].set_core_bound(graph.degree(*vitr));
   }
   for(auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
     k_core_data[*citr].set_alive(true);
-    k_core_data[*citr].set_core_bound(graph.degree(*citr) + 1);
+    k_core_data[*citr].set_core_bound(graph.degree(*citr));
   } 
 
   typedef visitor_queue< visitor_type, kcore_queue, TGraph >    visitor_queue_type;
 
   visitor_queue_type vq(&graph);
-  vq.init_visitor_traversal();
-  
-  for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
-    if(k_core_data[*vitr].get_alive()) ++to_return;
-  }
-  for(auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
-    if(k_core_data[*citr].get_alive()) ++to_return;
-  }
-  return mpi_all_reduce(to_return,std::plus<uint64_t>(), MPI_COMM_WORLD);
+  uint64_t count_alive = 0;
+  do {
+    MPI_Barrier(MPI_COMM_WORLD);
+    double time_start = MPI_Wtime();
+      vq.init_visitor_traversal_new();
+    MPI_Barrier(MPI_COMM_WORLD);
+    double time_end = MPI_Wtime();
+    uint64_t local_alive(0);
+    for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+      if(k_core_data[*vitr].get_alive()) ++local_alive;
+    }
+    for(auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+      if(k_core_data[*citr].get_alive()) ++local_alive;
+    }
+    count_alive = mpi_all_reduce(local_alive,std::plus<uint64_t>(), MPI_COMM_WORLD);
+    if(havoqgt_env()->world_comm().rank() == 0) {
+      std::cout << "Core " << visitor_type::kth_core << ", size = " << count_alive << ", time = " << time_end-time_start << std::endl;
+    }
+    ++visitor_type::kth_core;
+  } while(count_alive);
+  //
+  // for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
+  //   if(k_core_data[*vitr].get_alive()) ++to_return;
+  // }
+  // for(auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
+  //   if(k_core_data[*citr].get_alive()) ++to_return;
+  // }
+  // return mpi_all_reduce(to_return,std::plus<uint64_t>(), MPI_COMM_WORLD);
 }
 
 } } // end havoqgt::mpi
