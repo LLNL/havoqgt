@@ -54,51 +54,9 @@
 #define HAVOQGT_MPI_KTH_CORE_HPP_INCLUDED
 
 #include <havoqgt/visitor_queue.hpp>
-#include <vector>
+#include <havoqgt/detail/visitor_priority_queue.hpp>
 
 namespace havoqgt { namespace mpi {
-
-
-template <typename Visitor>
-class kcore_queue
-{
-
-protected:
-  std::vector<Visitor> m_data;
-public:
-  kcore_queue() { }
-
-  bool push(Visitor const & task)
-  {
-    m_data.push_back(task);
-    return true;
-  }
-
-  void pop()
-  {
-    m_data.pop_back();
-  }
-
-  Visitor const & top() //const
-  {
-    return m_data.back();
-  }
-
-  size_t size() const
-  {
-    return m_data.size();;
-  }
-
-  bool empty() const
-  {
-    return m_data.empty();
-  }
-
-  void clear()
-  {
-    m_data.clear();
-  }
-};
 
 
 /// This is the kth-core data stored per vertex in the Graph
@@ -157,6 +115,11 @@ public:
     }
     return true;
   }
+  
+  friend inline bool operator>(const kth_core_visitor& v1, const kth_core_visitor& v2) {
+    if(v1.vertex == v2.vertex) return false;
+    return !(v1.vertex < v2.vertex);
+  }
 
   vertex_locator vertex;
   static uint32_t kth_core;
@@ -188,7 +151,7 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     k_core_data[*citr].set_core_bound(graph.degree(*citr));
   } 
 
-  typedef visitor_queue< visitor_type, kcore_queue, TGraph >    visitor_queue_type;
+  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
 
   visitor_queue_type vq(&graph);
   uint64_t count_alive = 0;

@@ -54,7 +54,7 @@
 
 
 #include <havoqgt/visitor_queue.hpp>
-#include <havoqgt/breadth_first_search.hpp>
+#include <havoqgt/detail/visitor_priority_queue.hpp>
 
 namespace havoqgt { namespace mpi {
 
@@ -109,6 +109,7 @@ public:
     {
       return false;
     }
+    if(v1.vertex == v2.vertex) return false;
     return !(v1.vertex < v2.vertex);
   }
 
@@ -137,7 +138,7 @@ void connected_components(TGraph* g, CCData& cc_data) {
     cc_data[*citr] = *citr;
   } 
   
-  typedef visitor_queue< visitor_type, bfs_priority_queue, TGraph >    visitor_queue_type;
+  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
   visitor_queue_type vq(g);
   vq.init_visitor_traversal_new();
 }
