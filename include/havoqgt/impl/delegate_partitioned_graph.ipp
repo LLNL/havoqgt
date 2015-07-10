@@ -440,7 +440,7 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
   assert(maps_to_send.size() == m_mpi_size);
   for (size_t i = 0; i < maps_to_send.size(); i++) {
     for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
-      assert(to_send_pos < to_send.size());
+      //assert(to_send_pos < to_send.size());
       std::pair<int, std::pair<uint64_t, uint64_t>> triple = (*itr);
       //to_send[to_send_pos++] = uint64_t(triple.first);
       //to_send[to_send_pos++] = triple.second.first;
@@ -474,7 +474,7 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
     //   high_vertex_count++;
     // }
     if (m_local_outgoing_count[local_id] < delegate_degree_threshold
-      && m_local_outgoing_count[local_id] + dest_count >=
+	&& m_local_outgoing_count[local_id] + source_count >= // changed from dest_count to source_count
       delegate_degree_threshold) {
 
       high_vertex_count++;
@@ -979,7 +979,7 @@ send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
   assert(maps_to_send.size() == m_mpi_size);
   for (size_t i = 0; i < maps_to_send.size(); i++) {
     for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
-      assert(to_send_pos < to_send.size());
+      //assert(to_send_pos < to_send.size());
       //to_send[to_send_pos++] = itr->first;
       //to_send[to_send_pos++] = itr->second;
       to_send.push_back(itr->first);
