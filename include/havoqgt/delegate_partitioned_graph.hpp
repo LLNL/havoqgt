@@ -202,6 +202,13 @@ class delegate_partitioned_graph {
     return m_max_vertex;
   }
 
+  size_t num_owned_targets() const {
+    return m_owned_targets_size;
+  }
+
+  size_t num_delegate_targets() const {
+    return m_delegate_targets_size;
+  }
 
   size_t num_delegates() const {
     return m_delegate_degree.size();

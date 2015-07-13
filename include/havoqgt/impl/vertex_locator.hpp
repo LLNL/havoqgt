@@ -54,6 +54,7 @@
 #define HAVOQGT_MPI_IMPL_VERTEX_LOCATOR_HPP_
 
 #include <havoqgt/delegate_partitioned_graph.hpp>
+#include <boost/functional/hash_fwd.hpp>
 
 namespace havoqgt {
 namespace mpi {
@@ -88,6 +89,16 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
   bool is_intercept() const { return m_is_intercept == 1;}
   void set_intercept(bool intercept) { m_is_intercept = intercept; }
 
+  friend std::size_t hash_value(vertex_locator const& _vertex) {
+    std::size_t seed = 0;
+    boost::hash_combine(seed, _vertex.is_delegate());
+    boost::hash_combine(seed, _vertex.owner());
+    boost::hash_combine(seed, _vertex.local_id());
+    boost::hash_combine(seed, _vertex.get_bcast());
+    boost::hash_combine(seed, _vertex.is_intercept());
+    return seed;
+  }
+  
   friend bool operator==(const vertex_locator& x,
                          const vertex_locator& y) {return x.is_equal(y); }
   friend bool operator<(const vertex_locator& x,

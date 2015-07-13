@@ -10,6 +10,7 @@ function(add_exe source)
   endif( MPI_FOUND AND Boost_FOUND )
 endfunction()
 
+add_exe( ingest_flow_edge_process )
 add_exe( generate_rmat )
 add_exe( ingest_edge_list )
 add_exe( run_bfs )

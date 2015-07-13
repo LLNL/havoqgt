@@ -56,6 +56,7 @@
 #include <havoqgt/mailbox.hpp>
 #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/reservable_priority_queue.hpp>
+#include <havoqgt/ingest_flow_edge_list.hpp>
 #include <vector>
 #include <iterator>
 #include <sched.h>
@@ -76,6 +77,8 @@ class visitor_queue {
   //    std::vector<visitor_type>, std::greater<visitor_type> > local_queue_type;
   typedef  Queue<visitor_type> local_queue_type;
 
+  typedef ingest_flow_edge_list::flow_input_iterator flow_iterator;
+  
 #ifdef __bgp__
   typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
@@ -244,6 +247,31 @@ public:
       } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
               || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
+  }
+
+  void init_visitor_traversal_flow(const flow_iterator &flow_itr_begin, const flow_iterator &flow_itr_end) {
+    flow_iterator flow_itr = flow_itr_begin;
+
+    do {
+      if( flow_itr != flow_itr_end ) {
+	const flow _flow = *flow_itr;
+	auto src_locator = m_ptr_graph->label_to_locator( _flow.get_src_label() );
+	auto dest_locator = m_ptr_graph->label_to_locator( _flow.get_dest_label() );
+	visitor_type v(src_locator, dest_locator, _flow);
+	queue_visitor(v);
+	++flow_itr;
+      }
+
+      process_pending_controllers();
+      while( !empty() ) {
+	process_pending_controllers();
+	visitor_type this_visitor = pop_top();
+	do_visit(this_visitor);
+	m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+    }while(flow_itr != flow_itr_end || !m_termination_detection.test_for_termination());
+    
   }
 
   void queue_visitor(const visitor_type& v) {
