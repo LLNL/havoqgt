@@ -1,54 +1,7 @@
 /*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
+ * Written by Keita Iwabuchi.
+ * LLNL / TokyoTech
  */
-
 #ifndef GRAPHSTORE_UTILITIES_HPP
 #define GRAPHSTORE_UTILITIES_HPP
 
@@ -67,35 +20,42 @@
 
 #define ENABLE_HAVOQGT_ERR_PROCEDURE 1
 #if ENABLE_HAVOQGT_ERR_PROCEDURE
-#include <havoqgt/utilities.hpp>
+#include <havoqgt/error.hpp>
 #endif
+
+
+#define DISP_LOG(msg) \
+  do { \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << msg << std::endl; } \
+  while (0)
+
+#define DISP_LOG_VAR(x) \
+  do { \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
+  while (0)
+
 
 namespace graphstore {
 namespace utility {
 
-
-class aligned_alloc
+int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
 {
- public:
-    static int alloc(void** actual_buffer, size_t align_size, size_t length)
-    {
-        int result = ::posix_memalign(actual_buffer, align_size, length);
-        if (result != 0) {
+    int result = ::posix_memalign(actual_buffer, align_size, length);
+    if (result != 0) {
 #if ENABLE_HAVOQGT_ERR_PROCEDURE
-            HAVOQGT_ERROR_MSG("Failed posix_memalign");
+        HAVOQGT_ERROR_MSG("Failed posix_memalign");
 #else
-            std::cerr << "Failed posix_memalign";
-            ::exit(1);
+        std::cerr << "Failed posix_memalign";
+        ::exit(1);
 #endif
-        }
-        return result;
     }
+    return result;
+}
 
-    static void free(void* ptr)
-    {
-        ::free(ptr);
-    }
-};
+void aligned_free(void* ptr)
+{
+    ::free(ptr);
+}
 
 
 template <size_t AlignSize>
@@ -174,14 +134,14 @@ class direct_file_reader
 
     void alloc_buffer(const size_t size)
     {
-        aligned_alloc::alloc(&m_buffer, AlignSize, size);
+        aligned_alloc(&m_buffer, AlignSize, size);
         m_buf_size = size;
     }
 
     void free_buffer()
     {
         if (m_buffer != nullptr)
-            aligned_alloc::free(m_buffer);
+            aligned_free(m_buffer);
         m_buffer = nullptr;
         m_buf_size = 0;
         m_current_buf_pos = 0;
@@ -345,6 +305,7 @@ bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* co
 #endif
   return is_succeed;
 }
+
 
 } /// namespace utility
 } /// namespace graphstore

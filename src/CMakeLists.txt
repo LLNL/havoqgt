@@ -10,4 +10,4 @@ function(add_exe source)
   endif( MPI_FOUND AND Boost_FOUND )
 endfunction()
 
-add_exe( generate_graph_dynamic )
+add_exe( dynamicdegreeawaregraphstore_bench )

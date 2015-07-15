@@ -54,7 +54,7 @@
 
 #define DIRECT_IO_IN_EDGELIST_READER 1
 #if DIRECT_IO_IN_EDGELIST_READER
-#include <havoqgt/graphstore_utilities.hpp>
+#include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <memory>
 #include <limits>
 #endif
@@ -151,8 +151,8 @@
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected )
-    : m_undirected(undirected) {
+  parallel_edge_list_reader(const std::vector< std::string >& filenames)
+  {
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
@@ -286,7 +286,6 @@ protected:
 #endif
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
-  bool m_undirected;
 
 };
 
