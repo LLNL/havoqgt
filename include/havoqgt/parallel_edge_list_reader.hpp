@@ -66,6 +66,7 @@
 #include <sstream>
 #include <utility>
 #include <stdint.h>
+#include <iostream>
 
 #include <havoqgt/environment.hpp>
 
@@ -145,19 +146,24 @@
     parallel_edge_list_reader* m_ptr_reader;
     uint64_t m_count;
     edge_type m_current;
+    bool m_make_undirected;
   };
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames ) {
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
+  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected )
+    : m_undirected(undirected) {
+    int shm_rank  = havoqgt_env()->node_local_comm().rank();
+    int shm_size  = havoqgt_env()->node_local_comm().size();
+    int node_rank = havoqgt_env()->node_offset_comm().rank();
+    int node_size = havoqgt_env()->node_offset_comm().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
 
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
-      if(i % mpi_size == mpi_rank) {
+      //if(i % mpi_size == mpi_rank) {
+      if(i % node_size == node_rank && (i / node_size) % shm_size == shm_rank) {
         m_local_filenames.push_back(filenames[i]);
       }
     }
@@ -175,7 +181,7 @@
     std::cout << "ifstream mode\n"
     /// First pass to calc max vertex and count edges.
     open_files();
-    std::cout << "files open" << std::endl;
+    //std::cout << "files open" << std::endl;
     edge_type edge;
     // uint64_t local_max_vertex = 0;
     while(try_read_edge(edge)) {
@@ -280,6 +286,7 @@ protected:
 #endif
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
+  bool m_undirected;
 
 };
 

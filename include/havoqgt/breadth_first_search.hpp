@@ -54,52 +54,9 @@
 
 
 #include <havoqgt/visitor_queue.hpp>
-#include <boost/container/deque.hpp>
+#include <havoqgt/detail/visitor_priority_queue.hpp>
 
 namespace havoqgt { namespace mpi {
-
-
-template <typename Visitor>
-class bfs_priority_queue
-{
-
-protected:
-  std::priority_queue< Visitor, std::deque<Visitor>, 
-                               std::greater<Visitor> > m_data;
-public:
-  bfs_priority_queue() { }
-
-  bool push(Visitor const & task)
-  {
-    m_data.push(task);
-    return true;
-  }
-
-  void pop()
-  {
-    m_data.pop();
-  }
-
-  Visitor const & top() //const
-  {
-    return m_data.top();
-  }
-
-  size_t size() const
-  {
-    return m_data.size();;
-  }
-
-  bool empty() const
-  {
-    return m_data.empty();
-  }
-
-  void clear()
-  {
-    m_data.clear();
-  }
-};
 
 template <typename Visitor>
 class bfs_queue
@@ -243,7 +200,7 @@ public:
   vertex_locator   vertex;
   //uint64_t         m_parent : 40;
   vertex_locator  m_parent;
-  uint64_t         m_level : 8;
+  uint64_t         m_level : 16;
 } __attribute__ ((packed));
 
 
@@ -256,7 +213,7 @@ void breadth_first_search(TGraph* g,
   typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
   visitor_type::set_level_data(&level_data);
   visitor_type::set_parent_data(&parent_data);
-  typedef visitor_queue< visitor_type, bfs_priority_queue, TGraph >    visitor_queue_type;
+  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
 
   visitor_queue_type vq(g);
   vq.init_visitor_traversal(s);

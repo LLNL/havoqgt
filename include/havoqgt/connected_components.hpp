@@ -49,89 +49,105 @@
  *
  */
 
-#include <havoqgt/environment.hpp>
-#include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/triangle_count.hpp>
-#include <havoqgt/delegate_partitioned_graph.hpp>
+#ifndef HAVOQGT_CONNECTED_COMPONENTS_HPP_INCLUDED
+#define HAVOQGT_CONNECTED_COMPONENTS_HPP_INCLUDED
 
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
 
-#include <havoqgt/distributed_db.hpp>
-#include <assert.h>
+#include <havoqgt/visitor_queue.hpp>
+#include <havoqgt/detail/visitor_priority_queue.hpp>
 
-#include <deque>
-#include <string>
-#include <utility>
-#include <algorithm>
-#include <functional>
+namespace havoqgt { namespace mpi {
 
-#include <boost/interprocess/managed_heap_memory.hpp>
+template<typename Graph, typename CCData>
+class cc_visitor {
+public:
+  typedef typename Graph::vertex_locator                 vertex_locator;
+  cc_visitor() { }
+  cc_visitor(vertex_locator _vertex, vertex_locator _cc)
+    : vertex(_vertex)
+    , m_cc(_cc) { }
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
+  cc_visitor(vertex_locator _vertex)
+    : vertex(_vertex)
+    , m_cc(_vertex) { }
 
-int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
-  int mpi_rank(0), mpi_size(0);
-
-  havoqgt::havoqgt_init(&argc, &argv);
-  {
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
-  if (mpi_rank == 0) {
-    std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    std::cout << "CMD line:";
-    for (int i = 0; i < argc; ++i) {
-      std::cout << " " << argv[i];
+  bool pre_visit() const {
+    if(m_cc < (*cc_data)[vertex]) {
+      (*cc_data)[vertex] = m_cc;
+      return true;
     }
-    std::cout << std::endl;
-    havoqgt::get_environment().print();
-    //print_system_info(false);
+    return false;
   }
-  MPI_Barrier(MPI_COMM_WORLD);
-
-
-  std::string graph_input;
-
-  if (argc < 2) {
-    std::cerr << "usage: <graph input file name>"
-      << " (argc:" << argc << " )." << std::endl;
-    exit(-1);
-  } else {
-    int pos = 1;
-    graph_input = argv[pos++];
+  
+  template<typename VisitorQueueHandle>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    return visit(g,vis_queue);
   }
 
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
-
-  graph_type *graph = ddb.get_segment_manager()->
-    find<graph_type>("graph_obj").first;
-  assert(graph != nullptr);
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (mpi_rank == 0) {
-    std::cout << "Graph Loaded Ready." << std::endl;
-  }
-  //graph->print_graph_statistics();
-  MPI_Barrier(MPI_COMM_WORLD);
- 
-  for(int i=0; i<100; ++i) {
-    uint64_t count = triangle_count(*graph, graph->label_to_locator(i));
-    if(mpi_rank == 0) {
-      std::cout << "Vertex " << i << " has " << count <<  " triangles." << std::endl;
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    if((*cc_data)[vertex] == m_cc) {
+      for(auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
+        auto neighbor = eitr.target();
+        if(m_cc < neighbor) {
+          cc_visitor new_visitor(neighbor, m_cc);
+          vis_queue->queue_visitor(new_visitor);
+        }
+      }
+      return true;
     }
+    return false;
   }
 
-  }  // END Main MPI
-  havoqgt::havoqgt_finalize();
 
-  return 0;
+  friend inline bool operator>(const cc_visitor& v1, const cc_visitor& v2) {
+    if(v2.m_cc < v1.m_cc)
+    {
+      return true;
+    } else if(v1.m_cc < v2.m_cc)
+    {
+      return false;
+    }
+    if(v1.vertex == v2.vertex) return false;
+    return !(v1.vertex < v2.vertex);
+  }
+
+  
+  static CCData*  cc_data;
+  
+  vertex_locator   vertex;
+  vertex_locator  m_cc;
+};
+
+template<typename Graph, typename CCData>
+CCData* cc_visitor<Graph,CCData>::cc_data = nullptr;
+
+
+
+template <typename TGraph, typename CCData>
+void connected_components(TGraph* g, CCData& cc_data) {
+
+  typedef  cc_visitor<TGraph, CCData>    visitor_type;
+  visitor_type::cc_data = &cc_data;
+  
+  for(auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
+    cc_data[*vitr] = *vitr;
+  }
+  for(auto citr = g->controller_begin(); citr != g->controller_end(); ++citr) {
+    cc_data[*citr] = *citr;
+  } 
+  
+  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
+  visitor_queue_type vq(g);
+  vq.init_visitor_traversal_new();
 }
+
+
+
+}} //end namespace havoqgt::mpi
+
+
+
+
+#endif //HAVOQGT_CONNECTED_COMPONENTS_HPP_INCLUDED

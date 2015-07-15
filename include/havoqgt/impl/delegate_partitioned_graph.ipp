@@ -72,6 +72,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            MPI_Comm mpi_comm,
                            Container& edges, uint64_t max_vertex,
                            uint64_t delegate_degree_threshold,
+                           uint64_t _node_partitions,
+                           uint64_t _chunk_size,  
                            ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
@@ -94,8 +96,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
   
   processes_per_node = havoqgt_env()->node_local_comm().size();
-  node_partitions = std::min(4,processes_per_node); ///< @todo make env var
-  edge_chunk_size = 1024*8; ///< @todo marke env var
+  node_partitions = std::min(_node_partitions,uint64_t(processes_per_node));
+  edge_chunk_size = _chunk_size;
 
   m_global_max_vertex = max_vertex;
   m_max_vertex = (std::ceil(double(max_vertex) / double(m_mpi_size)));
@@ -328,7 +330,10 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
           high_vertex_count++;
         }
       } else {
-        maps_to_send.at(owner)[local_id].first++;
+        int c = maps_to_send.at(owner)[local_id].first++;
+        if (c == 0 && maps_to_send.at(owner)[local_id].second ==0) {
+          maps_to_send_element_count++;
+        }
       }
 
       // Update the vertex's incoming edge count (second member of the pair)
@@ -341,7 +346,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
         // }
       } else {
         int c = maps_to_send.at(owner)[local_id].second++;
-        if (c == 0) {
+        if (c == 0 && maps_to_send.at(owner)[local_id].first ==0) {
           maps_to_send_element_count++;
         }
       }
@@ -429,17 +434,21 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
 
 
   int to_send_pos = 0;
-  std::vector<uint64_t> to_send(maps_to_send_element_count*3, 0);
+  std::vector<uint64_t> to_send;//(maps_to_send_element_count*3, 0);
   std::vector<int> to_send_count(m_mpi_size, 0);
 
   assert(maps_to_send.size() == m_mpi_size);
   for (size_t i = 0; i < maps_to_send.size(); i++) {
     for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
-      assert(to_send_pos < to_send.size());
+      //assert(to_send_pos < to_send.size());
       std::pair<int, std::pair<uint64_t, uint64_t>> triple = (*itr);
-      to_send[to_send_pos++] = uint64_t(triple.first);
-      to_send[to_send_pos++] = triple.second.first;
-      to_send[to_send_pos++] = triple.second.second;
+      //to_send[to_send_pos++] = uint64_t(triple.first);
+      //to_send[to_send_pos++] = triple.second.first;
+      //to_send[to_send_pos++] = triple.second.second;
+      
+      to_send.push_back(uint64_t(triple.first));
+      to_send.push_back(triple.second.first);
+      to_send.push_back(triple.second.second);
     }
     to_send_count[i] = maps_to_send[i].size()*3;
   }
@@ -465,7 +474,7 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
     //   high_vertex_count++;
     // }
     if (m_local_outgoing_count[local_id] < delegate_degree_threshold
-      && m_local_outgoing_count[local_id] + dest_count >=
+	&& m_local_outgoing_count[local_id] + source_count >= // changed from dest_count to source_count
       delegate_degree_threshold) {
 
       high_vertex_count++;
@@ -737,7 +746,7 @@ partition_low_degree(Container& unsorted_edges) {
 
         for (size_t i = 0;
           unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-          ++unsorted_itr) {
+          ++unsorted_itr, ++i) {
           // Get next edge
           const auto edge = *unsorted_itr;
 
@@ -751,7 +760,7 @@ partition_low_degree(Container& unsorted_edges) {
 
           if (m_map_delegate_locator.count(unsorted_itr->first) == 0) {
             to_send_edges_low.push_back(*unsorted_itr);
-            ++i;
+            //++i;
           } else {
             continue;
           }
@@ -875,7 +884,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
     int maps_to_send_element_count = 0;
     {
       for (size_t i=0; unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
-           ++unsorted_itr) {
+           ++unsorted_itr, ++i) {
 
         // Get next edge
         const auto edge = *unsorted_itr;
@@ -904,7 +913,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
             int c = maps_to_send.at(owner)[unsorted_itr->first]++;
             if (c == 0) {
               maps_to_send_element_count++;
-              i++;
+              //i++;
             }
           }
         } else {
@@ -964,15 +973,17 @@ send_high_info(std::vector< boost::container::map< uint64_t, uint64_t> >&
   maps_to_send, int maps_to_send_element_count) {
 
   int to_send_pos = 0;
-  std::vector<uint64_t> to_send(maps_to_send_element_count*2, 0);
+  std::vector<uint64_t> to_send;//(maps_to_send_element_count*2, 0);
   std::vector<int> to_send_count(m_mpi_size, 0);
 
   assert(maps_to_send.size() == m_mpi_size);
   for (size_t i = 0; i < maps_to_send.size(); i++) {
     for (auto itr = maps_to_send[i].begin(); itr != maps_to_send[i].end(); itr++) {
-      assert(to_send_pos < to_send.size());
-      to_send[to_send_pos++] = itr->first;
-      to_send[to_send_pos++] = itr->second;
+      //assert(to_send_pos < to_send.size());
+      //to_send[to_send_pos++] = itr->first;
+      //to_send[to_send_pos++] = itr->second;
+      to_send.push_back(itr->first);
+      to_send.push_back(itr->second);
     }
     to_send_count[i] = maps_to_send[i].size()*2;
   }
@@ -1310,9 +1321,9 @@ partition_high_degree(Container& unsorted_edges,
       }
       loop_counter++;
 
-
+      size_t i=0;
       while (unsorted_itr != unsorted_itr_end &&
-             to_send_edges_high.size() < edge_chunk_size) {
+             /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
         const auto edge = *unsorted_itr;
         ++unsorted_itr;
@@ -1642,7 +1653,11 @@ inline
 typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
 delegate_partitioned_graph<SegmentManager>::
 vertices_end() const {
-  return vertex_iterator(m_owned_info.size()-1,this);
+  size_t last_index = m_owned_info.empty() ? 0 : m_owned_info.size()-1;
+  while(last_index > 1 && (m_owned_info[last_index-1].low_csr_idx == m_owned_info[last_index].low_csr_idx)) {
+    --last_index;
+  }
+  return vertex_iterator(last_index,this);
 }
 
 template <typename SegmentManager>
