@@ -175,7 +175,7 @@ public:
     if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
       visitor_type v = this_visitor;
       m_mailbox.bcast(v, visitor_queue_inserter(this));
-      m_termination_detection.inc_queued(m_mailbox.comm_size());
+      m_termination_detection.inc_queued( m_mailbox.comm_size() );
     }
   }
   
@@ -253,25 +253,32 @@ public:
     flow_iterator flow_itr = flow_itr_begin;
 
     do {
-      if( flow_itr != flow_itr_end ) {
-	const flow _flow = *flow_itr;
-	auto src_locator = m_ptr_graph->label_to_locator( _flow.get_src_label() );
-	auto dest_locator = m_ptr_graph->label_to_locator( _flow.get_dest_label() );
-	visitor_type v(src_locator, dest_locator, _flow);
-	queue_visitor(v);
-	++flow_itr;
-      }
+      do{
+	do{
+	  
+	  if( flow_itr != flow_itr_end ) {
+	    const flow _flow = *flow_itr;
+	    auto src_locator = m_ptr_graph->label_to_locator( _flow.get_src_label() );
+	    auto dest_locator = m_ptr_graph->label_to_locator( _flow.get_dest_label() );
+	    visitor_type v(src_locator, dest_locator, _flow);
+	    queue_visitor(v);
+	    ++flow_itr;
+	  }
 
-      process_pending_controllers();
-      while( !empty() ) {
-	process_pending_controllers();
-	visitor_type this_visitor = pop_top();
-	do_visit(this_visitor);
-	m_termination_detection.inc_completed();
-      }
-      m_mailbox.flush_buffers_if_idle();
-    }while(flow_itr != flow_itr_end || !m_termination_detection.test_for_termination());
-    
+	  //process_pending_controllers();
+	  while( !empty() ) {
+	    //process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();
+	  }
+	} while( flow_itr != flow_itr_end);
+
+	m_mailbox.flush_buffers_if_idle();
+
+      } while( !empty() || !m_mailbox.is_idle() );
+      
+    } while(!m_termination_detection.test_for_termination());
   }
 
   void queue_visitor(const visitor_type& v) {

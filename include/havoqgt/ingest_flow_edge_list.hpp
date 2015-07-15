@@ -76,7 +76,7 @@ protected:
   }
 
 public:
-  flow() { }
+  flow() : protocol(0x8000) { }
 
   void initialize(std::string line) { 
     std::vector<std::string> tokens(13);
@@ -95,8 +95,16 @@ public:
     start = nano_time(tokens[8]);
     end = nano_time(tokens[9]);
     total_bytes = to_integer(tokens[10]);
-    protocol = static_cast<u_short>(to_integer(tokens[11]));
+    protocol = static_cast<u_short>(to_integer(tokens[11])) | (0x8000);
     packet_counts = to_integer(tokens[12]);
+  }
+
+  bool is_recorded() {
+    return ( (protocol & 0x8000) == 0 ) ? true : false;
+  }
+
+  void register_recorded() {
+    protocol = protocol ^ 0x8000;
   }
 
   uint32_t get_src_label() const { return src_label; }
@@ -184,7 +192,7 @@ public:
       while( try_read_flow(_flow, false) ) {
 	++m_local_edge_count;
       }	
-      //std::cout << "Total Local Edge Count " << m_local_edge_count << std::endl;
+      std::cout << "Total Local Edge Count " << m_local_edge_count << std::endl;
     }
   }
   
@@ -210,7 +218,9 @@ protected:
     for( auto itr=m_local_filenames.begin(); itr != m_local_filenames.end(); ++itr){
       std::ifstream* ptr = new std::ifstream(*itr);
       if(ptr->good()) {
+	std::cout << "Opening File for metadata  : " << (*itr) << std::endl;
 	m_ptr_ifstreams.push_back(ptr);
+	m_filenames.push_back(*itr);
       } else {
 	std::cerr << "Error opening filename: " << *itr;
       }
@@ -227,14 +237,17 @@ protected:
 	curr_flow.initialize(line);
       return true;
     }
+    std::cout << "Closing reading file " << m_filenames.front() << std::endl;
     ptr->close();
     m_ptr_ifstreams.pop_front();
+    m_filenames.pop_front();
     delete(ptr);
     return !m_ptr_ifstreams.empty();
   }
   
 
   std::deque<std::ifstream*> m_ptr_ifstreams;
+  std::deque<std::string> m_filenames;
   std::vector<std::string> m_local_filenames;
   uint64_t m_local_edge_count;
 };

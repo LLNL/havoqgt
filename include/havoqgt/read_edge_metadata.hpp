@@ -23,7 +23,8 @@ public:
   bool pre_visit() const {
     return true;
   }
-
+  
+#if 0
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
     eitr_type *eitr_ptr = edge_iterator(vertex, target);
@@ -31,23 +32,53 @@ public:
     for(eitr_type* eitr = edge_iterator(vertex, target); *eitr != g.edges_end(vertex); ++(*eitr)) {
       vertex_locator _target = eitr->target();
       if(_target == target) {
+	if(vertex.get_bcast() != 0){
+	  //std::cout << "Matched here for broadcasted vertex " << std::endl;
+	}
 	(*edge_data())[(*eitr)] = meta_data;
 	++(*eitr);
 	count++;
-	return true;
+	return false; //terminate the visit here
       }else {
 	eitr_type *__eitr_ptr = edge_iterator(vertex, _target);
 	if(__eitr_ptr == NULL) (*edge_map())[std::make_pair(vertex, _target)] = new eitr_type(*eitr);
       }
     }
-    return false;
+
+    if(vertex.get_bcast() != 0 ) {
+      //std::cout << "No target found here even after broadcast" << std::endl;
+      return false;
+    } else {
+      //std::cout << "BroadCasting here" << std::endl;
+      return true;
+    }
+    //return (vertex.get_bcast() == 0 ) ? true : false ; // dont re broadcast
   }
-  
+#else
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
+      vertex_locator _target = eitr.target();
+      if( _target == target && !((*edge_data())[eitr].is_recorded()) ) {
+	(*edge_data())[eitr] = meta_data;
+	(*edge_data())[eitr].register_recorded();
+	++eitr;
+	count++;
+	return false;
+      }
+    }
+    if( vertex.get_bcast() != 0 ) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+#endif
+ 
   friend inline bool operator>(const edge_metadata_visitor& v1, const edge_metadata_visitor& v2) {
     return true;
   }
 			   
-
   static void set_edge_data(EdgeData* _data) { edge_data() = _data; }
 
   static EdgeData*& edge_data() {
