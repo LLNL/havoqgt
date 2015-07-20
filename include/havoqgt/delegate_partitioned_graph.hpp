@@ -64,6 +64,8 @@
 #include <boost/interprocess/containers/map.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/range/algorithm/sort.hpp>
+#include <boost/fusion/support/pair.hpp>
 
 #include <havoqgt/mpi.hpp>
 #include <havoqgt/utilities.hpp>
@@ -287,12 +289,15 @@ class delegate_partitioned_graph {
   template <typename Container>
   void partition_low_degree(Container& unsorted_edges);
 
+  void sort_owned_vertices();
+
+  void sort_delegate_vertices();
+  
   template <typename InputIterator>
   void count_high_degree_edges(InputIterator unsorted_itr,
                  InputIterator unsorted_itr_end,
                  boost::unordered_set<uint64_t>& global_hub_set);
-
-
+  
   template <typename Container>
   void partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);

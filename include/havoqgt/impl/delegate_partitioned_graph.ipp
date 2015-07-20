@@ -256,6 +256,9 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
 ////////////////////////////////////////////////////////////////////////////////
 /// End of graph construction
 ////////////////////////////////////////////////////////////////////////////////
+
+  sort_owned_vertices();
+  sort_delegate_vertices();
 };
 
 /**
@@ -830,6 +833,31 @@ partition_low_degree(Container& unsorted_edges) {
 
 }  // partition_low_degree
 
+template <typename SegmentManager>
+void
+delegate_partitioned_graph<SegmentManager>::
+sort_owned_vertices() {
+    for(vertex_iterator itr = vertices_begin(); itr != vertices_end(); itr++) {
+      if(itr->is_delegate()) continue;
+      
+      int i = itr->local_id();
+
+      if(m_owned_info[i].low_csr_idx == m_owned_info[i + 1].low_csr_idx) continue;
+
+      vertex_locator* start_ptr = &(m_owned_targets[ m_owned_info[i].low_csr_idx] );
+      vertex_locator* end_ptr = &(m_owned_targets[ m_owned_info[i+1].low_csr_idx] );
+    
+      std::pair<vertex_locator*, vertex_locator*> range = std::make_pair(start_ptr, end_ptr);
+      boost::sort(range);
+
+#ifdef DEBUG_DPG //sanity check
+      for(size_t j = m_owned_info[i].low_csr_idx; j < m_owned_info[i+1].low_csr_idx - 1; j++ ) {
+	assert( (m_owned_targets[j + 1] < m_owned_targets[j] ) == false );
+      }
+#endif
+  }
+   
+}
 
 
 /**
@@ -1485,6 +1513,38 @@ partition_high_degree(Container& unsorted_edges,
 #endif
 
 }  // partition_high_degre
+
+
+template<typename SegmentManager>
+void
+delegate_partitioned_graph<SegmentManager>::
+sort_delegate_vertices() {
+  std::cout << "Sorting delegate vertices start " << std::endl;
+  for(size_t curr_vertex_local_id = 0;
+      curr_vertex_local_id < m_delegate_info.size() - 1;
+      ++curr_vertex_local_id ) {
+
+    if( m_delegate_info[curr_vertex_local_id] == m_delegate_info[curr_vertex_local_id + 1] )
+      continue;
+    
+    vertex_locator* start_ptr = &(m_delegate_targets[m_delegate_info[curr_vertex_local_id]]);
+    vertex_locator* end_ptr = &(m_delegate_targets[m_delegate_info[curr_vertex_local_id + 1]]);
+
+    std::pair<vertex_locator*, vertex_locator*> range = std::make_pair(start_ptr, end_ptr);
+    boost::sort(range);
+
+    #ifdef DEBUG_DPG
+    //sanity check
+    for(int j = m_delegate_info[curr_vertex_local_id];
+	j < m_delegate_info[curr_vertex_local_id + 1] - 1;
+	++j ) {
+      assert( ( m_delegate_targets[j + 1] < m_delegate_targets[j] ) == false );
+    }
+    #endif
+  }
+
+  std::cout << "Sorting delegate vertices ends" << std::endl;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////

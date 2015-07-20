@@ -3,8 +3,122 @@
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <boost/range/algorithm/lower_bound.hpp>
+#include <boost/iterator/iterator_facade.hpp>
 
 namespace havoqgt { namespace mpi {
+
+    template <typename Graph>
+    class edge_list_iterator
+      : public boost::iterator_facade< edge_list_iterator<Graph>,
+			       typename Graph::edge_iterator,
+			       boost::random_access_traversal_tag,
+			       typename Graph::edge_iterator const& >
+    {
+    public:
+      typedef std::ptrdiff_t difference;
+
+      edge_list_iterator() { }
+
+      edge_list_iterator(typename Graph::edge_iterator _iterator)
+	: edge_itr(_iterator) { }
+
+      edge_list_iterator & operator=(edge_list_iterator const& _iterator) {
+	edge_itr = _iterator.edge_itr;
+	return *this;
+       }
+
+      bool equal(const edge_list_iterator& x) const {
+	return (edge_itr == x.edge_itr);
+      }
+
+      typename Graph::edge_iterator const& dereference() const {
+	return edge_itr;
+      }
+
+      difference distance_to(const edge_list_iterator& z) const {
+	return z.edge_itr - edge_itr;
+      }
+
+      void increment() { ++edge_itr; }
+
+      void decrement() { --edge_itr; }
+
+      void advance(int n) { edge_itr += n; }
+
+      typename Graph::edge_iterator get_iterator() const {
+	return edge_itr;
+      }
+
+    private:
+      typename Graph::edge_iterator edge_itr;
+    };
+
+    template<typename Graph>
+    class edge_list_per_vertex {
+    public:
+      typedef typename Graph::vertex_locator vertex_locator;
+      typedef typename Graph::edge_iterator eitr_type;
+
+      typedef edge_list_iterator<Graph> const_iterator;
+      typedef edge_list_iterator<Graph> iterator;
+
+      edge_list_per_vertex(): g(NULL) { }
+      
+      edge_list_per_vertex(const Graph* const _g, vertex_locator _source)
+	:g(_g), source(_source) {
+      }
+
+      edge_list_iterator<Graph> begin() const {
+	return edge_list_iterator<Graph>( g->edges_begin(source) );
+      }
+
+      edge_list_iterator<Graph> end() const {
+	return edge_list_iterator<Graph>( g->edges_end(source) );
+      }
+
+      void sanity_check() const {
+	eitr_type first = g->edges_begin(source);
+	eitr_type second = ++first;
+	while(second != g->edges_end(source)) {
+	  if( second.target() < first.target() ) {
+	    std::cerr << "The list here isn't sorted" << std::endl;
+	    return;
+	  }
+	  ++first;
+	  ++second;
+	}
+      }
+            
+    private:
+      const Graph* const g;
+      vertex_locator source;
+      
+    };
+
+    template<typename Graph, typename EdgeData, typename MetaData>
+    class edge_metadata_visitor;
+
+    template<typename Graph, typename EdgeData, typename MetaData>
+    class sort_predicate {
+    public:
+      typedef typename Graph::vertex_locator vertex_locator;
+      typedef typename Graph::edge_iterator eitr_type;
+            
+      friend class edge_metadata_visitor<Graph, EdgeData, MetaData>;
+
+      typedef edge_metadata_visitor<Graph, EdgeData, MetaData> edge_metadata_visitor_t;
+
+      bool operator()(const eitr_type& e1, const vertex_locator &target) const {
+	  if(target == e1.target()){
+	    return (*(edge_metadata_visitor_t::edge_data()))[e1].is_recorded();
+	  }else
+	    return  e1.target() < target;
+      }
+
+    private:
+      const Graph* const g;
+    };
     
 template<typename Graph, typename EdgeData, typename MetaData>
 class edge_metadata_visitor {
@@ -23,8 +137,8 @@ public:
   bool pre_visit() const {
     return true;
   }
-  
-#if 0
+      
+#if 0 // MAP STORAGE
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
     eitr_type *eitr_ptr = edge_iterator(vertex, target);
@@ -32,9 +146,6 @@ public:
     for(eitr_type* eitr = edge_iterator(vertex, target); *eitr != g.edges_end(vertex); ++(*eitr)) {
       vertex_locator _target = eitr->target();
       if(_target == target) {
-	if(vertex.get_bcast() != 0){
-	  //std::cout << "Matched here for broadcasted vertex " << std::endl;
-	}
 	(*edge_data())[(*eitr)] = meta_data;
 	++(*eitr);
 	count++;
@@ -44,17 +155,9 @@ public:
 	if(__eitr_ptr == NULL) (*edge_map())[std::make_pair(vertex, _target)] = new eitr_type(*eitr);
       }
     }
-
-    if(vertex.get_bcast() != 0 ) {
-      //std::cout << "No target found here even after broadcast" << std::endl;
-      return false;
-    } else {
-      //std::cout << "BroadCasting here" << std::endl;
-      return true;
-    }
-    //return (vertex.get_bcast() == 0 ) ? true : false ; // dont re broadcast
+    return (vertex.get_bcast() == 0 ) ? true : false ; // dont re broadcast
   }
-#else
+#elseif 0 // FOR ALL VERTICES
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
     for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
@@ -71,6 +174,34 @@ public:
       return false;
     } else {
       return true;
+    }
+  }
+
+#else // BINARY SEARCH
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+    edge_list_per_vertex<Graph> el(&g, vertex);
+#if 0 // Test if the edge list of the vertex is sorted   
+    el.sanity_check();
+#endif
+    typedef sort_predicate<Graph, EdgeData, MetaData> sort_predicate;
+    edge_list_iterator<Graph> found_itr = boost::lower_bound(el, target, sort_predicate());
+
+    eitr_type found = found_itr.dereference();
+    
+    if(found_itr == el.end()) {
+      return (vertex.get_bcast() != 0) ? false : true ;
+    }else {
+#if 1 // Test result of the Binary Search
+      assert(sort_predicate()(found, target) == false);
+      assert(target == found.target());
+      assert((*edge_data())[found].is_recorded() == false );
+#endif
+      
+      count++;
+      (*edge_data())[found] = meta_data;
+      (*edge_data())[found].register_recorded();
+      return false;
     }
   }
 #endif

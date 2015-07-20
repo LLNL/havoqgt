@@ -218,7 +218,7 @@ protected:
     for( auto itr=m_local_filenames.begin(); itr != m_local_filenames.end(); ++itr){
       std::ifstream* ptr = new std::ifstream(*itr);
       if(ptr->good()) {
-	std::cout << "Opening File for metadata  : " << (*itr) << std::endl;
+	//std::cout << "Opening File for metadata  : " << (*itr) << std::endl;
 	m_ptr_ifstreams.push_back(ptr);
 	m_filenames.push_back(*itr);
       } else {
@@ -237,12 +237,13 @@ protected:
 	curr_flow.initialize(line);
       return true;
     }
-    std::cout << "Closing reading file " << m_filenames.front() << std::endl;
+    if(parse)
+      std::cout << "Closing reading file " << m_filenames.front() << std::endl;
     ptr->close();
     m_ptr_ifstreams.pop_front();
     m_filenames.pop_front();
     delete(ptr);
-    return !m_ptr_ifstreams.empty();
+    return try_read_flow(curr_flow, parse);
   }
   
 

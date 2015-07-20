@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
 	 partition_passes, chunk_size);
       
       havoqgt_env()->world_comm().barrier();
-      
+
       MASTER_MSG("Graph Topology Ready. Integrating Meta Data.");
       
       havoqgt::distributed_db metadata_ddb(havoqgt::db_create(), metadata_output_filename.c_str(), gbyte_per_rank);
@@ -177,6 +177,7 @@ int main(int argc, char** argv) {
       MASTER_DO(
 		std::cout << "Total Number of vertices : " << total_count << std::endl;
 		);
+		
     }
   }
   havoqgt::havoqgt_finalize();
