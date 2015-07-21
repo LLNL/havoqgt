@@ -1519,7 +1519,6 @@ template<typename SegmentManager>
 void
 delegate_partitioned_graph<SegmentManager>::
 sort_delegate_vertices() {
-  std::cout << "Sorting delegate vertices start " << std::endl;
   for(size_t curr_vertex_local_id = 0;
       curr_vertex_local_id < m_delegate_info.size() - 1;
       ++curr_vertex_local_id ) {
@@ -1533,17 +1532,15 @@ sort_delegate_vertices() {
     std::pair<vertex_locator*, vertex_locator*> range = std::make_pair(start_ptr, end_ptr);
     boost::sort(range);
 
-    #ifdef DEBUG_DPG
+#ifdef DEBUG_DPG
     //sanity check
     for(int j = m_delegate_info[curr_vertex_local_id];
 	j < m_delegate_info[curr_vertex_local_id + 1] - 1;
 	++j ) {
       assert( ( m_delegate_targets[j + 1] < m_delegate_targets[j] ) == false );
     }
-    #endif
+#endif
   }
-
-  std::cout << "Sorting delegate vertices ends" << std::endl;
 }
 
 

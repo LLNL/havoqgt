@@ -79,6 +79,11 @@ namespace havoqgt { namespace mpi {
 
       void sanity_check() const {
 	eitr_type first = g->edges_begin(source);
+	if(first  == g->edges_end(source)){
+	  //std::cout << "The list is empty " << std::endl;
+	  return;
+	}
+	
 	eitr_type second = ++first;
 	while(second != g->edges_end(source)) {
 	  if( second.target() < first.target() ) {
@@ -181,23 +186,34 @@ public:
   template<typename VisitorQueueHandle>
   bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
     edge_list_per_vertex<Graph> el(&g, vertex);
-#if 0 // Test if the edge list of the vertex is sorted   
-    el.sanity_check();
-#endif
+ #if 0 // Test if the edge list of the vertex is sorted   
+    //  el.sanity_check();
+ #endif
+
+    if(g.edges_begin(vertex) == g.edges_end(vertex)){
+      if(vertex.is_delegate()){
+	return true;
+      }
+      else{
+	std::cerr << "Logic Problem!!" << std::endl;
+	return false;
+      }
+    }
+    
     typedef sort_predicate<Graph, EdgeData, MetaData> sort_predicate;
     edge_list_iterator<Graph> found_itr = boost::lower_bound(el, target, sort_predicate());
 
     eitr_type found = found_itr.dereference();
     
-    if(found_itr == el.end()) {
-      return (vertex.get_bcast() != 0) ? false : true ;
+    if(found_itr == el.end() || !( target == found.target() /* this should have been covered by first statement*/) ) {
+      assert(vertex.is_delegate());
+      return true;
     }else {
-#if 1 // Test result of the Binary Search
+#if 0 // Test result of the Binary Search
       assert(sort_predicate()(found, target) == false);
       assert(target == found.target());
       assert((*edge_data())[found].is_recorded() == false );
 #endif
-      
       count++;
       (*edge_data())[found] = meta_data;
       (*edge_data())[found].register_recorded();

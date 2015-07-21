@@ -117,7 +117,7 @@ public:
     }
 
     bool intercept(const visitor_type& __value) {
-      assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
+      //assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
       bool ret = __value.pre_visit();
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
@@ -175,7 +175,7 @@ public:
     if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
       visitor_type v = this_visitor;
       m_mailbox.bcast(v, visitor_queue_inserter(this));
-      m_termination_detection.inc_queued( m_mailbox.comm_size() );
+      m_termination_detection.inc_queued( m_mailbox.comm_size());
     }
   }
   
@@ -265,14 +265,14 @@ public:
 	    ++flow_itr;
 	  }
 
-	  //process_pending_controllers();
+	  process_pending_controllers();
 	  while( !empty() ) {
-	    //process_pending_controllers();
+	    process_pending_controllers();
 	    visitor_type this_visitor = pop_top();
 	    do_visit(this_visitor);
 	    m_termination_detection.inc_completed();
 	  }
-	} while( flow_itr != flow_itr_end);
+	} while( flow_itr != flow_itr_end || !m_local_controller_queue.empty() );
 
 	m_mailbox.flush_buffers_if_idle();
 
@@ -411,7 +411,7 @@ private:
   void push(const visitor_type& v) {
     /*if(v.vertex.is_delegate()) {
       m_localqueue_delegates.push(v);
-    } else {
+    } else {v
       m_localqueue_owned.push(v);
     }*/
     m_localqueue_owned.push(v);
