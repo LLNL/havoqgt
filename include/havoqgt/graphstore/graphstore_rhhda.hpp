@@ -213,7 +213,7 @@ SKIP_EDGE_INSERTION:
               << "size/capacity = " << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
               << ", chaine depth = " << m_ld_singlelist->depth()
               << ", average probedistance = " << m_ld_singlelist->load_factor() << std::endl;
-    std::cout << "high-midle degree table : "
+    std::cout << "high-midle main degree table : "
               << "size/capacity = " << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
               << ", chaine depth = " << m_hd_adj_matrix->depth()
               << ", average probedistance = " << m_hd_adj_matrix->load_factor() << std::endl;

@@ -71,7 +71,7 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
 #if VERBOSE
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
-        std::cout << "Proc no. " << mpi_rank << std::endl;
+        std::cout << "[" << mpi_rank << "]" << std::endl;
         graph_store.print_status();
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
@@ -80,15 +80,24 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
 
     ++loop_cnt;
 
-    bool local_is_finished = (edges_itr == edges_itr_end);
+    const bool local_is_finished = (edges_itr == edges_itr_end);
     MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
   }
-  if (mpi_rank == 0) print_usages(segment_manager);
   havoqgt::havoqgt_env()->world_comm().barrier();
+  if (mpi_rank == 0) {
+    std::cout << "\n-- All edge updations done --" << std::endl;
+    print_usages(segment_manager);
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
+      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
+    }
+  }
 
-  std::cout << "inserted edges : " << count_inserted << std::endl;
-  std::cout << "deleted edges : " << count_delete << std::endl;
 }
+
 
 int main(int argc, char** argv) {
 
