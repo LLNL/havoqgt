@@ -8,7 +8,7 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 namespace graphstore {
-namespace rhhda {
+namespace rhh {
 
 using segment_manager_t = boost::interprocess::managed_mapped_file::segment_manager;
 

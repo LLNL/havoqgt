@@ -3,7 +3,7 @@
  * LLNL / TokyoTech
  */
 
-#include "dynamicdegreeawaregraphstore_bench.hpp"
+#include "dynamicgraphstore_bench.hpp"
 
 #define VERBOSE 0
 
@@ -12,9 +12,13 @@
 std::ofstream ofs_edges;
 #endif
 
+enum : size_t {
+  midle_high_degree_threshold = 4
+};
+
 using vertex_meta_data_type = unsigned char;
 using edge_weight_type = unsigned char;
-using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, static_cast<size_t>(4)>;
+using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, static_cast<size_t>(midle_high_degree_threshold)>;
 
 template <typename Edges>
 void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
@@ -163,6 +167,7 @@ int main(int argc, char** argv) {
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
+      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
 
       if (fname_edge_list.empty()) {
         std::cout << "Building RMAT graph Scale: " << vert_scale << std::endl;
@@ -171,16 +176,17 @@ int main(int argc, char** argv) {
         for (auto itr = fname_edge_list.begin(), itr_end = fname_edge_list.end(); itr != itr_end; ++itr)
           std::cout << mpi_rank << " : " << "Load edge list from " << *itr << std::endl;
       }
-      {
+
 #if DEBUG_MODE
-        if (mpi_size > 1) {
+      {
+      if (mpi_size > 1) {
           assert(false);
         }
         std::stringstream fname;
         fname << fname_output << ".debug_edges_raw";
         ofs_edges.open(fname.str());
-#endif
       }
+#endif
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
 

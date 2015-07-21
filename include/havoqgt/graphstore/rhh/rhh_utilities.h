@@ -7,7 +7,7 @@
 #define RHH_UTILITIES_HPP_INCLUDED
 
 namespace graphstore {
-namespace rhhda {
+namespace rhh {
 
 
 /// --- A template helper caluculate the size of a element --- ///

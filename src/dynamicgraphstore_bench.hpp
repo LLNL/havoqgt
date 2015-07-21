@@ -20,7 +20,7 @@
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_common.hpp>
+#include <havoqgt/graphstore/rhh/rhh_common.hpp>
 
 #include <havoqgt/graphstore/graphstore_rhhda.hpp>
 
@@ -32,7 +32,7 @@ using vertex_meta_data_type = unsigned char;
 using edge_weight_type      = unsigned char;
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = graphstore::rhhda::segment_manager_t;
+using segment_manager_type = graphstore::rhh::segment_manager_t;
 
 
 struct EdgeUpdateRequest

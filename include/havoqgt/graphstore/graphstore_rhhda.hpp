@@ -8,12 +8,12 @@
 
 #include <tuple>
 
-#include <havoqgt/graphstore/rhhda/rhhda_defs.hpp>
+#include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/rhhda/rhh_utilities.h>
-#include <havoqgt/graphstore/rhhda/rhh_container.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_allocator_holder.hpp>
+#include <havoqgt/graphstore/rhh/rhh_utilities.h>
+#include <havoqgt/graphstore/rhh/rhh_container.hpp>
+#include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
 namespace graphstore {
 
@@ -27,16 +27,16 @@ private:
   using hd_trg_vertex_adjlist_type = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
   using hd_src_vertex_value_type   = std::pair<vertex_meta_data_type, hd_trg_vertex_adjlist_type*>;
   using hd_adj_matrix_type         = rhh_container_base<vertex_id_type, hd_src_vertex_value_type, size_type>;
-  using segment_manager_type       = rhhda::segment_manager_t;
+  using segment_manager_type       = rhh::segment_manager_t;
 
 
 public:
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
-    rhhda::init_allocator<typename ld_singlelist_type::allocator, segment_manager_type>(segment_manager);
-    rhhda::init_allocator<typename hd_trg_vertex_adjlist_type::allocator, segment_manager_type>(segment_manager);
-    rhhda::init_allocator<typename hd_adj_matrix_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename ld_singlelist_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename hd_trg_vertex_adjlist_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename hd_adj_matrix_type::allocator, segment_manager_type>(segment_manager);
 
     m_ld_singlelist = ld_singlelist_type::allocate(2);
     m_hd_adj_matrix = hd_adj_matrix_type::allocate(2);
@@ -46,9 +46,9 @@ public:
     clear();
     ld_singlelist_type::deallocate(m_ld_singlelist);
     hd_adj_matrix_type::deallocate(m_hd_adj_matrix);
-    rhhda::destroy_allocator<typename ld_singlelist_type::allocator>();
-    rhhda::destroy_allocator<typename hd_trg_vertex_adjlist_type::allocator>();
-    rhhda::destroy_allocator<typename hd_adj_matrix_type::allocator>();
+    rhh::destroy_allocator<typename ld_singlelist_type::allocator>();
+    rhh::destroy_allocator<typename hd_trg_vertex_adjlist_type::allocator>();
+    rhh::destroy_allocator<typename hd_adj_matrix_type::allocator>();
   }
 
   ///
@@ -89,6 +89,7 @@ public:
         rhh_container_utility::insert(&adj_list, trg, weight);
         value.second = adj_list;
         rhh_container_utility::insert(&m_hd_adj_matrix, src, value);
+        rhh_container_utility::shrink_to_fit(&m_ld_singlelist);
       }
 
     } else {
@@ -153,6 +154,7 @@ SKIP_EDGE_INSERTION:
     }
 
     if (count > 0) {
+      rhh_container_utility::shrink_to_fit(&m_ld_singlelist);
       return count;
     }
 
@@ -166,16 +168,21 @@ SKIP_EDGE_INSERTION:
       ++count;
     }
 
-    /// if the adj_list has no edges, deallocate the adj_list
-    if (count > 0 && adj_list->size() < midle_high_degree_threshold) {
-      const vertex_meta_data_type& meta_data = itr_matrix->first;
-      for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
-        ld_singlelist_value_type value(meta_data, itr->key, itr->value);
-        rhh_container_utility::insert(&m_ld_singlelist, src, value);
-        adj_list->erase(itr);
+    if (count > 0) {
+      if (adj_list->size() < midle_high_degree_threshold) {
+        const vertex_meta_data_type& meta_data = itr_matrix->first;
+        for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
+          ld_singlelist_value_type value(meta_data, itr->key, itr->value);
+          rhh_container_utility::insert(&m_ld_singlelist, src, value);
+          adj_list->erase(itr);
+        }
+        hd_trg_vertex_adjlist_type::deallocate(adj_list);
+        m_hd_adj_matrix->erase(itr_matrix);
+        rhh_container_utility::shrink_to_fit(&m_hd_adj_matrix);
+      } else {
+        rhh_container_utility::shrink_to_fit(&adj_list);
+        itr_matrix->second = adj_list;
       }
-      hd_trg_vertex_adjlist_type::deallocate(adj_list);
-      m_hd_adj_matrix->erase(itr_matrix);
     }
 
     return count;
@@ -202,14 +209,14 @@ SKIP_EDGE_INSERTION:
   ///         thus, this function would affect pagecache and cause I/Os
   void print_status()
   {
-    std::cout << "low degree table : (size/capacity) "
-              << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
-              << " : (chaine depth) " << m_ld_singlelist->depth()
-              << " : (average probedistance) " << m_ld_singlelist->load_factor() << std::endl;
-    std::cout << "high-midle degree table : (size/capacity) "
-              << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
-              << " : (chaine depth) " << m_hd_adj_matrix->depth()
-              << " : (average probedistance) " << m_hd_adj_matrix->load_factor() << std::endl;
+    std::cout << "low degree table : "
+              << "size/capacity = " << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
+              << ", chaine depth = " << m_ld_singlelist->depth()
+              << ", average probedistance = " << m_ld_singlelist->load_factor() << std::endl;
+    std::cout << "high-midle degree table : "
+              << "size/capacity = " << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
+              << ", chaine depth = " << m_hd_adj_matrix->depth()
+              << ", average probedistance = " << m_hd_adj_matrix->load_factor() << std::endl;
   }
 
   void fprint_all_elements(std::ofstream& of)

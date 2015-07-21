@@ -12,11 +12,11 @@
 #include <utility>      // swap
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_defs.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_common.hpp>
-#include <havoqgt/graphstore/rhhda/rhh_utilities.h>
-#include <havoqgt/graphstore/rhhda/rhh_element_base.h>
-#include <havoqgt/graphstore/rhhda/rhhda_allocator_holder.hpp>
+#include <havoqgt/graphstore/rhh/rhh_defs.hpp>
+#include <havoqgt/graphstore/rhh/rhh_common.hpp>
+#include <havoqgt/graphstore/rhh/rhh_utilities.h>
+#include <havoqgt/graphstore/rhh/rhh_element_base.h>
+#include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
 namespace graphstore {
 
@@ -29,12 +29,12 @@ inline bool has_key(rhh_type* const rhh, typename rhh_type::key_type& key)
   return (rhh->find(key) != rhh_type::kKeyNotFound);
 }
 
-/// Note: this function causes copy !!
-template<typename rhh_type, typename key_type, typename value_type>
+/// Note: this function causes copy of a key and a value !!
+template <typename rhh_type, typename key_type, typename value_type>
 inline void insert(rhh_type** rhh, key_type key, value_type value)
 {
-  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhhda::kFullCapacitFactor)) {
-    (*rhh) = rhh_type::grow((*rhh));
+  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
+    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
   // --- Consider long probe distance --- //
   while (!(*rhh)->insert(key, value, key, value)) {
@@ -44,13 +44,29 @@ inline void insert(rhh_type** rhh, key_type key, value_type value)
   }
 }
 
+template <typename rhh_type>
+inline void shrink_to_fit(rhh_type** rhh)
+{
+  const typename rhh_type::size_type cur_size = (*rhh)->size();
+  typename rhh_type::size_type new_capacity = (*rhh)->capacity();
+  while ( cur_size <
+            static_cast<double>(new_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor ) {
+    new_capacity /= graphstore::rhh::kCapacityGrowingFactor;
+  }
+
+  if ((*rhh)->capacity() > new_capacity) {
+    (*rhh) = rhh_type::resize((*rhh), new_capacity);
+  }
+
+}
+
 } /// namespace rhh_container_utility
 
 
 template<typename _key_type,
          typename _value_type,
          typename _size_type,
-         typename _key_hash_func = rhhda::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
+         typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
          typename _property_program = rhh_container_utility::rhh_property_program_base<unsigned char>>
 class rhh_container_base {
 
@@ -79,7 +95,7 @@ public:
   };
 
   using rhh_contatiner_selftype = rhh_container_base<key_type, value_type, size_type, key_hash_func, property_program>;
-  using allocator               = graphstore::rhhda::allocator_holder_sglt<kElementSize,
+  using allocator               = graphstore::rhh::allocator_holder_sglt<kElementSize,
                                                                            sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
 
   enum : size_t{
@@ -443,20 +459,10 @@ public:
     }
   }
 
-  inline static rhh_contatiner_selftype* grow(rhh_contatiner_selftype* rhh)
+  inline static rhh_contatiner_selftype* resize(rhh_contatiner_selftype* rhh, size_type new_capacity)
   {
     rhh_contatiner_selftype* old_rhh = rhh;
-    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh,
-                                                            old_rhh->capacity() * graphstore::rhhda::kCapacityGrwoingFactor);
-    deallocate(old_rhh);
-    return new_rhh;
-  }
-
-  inline static rhh_contatiner_selftype* shurink(rhh_contatiner_selftype* rhh)
-  {
-    rhh_contatiner_selftype* old_rhh = rhh;
-    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh,
-                                                            old_rhh->capacity() / graphstore::rhhda::kCapacityGrwoingFactor);
+    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh, new_capacity);
     deallocate(old_rhh);
     return new_rhh;
   }

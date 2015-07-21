@@ -13,11 +13,11 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/allocators/node_allocator.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_defs.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_common.hpp>
+#include <havoqgt/graphstore/rhh/rhh_defs.hpp>
+#include <havoqgt/graphstore/rhh/rhh_common.hpp>
 
 namespace graphstore {
-namespace rhhda {
+namespace rhh {
 
 /// Wrapper class for static_node_allocator to management the class using array data structure
 class static_node_allocator_wrp

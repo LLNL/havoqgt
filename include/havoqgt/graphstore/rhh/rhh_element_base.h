@@ -7,9 +7,9 @@
 #define rhh_property_program_base_HPP_INCLUDED
 
 #include <havoqgt/detail/hash.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_defs.hpp>
-#include <havoqgt/graphstore/rhhda/rhhda_common.hpp>
-#include <havoqgt/graphstore/rhhda/rhh_utilities.h>
+#include <havoqgt/graphstore/rhh/rhh_defs.hpp>
+#include <havoqgt/graphstore/rhh/rhh_common.hpp>
+#include <havoqgt/graphstore/rhh/rhh_utilities.h>
 
 namespace graphstore {
 namespace rhh_container_utility {
