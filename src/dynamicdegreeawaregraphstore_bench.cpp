@@ -5,6 +5,8 @@
 
 #include "dynamicdegreeawaregraphstore_bench.hpp"
 
+#define VERBOSE 0
+
 #define DEBUG_MODE 0
 #if DEBUG_MODE
 std::ofstream ofs_edges;
@@ -18,6 +20,7 @@ template <typename Edges>
 void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
 
   havoqgt::havoqgt_env()->world_comm().barrier();
   if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
@@ -60,7 +63,17 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
     if (mpi_rank == 0) print_usages(segment_manager);
-    if (mpi_rank == 0) graph_store.print_status();
+    havoqgt::havoqgt_env()->world_comm().barrier();
+#if VERBOSE
+    for (int i = 0; i < mpi_size; ++i) {
+      if (i == mpi_rank) {
+        std::cout << "Proc no. " << mpi_rank << std::endl;
+        graph_store.print_status();
+      }
+      havoqgt::havoqgt_env()->world_comm().barrier();
+    }
+#endif
+
     ++loop_cnt;
 
     bool local_is_finished = (edges_itr == edges_itr_end);
@@ -68,8 +81,6 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
   }
   if (mpi_rank == 0) print_usages(segment_manager);
   havoqgt::havoqgt_env()->world_comm().barrier();
-
-  // graph->print_profile();
 
   std::cout << "inserted edges : " << count_inserted << std::endl;
   std::cout << "deleted edges : " << count_delete << std::endl;

@@ -196,29 +196,34 @@ SKIP_EDGE_INSERTION:
   }
 
 
+  ///
+  /// \brief print_status
+  ///   Note: this function accesses entier data of the rhhda containers to compute statuses
+  ///         thus, this function would affect pagecache and cause I/Os
   void print_status()
   {
-    std::cout << "low degree table: "
+    std::cout << "low degree table : (size/capacity) "
               << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
-              << " : " << m_ld_singlelist->load_factor() << std::endl;
-    std::cout << "high-midle degree table: "
+              << " : (chaine depth) " << m_ld_singlelist->depth()
+              << " : (average probedistance) " << m_ld_singlelist->load_factor() << std::endl;
+    std::cout << "high-midle degree table : (size/capacity) "
               << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
-              << " : " << m_hd_adj_matrix->load_factor() << std::endl;
+              << " : (chaine depth) " << m_hd_adj_matrix->depth()
+              << " : (average probedistance) " << m_hd_adj_matrix->load_factor() << std::endl;
   }
 
   void fprint_all_elements(std::ofstream& of)
   {
     for (auto itr = m_ld_singlelist->begin(); !itr.is_end(); ++itr) {
-      of << itr->key << " " << std::get<1>(itr->value) << std::endl;
+      of << itr->key << " " << std::get<1>(itr->value) << "\n";
     }
 
     for (auto itr = m_hd_adj_matrix->begin(); !itr.is_end(); ++itr) {
       auto adj_list = itr->value.second;
       for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
-        of << itr->key << "\t" << itr2->key << "\n";
+        of << itr->key << " " << itr2->key << "\n";
       }
     }
-
   }
 
  private:

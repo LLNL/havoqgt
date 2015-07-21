@@ -446,7 +446,17 @@ public:
   inline static rhh_contatiner_selftype* grow(rhh_contatiner_selftype* rhh)
   {
     rhh_contatiner_selftype* old_rhh = rhh;
-    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh, old_rhh->capacity() * graphstore::rhhda::kCapacityGrwoingFactor);
+    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh,
+                                                            old_rhh->capacity() * graphstore::rhhda::kCapacityGrwoingFactor);
+    deallocate(old_rhh);
+    return new_rhh;
+  }
+
+  inline static rhh_contatiner_selftype* shurink(rhh_contatiner_selftype* rhh)
+  {
+    rhh_contatiner_selftype* old_rhh = rhh;
+    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh,
+                                                            old_rhh->capacity() / graphstore::rhhda::kCapacityGrwoingFactor);
     deallocate(old_rhh);
     return new_rhh;
   }
