@@ -8,19 +8,25 @@ import datetime
 USE_PDEBUG = False
 
 # ---- Configuration ----- #
+N_NODES = 1
+N_PROCS = 1
+
+
 DEBUG = True
 if DEBUG:
-	USE_PDEBUG = False
+	USE_PDEBUG = True
 USE_DIMMAP = True
-USE_DIMMAP_FOR_TUNE = True
+USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
 MEMSIZE_DIMMAP = 1024*256*4
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments.log"
+#MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_test_0713.log"
 
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
+SEGMENT_SIZE = 39
 # --------------------------- #
 
 if USE_DIMMAP:
@@ -33,8 +39,8 @@ else:
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "generate_graph_dynamic"
-#executable = "generate_graph" #"run_bfs"
+executable = "dynamicdegreeawaregraphstore_bench"
+
 
 command_strings = []
 test_count = 0
@@ -126,11 +132,11 @@ def generate_shell_file():
 		slurm_options = ""
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+		slurm_options += "--di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
+		slurm_options += "--di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
 	else:
-	 	slurm_options += "--di-mmap=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
+	 	slurm_options += "--di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
 	if USE_PDEBUG:
 		slurm_options += "-ppdebug"
@@ -229,8 +235,8 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-			s += block_start + "echo dmesg \n" + block_end
-			s += "dmesg\n"
+			s += block_start + "dmesg | tee -n 200 \n" + block_end
+			s += "dmesg | tee -n 200 \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
@@ -283,32 +289,28 @@ def add_command(nodes, processes, cmd):
 
 	command_strings.append([nodes, processes, " ".join(cmd)])
 
-def create_commands(initial_scale, scale_increments, max_scale,
-										data_structure_type, low_deg_tlh_list, delete_ratio_list):
+def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_list):
 
 	graph_file = graph_dir+"out.graph"
 
 	for k in delete_ratio_list:
-		for i in low_deg_tlh_list:
-			delete_segment_file = 0
-			chunk_size = 20
-			edges_factor = 16
-			scale = initial_scale
+		delete_segment_file = 0
+		chunk_size = 20
+		edges_factor = 16
+		scale = initial_scale
 
-			while (scale <= max_scale):
-				# cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k)]
-				# cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k), "/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/logs/debug/webgraph_file_list_srt.txt"]
-				cmd = [executable, str(scale), str(edges_factor), graph_file, str(delete_segment_file), str(chunk_size), data_structure_type, str(i), str(k),
-				"/g/g90/iwabuchi/havoqgt/build/catalyst.llnl.gov/logs/debug/webgraph_file_list_rnd.txt"]
-				add_command(1, 1, cmd)
-				scale = scale + scale_increments
+		while (scale <= max_scale):
+			cmd = [executable, str(scale), str(edges_factor), graph_file, str(SEGMENT_SIZE), str(delete_segment_file), str(chunk_size), str(k),
+				"/g/g90/iwabuchi/tmp/file_list"]
+			add_command(N_NODES, N_PROCS, cmd)
+			scale = scale + scale_increments
 
 init_test_dir()
 
 low_deg_tlh_list = [0]
 delete_ratio_list = [0]
 
-create_commands(27, 1, 27, "HY_DA", low_deg_tlh_list, delete_ratio_list)
+create_commands(27, 1, 27, delete_ratio_list)
 
 #make bash file and run it
 generate_shell_file()
