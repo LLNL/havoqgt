@@ -11,15 +11,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import matplotlib.pyplot as plt
 
-if len(sys.argv) != 6:
+#------------------------
+num_files = 1
+keyword = "segment size"
+#keyword = "Execution time"
+col_num = 5 # NOTE: [ awk -1 ]
+is_cumulate = False
+#------------------------
+
+
+if len(sys.argv) != 2:
 	print "# of arguments is wrong"
 	sys.exit(1)
 
 target_dir = sys.argv[1]
-num_files = int(sys.argv[2])
-keyword = sys.argv[3]
-col_num = int(sys.argv[4]) # NOTE: [ awk -1 ]
-is_cumulate = bool(int(sys.argv[5]))
+# num_files = int(sys.argv[2])
+# keyword = sys.argv[3]
+# col_num = int(sys.argv[4]) # NOTE: [ awk -1 ]
+# is_cumulate = bool(int(sys.argv[5]))
 
 flist = []
 
@@ -51,12 +60,14 @@ if is_cumulate:
 
 
 # --- print result --- #
+fnameresults = target_dir + "/value_" + str(num_files) + "_" + keyword.replace(" ", "_") + "_" + str(col_num) + "_" + str(is_cumulate) + ".txt"
+fresult = open(fnameresults, "w")
 for i in range (max_length):
 	for j in range (num_files):
 		if i < len(results[j]):
-			print results[j][i],
-		print "\t",
-	print "\n",
+			fresult.write(str(results[j][i]))
+		fresult.write("\t")
+	fresult.write("\n")
 
 
 # --- plot result --- #
@@ -74,5 +85,5 @@ plt.xlabel('inserted chunks')
 
 plt.grid()
 
-outname = target_dir + "/chart_" + sys.argv[2] + "_" + sys.argv[3].replace(" ", "_") + "_" + sys.argv[4] + "_" + sys.argv[5] + ".pdf"
+outname = target_dir + "/chart_" + str(num_files) + "_" + keyword.replace(" ", "_") + "_" + str(col_num) + "_" + str(is_cumulate) + ".pdf"
 plt.savefig(outname ,format = 'pdf')
