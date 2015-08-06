@@ -13,7 +13,7 @@ std::ofstream ofs_edges;
 #endif
 
 enum : size_t {
-  midle_high_degree_threshold = 4
+  midle_high_degree_threshold = 3
 };
 
 using vertex_meta_data_type = unsigned char;

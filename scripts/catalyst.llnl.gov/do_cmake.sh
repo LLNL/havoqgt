@@ -15,4 +15,4 @@ cmake ../../ \
   -DMPI_C_COMPILER=/usr/local/tools/mvapich2-gnu-1.9/bin/mpicc \
   -DMPI_CXX_COMPILER=/usr/local/tools/mvapich2-gnu-1.9/bin/mpicxx \
   -DBOOST_ROOT=/usr/gapps/dst/opt/boost_stages/boost_1_55_0/ \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -O3  -lrt" \
+  -DCMAKE_CXX_FLAGS="-std=c++11 -O3  -lrt -flto" \

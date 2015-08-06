@@ -2,6 +2,7 @@ import sys
 import atexit
 import time
 import subprocess
+import os
 import os.path
 import datetime
 
@@ -12,7 +13,7 @@ N_NODES = 1
 N_PROCS = 1
 
 
-DEBUG = True
+DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = True
@@ -20,13 +21,15 @@ USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
 MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_test_0713.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_test_0728.log"
 
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
 SEGMENT_SIZE = 39
+EDGES_FILELIST = os.getenv('EFILE_LIST', "./work/file_list")
+TIME_LIMIT = 60 * 4
 # --------------------------- #
 
 if USE_DIMMAP:
@@ -132,14 +135,16 @@ def generate_shell_file():
 		slurm_options = ""
 
 	if USE_DIMMAP:
-		slurm_options += "--di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+		slurm_options += " --di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
 	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += "--di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
+		slurm_options += " --di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
 	else:
-	 	slurm_options += "--di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
+	 	slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
 	if USE_PDEBUG:
-		slurm_options += "-ppdebug"
+		slurm_options += " -ppdebug "
+
+	slurm_options += " -t" + str(TIME_LIMIT) + " "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -300,14 +305,14 @@ def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_lis
 		scale = initial_scale
 
 		while (scale <= max_scale):
-			cmd = [executable, str(scale), str(edges_factor), graph_file, str(SEGMENT_SIZE), str(delete_segment_file), str(chunk_size), str(k),
-				"/g/g90/iwabuchi/tmp/file_list"]
+			cmd = [executable, str(scale), str(edges_factor),
+			       graph_file, str(SEGMENT_SIZE), str(delete_segment_file),
+			       str(chunk_size), str(k), EDGES_FILELIST]
 			add_command(N_NODES, N_PROCS, cmd)
 			scale = scale + scale_increments
 
 init_test_dir()
 
-low_deg_tlh_list = [0]
 delete_ratio_list = [0]
 
 create_commands(27, 1, 27, delete_ratio_list)
@@ -317,6 +322,8 @@ generate_shell_file()
 execute_shell_file()
 
 log("Finished after generating %d Srun Tasks\n" %(test_count))
-log_global()
+
+if not DEBUG:
+	log_global()
 
 

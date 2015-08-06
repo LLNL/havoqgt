@@ -55,10 +55,10 @@ class key_hash_func_64bit_to_64bit {
  public:
   inline static hash_type hash(const key_type& key)
   {
-//    #include <havoqgt/detail/hash.hpp>
-//    return static_cast<hash_type>(static_cast<uint64_t>(havoqgt::detail::hash32(key>>32ULL)) << 32ULL
-//                                                              | havoqgt::detail::hash32(key));
-    return static_cast<hash_type>(key);
+    #include <havoqgt/detail/hash.hpp>
+    return static_cast<hash_type>(static_cast<uint64_t>(havoqgt::detail::hash32(key>>32ULL)) << 32ULL
+                                                              | havoqgt::detail::hash32(key));
+    //    return static_cast<hash_type>(key);
   }
 };
 
