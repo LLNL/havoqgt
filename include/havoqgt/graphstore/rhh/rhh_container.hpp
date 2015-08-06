@@ -424,7 +424,12 @@ public:
           !property_program::is_scratched(m_body[pos].property))
         total += property_program::extract_probedistance(m_body[pos].property);
     }
-    return total / m_num_elems;
+
+    if (m_num_elems > 0)
+      return total / m_num_elems;
+    else
+      return 0;
+
   }
 
   inline size_type depth() const
