@@ -207,6 +207,18 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
     }
   }
 
+
+  std::ofstream fout;
+  fout.open("/l/ssd/debug"+"_graph", std::ios::out | std::ios::app);
+  for (auto itr = adjacency_matrix_map_vec_->begin(); itr != adjacency_matrix_map_vec_->end(); ++\
+itr) {
+    uint64_vector_t& adjacency_list_vec = (*itr).second;
+    for (auto itr2 = adjacency_list_vec.begin(); itr2 != adjacency_list_vec.end(); ++itr2) {
+      fout << (*itr).first << "\t" << *itr2 << std::endl;
+    }
+  }
+  fout.close();
+
 }
 
 
