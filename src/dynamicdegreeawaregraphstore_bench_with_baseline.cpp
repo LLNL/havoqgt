@@ -148,6 +148,8 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
 
     const double time_start = MPI_Wtime();
     unsigned char dummy = 0;
+    uint64_t count_inserted = 0;
+    uint64_t count_duplicated = 0;
     for (auto request : update_request_vec) {
       auto edge = request.edge;
       if (request.is_delete) {
@@ -157,19 +159,24 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
         if (value == adjacency_matrix_map_vec_.end()) { // new vertex
           uint64_vector_t vec(1, edge.second, seg_allocator);
           adjacency_matrix_map_vec_.insert(map_value_vec_t(edge.first, vec));
+	  ++count_inserted;
         } else {
           uint64_vector_t& adjacency_list_vec = value->second;
 
-          // add a edge without duplication
-          if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() )
+          if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() ) {
+	    ++count_duplicated;
             continue;
+	  }
           adjacency_list_vec.push_back(edge.second);
+	  ++count_inserted;
         }
       }
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+    if (mpi_rank == 0) std::cout << "ins =\t" << count_inserted << std::endl;
+    if (mpi_rank == 0) std::cout << "dup =\t" << count_duplicated << std::endl;
     if (mpi_rank == 0) print_usages(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
 #if VERBOSE
@@ -333,12 +340,12 @@ int main(int argc, char** argv) {
     havoqgt::havoqgt_env()->world_comm().barrier();
 
 
-    std::cout << "Allocate graphstore_rhh_matrix" << std::endl;
-    graphstore_type graph_store(segment_manager);
-    havoqgt::havoqgt_env()->world_comm().barrier();
+    //std::cout << "Allocate graphstore_rhh_matrix" << std::endl;
+    //graphstore_type graph_store(segment_manager);
+    //havoqgt::havoqgt_env()->world_comm().barrier();
 
     std::cout << "Allocate graphstore_rhh_matrix" << std::endl;
-    BoostSegmentAllocator<void> boost_seg_allocator;
+    BoostSegmentAllocator<void> boost_seg_allocator(segment_manager);
     adjacency_matrix_map_vec_t adjacency_matrix_map_vec(boost_seg_allocator);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
@@ -379,7 +386,6 @@ int main(int argc, char** argv) {
       std::stringstream ofname;
       ofname << fname_output << ".debug_edges_graph";
       std::ofstream  of(ofname.str());
-      graph_store.fprint_all_elements(of);
       std::cout << "done" << std::endl;
     }
 #endif

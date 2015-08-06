@@ -11,3 +11,4 @@ function(add_exe source)
 endfunction()
 
 add_exe( dynamicdegreeawaregraphstore_bench )
+add_exe( dynamicdegreeawaregraphstore_bench_with_baseline )

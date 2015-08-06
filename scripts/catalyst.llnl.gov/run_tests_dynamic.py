@@ -13,7 +13,7 @@ N_NODES = 1
 N_PROCS = 1
 
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = True
@@ -42,7 +42,7 @@ else:
 
 log_dir = "logs/"
 executable_dir = "src/"
-executable = "dynamicdegreeawaregraphstore_bench"
+executable = "dynamicdegreeawaregraphstore_bench_with_baseline"
 
 
 command_strings = []
