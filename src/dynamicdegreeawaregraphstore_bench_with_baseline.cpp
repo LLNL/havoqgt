@@ -155,6 +155,9 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
       if (request.is_delete) {
         assert(false);
       } else {
+
+	//	std::cout << edge.first << " " << edge.second << "\n";
+
         auto value = adjacency_matrix_map_vec_.find(edge.first);
         if (value == adjacency_matrix_map_vec_.end()) { // new vertex
           uint64_vector_t vec(1, edge.second, seg_allocator);
@@ -208,16 +211,15 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
   }
 
 
-  std::ofstream fout;
-  fout.open("/l/ssd/debug"+"_graph", std::ios::out | std::ios::app);
-  for (auto itr = adjacency_matrix_map_vec_->begin(); itr != adjacency_matrix_map_vec_->end(); ++\
-itr) {
-    uint64_vector_t& adjacency_list_vec = (*itr).second;
-    for (auto itr2 = adjacency_list_vec.begin(); itr2 != adjacency_list_vec.end(); ++itr2) {
-      fout << (*itr).first << "\t" << *itr2 << std::endl;
-    }
-  }
-  fout.close();
+  //  std::ofstream fout;
+  //fout.open("/l/ssd/debug_graph", std::ios::out | std::ios::app);
+  //for (auto itr = adjacency_matrix_map_vec_.begin(); itr != adjacency_matrix_map_vec_.end(); ++itr) {
+  //  uint64_vector_t& adjacency_list_vec = (*itr).second;
+  //  for (auto itr2 = adjacency_list_vec.begin(); itr2 != adjacency_list_vec.end(); ++itr2) {
+  //    fout << (*itr).first << "\t" << *itr2 << std::endl;
+  //  }
+  //}
+  //fout.close();
 
 }
 

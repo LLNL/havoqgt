@@ -13,11 +13,11 @@ import numpy as np
 
 #------------------------
 num_files = 1
-#keyword = "segment size"
-keyword = "Execution time"
+keyword = "segment size"
+#keyword = "Execution time"
 col_num = 5 # NOTE: [ awk -1 ]
-#is_cumulate = False
-is_cumulate = True
+is_cumulate = False
+#is_cumulate = True
 #------------------------
 
 
