@@ -64,19 +64,19 @@ public:
   bool insert_edge(vertex_id_type& src, vertex_id_type& trg, edge_weight_type& weight)
   {
 
+    // count degree of the source vertex in low degree table
     size_t count_in_single = 0;
     for (auto itr_single = m_ld_singlelist->find(src); !itr_single.is_end(); ++itr_single) {
       if (std::get<1>(*itr_single) == trg) {
-        goto SKIP_EDGE_INSERTION;
+        return false;
       }
       ++count_in_single;
     }
 
     if (count_in_single > 0) {
-      // insert into a low container or move to midle-high one
+      // insert into a low table or move to midle-high one
       if (count_in_single < midle_high_degree_threshold - 1) {
         ld_singlelist_value_type value(vertex_meta_data_type(), trg, weight);
-        /// TODO: uniquly insertion
         rhh_container_utility::insert(&m_ld_singlelist, src, value);
       } else {
         hd_trg_vertex_adjlist_type* adj_list = hd_trg_vertex_adjlist_type::allocate(midle_high_degree_threshold);
@@ -102,23 +102,20 @@ public:
         hd_trg_vertex_adjlist_type* adj_list = itr_src->second;
         auto itr_trg = adj_list->find(trg);
 
-        /// if same edge is found, overwrite the edge weight
-        if (!itr_trg.is_end()) {
-          /// (*itr_trg) = weight;
-          goto SKIP_EDGE_INSERTION;
-        } else {
+        /// if same edge is found do nothing
+        if (itr_trg.is_end()) {
           /// actually insert the edge (insert the target vertex into the adjacency list)
           rhh_container_utility::insert(&adj_list, trg, weight);
           itr_src->second = adj_list;
+        } else {
+          return false;
         }
       }
 
     }
 
-SKIP_EDGE_INSERTION:
-    /// insert the target vertex into the source vertex list
-    /// insert_vertex(trg, init_vertex_meta_data);
-
+    /// TODO: insert the target vertex into the source vertex list
+EDGE_INSERTED:
     return true;
   }
 
@@ -209,14 +206,60 @@ SKIP_EDGE_INSERTION:
   ///         thus, this function would affect pagecache and cause I/Os
   void print_status()
   {
-    std::cout << "low degree table : "
-              << "size/capacity = " << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
-              << ", chaine depth = " << m_ld_singlelist->depth()
-              << ", average probedistance = " << m_ld_singlelist->load_factor() << std::endl;
-    std::cout << "high-midle main degree table : "
-              << "size/capacity = " << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
-              << ", chaine depth = " << m_hd_adj_matrix->depth()
-              << ", average probedistance = " << m_hd_adj_matrix->load_factor() << std::endl;
+    std::cout << "<low degree table> : "
+              << " size/capacity : " << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
+              << ", chaine depth : " << m_ld_singlelist->depth()
+              << ", average probedistance : " << m_ld_singlelist->load_factor() << std::endl;
+
+    std::cout << "<high-midle degree table> : "
+              << " size/capacity : " << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
+              << ", chaine depth : " << m_hd_adj_matrix->depth()
+              << ", average probedistance : " << m_hd_adj_matrix->load_factor() << std::endl;
+    {
+      size_t histgram_load_factor[hd_adj_matrix_type::property_program::kLongProbedistanceThreshold] = {0};
+      size_t histgram_cap_log2[50] = {0};
+      size_t histgram_dept[30] = {0};
+      size_t size = 0;
+      for (auto itr = m_hd_adj_matrix->begin(); !itr.is_end(); ++itr) {
+        auto adj_list = itr->value.second;
+
+        size += adj_list->size();
+
+        assert(adj_list->load_factor() < utility::array_length(histgram_load_factor));
+        ++histgram_load_factor[adj_list->load_factor()];
+
+        size_t cap_log2 = std::log2l(adj_list->capacity() * adj_list->depth());
+        if (cap_log2 >= utility::array_length(histgram_cap_log2))
+          cap_log2 = utility::array_length(histgram_cap_log2) - 1;
+        ++histgram_cap_log2[cap_log2];
+
+        size_t depth = adj_list->depth();
+        if (depth >= utility::array_length(histgram_dept))
+          depth = utility::array_length(histgram_dept);
+        ++histgram_dept[depth];
+      }
+
+      std::cout << "<high-midle edge chunks> : " << " size : " << size << std::endl;
+
+      std::cout << "load factor: ";
+      for (int i = 0; i < utility::array_length(histgram_load_factor); ++i) {
+        std::cout << histgram_load_factor[i] << " ";
+      }
+      std::cout << std::endl;
+
+      std::cout << "capacity (log2): ";
+      for (int i = 0; i < utility::array_length(histgram_cap_log2); ++i) {
+        std::cout << histgram_cap_log2[i] << " ";
+      }
+      std::cout << std::endl;
+
+      std::cout << "depth: ";
+      for (int i = 0; i < utility::array_length(histgram_dept); ++i) {
+        std::cout << histgram_dept[i] << " ";
+      }
+      std::cout << std::endl;
+
+    }
   }
 
   void fprint_all_elements(std::ofstream& of)

@@ -38,6 +38,12 @@
 namespace graphstore {
 namespace utility {
 
+template <typename T, std::size_t SIZE>
+size_t array_length(const T (&)[SIZE])
+{
+    return SIZE;
+}
+
 int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
 {
     int result = ::posix_memalign(actual_buffer, align_size, length);
