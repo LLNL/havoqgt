@@ -38,6 +38,37 @@
 namespace graphstore {
 namespace utility {
 
+#pragma pack(1)
+template <typename T1, typename T2>
+struct packed_pair
+{
+  T1 first;
+  T2 second;
+
+  packed_pair() {}
+
+  packed_pair(T1 t1, T2 t2) :
+    first(t1),
+    second(t2){}
+};
+
+#pragma pack(1)
+template <typename T1, typename T2, typename T3>
+struct packed_tuple
+{
+  T1 first;
+  T2 second;
+  T3 third;
+
+  packed_tuple(){}
+
+  packed_tuple(T1 t1, T2 t2, T3 t3) :
+    first(t1),
+    second(t2),
+    third(t3){}
+};
+
+
 template <typename T, std::size_t SIZE>
 size_t array_length(const T (&)[SIZE])
 {

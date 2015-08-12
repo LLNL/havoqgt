@@ -22,10 +22,10 @@ class graphstore_rhhda
 {
 private:
   using size_type = size_t;
-  using low_degree_table_value_type    = std::tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
+  using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
   using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
   using high_mid_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
-  using high_mid_src_vertex_value_type = std::pair<vertex_meta_data_type, high_mid_edge_chunk_type*>;
+  using high_mid_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, high_mid_edge_chunk_type*>;
   using high_mid_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
   using segment_manager_type           = rhh::segment_manager_t;
 
@@ -72,7 +72,7 @@ public:
     // count degree of the source vertex in low degree table
     size_t count_in_single = 0;
     for (auto itr_single = m_low_degree_table->find(src); !itr_single.is_end(); ++itr_single) {
-      if (std::get<1>(*itr_single) == trg) {
+      if ((*itr_single).second == trg) {
         return false;
       }
       ++count_in_single;
@@ -86,9 +86,9 @@ public:
       } else {
         high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
         auto itr_single2 = m_low_degree_table->find(src);
-        high_mid_src_vertex_value_type value(std::get<0>(*itr_single2), nullptr);
+        high_mid_src_vertex_value_type value((*itr_single2).first, nullptr);
         for (; !itr_single2.is_end(); ++itr_single2) {
-          rhh_container_utility::insert(&adj_list, std::get<1>(*itr_single2), std::get<2>(*itr_single2));
+          rhh_container_utility::insert(&adj_list, (*itr_single2).second, (*itr_single2).third);
           m_low_degree_table->erase(itr_single2);
         }
         rhh_container_utility::insert(&adj_list, trg, weight);
@@ -149,7 +149,7 @@ EDGE_INSERTED:
   {
     size_t count = 0;
     for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
-      if (std::get<1>(*itr) == trg) {
+      if ((*itr).second == trg) {
         m_low_degree_table->erase(itr);
         ++count;
       }
@@ -277,7 +277,7 @@ EDGE_INSERTED:
   void fprint_all_elements(std::ofstream& of)
   {
     for (auto itr = m_low_degree_table->begin(); !itr.is_end(); ++itr) {
-      of << itr->key << " " << std::get<1>(itr->value) << "\n";
+      of << itr->key << " " << (itr->value).second << "\n";
     }
 
     for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {

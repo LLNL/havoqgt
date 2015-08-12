@@ -80,7 +80,7 @@ public:
   using probedistance_type = typename property_program::probedistance_type;
 
   /// TODO: specializetion for no value case
-#pragma pack(1)
+  #pragma pack(1)
   typedef struct element
   {
     property_type property;
