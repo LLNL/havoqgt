@@ -17,38 +17,43 @@
 
 namespace graphstore {
 
-template <typename vertex_id_type, typename vertex_meta_data_type, typename edge_weight_type, size_t midle_high_degree_threshold>
+template <typename vertex_id_type, typename vertex_meta_data_type, typename edge_weight_type, size_t middle_high_degree_threshold>
 class graphstore_rhhda
 {
 private:
   using size_type = size_t;
-  using ld_singlelist_value_type   = std::tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
-  using ld_singlelist_type         = rhh_container_base<vertex_id_type, ld_singlelist_value_type, size_type>;
-  using hd_trg_vertex_adjlist_type = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
-  using hd_src_vertex_value_type   = std::pair<vertex_meta_data_type, hd_trg_vertex_adjlist_type*>;
-  using hd_adj_matrix_type         = rhh_container_base<vertex_id_type, hd_src_vertex_value_type, size_type>;
-  using segment_manager_type       = rhh::segment_manager_t;
+  using low_degree_table_value_type    = std::tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
+  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
+  using high_mid_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
+  using high_mid_src_vertex_value_type = std::pair<vertex_meta_data_type, high_mid_edge_chunk_type*>;
+  using high_mid_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
+  using segment_manager_type           = rhh::segment_manager_t;
 
 
 public:
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
-    rhh::init_allocator<typename ld_singlelist_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename hd_trg_vertex_adjlist_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename hd_adj_matrix_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename low_degree_table_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename high_mid_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename high_mid_degree_table_type::allocator, segment_manager_type>(segment_manager);
 
-    m_ld_singlelist = ld_singlelist_type::allocate(2);
-    m_hd_adj_matrix = hd_adj_matrix_type::allocate(2);
+    m_low_degree_table = low_degree_table_type::allocate(2);
+    m_high_mid_degree_table = high_mid_degree_table_type::allocate(2);
+
+    std::cout << "Element size: \n"
+              << " low_degree_table " << low_degree_table_type::kElementSize << "\n"
+              << " high_mid_edge_chunk " << high_mid_edge_chunk_type::kElementSize << "\n"
+              << " high_mid_degree_table " << high_mid_degree_table_type::kElementSize << std::endl;
   }
 
   ~graphstore_rhhda() {
     clear();
-    ld_singlelist_type::deallocate(m_ld_singlelist);
-    hd_adj_matrix_type::deallocate(m_hd_adj_matrix);
-    rhh::destroy_allocator<typename ld_singlelist_type::allocator>();
-    rhh::destroy_allocator<typename hd_trg_vertex_adjlist_type::allocator>();
-    rhh::destroy_allocator<typename hd_adj_matrix_type::allocator>();
+    low_degree_table_type::deallocate(m_low_degree_table);
+    high_mid_degree_table_type::deallocate(m_high_mid_degree_table);
+    rhh::destroy_allocator<typename low_degree_table_type::allocator>();
+    rhh::destroy_allocator<typename high_mid_edge_chunk_type::allocator>();
+    rhh::destroy_allocator<typename high_mid_degree_table_type::allocator>();
   }
 
   ///
@@ -66,7 +71,7 @@ public:
 
     // count degree of the source vertex in low degree table
     size_t count_in_single = 0;
-    for (auto itr_single = m_ld_singlelist->find(src); !itr_single.is_end(); ++itr_single) {
+    for (auto itr_single = m_low_degree_table->find(src); !itr_single.is_end(); ++itr_single) {
       if (std::get<1>(*itr_single) == trg) {
         return false;
       }
@@ -74,32 +79,32 @@ public:
     }
 
     if (count_in_single > 0) {
-      // insert into a low table or move to midle-high one
-      if (count_in_single < midle_high_degree_threshold - 1) {
-        ld_singlelist_value_type value(vertex_meta_data_type(), trg, weight);
-        rhh_container_utility::insert(&m_ld_singlelist, src, value);
+      // insert into a low table or move to middle-high one
+      if (count_in_single < middle_high_degree_threshold - 1) {
+        low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
+        rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
-        hd_trg_vertex_adjlist_type* adj_list = hd_trg_vertex_adjlist_type::allocate(midle_high_degree_threshold);
-        auto itr_single2 = m_ld_singlelist->find(src);
-        hd_src_vertex_value_type value(std::get<0>(*itr_single2), nullptr);
+        high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
+        auto itr_single2 = m_low_degree_table->find(src);
+        high_mid_src_vertex_value_type value(std::get<0>(*itr_single2), nullptr);
         for (; !itr_single2.is_end(); ++itr_single2) {
           rhh_container_utility::insert(&adj_list, std::get<1>(*itr_single2), std::get<2>(*itr_single2));
-          m_ld_singlelist->erase(itr_single2);
+          m_low_degree_table->erase(itr_single2);
         }
         rhh_container_utility::insert(&adj_list, trg, weight);
         value.second = adj_list;
-        rhh_container_utility::insert(&m_hd_adj_matrix, src, value);
-        rhh_container_utility::shrink_to_fit(&m_ld_singlelist);
+        rhh_container_utility::insert(&m_high_mid_degree_table, src, value);
+        rhh_container_utility::shrink_to_fit(&m_low_degree_table);
       }
 
     } else {
-      auto itr_src = m_hd_adj_matrix->find(src);
+      auto itr_src = m_high_mid_degree_table->find(src);
       if (itr_src.is_end()) {
-        ld_singlelist_value_type value(vertex_meta_data_type(), trg, weight);
-        rhh_container_utility::insert(&m_ld_singlelist, src, value);
+        low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
+        rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
         /// has source vertex
-        hd_trg_vertex_adjlist_type* adj_list = itr_src->second;
+        high_mid_edge_chunk_type* adj_list = itr_src->second;
         auto itr_trg = adj_list->find(trg);
 
         /// if same edge is found do nothing
@@ -121,11 +126,11 @@ EDGE_INSERTED:
 
   inline bool insert_vertex(vertex_id_type& vertex, vertex_meta_data_type& meta_data)
   {
-    auto itr_single = m_ld_singlelist->find(vertex);
+    auto itr_single = m_low_degree_table->find(vertex);
     if (itr_single.is_end()) {
-      auto itr = m_hd_adj_matrix->find(vertex);
+      auto itr = m_high_mid_degree_table->find(vertex);
       if (itr.is_end()) {
-        rhh_container_utility::insert(m_ld_singlelist, vertex, ld_singlelist_value_type(meta_data, vertex_id_type(), edge_weight_type()));
+        rhh_container_utility::insert(m_low_degree_table, vertex, low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
         return true;
       }
     }
@@ -143,22 +148,22 @@ EDGE_INSERTED:
   size_t erase_edge(vertex_id_type& src, vertex_id_type& trg)
   {
     size_t count = 0;
-    for (auto itr = m_ld_singlelist->find(src); !itr.is_end(); ++itr) {
+    for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
       if (std::get<1>(*itr) == trg) {
-        m_ld_singlelist->erase(itr);
+        m_low_degree_table->erase(itr);
         ++count;
       }
     }
 
     if (count > 0) {
-      rhh_container_utility::shrink_to_fit(&m_ld_singlelist);
+      rhh_container_utility::shrink_to_fit(&m_low_degree_table);
       return count;
     }
 
-    auto itr_matrix = m_hd_adj_matrix->find(src);
+    auto itr_matrix = m_high_mid_degree_table->find(src);
     /// has source vertex ?
     if (itr_matrix.is_end()) return false;
-    hd_trg_vertex_adjlist_type* adj_list = itr_matrix->second;
+    high_mid_edge_chunk_type* adj_list = itr_matrix->second;
 
     for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
       adj_list->erase(itr);
@@ -166,16 +171,16 @@ EDGE_INSERTED:
     }
 
     if (count > 0) {
-      if (adj_list->size() < midle_high_degree_threshold) {
+      if (adj_list->size() < middle_high_degree_threshold) {
         const vertex_meta_data_type& meta_data = itr_matrix->first;
         for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
-          ld_singlelist_value_type value(meta_data, itr->key, itr->value);
-          rhh_container_utility::insert(&m_ld_singlelist, src, value);
+          low_degree_table_value_type value(meta_data, itr->key, itr->value);
+          rhh_container_utility::insert(&m_low_degree_table, src, value);
           adj_list->erase(itr);
         }
-        hd_trg_vertex_adjlist_type::deallocate(adj_list);
-        m_hd_adj_matrix->erase(itr_matrix);
-        rhh_container_utility::shrink_to_fit(&m_hd_adj_matrix);
+        high_mid_edge_chunk_type::deallocate(adj_list);
+        m_high_mid_degree_table->erase(itr_matrix);
+        rhh_container_utility::shrink_to_fit(&m_high_mid_degree_table);
       } else {
         rhh_container_utility::shrink_to_fit(&adj_list);
         itr_matrix->second = adj_list;
@@ -187,16 +192,16 @@ EDGE_INSERTED:
 
   size_t erase_vertex(vertex_id_type& vertex)
   {
-    return m_hd_adj_matrix->erase(vertex);
+    return m_high_mid_degree_table->erase(vertex);
   }
 
   void clear()
   {
-    for (auto itr = m_hd_adj_matrix->begin(); !itr.is_end(); ++itr) {
-      hd_trg_vertex_adjlist_type* adj_list = itr->value.second;
+    for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
+      high_mid_edge_chunk_type* adj_list = itr->value.second;
       adj_list->clear();
     }
-    m_ld_singlelist->clear();
+    m_low_degree_table->clear();
   }
 
 
@@ -207,27 +212,31 @@ EDGE_INSERTED:
   void print_status()
   {
     std::cout << "<low degree table> : "
-              << " size/capacity : " << m_ld_singlelist->size() << " / " << m_ld_singlelist->capacity() * m_ld_singlelist->depth()
-              << ", chaine depth : " << m_ld_singlelist->depth()
-              << ", average probedistance : " << m_ld_singlelist->load_factor() << std::endl;
+              << " size, capacity, rate : " << m_low_degree_table->size() << ", " << m_low_degree_table->capacity() * m_low_degree_table->depth()
+              << ", " << (double)(m_low_degree_table->size()) / (m_low_degree_table->capacity() * m_low_degree_table->depth())
+              << ", chaine depth : " << m_low_degree_table->depth()
+              << ", average probedistance : " << m_low_degree_table->load_factor() << std::endl;
 
-    std::cout << "<high-midle degree table> : "
-              << " size/capacity : " << m_hd_adj_matrix->size() << " / " << m_hd_adj_matrix->capacity() * m_hd_adj_matrix->depth()
-              << ", chaine depth : " << m_hd_adj_matrix->depth()
-              << ", average probedistance : " << m_hd_adj_matrix->load_factor() << std::endl;
+    std::cout << "<high-middle degree table> : "
+              << " size, capacity, rate : " << m_high_mid_degree_table->size() << ", " << m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth()
+              << ", " << (double)(m_high_mid_degree_table->size()) / (m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth())
+              << ", chaine depth : " << m_high_mid_degree_table->depth()
+              << ", average probedistance : " << m_high_mid_degree_table->load_factor() << std::endl;
     {
-      size_t histgram_load_factor[hd_adj_matrix_type::property_program::kLongProbedistanceThreshold] = {0};
+      size_t histgram_load_factor[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_t histgram_cap_log2[50] = {0};
       size_t histgram_dept[30] = {0};
-      size_t size = 0;
-      for (auto itr = m_hd_adj_matrix->begin(); !itr.is_end(); ++itr) {
+      size_t size_sum = 0;
+      size_t capacity_sum = 0;
+      for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
         auto adj_list = itr->value.second;
 
-        size += adj_list->size();
+        size_sum += adj_list->size();
 
         assert(adj_list->load_factor() < utility::array_length(histgram_load_factor));
         ++histgram_load_factor[adj_list->load_factor()];
 
+        capacity_sum += adj_list->capacity() * adj_list->depth();
         size_t cap_log2 = std::log2l(adj_list->capacity() * adj_list->depth());
         if (cap_log2 >= utility::array_length(histgram_cap_log2))
           cap_log2 = utility::array_length(histgram_cap_log2) - 1;
@@ -239,9 +248,12 @@ EDGE_INSERTED:
         ++histgram_dept[depth];
       }
 
-      std::cout << "<high-midle edge chunks> : " << " size : " << size << std::endl;
+      std::cout << "<high-middle edge chunks> : "
+                << " size : " << size_sum
+                << ", capacity : " << capacity_sum
+                << ", rate : " << (double)(size_sum) / capacity_sum << std::endl;
 
-      std::cout << "load factor: ";
+      std::cout << "average probedistance: ";
       for (int i = 0; i < utility::array_length(histgram_load_factor); ++i) {
         std::cout << histgram_load_factor[i] << " ";
       }
@@ -254,7 +266,7 @@ EDGE_INSERTED:
       std::cout << std::endl;
 
       std::cout << "depth: ";
-      for (int i = 0; i < utility::array_length(histgram_dept); ++i) {
+      for (int i = 1; i < utility::array_length(histgram_dept); ++i) {
         std::cout << histgram_dept[i] << " ";
       }
       std::cout << std::endl;
@@ -264,11 +276,11 @@ EDGE_INSERTED:
 
   void fprint_all_elements(std::ofstream& of)
   {
-    for (auto itr = m_ld_singlelist->begin(); !itr.is_end(); ++itr) {
+    for (auto itr = m_low_degree_table->begin(); !itr.is_end(); ++itr) {
       of << itr->key << " " << std::get<1>(itr->value) << "\n";
     }
 
-    for (auto itr = m_hd_adj_matrix->begin(); !itr.is_end(); ++itr) {
+    for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
       auto adj_list = itr->value.second;
       for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
         of << itr->key << " " << itr2->key << "\n";
@@ -277,8 +289,8 @@ EDGE_INSERTED:
   }
 
  private:
-  ld_singlelist_type* m_ld_singlelist;
-  hd_adj_matrix_type* m_hd_adj_matrix;
+  low_degree_table_type* m_low_degree_table;
+  high_mid_degree_table_type* m_high_mid_degree_table;
 
 };
 

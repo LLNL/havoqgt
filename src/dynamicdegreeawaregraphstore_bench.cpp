@@ -18,7 +18,7 @@ enum : size_t {
 
 using vertex_meta_data_type = unsigned char;
 using edge_weight_type = unsigned char;
-using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, static_cast<size_t>(midle_high_degree_threshold)>;
+using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, midle_high_degree_threshold>;
 
 template <typename Edges>
 void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
