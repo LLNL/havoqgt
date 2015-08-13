@@ -98,7 +98,7 @@ public:
   using allocator               = graphstore::rhh::allocator_holder_sglt<kElementSize,
                                                                            sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
 
-  enum : size_t{
+  enum : size_t {
     kCapacityGrowingFactor = 2ULL
   };
 

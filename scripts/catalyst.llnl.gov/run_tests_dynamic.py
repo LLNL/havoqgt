@@ -240,8 +240,8 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-			s += block_start + "dmesg | tee -n 200 \n" + block_end
-			s += "dmesg | tee -n 200 \n"
+                        s += block_start + "dmesg | tail -n 200 \n" + block_end
+                        s += "dmesg | tail -n 200 \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"

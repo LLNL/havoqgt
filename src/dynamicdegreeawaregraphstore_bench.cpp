@@ -5,7 +5,7 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #define DEBUG_MODE 0
 #if DEBUG_MODE

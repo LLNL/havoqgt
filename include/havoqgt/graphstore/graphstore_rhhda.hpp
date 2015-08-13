@@ -211,17 +211,19 @@ EDGE_INSERTED:
   ///         thus, this function would affect pagecache and cause I/Os
   void print_status()
   {
-    std::cout << "<low degree table> : "
-              << " size, capacity, rate : " << m_low_degree_table->size() << ", " << m_low_degree_table->capacity() * m_low_degree_table->depth()
+    std::cout << "<low degree table>:"
+              << "\n size, capacity, rate: " << m_low_degree_table->size() << ", " << m_low_degree_table->capacity() * m_low_degree_table->depth()
               << ", " << (double)(m_low_degree_table->size()) / (m_low_degree_table->capacity() * m_low_degree_table->depth())
-              << ", chaine depth : " << m_low_degree_table->depth()
-              << ", average probedistance : " << m_low_degree_table->load_factor() << std::endl;
+              << "\n chaine depth: " << m_low_degree_table->depth()
+              << "\n average probedistance: " << m_low_degree_table->load_factor()
+              << "\n capacity*element_size(GB): " << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
 
-    std::cout << "<high-middle degree table> : "
-              << " size, capacity, rate : " << m_high_mid_degree_table->size() << ", " << m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth()
+    std::cout << "<high-middle degree table>: "
+              << "\n size, capacity, rate: " << m_high_mid_degree_table->size() << ", " << m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth()
               << ", " << (double)(m_high_mid_degree_table->size()) / (m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth())
-              << ", chaine depth : " << m_high_mid_degree_table->depth()
-              << ", average probedistance : " << m_high_mid_degree_table->load_factor() << std::endl;
+              << "\n chaine depth : " << m_high_mid_degree_table->depth()
+              << "\n average probedistance: " << m_high_mid_degree_table->load_factor()
+              << "\n capacity*element_size(GB): " << (double)m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth() * high_mid_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
     {
       size_t histgram_load_factor[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_t histgram_cap_log2[50] = {0};
@@ -248,10 +250,11 @@ EDGE_INSERTED:
         ++histgram_dept[depth];
       }
 
-      std::cout << "<high-middle edge chunks> : "
-                << " size : " << size_sum
-                << ", capacity : " << capacity_sum
-                << ", rate : " << (double)(size_sum) / capacity_sum << std::endl;
+      std::cout << "<high-middle edge chunks>: "
+                << "\n size: " << size_sum
+                << "\n capacity: " << capacity_sum
+                << "\n rate: " << (double)(size_sum) / capacity_sum
+                << "\n capacity*element_size(GB): " << (double)capacity_sum * high_mid_edge_chunk_type::kElementSize  / (1ULL<<30) << std::endl;
 
       std::cout << "average probedistance: ";
       for (int i = 0; i < utility::array_length(histgram_load_factor); ++i) {
