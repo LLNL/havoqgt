@@ -5,7 +5,7 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 #define DEBUG_MODE 0
 #if DEBUG_MODE
@@ -21,7 +21,10 @@ using edge_weight_type = unsigned char;
 using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, midle_high_degree_threshold>;
 
 template <typename Edges>
-void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
+void apply_edges_update_requests(mapped_file_type& mapped_file,
+                                 segment_manager_type *const segment_manager,
+                                 graphstore_type& graph_store, Edges& edges,
+                                 const uint64_t chunk_size, const size_t edges_delete_ratio)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
@@ -63,7 +66,9 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
+    mapped_file.flush();
     havoqgt::havoqgt_env()->world_comm().barrier();
+
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
     if (mpi_rank == 0) print_usages(segment_manager);
@@ -209,7 +214,7 @@ int main(int argc, char** argv) {
       std::cout << "Create and map a segument file" << std::endl;
     }
     uint64_t graph_capacity = std::pow(2, segmentfile_init_size) / mpi_size;
-    mapped_file_type asdf = mapped_file_type(boost::interprocess::create_only, fname.str().c_str(), graph_capacity);
+    mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname.str().c_str(), graph_capacity);
 
 #if 0
     boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
@@ -219,12 +224,12 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Call posix_fallocate\n";
     }
-    fallocate(fname.str().c_str(), graph_capacity, asdf);
+    fallocate(fname.str().c_str(), graph_capacity, mapped_file);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
 
     /// --- create a segument --- ///
-    segment_manager_type* segment_manager = asdf.get_segment_manager();
+    segment_manager_type* segment_manager = mapped_file.get_segment_manager();
     if (mpi_rank == 0) print_usages(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
@@ -242,11 +247,13 @@ int main(int argc, char** argv) {
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
         vert_scale, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
-      apply_edges_update_requests(graph_store,
-                                  rmat,
-                                  segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
-                                  edges_delete_ratio);
+      apply_edges_update_requests(
+            mapped_file,
+            segment_manager,
+            graph_store,
+            rmat,
+            static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+            edges_delete_ratio);
     } else {
       const double time_start = MPI_Wtime();
       havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
@@ -255,12 +262,14 @@ int main(int argc, char** argv) {
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
 
-      apply_edges_update_requests(graph_store,
-                                  edgelist,
-                                  segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
-                                  edges_delete_ratio);
-    }
+      apply_edges_update_requests(
+            mapped_file,
+            segment_manager,
+            graph_store,
+            edgelist,
+            static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+            edges_delete_ratio);
+}
 
 
 #if DEBUG_MODE
@@ -275,6 +284,5 @@ int main(int argc, char** argv) {
 #endif
 
     havoqgt::havoqgt_env()->world_comm().barrier();
-
-  }
+  } // End of MPI
 }
