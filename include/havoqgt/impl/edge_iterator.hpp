@@ -64,6 +64,9 @@ class delegate_partitioned_graph<SegementManager>::edge_iterator {
   edge_iterator()
     : m_ptr_graph(NULL) {};
 
+  edge_iterator(const delegate_partitioned_graph<SegementManager>* const graph)
+    : m_ptr_graph(graph) {};
+  
   edge_iterator & operator=(const edge_iterator& _iterator) {
     m_source = _iterator.m_source;
     m_edge_offset = _iterator.m_edge_offset;

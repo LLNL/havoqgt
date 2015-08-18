@@ -109,6 +109,9 @@ public:
 
   uint32_t get_src_label() const { return src_label; }
   uint32_t get_dest_label() const { return dest_label; }
+  nano_time start_time() const { return start; }
+  nano_time end_time() const { return end; }
+
 } __attribute__ ((packed));
 
 class ingest_flow_edge_list {

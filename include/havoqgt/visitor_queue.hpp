@@ -145,8 +145,36 @@ public:
   };
 
   void init_visitor_traversal(vertex_locator _source_v) {
+    return init_visitor_traversal(visitor_type(_source_v));
+  }
+
+  void init_visitor_traversal(std::vector<visitor_type> visitor_list) {
+    for( auto visitor_list_itr = visitor_list.begin();
+	 visitor_list_itr != visitor_list.end();
+	 ++visitor_list_itr ) {
+      visitor_type visitor = *visitor_list_itr;
+      if( visitor.vertex.owner() == m_mailbox.comm_rank() )
+	queue_visitor( visitor );
+    }
+
+    do{
+      do{
+	process_pending_controllers();
+	while(!empty()) {
+	  process_pending_controllers();
+	  visitor_type this_visitor = pop_top();
+	  do_visit(this_visitor);
+	  m_termination_detection.inc_completed();	  
+	}
+	m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      sched_yield();
+    } while( !m_termination_detection.test_for_termination());
+  }
+  
+  void init_visitor_traversal(visitor_type& _source_visitor) {
     if(0 /*_source_v.owner()*/ == m_mailbox.comm_rank()) {
-      queue_visitor(visitor_type(_source_v));
+      queue_visitor(_source_visitor);
     }
     do {
       do {
@@ -246,6 +274,82 @@ public:
         m_mailbox.flush_buffers_if_idle();
       } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
               || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+  template<typename value_type>
+  void init_visitor_traversal_child_count(const value_type* value, const std::vector<vertex_locator>& sources) {
+    typename TGraph::vertex_iterator vertex_itr = m_ptr_graph->vertices_begin();
+    int count = 0;
+    //typedef typename TGraph::vertex_locator vertex_locator;
+    auto itr = sources.begin();
+    do {
+      do {
+	do {
+	   
+	  if(vertex_itr != m_ptr_graph->vertices_end())
+	    itr = sources.begin();
+	  do{
+	    
+	    if(vertex_itr != m_ptr_graph->vertices_end() &&
+	       itr != sources.end() ) {
+	      //for( auto itr = sources.begin(); itr != sources.end(); ++itr) {
+	      //if( *itr == *vertex_itr ) continue;
+	      if(*itr!=*vertex_itr && (*value)[*vertex_itr].get_parent(*itr) != vertex_locator() ) {
+		visitor_type v( (*value)[*vertex_itr].get_parent(*itr), *itr);  
+		queue_visitor(v);
+	  
+	      }
+		//}
+	    ++itr;	    
+	  }
+	  
+	    process_pending_controllers();
+	    while(!empty()) {
+	      process_pending_controllers();
+	      visitor_type this_visitor = pop_top();
+	      do_visit(this_visitor);
+	      m_termination_detection.inc_completed();
+	    }
+	  }while( itr != sources.end());
+	  
+	  if(vertex_itr != m_ptr_graph->vertices_end())
+	    ++vertex_itr;
+	} while( vertex_itr != m_ptr_graph->vertices_end() ||
+		 !m_local_controller_queue.empty() );
+	m_mailbox.flush_buffers_if_idle();
+      }while( !empty() || !m_mailbox.is_idle() );
+    }while( !m_termination_detection.test_for_termination());
+    
+  }
+
+  void init_visitor_traversal_reachability() {
+    typename TGraph::vertex_iterator vertex_itr = m_ptr_graph->vertices_begin();
+   
+    do {
+
+      do{
+	
+	do{
+	  int count = 0;
+	  for(; count < 7000 && vertex_itr != m_ptr_graph->vertices_end(); count++, vertex_itr++) {
+	    visitor_type v(*vertex_itr, 0, vertex_locator(), *vertex_itr);
+	    queue_visitor(v);
+	  }
+
+	  process_pending_controllers();
+	  while(!empty()) {
+	    process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();
+	  }
+
+	}while( vertex_itr != m_ptr_graph->vertices_end() || !m_local_controller_queue.empty() );
+	
+	m_mailbox.flush_buffers_if_idle();
+      } while( !empty() || !m_mailbox.is_idle() );
+
     } while(!m_termination_detection.test_for_termination());
   }
 

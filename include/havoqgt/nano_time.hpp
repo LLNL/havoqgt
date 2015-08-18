@@ -37,6 +37,10 @@ class nano_time {
 		return str.str();
 	}
 
+  friend bool operator==(const nano_time& lhs, const nano_time& rhs) {
+    return (lhs.seconds == rhs.seconds) && (lhs.nanoseconds == rhs.nanoseconds);
+  }
+
 	friend nano_time operator+(nano_time lhs, nano_time rhs) {
 		uint32_t _seconds = lhs.seconds + rhs.seconds;
 		uint32_t _nanoseconds = lhs.nanoseconds + rhs.nanoseconds;
@@ -64,6 +68,14 @@ class nano_time {
 		else
 			return false;
 	}
+
+  friend bool operator<(const nano_time& lhs, const nano_time& rhs) {
+    if(lhs.seconds < rhs.seconds) return true;
+    else if(lhs.seconds == rhs.seconds) {
+      return lhs.nanoseconds < rhs.nanoseconds;
+    }
+    else return false;
+  }
 } __attribute__ ((packed));
 
 #endif  //  _NANO_TIME_HPP_INCLUDED
