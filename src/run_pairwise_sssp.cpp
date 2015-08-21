@@ -28,7 +28,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_graph_filename
 		    , nano_time& start_time
 		    , nano_time& waiting_time
 		    , uint32_t& source_count) {
-
+#if 0 //DEBUG CODE
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for( size_t i = 0; i < argc; ++i) {
@@ -36,15 +36,18 @@ void parse_cmd_line(int argc, char** argv, std::string& input_graph_filename
     }
     std::cout << std::endl;
   }
+#endif
 
   bool found_input_graph_filename = false;
   bool found_input_metadata_filename = false;
 
   char c;
   while( (c = getopt(argc, argv, "i:m:s:w:c:h ")) != -1 ) {
+#if 0 //DEBUG CODE
     if( havoqgt_env()->world_comm().rank() == 0) {
       std::cout << "Processing " << c << " , Value : " << optarg << std::endl;
     }
+#endif
 
     switch (c) {
     case 'i':
@@ -96,12 +99,12 @@ std::vector<uint64_t> random_vertices_list(graph_type* graph, int source_count) 
   return random_vertices;
 }
 
-time_t start;
-time_t end;
+clock_t start;
+clock_t end;
 
-void start_timer() { time(&start); }
-void end_timer() { time(&end); }
-double execution_time() { return difftime(end, start); }
+void start_timer() { start = clock(); }
+void end_timer() { end = clock(); }
+double execution_time() { return ((double)(end - start))/CLOCKS_PER_SEC; }
 
 int main( int argc, char **argv) {
 
@@ -129,11 +132,11 @@ int main( int argc, char **argv) {
       havoqgt::distributed_db graph_db(havoqgt::db_open(), input_graph_filename.c_str());
       havoqgt::distributed_db metadata_db(havoqgt::db_open(), input_metadata_filename.c_str());
 
-      MASTER_MSG("Initializing graph database");
+      //MASTER_MSG("Initializing graph database");
       graph_type *graph = graph_db.get_segment_manager()->find<graph_type>("graph_obj").first;
       assert( graph != NULL );
 
-      MASTER_MSG("Initializing metadata database");
+      //MASTER_MSG("Initializing metadata database");
       edge_data_type *edge_data = metadata_db.get_segment_manager()->find<edge_data_type>("edge_data").first;
       assert( graph != NULL );
 
@@ -153,7 +156,7 @@ int main( int argc, char **argv) {
 	  }
 	}
       }// else std::sort( vertices_list.begin(), vertices_list.end());
-
+      MASTER_DO( std::cout << source_count <<","; );
 
       typedef vertex_state_map<graph_type, nano_time> vertex_state_type;
       vertex_state_type::traversal_count = 0;
@@ -170,7 +173,7 @@ int main( int argc, char **argv) {
 	vertices_locator_list.push_back(graph->label_to_locator(*vertices_itr));
       }
 
-      MASTER_MSG("Starting pairwise SSSP Computation");
+      //MASTER_MSG("Starting pairwise SSSP Computation");
       havoqgt_env()->world_comm().barrier();
       MASTER_DO(
 		start_timer();
@@ -188,8 +191,9 @@ int main( int argc, char **argv) {
       uint64_t total_count = mpi_all_reduce( vertex_state_type::traversal_count,
 					     std::plus<uint64_t>() ,
 					     havoqgt_env()->world_comm().comm() );
-      MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
-      
+
+      //MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
+      MASTER_DO(std::cout << total_count << ",";);
       {
 #if 0
 	for(graph_type::vertex_iterator vert_itr = graph->vertices_begin();
@@ -205,10 +209,11 @@ int main( int argc, char **argv) {
 	  }
 	}
 #endif
-	MASTER_MSG("Preliminary pairwise SSSP computation completed. " );
-	MASTER_DO(
+	//MASTER_MSG("Preliminary pairwise SSSP computation completed. " );
+	/*MASTER_DO(
 		  std::cout << "Time of Execution: Pairwise SSSP : " << execution_time() << std::endl;
-		  );
+		  );*/
+	MASTER_DO(std::cout << execution_time() <<",";);
       }
       havoqgt_env()->world_comm().barrier();
 
@@ -228,11 +233,11 @@ int main( int argc, char **argv) {
       total_count = mpi_all_reduce(count_vertex_state_type::traversal_count
 				   , std::plus<uint64_t>()
 				   , havoqgt_env()->world_comm().comm() );
-      MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
-      
-      MASTER_MSG(" Counting child complete " );
-      MASTER_DO( std::cout << "Time of Execution: Child Count :" << execution_time() << std::endl; );
-      
+      //MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
+      MASTER_DO(std::cout << total_count << ",";);
+      //MASTER_MSG(" Counting child complete " );
+      //MASTER_DO( std::cout << "Time of Execution: Child Count :" << execution_time() << std::endl; );
+      MASTER_DO(std::cout << execution_time() << ","; );
             {
 #if 0
 	for( graph_type::vertex_iterator itr = graph->vertices_begin();
@@ -268,16 +273,17 @@ int main( int argc, char **argv) {
       total_count = mpi_all_reduce( count_vertex_state_type::traversal_count
 				    , std::plus<uint64_t>()
 				    , havoqgt_env()->world_comm().comm() );
-      MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
-      
-      MASTER_MSG(" Betweenness centrality computation completed. " );
-      MASTER_DO( std::cout << "Time of Execution : Betweenness Centrality : " << execution_time() << std::endl; );
+      //MASTER_DO( std::cout << "Total traversed vertices: " << total_count << std::endl; );
+      MASTER_DO(std::cout << total_count << ",";);
+      //MASTER_MSG(" Betweenness centrality computation completed. " );
+      //MASTER_DO( std::cout << "Time of Execution : Betweenness Centrality : " << execution_time() << std::endl; );
+      MASTER_DO(std::cout << execution_time() << std::endl;);
       typedef graph_type::vertex_data< uint64_t, std::allocator<uint64_t> > aggregate_vertex_data_type;
       aggregate_vertex_data_type shortest_path_aggregate( *graph );
       shortest_path_aggregate.reset( 0 );
 
       std::stringstream str;
-      str << "betweenness_" <<  mpi_rank << "_of_" << mpi_size;
+      str << "betweenness_" << start_time.seconds << "_" << waiting_time.seconds << "_" <<  mpi_rank << "_of_" << mpi_size;
       
       std::ofstream out(str.str());
       
@@ -298,7 +304,7 @@ int main( int argc, char **argv) {
       out.close();
       
       havoqgt_env()->world_comm().barrier();
-      MASTER_MSG(" Writing to file completed");
+      //MASTER_MSG(" Writing to file completed");
     }
     
   }
