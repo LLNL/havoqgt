@@ -21,7 +21,7 @@ USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
 MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_test_0728.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_flush_test_0828.log"
 
 NORUN = False
 VERBOSE = True
@@ -40,7 +40,7 @@ else:
 	else:
 		graph_dir = "/usr/localdisk/fusion/"
 
-log_dir = "logs/"
+log_dir = "logs/flush/"
 executable_dir = "src/"
 executable = "dynamicdegreeawaregraphstore_bench"
 
@@ -240,8 +240,8 @@ def generate_shell_file():
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-      s += block_start + "dmesg | tail -n 500 \n" + block_end
-      s += "dmesg | tail -n 500 \n"
+			s += block_start + "dmesg | tail -n 500 \n" + block_end
+			s += "dmesg | tail -n 500 \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"

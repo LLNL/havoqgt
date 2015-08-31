@@ -13,7 +13,7 @@ std::ofstream ofs_edges;
 #endif
 
 enum : size_t {
-  midle_high_degree_threshold = 3
+  midle_high_degree_threshold = 4
 };
 
 using vertex_meta_data_type = unsigned char;
@@ -66,7 +66,8 @@ void apply_edges_update_requests(mapped_file_type& mapped_file,
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
-    mapped_file.flush();
+    // mapped_file.flush();
+    sync_dimmap();
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     const double time_end = MPI_Wtime();

@@ -128,6 +128,17 @@ void generate_insertion_requests(Edges_itr& edges_itr, Edges_itr& edges_itr_last
  #endif
 }
 
+void flush_dimmap()
+{
+  std::ofstream flusher("/sys/class/di-mmap-runtimeA/flush_buffer");
+  flusher << "1" << std::endl;
+}
+
+void sync_dimmap()
+{
+  std::ofstream flusher("/proc/di-mmap-runtimeA-tuning");
+  flusher << "mmap_sync_buffers" << std::endl;
+}
 
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP
 
