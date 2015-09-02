@@ -205,6 +205,18 @@ EDGE_INSERTED:
   }
 
 
+  typename low_degree_table_type::value_iterator find_low_edge (vertex_id_type& src_vrt)
+  {
+    return m_low_degree_table->find(src_vrt);
+  }
+
+  typename high_mid_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
+  {
+    const auto itr_matrix = m_high_mid_degree_table->find(src_vrt);
+    const high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
+    return adj_list->begin();
+  }
+
   ///
   /// \brief print_status
   ///   Note: this function accesses entier data of the rhhda containers to compute statuses
