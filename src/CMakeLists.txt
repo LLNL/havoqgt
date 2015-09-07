@@ -12,3 +12,4 @@ endfunction()
 
 add_exe( dynamicdegreeawaregraphstore_bench )
 add_exe( dynamicdegreeawaregraphstore_bench_with_baseline )
+add_exe( pa_graph_generator )
