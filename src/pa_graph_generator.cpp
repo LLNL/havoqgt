@@ -70,20 +70,30 @@ int main(int argc, char** argv)
   std::cout << "generated graph: " << edge_vec.size() << std::endl;
 
 
-  /// --- count degree ---- ///
-#if 0
-  std::vector<size_t> deg_vec(num_verticess);
+  /// --- count degree and make ---- ///
+#if 1
+  std::vector<size_t> deg_vec(num_verticess, 0);
   for_each(edge_vec.begin(), edge_vec.end(),
                   [&deg_vec](std::pair<vertex_type, vertex_type> edge){
                     ++deg_vec[edge.first];
                   }
           );
 
+
+  auto max_elem = std::max_element(deg_vec.begin(), deg_vec.end());
+  std::cout << "max degree =\t" << *max_elem << std::endl;
+  std::cout << "-- degree table --" << std::endl;
+  std::vector<size_t> deg_tbl_vec(*max_elem+1, 0);
   for_each(deg_vec.begin(), deg_vec.end(),
-                  [](uint64_t d){
-                  std::cout << d << std::endl;
+                  [&deg_tbl_vec](uint64_t d){
+                    ++deg_tbl_vec[d];
                   }
           );
+
+ for (auto itr = deg_tbl_vec.begin(), end = deg_tbl_vec.end(); itr != end; ++itr) {
+   if (*itr > 0)
+    std::cout << itr - deg_tbl_vec.begin() << ":\t" << *itr << std::endl;
+ }
 #endif
 
   return 0;
