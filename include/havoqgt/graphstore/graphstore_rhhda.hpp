@@ -69,7 +69,7 @@ public:
   bool insert_edge(vertex_id_type& src, vertex_id_type& trg, edge_weight_type& weight)
   {
 
-    // count degree of the source vertex in low degree table
+    /// -- count the degree of the source vertex in the low degree table -- ///
     size_t count_in_single = 0;
     for (auto itr_single = m_low_degree_table->find(src); !itr_single.is_end(); ++itr_single) {
       if ((*itr_single).second == trg) {
@@ -78,12 +78,13 @@ public:
       ++count_in_single;
     }
 
-    if (count_in_single > 0) {
-      // insert into a low table or move to middle-high one
+    if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
       if (count_in_single < middle_high_degree_threshold - 1) {
+        /// --- insert into the low table --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
         rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
+        /// --- move the elements from low table to high-mid table --- ///
         high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
         auto itr_single2 = m_low_degree_table->find(src);
         high_mid_src_vertex_value_type value((*itr_single2).first, nullptr);
@@ -100,19 +101,20 @@ public:
     } else {
       auto itr_src = m_high_mid_degree_table->find(src);
       if (itr_src.is_end()) {
+        /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
         rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
-        /// has source vertex
+        /// --- the high-mid table has source vertex --- ///
         high_mid_edge_chunk_type* adj_list = itr_src->second;
         auto itr_trg = adj_list->find(trg);
 
-        /// if same edge is found do nothing
         if (itr_trg.is_end()) {
-          /// actually insert the edge (insert the target vertex into the adjacency list)
+          /// --- insert the edge --- ///
           rhh_container_utility::insert(&adj_list, trg, weight);
           itr_src->second = adj_list;
         } else {
+          /// --- if the same edge is found, do nothing --- ///
           return false;
         }
       }
@@ -197,8 +199,9 @@ EDGE_INSERTED:
 
   void clear()
   {
-    for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
-      high_mid_edge_chunk_type* adj_list = itr->value.second;
+    // for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr)
+    for (const auto& itr : *m_high_mid_degree_table) {
+      high_mid_edge_chunk_type* const adj_list = itr.value.second;
       adj_list->clear();
     }
     m_low_degree_table->clear();
@@ -210,12 +213,25 @@ EDGE_INSERTED:
     return m_low_degree_table->find(src_vrt);
   }
 
+  typename low_degree_table_type::const_value_iterator find_low_edge (vertex_id_type& src_vrt) const
+  {
+    return m_low_degree_table->find(src_vrt);
+  }
+
   typename high_mid_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_high_mid_degree_table->find(src_vrt);
     high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->begin();
   }
+
+  typename high_mid_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
+  {
+    const auto itr_matrix = m_high_mid_degree_table->find(src_vrt);
+    const high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
+    return adj_list->cbegin();
+  }
+
 
   ///
   /// \brief print_status

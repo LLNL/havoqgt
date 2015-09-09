@@ -44,19 +44,38 @@ inline void insert(rhh_type** rhh, key_type key, value_type value)
   }
 }
 
+//template <typename rhh_type>
+//inline void shrink_to_fit(rhh_type** rhh)
+//{
+//  const typename rhh_type::size_type cur_size = (*rhh)->size();
+//  typename rhh_type::size_type new_capacity = (*rhh)->capacity();
+//  while ( cur_size <
+//            static_cast<double>(new_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor ) {
+//    new_capacity /= graphstore::rhh::kCapacityGrowingFactor;
+//  }
+
+//  if ((*rhh)->capacity() > new_capacity) {
+//    (*rhh) = rhh_type::resize((*rhh), new_capacity);
+//  }
+
+//}
+
 template <typename rhh_type>
 inline void shrink_to_fit(rhh_type** rhh)
 {
   const typename rhh_type::size_type cur_size = (*rhh)->size();
-  typename rhh_type::size_type new_capacity = (*rhh)->capacity();
-  while ( cur_size <
-            static_cast<double>(new_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor ) {
-    new_capacity /= graphstore::rhh::kCapacityGrowingFactor;
+  typename rhh_type::size_type cur_capacity = (*rhh)->capacity() * (*rhh)->depth();
+  if (cur_size > static_cast<double>(cur_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor) {
+    /// --- current capacity is fit to current size, do nothing --- ///
+    return ;
   }
 
-  if ((*rhh)->capacity() > new_capacity) {
-    (*rhh) = rhh_type::resize((*rhh), new_capacity);
+  typename rhh_type::size_type new_capacity = 1;
+  while ( cur_size > static_cast<double>(new_capacity) * graphstore::rhh::kFullCapacitFactor ) {
+    new_capacity *= graphstore::rhh::kCapacityGrowingFactor;
   }
+
+  (*rhh) = rhh_type::resize((*rhh), new_capacity);
 
 }
 
@@ -113,7 +132,9 @@ public:
 
    public:
 
-    WholeForwardIterator(rhh_type* rhh) :
+    WholeForwardIterator() = delete;
+
+    explicit WholeForwardIterator(rhh_type* rhh) :
       m_rhh_ptr(rhh),
       m_pos(-1) /// Note: next_valid_element increment m_pos in the first line
     {
@@ -189,9 +210,6 @@ public:
 
    private:
 
-    WholeForwardIterator()
-    { }
-
     void next_valid_element()
     {
       ++m_pos;
@@ -229,7 +247,10 @@ public:
     using value_iterator_selftype = ValueForwardIterator<Type>;
     using rhh_type                = rhh_contatiner_selftype;
 
+
    public:
+
+    ValueForwardIterator() = delete;
 
     ValueForwardIterator(rhh_type* rhh, const key_type& key) :
       m_rhh_ptr(rhh),
@@ -307,9 +328,6 @@ public:
 
    private:
 
-    ValueForwardIterator()
-    { }
-
     template<class OtherType>
     inline bool is_equal(const ValueForwardIterator<OtherType> &rhs) const
     {
@@ -333,12 +351,12 @@ public:
 
 
   /// --- Explicitly Delete -- ///
-  rhh_container_base()  =delete;
-  ~rhh_container_base() =delete;
-  rhh_container_base(const rhh_contatiner_selftype& src) =delete;
-  rhh_container_base& operator=(const rhh_container_base&) =delete;
-  rhh_container_base(const rhh_container_base&&) =delete;
-  rhh_container_base& operator=(rhh_container_base&& old_obj) =delete;
+  rhh_container_base()  = delete;
+  ~rhh_container_base() = delete;
+  rhh_container_base(const rhh_contatiner_selftype& src) = delete;
+  rhh_container_base& operator=(const rhh_container_base&) = delete;
+  rhh_container_base(const rhh_container_base&&) = delete;
+  rhh_container_base& operator=(rhh_container_base&& old_obj) = delete;
 
   /// --- operator ---- ///
   //  inline element_type& operator[](size_type pos) {
@@ -363,6 +381,12 @@ public:
     return value_iterator(this, key);
   }
 
+  inline const_value_iterator find(const key_type& key) const
+  {
+    return const_value_iterator(this, key);
+  }
+
+
   inline std::pair<value_iterator, value_iterator> equal_range(const key_type& key)
   {
     return std::make_pair(fin(key), value_iterator(nullptr, kKeyNotFound));
@@ -376,6 +400,16 @@ public:
   whole_iterator end()
   {
     return whole_iterator(this, kKeyNotFound);
+  }
+
+  const_whole_iterator cbegin() const
+  {
+    return const_whole_iterator(this);
+  }
+
+  const_whole_iterator cend() const
+  {
+    return const_whole_iterator(this, kKeyNotFound);
   }
 
 

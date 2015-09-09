@@ -71,7 +71,7 @@ void apply_edges_update_requests(mapped_file_type& mapped_file,
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) / (1000000.0) << std::endl;
     if (mpi_rank == 0) print_usages(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
 #if VERBOSE
