@@ -29,7 +29,6 @@ private:
   using high_mid_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
   using segment_manager_type           = rhh::segment_manager_t;
 
-
 public:
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
@@ -253,28 +252,34 @@ EDGE_INSERTED:
               << "\n average probedistance: " << m_high_mid_degree_table->load_factor()
               << "\n capacity*element_size(GB): " << (double)m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth() * high_mid_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
     {
-      size_t histgram_load_factor[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
-      size_t histgram_cap_log2[50] = {0};
-      size_t histgram_dept[30] = {0};
+      size_t histgram_ave_prbdist[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
+      size_t histgram_cap[50] = {0};
+      size_t histgram_size[50] = {0};
+      size_t histgram_dept[50] = {0};
       size_t size_sum = 0;
       size_t capacity_sum = 0;
       for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
         auto adj_list = itr->value.second;
 
+        /// --- size ---- ///
         size_sum += adj_list->size();
+        const size_t sz_log2 = std::min(std::log2l(adj_list->size()),
+                                        utility::array_length(histgram_size) - 1);
+        ++histgram_size[sz_log2];
 
-        assert(adj_list->load_factor() < utility::array_length(histgram_load_factor));
-        ++histgram_load_factor[adj_list->load_factor()];
+        /// --- average probe distance (laod factor) ---- ///
+        assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
+        ++histgram_ave_prbdist[adj_list->load_factor()];
 
+        /// --- capacity --- ///
         capacity_sum += adj_list->capacity() * adj_list->depth();
-        size_t cap_log2 = std::log2l(adj_list->capacity() * adj_list->depth());
-        if (cap_log2 >= utility::array_length(histgram_cap_log2))
-          cap_log2 = utility::array_length(histgram_cap_log2) - 1;
-        ++histgram_cap_log2[cap_log2];
+        const size_t cap_log2 = std::min(std::log2l(adj_list->capacity()),
+                                        utility::array_length(histgram_cap) - 1);
+        ++histgram_cap[cap_log2];
 
-        size_t depth = adj_list->depth();
-        if (depth >= utility::array_length(histgram_dept))
-          depth = utility::array_length(histgram_dept);
+        /// --- depth --- ///
+        const size_t depth = std::min(adj_list->depth(),
+                                      utility::array_length(histgram_dept) - 1);
         ++histgram_dept[depth];
       }
 
@@ -285,14 +290,20 @@ EDGE_INSERTED:
                 << "\n capacity*element_size(GB): " << (double)capacity_sum * high_mid_edge_chunk_type::kElementSize  / (1ULL<<30) << std::endl;
 
       std::cout << "average probedistance: ";
-      for (int i = 0; i < utility::array_length(histgram_load_factor); ++i) {
-        std::cout << histgram_load_factor[i] << " ";
+      for (int i = 0; i < utility::array_length(histgram_ave_prbdist); ++i) {
+        std::cout << histgram_ave_prbdist[i] << " ";
       }
       std::cout << std::endl;
 
       std::cout << "capacity (log2): ";
-      for (int i = 0; i < utility::array_length(histgram_cap_log2); ++i) {
-        std::cout << histgram_cap_log2[i] << " ";
+      for (int i = 0; i < utility::array_length(histgram_cap); ++i) {
+        std::cout << histgram_cap[i] << " ";
+      }
+      std::cout << std::endl;
+
+      std::cout << "size (log2): ";
+      for (int i = 0; i < utility::array_length(histgram_size); ++i) {
+        std::cout << histgram_size[i] << " ";
       }
       std::cout << std::endl;
 
@@ -319,7 +330,7 @@ EDGE_INSERTED:
     }
   }
 
- private:
+private:
   low_degree_table_type* m_low_degree_table;
   high_mid_degree_table_type* m_high_mid_degree_table;
 
