@@ -263,8 +263,8 @@ EDGE_INSERTED:
 
         /// --- size ---- ///
         size_sum += adj_list->size();
-        const size_t sz_log2 = std::min(std::log2l(adj_list->size()),
-                                        utility::array_length(histgram_size) - 1);
+        const size_t sz_log2 = std::min(std::log2(adj_list->size()),
+                                        static_cast<double>(utility::array_length(histgram_size) - 1.0));
         ++histgram_size[sz_log2];
 
         /// --- average probe distance (laod factor) ---- ///
@@ -273,8 +273,8 @@ EDGE_INSERTED:
 
         /// --- capacity --- ///
         capacity_sum += adj_list->capacity() * adj_list->depth();
-        const size_t cap_log2 = std::min(std::log2l(adj_list->capacity()),
-                                        utility::array_length(histgram_cap) - 1);
+        const size_t cap_log2 = std::min(std::log2(adj_list->capacity()),
+                                        static_cast<double>(utility::array_length(histgram_cap) - 1));
         ++histgram_cap[cap_log2];
 
         /// --- depth --- ///
