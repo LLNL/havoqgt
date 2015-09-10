@@ -258,7 +258,7 @@ public:
       m_pos(0),
       m_prb_dist(0)
     {
-      m_rhh_ptr->internal_locate(m_key, &m_rhh_ptr, m_pos, m_prb_dist);
+      internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
     }
 
     ValueForwardIterator(rhh_type* rhh, const key_type& key, rhh_type::size_type pos,  rhh_type::probedistance_type prb_dist) :
@@ -336,8 +336,8 @@ public:
 
     inline void find_next_value()
     {
-      const rhh_type::size_type start_pos = (m_pos + 1) & (m_rhh_ptr->capacity() - 1);
-      m_rhh_ptr->internal_locate_with_hint(m_key, start_pos, &m_rhh_ptr, m_pos, m_prb_dist);
+      m_pos = (m_pos + 1) & (m_rhh_ptr->capacity() - 1);
+      internal_locate_with_hint(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
     }
 
     rhh_type* m_rhh_ptr;
@@ -536,47 +536,43 @@ private:
     return hash & (m_capacity - 1);
   }
 
-  inline void internal_locate(const key_type& key,
-                              rhh_contatiner_selftype** body_ptr,
-                              size_type& pos,
-                              probedistance_type& cur_prb_dist)
+  static inline void internal_locate(const key_type& key,
+                                     const rhh_contatiner_selftype** body_ptr,
+                                     size_type& pos,
+                                     probedistance_type& cur_prb_dist)
   {
     const size_type hash = key_hash_func::hash(key);
-    size_type start_pos = cal_desired_position(hash);
+    pos = (*body_ptr)->cal_desired_position(hash);
     cur_prb_dist = 0;
-    internal_locate_with_hint(key, start_pos, body_ptr, pos, cur_prb_dist);
+    internal_locate_with_hint(key, body_ptr, pos, cur_prb_dist);
   }
 
-  void internal_locate_with_hint(const key_type& key,
-                            const size_type start_pos,
-                            rhh_contatiner_selftype** body_ptr,
-                            size_type& found_pos,
-                            probedistance_type& prb_dist)
+  static void internal_locate_with_hint(const key_type& key,
+                                        const rhh_contatiner_selftype** body_ptr,
+                                        size_type& pos,
+                                        probedistance_type& prb_dist)
   {
-    size_type pos = start_pos;
-//    probedistance_type prb_dist = cur_prb_dist;
-    const size_type mask = (m_capacity - 1);
+    // size_type pos = start_pos;
+    const size_type mask = ((*body_ptr)->m_capacity - 1);
 
     while (true) {
-      property_type exist_property = m_body[pos].property;
+      property_type exist_property = (*body_ptr)->m_body[pos].property;
       if (property_program::is_empty(exist_property)) {
         break;
       } else if (prb_dist > property_program::extract_probedistance(exist_property)) {
         break;
-      } else if (!property_program::is_scratched(exist_property) && key == m_body[pos].key) {
-        *body_ptr = this;
-        found_pos = pos;
+      } else if (!property_program::is_scratched(exist_property) && key == (*body_ptr)->m_body[pos].key) {
         return;
       }
       pos = (pos+1) & mask;
       ++prb_dist;
     }
 
-    if (m_next != nullptr) {
-      m_next->internal_locate(key, body_ptr, found_pos, prb_dist);
+    if ((*body_ptr)->m_next != nullptr) {
+      *body_ptr = (*body_ptr)->m_next;
+      internal_locate(key, body_ptr, pos, prb_dist);
     } else {
-      *body_ptr = this;
-      found_pos = kKeyNotFound;
+      pos = kKeyNotFound;
     }
   }
 

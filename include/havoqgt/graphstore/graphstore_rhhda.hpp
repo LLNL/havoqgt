@@ -69,7 +69,7 @@ public:
   {
 
     /// -- count the degree of the source vertex in the low degree table -- ///
-    size_t count_in_single = 0;
+    size_type count_in_single = 0;
     for (auto itr_single = m_low_degree_table->find(src); !itr_single.is_end(); ++itr_single) {
       if ((*itr_single).second == trg) {
         return false;
@@ -78,18 +78,18 @@ public:
     }
 
     if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
-      if (count_in_single < middle_high_degree_threshold - 1) {
+      if (count_in_single + 1 < middle_high_degree_threshold) {
         /// --- insert into the low table --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
         rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
         /// --- move the elements from low table to high-mid table --- ///
         high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
-        auto itr_single2 = m_low_degree_table->find(src);
-        high_mid_src_vertex_value_type value((*itr_single2).first, nullptr);
-        for (; !itr_single2.is_end(); ++itr_single2) {
-          rhh_container_utility::insert(&adj_list, (*itr_single2).second, (*itr_single2).third);
-          m_low_degree_table->erase(itr_single2);
+        auto itr_single = m_low_degree_table->find(src);
+        high_mid_src_vertex_value_type value((*itr_single).first, nullptr);
+        for (; !itr_single.is_end(); ++itr_single) {
+          rhh_container_utility::insert(&adj_list, (*itr_single).second, (*itr_single).third);
+          m_low_degree_table->erase(itr_single);
         }
         rhh_container_utility::insert(&adj_list, trg, weight);
         value.second = adj_list;
@@ -146,9 +146,9 @@ EDGE_INSERTED:
   /// \param trg
   /// \return
   ///         the number of edges erased
-  size_t erase_edge(vertex_id_type& src, vertex_id_type& trg)
+  size_type erase_edge(vertex_id_type& src, vertex_id_type& trg)
   {
-    size_t count = 0;
+    size_type count = 0;
     for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
       if ((*itr).second == trg) {
         m_low_degree_table->erase(itr);
@@ -191,7 +191,7 @@ EDGE_INSERTED:
     return count;
   }
 
-  size_t erase_vertex(vertex_id_type& vertex)
+  size_type erase_vertex(vertex_id_type& vertex)
   {
     return m_high_mid_degree_table->erase(vertex);
   }
@@ -243,28 +243,30 @@ EDGE_INSERTED:
               << ", " << (double)(m_low_degree_table->size()) / (m_low_degree_table->capacity() * m_low_degree_table->depth())
               << "\n chaine depth: " << m_low_degree_table->depth()
               << "\n average probedistance: " << m_low_degree_table->load_factor()
-              << "\n capacity*element_size(GB): " << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
+              << "\n capacity*element_size(GB): "
+                << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
 
     std::cout << "<high-middle degree table>: "
               << "\n size, capacity, rate: " << m_high_mid_degree_table->size() << ", " << m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth()
               << ", " << (double)(m_high_mid_degree_table->size()) / (m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth())
               << "\n chaine depth : " << m_high_mid_degree_table->depth()
               << "\n average probedistance: " << m_high_mid_degree_table->load_factor()
-              << "\n capacity*element_size(GB): " << (double)m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth() * high_mid_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+              << "\n capacity*element_size(GB): "
+                << (double)m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth() * high_mid_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
     {
-      size_t histgram_ave_prbdist[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
-      size_t histgram_cap[50] = {0};
-      size_t histgram_size[50] = {0};
-      size_t histgram_dept[50] = {0};
-      size_t size_sum = 0;
-      size_t capacity_sum = 0;
+      size_type histgram_ave_prbdist[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
+      size_type histgram_cap[50] = {0};
+      size_type histgram_size[50] = {0};
+      size_type histgram_dept[50] = {0};
+      size_type size_sum = 0;
+      size_type capacity_sum = 0;
       for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
         auto adj_list = itr->value.second;
 
         /// --- size ---- ///
         size_sum += adj_list->size();
-        const size_t sz_log2 = std::min(std::log2(adj_list->size()),
-                                        static_cast<double>(utility::array_length(histgram_size) - 1.0));
+        const size_type sz_log2 = std::min(std::log2(adj_list->size()),
+                                        static_cast<double>(utility::array_length(histgram_size) - 1));
         ++histgram_size[sz_log2];
 
         /// --- average probe distance (laod factor) ---- ///
@@ -273,12 +275,12 @@ EDGE_INSERTED:
 
         /// --- capacity --- ///
         capacity_sum += adj_list->capacity() * adj_list->depth();
-        const size_t cap_log2 = std::min(std::log2(adj_list->capacity()),
+        const size_type cap_log2 = std::min(std::log2(adj_list->capacity()),
                                         static_cast<double>(utility::array_length(histgram_cap) - 1));
         ++histgram_cap[cap_log2];
 
         /// --- depth --- ///
-        const size_t depth = std::min(adj_list->depth(),
+        const size_type depth = std::min(adj_list->depth(),
                                       utility::array_length(histgram_dept) - 1);
         ++histgram_dept[depth];
       }

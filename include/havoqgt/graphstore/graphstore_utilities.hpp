@@ -60,7 +60,7 @@ struct packed_tuple
   T2 second;
   T3 third;
 
-  packed_tuple(){}
+  packed_tuple() {}
 
   packed_tuple(T1 t1, T2 t2, T3 t3) :
     first(t1),
