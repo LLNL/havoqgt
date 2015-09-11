@@ -26,7 +26,7 @@ private:
   using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
   using high_mid_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
   using high_mid_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, high_mid_edge_chunk_type*>;
-  using high_mid_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
+  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
   using segment_manager_type           = rhh::segment_manager_t;
 
 public:
@@ -35,24 +35,34 @@ public:
     // -- init allocator -- //
     rhh::init_allocator<typename low_degree_table_type::allocator, segment_manager_type>(segment_manager);
     rhh::init_allocator<typename high_mid_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename high_mid_degree_table_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename mid_high_degree_table_type::allocator, segment_manager_type>(segment_manager);
 
     m_low_degree_table = low_degree_table_type::allocate(2);
-    m_high_mid_degree_table = high_mid_degree_table_type::allocate(2);
+    m_mid_high_degree_table = mid_high_degree_table_type::allocate(2);
 
     std::cout << "Element size: \n"
               << " low_degree_table " << low_degree_table_type::kElementSize << "\n"
               << " high_mid_edge_chunk " << high_mid_edge_chunk_type::kElementSize << "\n"
-              << " high_mid_degree_table " << high_mid_degree_table_type::kElementSize << std::endl;
+              << " mid_high_degree_table " << mid_high_degree_table_type::kElementSize << std::endl;
   }
 
   ~graphstore_rhhda() {
     clear();
     low_degree_table_type::deallocate(m_low_degree_table);
-    high_mid_degree_table_type::deallocate(m_high_mid_degree_table);
+    mid_high_degree_table_type::deallocate(m_mid_high_degree_table);
     rhh::destroy_allocator<typename low_degree_table_type::allocator>();
     rhh::destroy_allocator<typename high_mid_edge_chunk_type::allocator>();
-    rhh::destroy_allocator<typename high_mid_degree_table_type::allocator>();
+    rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
+  }
+
+  void shrink_to_fit_low_table()
+  {
+    rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+  }
+
+  void shrink_to_fit_mid_high_table()
+  {
+    rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
   }
 
   ///
@@ -93,12 +103,12 @@ public:
         }
         rhh_container_utility::insert(&adj_list, trg, weight);
         value.second = adj_list;
-        rhh_container_utility::insert(&m_high_mid_degree_table, src, value);
-        rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+        rhh_container_utility::insert(&m_mid_high_degree_table, src, value);
+        /// rhh_container_utility::shrink_to_fit(&m_low_degree_table);
       }
 
     } else {
-      auto itr_src = m_high_mid_degree_table->find(src);
+      auto itr_src = m_mid_high_degree_table->find(src);
       if (itr_src.is_end()) {
         /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
@@ -129,7 +139,7 @@ EDGE_INSERTED:
   {
     auto itr_single = m_low_degree_table->find(vertex);
     if (itr_single.is_end()) {
-      auto itr = m_high_mid_degree_table->find(vertex);
+      auto itr = m_mid_high_degree_table->find(vertex);
       if (itr.is_end()) {
         rhh_container_utility::insert(m_low_degree_table, vertex, low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
         return true;
@@ -157,11 +167,11 @@ EDGE_INSERTED:
     }
 
     if (count > 0) {
-      rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+      /// rhh_container_utility::shrink_to_fit(&m_low_degree_table);
       return count;
     }
 
-    auto itr_matrix = m_high_mid_degree_table->find(src);
+    auto itr_matrix = m_mid_high_degree_table->find(src);
     /// has source vertex ?
     if (itr_matrix.is_end()) return false;
     high_mid_edge_chunk_type* adj_list = itr_matrix->second;
@@ -180,10 +190,10 @@ EDGE_INSERTED:
           adj_list->erase(itr);
         }
         high_mid_edge_chunk_type::deallocate(adj_list);
-        m_high_mid_degree_table->erase(itr_matrix);
-        rhh_container_utility::shrink_to_fit(&m_high_mid_degree_table);
+        m_mid_high_degree_table->erase(itr_matrix);
+        /// rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
       } else {
-        rhh_container_utility::shrink_to_fit(&adj_list);
+        /// rhh_container_utility::shrink_to_fit(&adj_list);
         itr_matrix->second = adj_list;
       }
     }
@@ -193,13 +203,13 @@ EDGE_INSERTED:
 
   size_type erase_vertex(vertex_id_type& vertex)
   {
-    return m_high_mid_degree_table->erase(vertex);
+    return m_mid_high_degree_table->erase(vertex);
   }
 
   void clear()
   {
-    // for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr)
-    for (const auto& itr : *m_high_mid_degree_table) {
+    // for (auto itr = m_mid_high_degree_table->begin(); !itr.is_end(); ++itr)
+    for (const auto& itr : *m_mid_high_degree_table) {
       high_mid_edge_chunk_type* const adj_list = itr.value.second;
       adj_list->clear();
     }
@@ -219,14 +229,14 @@ EDGE_INSERTED:
 
   typename high_mid_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
   {
-    const auto itr_matrix = m_high_mid_degree_table->find(src_vrt);
+    const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->begin();
   }
 
   typename high_mid_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
   {
-    const auto itr_matrix = m_high_mid_degree_table->find(src_vrt);
+    const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     const high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->cbegin();
   }
@@ -247,20 +257,20 @@ EDGE_INSERTED:
                 << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
 
     std::cout << "<high-middle degree table>: "
-              << "\n size, capacity, rate: " << m_high_mid_degree_table->size() << ", " << m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth()
-              << ", " << (double)(m_high_mid_degree_table->size()) / (m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth())
-              << "\n chaine depth : " << m_high_mid_degree_table->depth()
-              << "\n average probedistance: " << m_high_mid_degree_table->load_factor()
+              << "\n size, capacity, rate: " << m_mid_high_degree_table->size() << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()
+              << ", " << (double)(m_mid_high_degree_table->size()) / (m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth())
+              << "\n chaine depth : " << m_mid_high_degree_table->depth()
+              << "\n average probedistance: " << m_mid_high_degree_table->load_factor()
               << "\n capacity*element_size(GB): "
-                << (double)m_high_mid_degree_table->capacity() * m_high_mid_degree_table->depth() * high_mid_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+                << (double)m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth() * mid_high_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
     {
-      size_type histgram_ave_prbdist[high_mid_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
+      size_type histgram_ave_prbdist[mid_high_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_type histgram_cap[50] = {0};
       size_type histgram_size[50] = {0};
       size_type histgram_dept[50] = {0};
       size_type size_sum = 0;
       size_type capacity_sum = 0;
-      for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
+      for (auto itr = m_mid_high_degree_table->begin(); !itr.is_end(); ++itr) {
         auto adj_list = itr->value.second;
 
         /// --- size ---- ///
@@ -324,7 +334,7 @@ EDGE_INSERTED:
       of << itr->key << " " << (itr->value).second << "\n";
     }
 
-    for (auto itr = m_high_mid_degree_table->begin(); !itr.is_end(); ++itr) {
+    for (auto itr = m_mid_high_degree_table->begin(); !itr.is_end(); ++itr) {
       auto adj_list = itr->value.second;
       for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
         of << itr->key << " " << itr2->key << "\n";
@@ -334,7 +344,7 @@ EDGE_INSERTED:
 
 private:
   low_degree_table_type* m_low_degree_table;
-  high_mid_degree_table_type* m_high_mid_degree_table;
+  mid_high_degree_table_type* m_mid_high_degree_table;
 
 };
 

@@ -140,5 +140,10 @@ void sync_dimmap()
   flusher << "mmap_sync_buffers" << std::endl;
 }
 
+void flush_mmmap(mapped_file_type& mapped_file)
+{
+  mapped_file.flush();
+}
+
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP
 
