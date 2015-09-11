@@ -56,9 +56,9 @@ int main(int argc, char** argv)
       std::uniform_int_distribution<vertex_type> dis(0, (edge_vec.size() - 1));
       vertex_type edge_no = dis(gen);
       vertex_type src = edge_vec[edge_no].first;
-      edge_vec.push_back(std::make_pair(v, src));
-#if GENERATE_EDGE_BOTH_DIRECTION
       edge_vec.push_back(std::make_pair(src, v));
+#if GENERATE_EDGE_BOTH_DIRECTION
+      edge_vec.push_back(std::make_pair(v, src));
 #endif
     }
   }
@@ -69,7 +69,8 @@ int main(int argc, char** argv)
                   ofs << edge.first << " " << edge.second << std::endl;
                   }
           );
-  std::cout << "generated graph: " << edge_vec.size() << std::endl;
+  std::cout << "GENERATE_EDGE_BOTH_DIRECTION: " << GENERATE_EDGE_BOTH_DIRECTION << std::endl;
+  std::cout << "generated graph (undirected graph): " << edge_vec.size() << std::endl;
 
 
   /// --- count degree and make ---- ///
@@ -78,6 +79,7 @@ int main(int argc, char** argv)
   for_each(edge_vec.begin(), edge_vec.end(),
                   [&deg_vec](std::pair<vertex_type, vertex_type> edge){
                     ++deg_vec[edge.first];
+                    ++deg_vec[edge.second];
                   }
           );
 
