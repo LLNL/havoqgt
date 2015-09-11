@@ -8,6 +8,9 @@
 
 using vertex_type = uint64_t;
 
+#define GENERATE_EDGE_BOTH_DIRECTION 0
+#define COUNT_DEGREE_TABLE 1
+
 int main(int argc, char** argv)
 {
   size_t num_verticess;
@@ -32,32 +35,31 @@ int main(int argc, char** argv)
   std::cout << " use seed: " << seed << std::endl;
   std::mt19937_64 gen(seed);
 
-  /// --- generate init graph --- ///
-  edge_vec.push_back(std::make_pair(0, 1));
-  edge_vec.push_back(std::make_pair(0, 2));
-  edge_vec.push_back(std::make_pair(0, 3));
-
-  edge_vec.push_back(std::make_pair(1, 0));
-  edge_vec.push_back(std::make_pair(1, 2));
-  edge_vec.push_back(std::make_pair(1, 3));
-
-  edge_vec.push_back(std::make_pair(2, 0));
-  edge_vec.push_back(std::make_pair(2, 1));
-  edge_vec.push_back(std::make_pair(2, 3));
-
-  edge_vec.push_back(std::make_pair(3, 0));
-  edge_vec.push_back(std::make_pair(3, 1));
-  edge_vec.push_back(std::make_pair(3, 2));
+  /// --- generate init graph (aomplete graph) --- ///
+  /// k + 1 vertices are requred
+  /// so that each vertex has at least k edges
+  const size_t num_min_vertex = num_min_degree + 1;
+  for (uint64_t v1 = 0; v1 < num_min_vertex; ++v1) {
+    for (uint64_t v2 = 0; v2 < num_min_vertex; ++v2) {
+      if (v1 == v2) continue;
+      edge_vec.push_back(std::make_pair(v1, v2));
+#if GENERATE_EDGE_BOTH_DIRECTION
+      edge_vec.push_back(std::make_pair(v2, v1));
+#endif
+    }
+  }
 
 
   /// --- generate edges --- ///
-  for (uint64_t v = 4; v < num_verticess; ++v) {
-    std::uniform_int_distribution<vertex_type> dis(0, (edge_vec.size() - 1));
+  for (uint64_t v = num_min_vertex; v < num_verticess; ++v) {
     for (uint64_t i = 0; i < num_min_degree; ++i) {
+      std::uniform_int_distribution<vertex_type> dis(0, (edge_vec.size() - 1));
       vertex_type edge_no = dis(gen);
       vertex_type src = edge_vec[edge_no].first;
       edge_vec.push_back(std::make_pair(v, src));
+#if GENERATE_EDGE_BOTH_DIRECTION
       edge_vec.push_back(std::make_pair(src, v));
+#endif
     }
   }
 
@@ -71,7 +73,7 @@ int main(int argc, char** argv)
 
 
   /// --- count degree and make ---- ///
-#if 1
+#if COUNT_DEGREE_TABLE
   std::vector<size_t> deg_vec(num_verticess, 0);
   for_each(edge_vec.begin(), edge_vec.end(),
                   [&deg_vec](std::pair<vertex_type, vertex_type> edge){

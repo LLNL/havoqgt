@@ -66,10 +66,12 @@ void apply_edges_update_requests(mapped_file_type& mapped_file,
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
+
+    graph_store.shrink_to_fit_low_table();
+
     /// flush_mmmap(mapped_file);
     sync_dimmap();
 
-    graph_store.shrink_to_fit_low_table();
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     const double time_end = MPI_Wtime();
