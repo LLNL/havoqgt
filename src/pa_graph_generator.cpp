@@ -65,7 +65,6 @@ int main(int argc, char** argv)
       edge_vec.push_back(std::make_pair(v, src));
 #else
       const vertex_type src = (dis_2(gen)) ? edge_vec[edge_no].first : edge_vec[edge_no].second;
-      std::cout << dis_2(gen) << std::endl;
       edge_vec.push_back(std::make_pair(v, src));
 #endif
     }
