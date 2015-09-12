@@ -51,13 +51,21 @@ int main(int argc, char** argv)
 
 
   /// --- generate edges --- ///
+  /// \brief dis_2
+#if !GENERATE_EDGE_BOTH_DIRECTION
+  std::uniform_int_distribution<int> dis_2(0, 1);
+#endif
   for (uint64_t v = num_min_vertex; v < num_verticess; ++v) {
     for (uint64_t i = 0; i < num_min_degree; ++i) {
       std::uniform_int_distribution<vertex_type> dis(0, (edge_vec.size() - 1));
       vertex_type edge_no = dis(gen);
-      vertex_type src = edge_vec[edge_no].first;
-      edge_vec.push_back(std::make_pair(src, v));
 #if GENERATE_EDGE_BOTH_DIRECTION
+      const vertex_type src = edge_vec[edge_no].first;
+      edge_vec.push_back(std::make_pair(src, v));
+      edge_vec.push_back(std::make_pair(v, src));
+#else
+      const vertex_type src = (dis_2(gen)) ? edge_vec[edge_no].first : edge_vec[edge_no].second;
+      std::cout << dis_2(gen) << std::endl;
       edge_vec.push_back(std::make_pair(v, src));
 #endif
     }
@@ -79,7 +87,9 @@ int main(int argc, char** argv)
   for_each(edge_vec.begin(), edge_vec.end(),
                   [&deg_vec](std::pair<vertex_type, vertex_type> edge){
                     ++deg_vec[edge.first];
+#if !GENERATE_EDGE_BOTH_DIRECTION
                     ++deg_vec[edge.second];
+#endif
                   }
           );
 
