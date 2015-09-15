@@ -337,6 +337,7 @@ public:
     inline void find_next_value()
     {
       m_pos = (m_pos + 1) & (m_rhh_ptr->capacity() - 1);
+      ++m_prb_dist;
       internal_locate_with_hint(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
     }
 
@@ -519,6 +520,18 @@ public:
   }
 
 
+  /// --- debug --- ///
+  void print_all_element()
+  {
+    for (size_type i = 0; i < m_capacity; ++i) {
+      std::cout << "property " << m_body[i].property << ", key " << m_body[i].key << std::endl;
+    }
+    if (m_next != nullptr) {
+      m_next->print_all_element();
+    }
+  }
+
+
   /// ---------------------------------------------------------- ///
   ///                         private
   /// ---------------------------------------------------------- ///
@@ -552,7 +565,6 @@ private:
                                         size_type& pos,
                                         probedistance_type& prb_dist)
   {
-    // size_type pos = start_pos;
     const size_type mask = ((*body_ptr)->m_capacity - 1);
 
     while (true) {
@@ -592,8 +604,8 @@ private:
   /// \param key_long_prbdst: be set a value if probe ditance exceed a threshhold
   /// \param val_long_prbdst: be set a value if probe ditance exceed a threshhold
   /// \return
-  ///        true: successed
-  ///        false: long probe distance
+  ///        true: successed insert
+  ///        false: probe distance of a element exceeded long probe distance thleshold
   bool insert_into_body(key_type&& key, value_type&& value,
                         key_type& key_long_prbdst, value_type& val_long_prbdst)
   {
@@ -601,6 +613,7 @@ private:
     const size_type hash = key_hash_func::hash(key);
     size_type pos = cal_desired_position(hash);
     const size_type mask = (m_capacity - 1);
+    bool is_needed_to_rehash = false;
 
     while(true) {
       property_type exist_property = m_body[pos].property;
@@ -613,6 +626,7 @@ private:
           return false;
         }
         construct(pos, prb_dist, std::move(key), std::move(value));
+        if (prb_dist >= m_capacity) is_needed_to_rehash = true;
         break;
       }
 
@@ -628,6 +642,7 @@ private:
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
+          if (prb_dist >= m_capacity) is_needed_to_rehash = true;
           break;
         }
         m_body[pos].property = prb_dist;
@@ -639,9 +654,23 @@ private:
       pos = (pos+1) & mask;
       ++prb_dist;
     }
+
+    /// TODO: this is a temporary code
+    if (is_needed_to_rehash) {
+      rehash_rhh();
+    }
+
     return true;
   }
 
+
+  ///
+  /// \brief make_with_source_rhh
+  ///         allocate new rhh with new_capacity and move all elements from source_rhh with handling long probe distance case
+  /// \param source_rhh
+  /// \param new_capacity
+  /// \return
+  ///         pointer to the new rhh
   static rhh_contatiner_selftype* make_with_source_rhh(rhh_contatiner_selftype* source_rhh, size_type new_capacity)
   {
     assert(source_rhh->size() <= new_capacity);
@@ -673,6 +702,22 @@ private:
     return new_rhh;
   }
 
+
+  void rehash_rhh()
+  {
+    key_type wk_key;
+    value_type wk_val;
+
+    rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
+    std::memcpy(&(tmp_rhh->m_body), &(m_body), m_capacity * kElementSize);
+
+    for (size_type i = 0; i < m_capacity; ++i) {
+      const property_type property = tmp_rhh->m_body[i].property;
+      if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
+        insert_into_body(std::move(tmp_rhh->m_body[i].key), std::move(tmp_rhh->m_body[i].value), wk_key, wk_val);
+      }
+    }
+  }
 
   /// --- private valiable --- ///
   size_type m_num_elems; /// including chained rhhs

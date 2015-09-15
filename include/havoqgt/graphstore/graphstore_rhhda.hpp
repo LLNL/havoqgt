@@ -93,6 +93,7 @@ public:
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
         rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
+
         /// --- move the elements from low table to high-mid table --- ///
         high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
         auto itr_single = m_low_degree_table->find(src);
@@ -341,6 +342,26 @@ EDGE_INSERTED:
       }
     }
   }
+
+  void print_all_elements_low()
+  {
+    std::cout << "------------------" << std::endl;
+    for (auto itr = m_low_degree_table->begin(); !itr.is_end(); ++itr) {
+      std::cout << itr->key << " " << (itr->value).second << "\n";
+    }
+  }
+
+  void print_all_elements_mh()
+  {
+    std::cout << "------------------" << std::endl;
+    for (auto itr = m_mid_high_degree_table->begin(); !itr.is_end(); ++itr) {
+      auto adj_list = itr->value.second;
+      for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
+        std::cout << itr->key << " " << itr2->key << "\n";
+      }
+    }
+  }
+
 
 private:
   low_degree_table_type* m_low_degree_table;
