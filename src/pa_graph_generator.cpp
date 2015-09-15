@@ -9,7 +9,7 @@
 using vertex_type = uint64_t;
 
 #define GENERATE_EDGE_BOTH_DIRECTION 0
-#define COUNT_DEGREE_TABLE 1
+#define COUNT_DEGREE_TABLE 0
 
 int main(int argc, char** argv)
 {
@@ -76,6 +76,7 @@ int main(int argc, char** argv)
                   ofs << edge.first << " " << edge.second << std::endl;
                   }
           );
+  ofs.close();
   std::cout << "GENERATE_EDGE_BOTH_DIRECTION: " << GENERATE_EDGE_BOTH_DIRECTION << std::endl;
   std::cout << "generated graph (undirected graph): " << edge_vec.size() << std::endl;
 

@@ -75,7 +75,7 @@ void apply_edges_update_requests(mapped_file_type& mapped_file,
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) / (1000000.0) << std::endl;
+    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
     if (mpi_rank == 0) print_usages(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
 #if VERBOSE
@@ -213,6 +213,7 @@ int main(int argc, char** argv) {
     /// --- create a segument file --- ///
     std::stringstream fname;
     fname << fname_output << "_" << mpi_rank;
+    std::cout << "Delete segment file: " << fname_output << std::endl;
     boost::interprocess::file_mapping::remove(fname.str().c_str());
     if (mpi_rank == 0) {
       std::cout << "\n<<Construct segment>>" << std::endl;
@@ -279,6 +280,7 @@ int main(int argc, char** argv) {
 
 #if DEBUG_MODE
     {
+      ofs_edges.close();
       std::cout << "dumping all elements for debug" << std::endl;
       std::stringstream ofname;
       ofname << fname_output << ".debug_edges_graph";
