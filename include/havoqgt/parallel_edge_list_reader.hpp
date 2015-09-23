@@ -178,7 +178,7 @@
       m_local_edge_count = std::numeric_limits<uint64_t>::max();
     }
 #else
-    std::cout << "ifstream mode\n"
+    std::cout << "ifstream mode\n";
     /// First pass to calc max vertex and count edges.
     open_files();
     //std::cout << "files open" << std::endl;

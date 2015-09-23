@@ -10,6 +10,7 @@ function(add_exe source)
   endif( MPI_FOUND AND Boost_FOUND )
 endfunction()
 
+add_exe( bfs_dynamicdegreeawaregraphstore_bench )
 add_exe( dynamicdegreeawaregraphstore_bench )
 add_exe( dynamicdegreeawaregraphstore_bench_with_baseline )
 add_exe( pa_graph_generator )

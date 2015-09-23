@@ -7,6 +7,7 @@
 
 #include <string>
 #include <cstring>
+#include <chrono>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -37,6 +38,30 @@
 
 namespace graphstore {
 namespace utility {
+
+
+void print_time() {
+  std::time_t result = std::time(nullptr);
+  std::cout << std::asctime(std::localtime(&result));
+}
+
+std::chrono::high_resolution_clock::time_point duration_time()
+{
+  return std::chrono::high_resolution_clock::now();
+}
+
+uint64_t duration_time_usec(std::chrono::high_resolution_clock::time_point& tic)
+{
+  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
+  return std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count();
+}
+
+double duration_time_sec(std::chrono::high_resolution_clock::time_point& tic)
+{
+  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
+  return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);
+}
+
 
 #pragma pack(1)
 template <typename T1, typename T2>
@@ -195,6 +220,7 @@ class direct_file_reader
 #else
         const int flags = O_RDONLY;
         std::cerr << "O_DIRECT is not suported\n";
+        std::cerr << "just use normal I/O\n";
 #endif
         m_fd = ::open(fname, flags);
         if (m_fd == -1) {

@@ -247,16 +247,16 @@ int main(int argc, char** argv) {
     uint64_t vert_scale;
     uint64_t edge_factor;
     uint32_t delete_file;
-    uint64_t chunk_size_exp;
-    uint64_t segmentfile_init_size;
+    uint64_t chunk_size_log10;
+    uint64_t segmentfile_init_size_log2;
     uint64_t edges_delete_ratio = 0;
     std::string fname_output;
     std::vector<std::string> fname_edge_list;
 
     if (argc < 8) {
       std::cerr << "usage: <Scale> <Edge factor> <segmentfile name>"
-      << " <segmentfile_init_size (exp)> <delete file on exit>"
-      << " <chunk_size_exp> <edges_delete_ratio>"
+      << " <segmentfile_init_size_log2 (log2)> <delete file on exit>"
+      << " <chunk_size_log10> <edges_delete_ratio>"
       << " <edgelist file>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -265,9 +265,9 @@ int main(int argc, char** argv) {
       vert_scale            = boost::lexical_cast<uint64_t>(argv[pos++]);
       edge_factor           = boost::lexical_cast<uint64_t>(argv[pos++]);
       fname_output          = argv[pos++];
-      segmentfile_init_size = boost::lexical_cast<uint64_t>(argv[pos++]);
+      segmentfile_init_size_log2 = boost::lexical_cast<uint64_t>(argv[pos++]);
       delete_file           = boost::lexical_cast<uint32_t>(argv[pos++]);
-      chunk_size_exp        = boost::lexical_cast<uint64_t>(argv[pos++]);
+      chunk_size_log10      = boost::lexical_cast<uint64_t>(argv[pos++]);
       edges_delete_ratio    = boost::lexical_cast<uint64_t>(argv[pos++]);
       if (pos < argc) {
         std::string fname(argv[pos++]);
@@ -297,9 +297,9 @@ int main(int argc, char** argv) {
 
     if (mpi_rank == 0) {
       std::cout << "Segment file name = " << fname_output << std::endl;
-      std::cout << "Initialize segment filse size = " << segmentfile_init_size << std::endl;
+      std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2 << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
-      std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
+      std::cout << "Chunk size (log10) = " << chunk_size_log10 << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
       std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
 
@@ -333,8 +333,8 @@ int main(int argc, char** argv) {
       std::cout << "\n<<Construct segment>>" << std::endl;
       std::cout << "Create and map a segument file" << std::endl;
     }
-    uint64_t graph_capacity = std::pow(2, segmentfile_init_size) / mpi_size;
-    mapped_file_type asdf = mapped_file_type(boost::interprocess::create_only, fname.str().c_str(), graph_capacity);
+    uint64_t segmentfile_init_size = std::pow(2, segmentfile_init_size_log2) / mpi_size;
+    mapped_file_type asdf = mapped_file_type(boost::interprocess::create_only, fname.str().c_str(), segmentfile_init_size);
 
 #if 0
     boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_random;
@@ -374,7 +374,7 @@ int main(int argc, char** argv) {
       apply_edges_update_requests(adjacency_matrix_map_vec,
                                   rmat,
                                   segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+                                  static_cast<uint64_t>(std::pow(10, chunk_size_log10)),
                                   edges_delete_ratio,
                                   boost_seg_allocator);
     } else {
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
       apply_edges_update_requests(adjacency_matrix_map_vec,
                                   edgelist,
                                   segment_manager,
-                                  static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+                                  static_cast<uint64_t>(std::pow(10, chunk_size_log10)),
                                   edges_delete_ratio,
                                   boost_seg_allocator);
     }

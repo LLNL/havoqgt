@@ -20,10 +20,11 @@ using vertex_meta_data_type = unsigned char;
 using edge_weight_type = unsigned char;
 using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, midle_high_degree_threshold>;
 
-template <typename Edges>
-void apply_edges_update_requests(mapped_file_type& mapped_file,
+template <typename Edges, typename vertex_id_type, typename vertex_meta_data_type, typename edge_weight_type, size_t midle_high_degree_threshold>
+void apply_edge_update_requests(mapped_file_type& mapped_file,
                                  segment_manager_type *const segment_manager,
-                                 graphstore_type& graph_store, Edges& edges,
+                                 graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, midle_high_degree_threshold>& graph_store,
+                                 Edges& edges,
                                  const uint64_t chunk_size, const size_t edges_delete_ratio)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
@@ -253,7 +254,7 @@ int main(int argc, char** argv) {
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
         vert_scale, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
-      apply_edges_update_requests(
+      apply_edge_update_requests(
             mapped_file,
             segment_manager,
             graph_store,
@@ -263,19 +264,19 @@ int main(int argc, char** argv) {
     } else {
       const double time_start = MPI_Wtime();
       havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
+      havoqgt::havoqgt_env()->world_comm().barrier();
       if (mpi_rank == 0) {
         std::cout << "TIME: Initializing a edge list reader (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
       }
-      havoqgt::havoqgt_env()->world_comm().barrier();
 
-      apply_edges_update_requests(
+      apply_edge_update_requests(
             mapped_file,
             segment_manager,
             graph_store,
             edgelist,
             static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
             edges_delete_ratio);
-}
+    }
 
 
 #if DEBUG_MODE
