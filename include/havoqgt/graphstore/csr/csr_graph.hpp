@@ -18,15 +18,14 @@
 #include <algorithm>
 #include <utility>
 
-#include "graph_trav_info.hpp"
-#include "utilities.hpp"
+#include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 namespace csr_graph_struct {
 
 
 template <typename edge_list_type, typename index_t, typename vertex_t>
 class csr_graph {
- public:
+public:
 
   using graph_self_type = csr_graph<edge_list_type, index_t, vertex_t>;
   using index_type = vertex_t;
@@ -39,7 +38,7 @@ class csr_graph {
     friend class csr_graph;
     using vertex_iterator_selftype = VertexForwardIterator<Type>;
 
-   public:
+  public:
 
     VertexForwardIterator(graph_self_type* graph) :
       m_graph(graph),
@@ -113,7 +112,7 @@ class csr_graph {
       return (m_crt_vrt == m_graph->num_vertices());
     }
 
-   private:
+  private:
 
     VertexForwardIterator()
     { }
@@ -144,7 +143,7 @@ class csr_graph {
     friend class csr_graph;
     using edge_iterator_selftype = EdgeForwardIterator<Type>;
 
-   public:
+  public:
 
     EdgeForwardIterator(graph_self_type* graph, Type& src_vrt) :
       m_graph(graph),
@@ -222,7 +221,7 @@ class csr_graph {
       return (m_crt_off == (m_graph->m_index_array[m_src_vrt + 1] - m_graph->m_index_array[m_src_vrt]));
     }
 
-   private:
+  private:
 
     EdgeForwardIterator()
     { }
@@ -248,9 +247,9 @@ class csr_graph {
 
 
 
-  csr_graph(edge_list_type& edge_list) :
-    m_num_vertices(edge_list.max_vertex_id() + 1),
-    m_num_edges(edge_list.size()),
+  csr_graph(edge_list_type& edge_list, size_t max_vertex_id, size_t num_edges) :
+    m_num_vertices(max_vertex_id + 1),
+    m_num_edges(num_edges),
     m_index_array(nullptr),
     m_adj_list(nullptr)
   {
@@ -346,7 +345,7 @@ class csr_graph {
     adj_file.close();
   }
 
- private:
+private:
 
   void allocate_graph()
   {
@@ -355,20 +354,20 @@ class csr_graph {
     m_adj_list = new vertex_type[m_num_edges];
 
     std::cout << "Allocate index_array:\t" <<  (double)(m_num_vertices + 1) * sizeof(index_type) / (1ULL<<30) << " GB" << std::endl;
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "Zero clear index-array" << std::endl;
     std::memset(m_index_array, 0, (m_num_vertices + 1ULL) * sizeof(index_type));
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "Allocate adj_list:\t" <<  (double)(m_num_edges) * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "Touch adj_list" << std::endl;
     for (uint64_t p = 0; p < m_num_edges; p += 4096 / sizeof(vertex_type)) {
       m_adj_list[p] = 0;
     }
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
   }
 
@@ -390,7 +389,7 @@ class csr_graph {
     }
     cumulate_array(m_index_array, m_num_vertices);
     assert(m_index_array[m_num_vertices] == m_num_edges);
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "Constructing adj-list" << std::endl;
     for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
@@ -401,10 +400,10 @@ class csr_graph {
     right_shift_aray(m_index_array, m_num_vertices);
     m_index_array[0] = 0;
     assert(m_index_array[m_num_vertices] == m_num_edges);
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
-//    for (size_t i = 0; i < m_num_vertices+1; ++i) std::cout << m_index_array[i] << " ";
-//    std::cout << std::endl;
+    //    for (size_t i = 0; i < m_num_vertices+1; ++i) std::cout << m_index_array[i] << " ";
+    //    std::cout << std::endl;
 
   }
 
@@ -429,7 +428,7 @@ class csr_graph {
     assert(last_src_vertex + 1 <= m_num_vertices);
     std::cout << "cnt_edges == m_num_edges :" << cnt_edges << " == " << m_num_edges << std::endl;
     assert(cnt_edges == m_num_edges);
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "Modificate index-array" << std::endl;
     cumulate_array(m_index_array, m_num_vertices);
@@ -437,7 +436,7 @@ class csr_graph {
     m_index_array[0] = 0;
     std::cout << "m_index_array[m_num_vertices] == m_num_edges :" << m_index_array[m_num_vertices] << " == " << m_num_edges << std::endl;
     // assert(m_index_array[m_num_vertices] == m_num_edges);
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
   }
 
   void cumulate_array(index_type* array, size_t length)
@@ -503,6 +502,7 @@ class csr_graph {
   vertex_type* m_adj_list;
 };
 
+#if 0
 template <typename edge_list_type, typename index_t, typename vertex_t>
 void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
                           graph_trv_info::trv_inf<vertex_t>& inf,
@@ -513,7 +513,7 @@ void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
   std::vector<std::pair<vertex_t, vertex_t>> unvisited_edges;
   size_t visited_edges = inf.count_total_visited_edges();
 
-  #if 0
+#if 0
   const index_type* index_array = graph.index_array();
   const vertex_type* adj_list = graph.adj_list();
   for (vertex_type src = 0; src < graph.num_vertices(); ++src) {
@@ -527,7 +527,7 @@ void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
   std::cout << "#unvisited_edges:\t" << unvisited_edges.size() << std::endl;
   assert(graph.num_edges() == inf.count_total_visited_edges() + unvisited_edges.size());
 
-  #else
+#else
   {
     std::cout << "Dump unvisited edges" << std::endl;
     // assert(graph.num_edges() == visited_edges + unvisited_edges.size());
@@ -540,14 +540,14 @@ void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
     for (vertex_t src = 0; src < graph.num_vertices(); ++src) {
       for (index_t i = index_array[src]; i < index_array[src+1]; ++i) {
         if (!inf.global_edge_is_visited[i]) {
-         // if (count % (1ULL << 28) == 0) {
-         //    std::stringstream fname;
-         //    fname << fname_prefix << std::setfill('0') << std::setw(5) << fname_count;
-         //    std::cout << "open : " << fname.str().c_str() << std::endl;
-         //    if (ofs_wk.is_open()) ofs_wk.close();
-         //    ofs_wk.open(fname.str().c_str());
-         //    ++fname_count;
-         //  }
+          // if (count % (1ULL << 28) == 0) {
+          //    std::stringstream fname;
+          //    fname << fname_prefix << std::setfill('0') << std::setw(5) << fname_count;
+          //    std::cout << "open : " << fname.str().c_str() << std::endl;
+          //    if (ofs_wk.is_open()) ofs_wk.close();
+          //    ofs_wk.open(fname.str().c_str());
+          //    ++fname_count;
+          //  }
           vertex_t dst = adj_list[i];
           ofs_wk << src << " " << dst << "\n";
           ++count;
@@ -582,7 +582,7 @@ void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
     std::ofstream ofs_wk(fname_wk, std::ofstream::trunc);
   }
 
-  #endif
+#endif
 
   unsigned seed2 = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "shuffle vector. seed: " << seed2 << std::endl;
@@ -592,14 +592,16 @@ void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
   std::ofstream ofs_crawling(fname);
   assert(ofs_crawling.good());
   for (auto itr = unvisited_edges.begin(), end = unvisited_edges.end();
-      itr != end;
-      ++itr)
+       itr != end;
+       ++itr)
   {
     ofs_crawling << itr->first << " " << itr->second << "\n";
   }
 
   ofs_crawling.close();
 }
+
+#endif
 
 }
 #endif // CSR_GRAPH_HPP

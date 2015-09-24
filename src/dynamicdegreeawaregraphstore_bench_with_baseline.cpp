@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Call posix_fallocate\n";
     }
-    fallocate(fname.str().c_str(), graph_capacity, asdf);
+    fallocate(fname.str().c_str(), segmentfile_init_size, asdf);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
 

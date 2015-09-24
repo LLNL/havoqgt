@@ -19,7 +19,7 @@ enum {
 
 using index_type = uint64_t;
 using vertex_type = uint64_t;
-using graph_type = csr_graph_struct::csr_graph<parallel_edge_list_reader, index_type, vertex_type>;
+using graph_type = csr_graph_struct::csr_graph<havoqgt::parallel_edge_list_reader, index_type, vertex_type>;
 
 template <typename gen_type, typename rnd_type>
 void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges, gen_type& gen, rnd_type& dis)
@@ -39,10 +39,10 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges, gen_type
     vertex_type src = dis(gen);
     std::cout << "BFS[" << i << "]: src=\t" << src << std::endl;
 
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
     bfs_sync<graph_type, vertex_type, false>(graph, src, max_vertex_id, num_edges);
     std::cout << "finish: ";
-    graph_trv_utilities::print_time();
+    graphstore::utility::print_time();
 
     std::cout << "\n" << std::endl;
   }
@@ -59,15 +59,13 @@ int main(int argc, char* argv[])
   size_t num_edges = 0;
   bool is_load_grah_from_file;
 
-  if (argc == 3 || argc == 4 || argc == 6) {
+  if (argc == 3 || argc == 6) {
     is_load_grah_from_file = static_cast<bool>(std::atoi(argv[1]));
     fname_prefix = argv[2];
     if (!is_load_grah_from_file) {
       num_files = std::atoll(argv[3]);
-      if (argc == 6) {
-        max_vertex_id = std::atoll(argv[4]);
-        num_edges = std::atoll(argv[5]);
-      }
+      max_vertex_id = std::atoll(argv[4]);
+      num_edges = std::atoll(argv[5]);
     }
   } else {
     std::cout << "Invalid argments: " << std::endl;
@@ -94,21 +92,15 @@ int main(int argc, char* argv[])
     }
 
     std::cout << "\n--- Initializing edgelist ---" << std::endl;
-    graph_trv_utilities::print_time();
-    parallel_edge_list_reader* edge_list;
-    if (max_vertex_id == 0 || num_edges == 0) {
-      edge_list = new parallel_edge_list_reader(edgelis_fname_list);
-      max_vertex_id = edge_list->max_vertex_id();
-      num_edges = edge_list->size();
-    } else {
-      edge_list = new parallel_edge_list_reader(edgelis_fname_list, max_vertex_id, num_edges);
-    }
-    std::cout << "max_vertex_id:\t" << edge_list->max_vertex_id() << "" << std::endl;
-    std::cout << "#edges:\t" << edge_list->size() << "" << std::endl;
+    graphstore::utility::print_time();
+    havoqgt::parallel_edge_list_reader* edge_list;
+    edge_list = new havoqgt::parallel_edge_list_reader(edgelis_fname_list);
+//    std::cout << "max_vertex_id:\t" << max_vertex_id << "" << std::endl;
+//    std::cout << "#edges:\t" << num_edges << "" << std::endl;
 
     std::cout << "\n--- Constructing csr graph ---" << std::endl;
-    graph_trv_utilities::print_time();
-    graph = new graph_type(*edge_list);
+    graphstore::utility::print_time();
+    graph = new graph_type(*edge_list, max_vertex_id, num_edges);
 
     delete edge_list;
   }
@@ -124,5 +116,5 @@ int main(int argc, char* argv[])
 
   run_bfs(*graph, max_vertex_id, num_edges, gen, dis);
 
- delete graph;
+  delete graph;
 }

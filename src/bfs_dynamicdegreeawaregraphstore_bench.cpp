@@ -139,6 +139,7 @@ void parse_options(int argc, char **argv)
     switch (c) {
       case 's':
         segment_size_log2 = boost::lexical_cast<size_t>(optarg);
+        break;
       case 'f':
         fname_segmentfile_ = optarg;
         break;
