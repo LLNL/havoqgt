@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
     uint64_t vert_scale;
     uint64_t edge_factor;
     uint32_t delete_file;
-    uint64_t chunk_size_exp;
+    uint64_t chunk_size_log10;
     uint64_t segmentfile_init_size;
     uint64_t edges_delete_ratio = 0;
     std::string fname_output;
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
     if (argc < 8) {
       std::cerr << "usage: <Scale> <Edge factor> <segmentfile name>"
       << " <segmentfile_init_size (exp)> <delete file on exit>"
-      << " <chunk_size_exp> <edges_delete_ratio>"
+      << " <chunk_size_log10> <edges_delete_ratio>"
       << " <edgelist file>"
       << " (argc:" << argc << " )." << std::endl;
       exit(-1);
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
       fname_output          = argv[pos++];
       segmentfile_init_size = boost::lexical_cast<uint64_t>(argv[pos++]);
       delete_file           = boost::lexical_cast<uint32_t>(argv[pos++]);
-      chunk_size_exp        = boost::lexical_cast<uint64_t>(argv[pos++]);
+      chunk_size_log10        = boost::lexical_cast<uint64_t>(argv[pos++]);
       edges_delete_ratio    = boost::lexical_cast<uint64_t>(argv[pos++]);
       if (pos < argc) {
         std::string fname(argv[pos++]);
@@ -183,9 +183,9 @@ int main(int argc, char** argv) {
 
     if (mpi_rank == 0) {
       std::cout << "Segment file name = " << fname_output << std::endl;
-      std::cout << "Initialize segment filse size = " << segmentfile_init_size << std::endl;
+      std::cout << "Initialize segment filse size log2 = " << segmentfile_init_size << std::endl;
       std::cout << "Delete on Exit = " << delete_file << std::endl;
-      std::cout << "Chunk size exp = " << chunk_size_exp << std::endl;
+      std::cout << "Chunk size log10 = " << chunk_size_log10 << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
       std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
 
@@ -259,7 +259,7 @@ int main(int argc, char** argv) {
             segment_manager,
             graph_store,
             rmat,
-            static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+            static_cast<uint64_t>(std::pow(10, chunk_size_log10)),
             edges_delete_ratio);
     } else {
       const double time_start = MPI_Wtime();
@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
             segment_manager,
             graph_store,
             edgelist,
-            static_cast<uint64_t>(std::pow(2, chunk_size_exp)),
+            static_cast<uint64_t>(std::pow(10, chunk_size_log10)),
             edges_delete_ratio);
     }
 
