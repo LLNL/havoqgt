@@ -63,6 +63,10 @@ void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, seg
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
+
+    /// flush_mmmap(mapped_file);
+    sync_dimmap();
+
     havoqgt::havoqgt_env()->world_comm().barrier();
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
