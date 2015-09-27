@@ -175,6 +175,10 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
         }
       }
     }
+
+    /// flush_mmmap(mapped_file);
+    sync_dimmap();
+
     havoqgt::havoqgt_env()->world_comm().barrier();
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;

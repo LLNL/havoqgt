@@ -8,7 +8,7 @@
 
 using vertex_type = uint64_t;
 
-#define GENERATE_EDGE_BOTH_DIRECTION 0
+#define GENERATE_EDGE_BOTH_DIRECTION 1
 #define COUNT_DEGREE_TABLE 0
 
 int main(int argc, char** argv)
@@ -28,12 +28,15 @@ int main(int argc, char** argv)
     edgefile_name  = argv[pos++];
   }
 
+  std::cout << "GENERATE_EDGE_BOTH_DIRECTION: " << GENERATE_EDGE_BOTH_DIRECTION << std::endl;
+
   std::vector<std::pair<vertex_type, vertex_type>> edge_vec;
 
   /// --- init random generator --- ///
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << " use seed: " << seed << std::endl;
+  std::cout << "use seed: " << seed << std::endl;
   std::mt19937_64 gen(seed);
+
 
   /// --- generate init graph (aomplete graph) --- ///
   /// k + 1 vertices are requred

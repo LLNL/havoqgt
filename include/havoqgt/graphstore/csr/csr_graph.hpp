@@ -18,18 +18,22 @@
 #include <algorithm>
 #include <utility>
 
+#include <boost/interprocess/allocators/allocator.hpp>
+
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 namespace csr_graph_struct {
 
 
-template <typename edge_list_type, typename index_t, typename vertex_t>
+template <typename edge_list_type, typename index_t, typename vertex_t, typename segment_manager_t>
 class csr_graph {
 public:
 
-  using graph_self_type = csr_graph<edge_list_type, index_t, vertex_t>;
-  using index_type = vertex_t;
+  using graph_self_type = csr_graph<edge_list_type, index_t, vertex_t, segment_manager_t>;
+  using index_type = index_t;
   using vertex_type = vertex_t;
+  using index_allocator = boost::interprocess::allocator<index_t, segment_manager_t>;
+  using adjlist_allocator = boost::interprocess::allocator<vertex_t, segment_manager_t>;
 
   friend class VertexForwardIterator;
   template <typename Type>
@@ -247,11 +251,18 @@ public:
 
 
 
-  csr_graph(edge_list_type& edge_list, size_t max_vertex_id, size_t num_edges) :
+  csr_graph(
+      edge_list_type& edge_list,
+      size_t max_vertex_id,
+      size_t num_edges,
+      segment_manager_t* segment_manager
+      ) :
     m_num_vertices(max_vertex_id + 1),
     m_num_edges(num_edges),
     m_index_array(nullptr),
-    m_adj_list(nullptr)
+    m_adj_list(nullptr),
+    m_index_allocator(segment_manager),
+    m_adjlist_allocator(segment_manager)
   {
     allocate_graph();
 #if 1
@@ -261,11 +272,13 @@ public:
 #endif
   }
 
-  csr_graph(std::string& prefix) :
+  csr_graph(std::string& prefix, segment_manager_t* segment_manager) :
     m_num_vertices(0),
     m_num_edges(0),
     m_index_array(nullptr),
-    m_adj_list(nullptr)
+    m_adj_list(nullptr),
+    m_index_allocator(segment_manager),
+    m_adjlist_allocator(segment_manager)
   {
     load_info(prefix);
     allocate_graph();
@@ -350,8 +363,10 @@ private:
   void allocate_graph()
   {
     std::cout << "Allocating index-array and adj-list" << std::endl;
-    m_index_array = new index_type[m_num_vertices + 1];
-    m_adj_list = new vertex_type[m_num_edges];
+    m_index_pointer = m_index_allocator.allocate(m_num_vertices + 1);
+    m_adjlist_pointer = m_adjlist_allocator.allocate(m_num_edges);
+    m_index_array = m_index_pointer.get();
+    m_adj_list = m_adjlist_pointer.get();
 
     std::cout << "Allocate index_array:\t" <<  (double)(m_num_vertices + 1) * sizeof(index_type) / (1ULL<<30) << " GB" << std::endl;
     graphstore::utility::print_time();
@@ -376,8 +391,8 @@ private:
   {
     m_num_vertices = 0;
     m_num_edges = 0;
-    delete[] m_index_array;
-    delete[] m_adj_list;
+    m_index_allocator.deallocate(m_index_pointer, m_num_vertices + 1);
+    m_adjlist_allocator.deallocate(m_adjlist_pointer, m_num_edges);
   }
 
   void construct_csr(edge_list_type& edge_list)
@@ -500,6 +515,10 @@ private:
   size_t m_num_edges;
   index_type*  m_index_array;
   vertex_type* m_adj_list;
+  index_allocator m_index_allocator;
+  adjlist_allocator m_adjlist_allocator;
+  typename index_allocator::pointer m_index_pointer;
+  typename index_allocator::pointer m_adjlist_pointer;
 };
 
 #if 0

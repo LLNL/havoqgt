@@ -21,7 +21,7 @@ USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
 MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sbatch_experiments_graphpartionning_flush_test_0828.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_poster_cameraready.log"
 
 NORUN = False
 VERBOSE = True
@@ -145,6 +145,9 @@ def generate_shell_file():
 		slurm_options += " -ppdebug "
 
 	slurm_options += " -t" + str(TIME_LIMIT) + " "
+        slurm_options += " -W" + str(TIME_LIMIT * 60) + " "
+
+        slurm_options += " --msr-safe "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -300,14 +303,14 @@ def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_lis
 
 	for k in delete_ratio_list:
 		delete_segment_file = 0
-		chunk_size = 20
+                chunk_size_log10 = 6
 		edges_factor = 16
 		scale = initial_scale
 
 		while (scale <= max_scale):
 			cmd = [executable, str(scale), str(edges_factor),
 			       graph_file, str(SEGMENT_SIZE), str(delete_segment_file),
-			       str(chunk_size), str(k), EDGES_FILELIST]
+                               str(chunk_size_log10), str(k), EDGES_FILELIST]
 			add_command(N_NODES, N_PROCS, cmd)
 			scale = scale + scale_increments
 
