@@ -29,7 +29,7 @@ USE_CATALYST = True
 DELETE_WORK_FILES = False
 SEGMENT_SIZE = 39
 EDGES_FILELIST = os.getenv('EFILE_LIST', "./work/file_list")
-TIME_LIMIT = 60 * 4
+TIME_LIMIT = 60 * 23
 # --------------------------- #
 
 if USE_DIMMAP:
@@ -145,7 +145,6 @@ def generate_shell_file():
 		slurm_options += " -ppdebug "
 
 	slurm_options += " -t" + str(TIME_LIMIT) + " "
-        slurm_options += " -W" + str(TIME_LIMIT * 60) + " "
 
         slurm_options += " --msr-safe "
 
@@ -199,7 +198,7 @@ def generate_shell_file():
 
 			s += block_start + "echo Executable Log \n" + block_end
 			s += "date \n"
-			s += "srun -N" +str(nodes) + " -n" + str(processes) + " " + cmd_str  + " \n"
+			s += "srun -N" +str(nodes) + " -n" + str(processes) + " -W" + str(TIME_LIMIT * 60) + " " + cmd_str + " \n"
 			s += "date \n"
 
 			if MONITOR_IO:
