@@ -42,7 +42,7 @@ namespace utility {
 
 void print_time() {
   std::time_t result = std::time(nullptr);
-  std::cout << std::asctime(std::localtime(&result)) << std::cout;
+  std::cout << std::asctime(std::localtime(&result)); /// don't need std::endl
 }
 
 std::chrono::high_resolution_clock::time_point duration_time()

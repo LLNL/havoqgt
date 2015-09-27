@@ -18,6 +18,8 @@
 #include <havoqgt/graphstore/graph_traversal/bfs.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
+#include "dynamicgraphstore_bench.hpp"
+
 enum {
   kNumBFSLoop = 64
 };
@@ -105,14 +107,25 @@ void parse_options(int argc, char **argv)
 
 int main(int argc, char* argv[])
 {
-  graph_type* graph;
+  std::cout << "CMD line:";
+  for (int i=0; i<argc; ++i) {
+    std::cout << " " << argv[i];
+  }
+  std::cout << std::endl;
 
+  parse_options(argc, argv);
+
+  std::cout << "Create and map a segument file" << std::endl;
   mapped_file_type mapped_file = mapped_file_type(
                                    boost::interprocess::create_only,
                                    fname_segmentfile_.c_str(),
-                                   1ULL << 30);
+                                   std::pow(2, segment_size_log2_));
   segment_manager_type* segment_manager = mapped_file.get_segment_manager();
+  std::cout << "Call posix_fallocate\n";
+  fallocate(fname_segmentfile_.c_str(), std::pow(2, segment_size_log2_), mapped_file);
 
+
+  graph_type* graph;
   if (!fname_graph_.empty()) {
     std::cout << "--- Constructing a graph from file ---" << std::endl;
     graph = new graph_type(fname_graph_, segment_manager);
