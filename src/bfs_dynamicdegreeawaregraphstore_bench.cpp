@@ -52,12 +52,13 @@ using graphstore_type       = graphstore::graphstore_rhhda<
                                 edge_weight_type,
                                 midle_high_degree_threshold>;
 
- /// --- variables --- ///
 vertex_id_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
 std::string fname_segmentfile_;
 std::vector<std::string> fname_edge_list_;
-size_t segment_size_log2 = 30;
+size_t segment_size_log2_ = 30;
+vertex_id_type source_list_[kNumBFSLoop];
+
 
 template <typename Edges>
 void constract_graph(mapped_file_type& mapped_file,
@@ -78,24 +79,26 @@ void constract_graph(mapped_file_type& mapped_file,
   for (auto edges_itr = edges.begin(), edges_itr_end = edges.end();
        edges_itr != edges_itr_end;
        ++edges_itr) {
-    std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+    std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     update_request_vec.clear();
     generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, 0);
 
-    unsigned char dummy = 0;
+    unsigned char dummy_weight = 0;
     auto local_start = graphstore::utility::duration_time();
     for (auto request : update_request_vec) {
       auto edge = request.edge;
       max_vertex_id_ = std::max(max_vertex_id_, edge.first);
       max_vertex_id_ = std::max(max_vertex_id_, edge.second);
-      count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
+      count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy_weight);
     }
-    construction_time += graphstore::utility::duration_time_sec(local_start);
+    graph_store.shrink_to_fit_low_table();
+    double t = graphstore::utility::duration_time_sec(local_start);
+    construction_time += t;
+    std::cout << "progress (sec.): " << t << std::endl;
 
     ++loop_cnt;
   }
-  graph_store.shrink_to_fit_low_table();
   flush_mmmap(mapped_file);
   sync_dimmap();
   const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
@@ -109,8 +112,7 @@ void constract_graph(mapped_file_type& mapped_file,
 }
 
 
-template <typename gen_type, typename rnd_type>
-void run_bfs(graphstore_type& graph, gen_type& gen, rnd_type& dis)
+void run_bfs(graphstore_type& graph)
 {
   std::cout << "\n--- BFS ---" << std::endl;
 
@@ -118,11 +120,10 @@ void run_bfs(graphstore_type& graph, gen_type& gen, rnd_type& dis)
   std::cout << "num_edges:\t"     << num_edges_     << std::endl;
 
   for (int i = 0; i < kNumBFSLoop; ++i) {
-    vertex_id_type src = dis(gen);
-    std::cout << "BFS[" << i << "]: src=\t" << src << std::endl;
+    std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graphstore_type, vertex_id_type, true>(graph, src, max_vertex_id_, num_edges_);
+    bfs_sync<graphstore_type, vertex_id_type, true>(graph, source_list_[i], max_vertex_id_, num_edges_);
     std::cout << "finish: ";
     graphstore::utility::print_time();
     std::cout << "\n" << std::endl;
@@ -132,13 +133,25 @@ void run_bfs(graphstore_type& graph, gen_type& gen, rnd_type& dis)
 }
 
 
+void generate_source_list()
+{
+  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  std::cout << "generate sources using a seed: " << seed << std::endl;
+  std::mt19937_64 gen(seed);
+  std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
+  for (size_t i = 0; i < kNumBFSLoop; ++i) {
+    source_list_[i] = dis(gen);
+  }
+}
+
+
 void parse_options(int argc, char **argv)
 {
   char c;
   while ((c = getopt (argc, argv, "s:f:e:")) != -1) {
     switch (c) {
       case 's':
-        segment_size_log2 = boost::lexical_cast<size_t>(optarg);
+        segment_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
       case 'f':
         fname_segmentfile_ = optarg;
@@ -168,7 +181,6 @@ int main(int argc, char** argv) {
   }
   std::cout << std::endl;
 
-
   parse_options(argc, argv);
   std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
   if (!fname_edge_list_.empty())
@@ -190,7 +202,7 @@ int main(int argc, char** argv) {
   boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
   std::cout << "\n<<Construct segment>>" << std::endl;
   std::cout << "Create and map a segument file" << std::endl;
-  uint64_t graph_capacity = std::pow(2, segment_size_log2);
+  uint64_t graph_capacity = std::pow(2, segment_size_log2_);
   mapped_file_type mapped_file = mapped_file_type(
                                    boost::interprocess::create_only,
                                    fname_segmentfile_.c_str(),
@@ -212,8 +224,6 @@ int main(int argc, char** argv) {
   std::cout << "\n<Construct graph>" << std::endl;
   havoqgt::havoqgt_init(&argc, &argv);
   {
-    int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
 
     havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
@@ -228,11 +238,8 @@ int main(int argc, char** argv) {
 
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
-  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << " use seed: " << seed << std::endl;
-  std::mt19937_64 gen(seed);
-  std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
-  run_bfs(graph_store, gen, dis);
+  generate_source_list();
+  run_bfs(graph_store);
 
   return 0;
 }

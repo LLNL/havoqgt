@@ -126,13 +126,13 @@ void bfs_sync(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, s
   /// --- BFS main loop -------- ///
   auto tic = graphstore::utility::duration_time();
   bfs_core<graph_type, vertex_type, is_rhhda>::run_bfs(graph, inf, frontier_queue, next_queue);
-  auto duration_misec = graphstore::utility::duration_time_sec(tic);
+  double duration_sec = graphstore::utility::duration_time_sec(tic);
 
   std::cout << "-----------" << std::endl;
   std::cout << "#visited vertices:\t" << inf.count_visited_vertices << std::endl;
   std::cout << "#visited edges:\t"    << inf.count_visited_edges    << std::endl;
-  std::cout << "BFS time (misec):\t"  << duration_misec << std::endl;
-  std::cout << "MegaTEPS:\t" << num_edges / (duration_misec / 1000000.0) / (1ULL << 20) << std::endl;
+  std::cout << "BFS time (sec.):\t"  << duration_sec << std::endl;
+  std::cout << "MegaTEPS:\t" << num_edges / duration_sec / (1ULL << 20) << std::endl;
 }
 
 void print_statics(std::vector<double>& mteps)

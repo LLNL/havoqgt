@@ -32,8 +32,16 @@ using index_type = uint64_t;
 using vertex_type = uint64_t;
 using graph_type = csr_graph_struct::csr_graph<havoqgt::parallel_edge_list_reader, index_type, vertex_type, segment_manager_type>;
 
-template <typename gen_type, typename rnd_type>
-void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges, gen_type& gen, rnd_type& dis)
+std::string fname_graph_;
+std::string fname_segmentfile_;
+size_t segment_size_log2_ = 30;
+std::vector<std::string> fname_edge_list_;
+size_t max_vertex_id_ = 0;
+size_t num_edges_ = 0;
+vertex_id_type source_list_[kNumBFSLoop];
+
+
+void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
 {
   std::cout << "\n--- BFS ---" << std::endl;
 
@@ -47,11 +55,10 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges, gen_type
 #endif
 
   for (int i = 0; i < kNumBFSLoop; ++i) {
-    vertex_type src = dis(gen);
-    std::cout << "BFS[" << i << "]: src=\t" << src << std::endl;
+    std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graph_type, vertex_type, false>(graph, src, max_vertex_id, num_edges);
+    bfs_sync<graph_type, vertex_type, false>(graph, source_list_[i], max_vertex_id, num_edges);
     std::cout << "finish: ";
     graphstore::utility::print_time();
 
@@ -61,12 +68,16 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges, gen_type
 
 }
 
-std::string fname_graph_;
-std::string fname_segmentfile_;
-size_t segment_size_log2_ = 30;
-std::vector<std::string> fname_edge_list_;
-size_t max_vertex_id_ = 0;
-size_t num_edges_ = 0;
+void generate_source_list()
+{
+  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  std::cout << "generate sources using a seed: " << seed << std::endl;
+  std::mt19937_64 gen(seed);
+  std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
+  for (size_t i = 0; i < kNumBFSLoop; ++i) {
+    source_list_[i] = dis(gen);
+  }
+}
 
 void parse_options(int argc, char **argv)
 {
@@ -151,15 +162,9 @@ int main(int argc, char* argv[])
   }
 
   /// ---------- Graph Traversal --------------- ///
-
-  // obtain a seed from the system clock:
-  //  std::random_device rd; /// not implemented in gccc ?
-  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << " use seed: " << seed << std::endl;
-  std::mt19937_64 gen(seed);
-  std::uniform_int_distribution<vertex_type> dis(0, max_vertex_id_);
-
-  run_bfs(*graph, max_vertex_id_, num_edges_, gen, dis);
+  std::cout << "\n<Run BFS>" << std::endl;
+  generate_source_list();
+  run_bfs(*graph, max_vertex_id_, num_edges_);
 
   delete graph;
   delete segment_manager;
