@@ -256,6 +256,15 @@ EDGE_INSERTED:
               << "\n average probedistance: " << m_low_degree_table->load_factor()
               << "\n capacity*element_size(GB): "
                 << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
+    {
+      size_type histgram_prbdist[low_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
+      std::cout << "probedistance: ";
+      m_low_degree_table->histgram_load_factor(histgram_prbdist);
+      for (int i = 0; i < utility::array_length(histgram_prbdist); ++i) {
+        std::cout << histgram_prbdist[i] << " ";
+      }
+      std::cout << std::endl;
+    }
 
     std::cout << "<high-middle degree table>: "
               << "\n size, capacity, rate: " << m_mid_high_degree_table->size() << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()

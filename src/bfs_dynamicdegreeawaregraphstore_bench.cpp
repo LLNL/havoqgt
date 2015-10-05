@@ -36,8 +36,7 @@
 #endif
 
  enum : size_t {
-  midle_high_degree_threshold = 4,
-  kNumBFSLoop = 64
+  midle_high_degree_threshold = 4
 };
 
  /// --- typenames --- ///
@@ -57,7 +56,7 @@ size_t num_edges_ = 0;
 std::string fname_segmentfile_;
 std::vector<std::string> fname_edge_list_;
 size_t segment_size_log2_ = 30;
-vertex_id_type source_list_[kNumBFSLoop];
+std::vector<vertex_id_type> source_list_;
 
 
 template <typename Edges>
@@ -119,7 +118,7 @@ void run_bfs(graphstore_type& graph)
   std::cout << "max_vertex_id:\t" << max_vertex_id_ << std::endl;
   std::cout << "num_edges:\t"     << num_edges_     << std::endl;
 
-  for (int i = 0; i < kNumBFSLoop; ++i) {
+  for (int i = 0; i < source_list_.size(); ++i) {
     std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
@@ -133,30 +132,35 @@ void run_bfs(graphstore_type& graph)
 }
 
 
-void generate_source_list()
+void generate_source_list(const int num_sources)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
   std::mt19937_64 gen(seed);
   std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
-  for (size_t i = 0; i < kNumBFSLoop; ++i) {
-    source_list_[i] = dis(gen);
+  for (size_t i = 0; i < num_sources; ++i) {
+    source_list_.push_back(dis(gen));
   }
 }
 
 
 void parse_options(int argc, char **argv)
 {
+
   char c;
-  while ((c = getopt (argc, argv, "s:f:e:")) != -1) {
+
+  while ((c = getopt (argc, argv, "s:f:e:r:")) != -1) {
     switch (c) {
       case 's':
         segment_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
+
       case 'f':
         fname_segmentfile_ = optarg;
         break;
+
       case 'e':
+      {
         std::string fname(optarg);
         std::ifstream fin(fname);
         std::string line;
@@ -168,8 +172,19 @@ void parse_options(int argc, char **argv)
           fname_edge_list_.push_back(line);
         }
         break;
+      }
+
+      case 'r':
+      {
+        std::string buf;
+        std::stringstream sstrm(optarg);
+        while (std::getline(sstrm, buf, ':'))
+            source_list_.push_back(boost::lexical_cast<size_t>(buf));
+        break;
+      }
     }
   }
+
 }
 
 
@@ -238,7 +253,8 @@ int main(int argc, char** argv) {
 
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
-  generate_source_list();
+  if (source_list_.empty())
+    generate_source_list(4);
   run_bfs(graph_store);
 
   return 0;

@@ -531,6 +531,24 @@ public:
     }
   }
 
+  ///
+  /// \brief histgram_load_factor
+  /// \param histgram
+  ///   An array hold load factors
+  ///
+  template <size_t size>
+  void histgram_load_factor(size_type (&histgram)[size])
+  {
+    for (size_type i = 0; i < m_capacity; ++i) {
+      const size_type d = property_program::extract_probedistance(m_body[i].property);
+      if (d >= size) exit(1);
+      ++histgram[d];
+    }
+    if (m_next != nullptr) {
+      m_next->histgram_load_factor(histgram);
+    }
+  }
+
 
   /// ---------------------------------------------------------- ///
   ///                         private

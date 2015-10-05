@@ -20,11 +20,6 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-enum {
-  kNumBFSLoop = 64
-};
-
-
 using mapped_file_type      = boost::interprocess::managed_mapped_file;
 using segment_manager_type  = boost::interprocess::managed_mapped_file::segment_manager;
 
@@ -38,7 +33,7 @@ size_t segment_size_log2_ = 30;
 std::vector<std::string> fname_edge_list_;
 size_t max_vertex_id_ = 0;
 size_t num_edges_ = 0;
-vertex_id_type source_list_[kNumBFSLoop];
+std::vector<vertex_id_type> source_list_;
 
 
 void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
@@ -54,7 +49,7 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
   find_startvertex_candidates(graph, table);
 #endif
 
-  for (int i = 0; i < kNumBFSLoop; ++i) {
+  for (int i = 0; i < source_list_.size(); ++i) {
     std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
@@ -68,21 +63,23 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
 
 }
 
-void generate_source_list()
+void generate_source_list(const int num_sources)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
   std::mt19937_64 gen(seed);
   std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
-  for (size_t i = 0; i < kNumBFSLoop; ++i) {
-    source_list_[i] = dis(gen);
+  for (size_t i = 0; i < num_sources; ++i) {
+    source_list_.push_back(dis(gen));
   }
 }
 
 void parse_options(int argc, char **argv)
 {
+
   char c;
-  while ((c = getopt (argc, argv, "g:s:f:e:v:m:")) != -1) {
+
+  while ((c = getopt (argc, argv, "g:s:f:e:v:m:r:")) != -1) {
     switch (c) {
       case 'g':
         fname_graph_ = optarg;
@@ -100,6 +97,7 @@ void parse_options(int argc, char **argv)
         num_edges_ = boost::lexical_cast<size_t>(optarg);
         break;
       case 'e':
+      {
         std::string fname(optarg);
         std::ifstream fin(fname);
         std::string line;
@@ -111,8 +109,19 @@ void parse_options(int argc, char **argv)
           fname_edge_list_.push_back(line);
         }
         break;
+      }
+
+      case 'r':
+      {
+        std::string buf;
+        std::stringstream sstrm(optarg);
+        while (std::getline(sstrm, buf, ':'))
+            source_list_.push_back(boost::lexical_cast<size_t>(buf));
+        break;
+      }
     }
   }
+
 }
 
 
@@ -163,7 +172,8 @@ int main(int argc, char* argv[])
 
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
-  generate_source_list();
+  if (source_list_.empty())
+    generate_source_list(4);
   run_bfs(*graph, max_vertex_id_, num_edges_);
 
   delete graph;
