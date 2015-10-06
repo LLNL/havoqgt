@@ -78,6 +78,11 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     return (m_local_id != conv.m_local_id || m_owner_dest != conv.m_owner_dest);
   }
 
+  inline uint64_t hash() const {
+    std::hash<uint64_t> hasher;
+    return (hasher(local_id()) + hasher(owner()));
+  }
+
   bool is_delegate() const { return m_is_delegate == 1;}
   uint32_t owner() const { return m_owner_dest; }
   void set_dest(uint32_t dest) { m_owner_dest = dest; assert(m_owner_dest == dest);}

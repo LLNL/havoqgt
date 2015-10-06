@@ -246,6 +246,73 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
 
+  void init_visitor_traversal_new_alt() {
+    auto citr = m_ptr_graph->controller_begin();
+    auto vitr = m_ptr_graph->vertices_begin();
+
+    do {
+      do {
+        do {
+          if(citr != m_ptr_graph->controller_end()) {
+            visitor_type v(*citr);
+            if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+              do_visit( v );
+              check_mailbox();
+            }
+            ++citr;
+          }
+          if(vitr != m_ptr_graph->vertices_end()) {
+            visitor_type v(*vitr);
+            if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+              do_visit( v );
+              check_mailbox();
+            }
+            ++vitr;
+          }
+          process_pending_controllers();
+          while(!empty()) {
+            process_pending_controllers();
+            visitor_type this_visitor = pop_top();
+            do_visit(this_visitor);
+            m_termination_detection.inc_completed();
+          }
+        } while( citr != m_ptr_graph->controller_end() ||  vitr != m_ptr_graph->vertices_end() );
+        m_mailbox.flush_buffers_if_idle();
+      } while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+  void init_visitor_traversal_local_first() {
+    typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
+    for(; citr != m_ptr_graph->controller_end(); ++citr) {
+      visitor_type v(*citr);
+      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+        do_visit( v );
+        // check_mailbox();
+      }
+    }
+    typename TGraph::vertex_iterator vitr = m_ptr_graph->vertices_begin();
+    for(; vitr != m_ptr_graph->vertices_end(); ++vitr) {
+      visitor_type v(*vitr);
+      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+        do_visit( v );
+        // check_mailbox();
+      }
+    }
+    do {
+      do {
+      process_pending_controllers();
+      while(!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+        m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
   void queue_visitor(const visitor_type& v) {
     if(v.vertex.is_delegate()) {
       local_delegate_visit(v);
