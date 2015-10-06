@@ -79,6 +79,11 @@ void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
          << " -s <int>    - RMAT graph Scale (default 17)\n"
+         << " -t <int>    - RMAT type:\n"
+         << "                 0: Graph500 (.57, .19, .19, .05) [DEFAULT]\n"
+         << "                 1: RMAT-ER  (.25, .25, .25, .25)\n"
+         << "                 2: RMAT-G   (.45, .15, .15, .25)\n"
+         << "                 3: RMAT-B   (.55, .15, .15, .15)\n"
          << " -d <int>    - delegate threshold (Default is 1048576)\n"
          << " -o <string> - output graph base filename\n"
          << " -b <string>   - backup graph base filename \n"
@@ -92,7 +97,7 @@ void usage()  {
 
 void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, 
                     std::string& output_filename, std::string& backup_filename, double& gbyte_per_rank, 
-                    uint64_t& partition_passes, uint64_t& chunk_size) {
+                    uint64_t& partition_passes, uint64_t& chunk_size, int* rmat_type) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -110,13 +115,16 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:d:o:b:p:f:c:h ")) != -1) {
+  while ((c = getopt(argc, argv, "s:t:d:o:b:p:f:c:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
          break;
       case 's':
          scale = atoll(optarg);
+         break;
+      case 't':
+         *rmat_type = atoi(optarg);
          break;
       case 'd':
          delegate_threshold = atoll(optarg);
@@ -179,9 +187,10 @@ int main(int argc, char** argv) {
     uint64_t      partition_passes;
     double        gbyte_per_rank;
     uint64_t      chunk_size;
-        
+    int           rmat_type = 0;
+
     parse_cmd_line(argc, argv, vert_scale, hub_threshold, output_filename, backup_filename, 
-                   gbyte_per_rank, partition_passes, chunk_size);
+                   gbyte_per_rank, partition_passes, chunk_size, &rmat_type);
 
     num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
@@ -198,11 +207,32 @@ int main(int argc, char** argv) {
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
+    // Set up RMAT values. (Remember: must sum up to 1.)
+    float r_val[4];
+    switch (rmat_type) {
+    case 0:  // Graph 500
+      r_val[0] = 0.57;  r_val[1] = 0.19;  r_val[2] = 0.19;  r_val[3] = 0.05;
+      break;
+    case 1:  // RMAT-ER
+      r_val[0] = 0.25;  r_val[1] = 0.25;  r_val[2] = 0.25;  r_val[3] = 0.25;
+      break;
+    case 2:  // RMAT-G
+      r_val[0] = 0.45;  r_val[1] = 0.15;  r_val[2] = 0.15;  r_val[3] = 0.25;
+      break;
+    case 3:  // RMAT-B
+      r_val[0] = 0.55;  r_val[1] = 0.15;  r_val[2] = 0.15;  r_val[3] = 0.15;
+      break;
+    default:
+      std::cerr << "Bad RMAT type!" << std::endl;
+      exit(-1);
+    }
+
     //Generate RMAT graph
     uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
     havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
                                       vert_scale, num_edges_per_rank,
-                                      0.57, 0.19, 0.19, 0.05, true, true);
+                                      r_val[0], r_val[1], r_val[2], r_val[3],
+                                      true, true);
 
 
     if (mpi_rank == 0) {
