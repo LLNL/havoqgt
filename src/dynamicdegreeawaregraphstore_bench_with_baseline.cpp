@@ -12,95 +12,95 @@
 std::ofstream ofs_edges;
 #endif
 
-enum : size_t {
-  midle_high_degree_threshold = 3
-};
+//enum : size_t {
+//  midle_high_degree_threshold = 3
+//};
 
-using vertex_meta_data_type = unsigned char;
-using edge_weight_type = unsigned char;
-using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, static_cast<size_t>(midle_high_degree_threshold)>;
+//using vertex_meta_data_type = unsigned char;
+//using edge_weight_type = unsigned char;
+//using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, static_cast<size_t>(midle_high_degree_threshold)>;
 
-template <typename Edges>
-void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
-{
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+//template <typename Edges>
+//void apply_edges_update_requests(graphstore_type& graph_store, Edges& edges, segment_manager_type *const segment_manager, const uint64_t chunk_size, const size_t edges_delete_ratio)
+//{
+//  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+//  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
 
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
-  if (mpi_rank == 0) print_usages(segment_manager);
-  havoqgt::havoqgt_env()->world_comm().barrier();
+//  havoqgt::havoqgt_env()->world_comm().barrier();
+//  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
+//  if (mpi_rank == 0) print_usages(segment_manager);
+//  havoqgt::havoqgt_env()->world_comm().barrier();
 
-  uint64_t loop_cnt = 0;
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  bool global_is_finished = false;
-  request_vector_type update_request_vec = request_vector_type();
+//  uint64_t loop_cnt = 0;
+//  auto edges_itr = edges.begin();
+//  auto edges_itr_end = edges.end();
+//  bool global_is_finished = false;
+//  request_vector_type update_request_vec = request_vector_type();
 
-  size_t count_inserted = 0;
-  size_t count_delete = 0;
+//  size_t count_inserted = 0;
+//  size_t count_delete = 0;
 
-  while (!global_is_finished) {
-    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+//  while (!global_is_finished) {
+//    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
-    update_request_vec.clear();
-    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
-    havoqgt::havoqgt_env()->world_comm().barrier();
+//    update_request_vec.clear();
+//    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
+//    havoqgt::havoqgt_env()->world_comm().barrier();
 
-    const double time_start = MPI_Wtime();
-    unsigned char dummy = 0;
-    for (auto request : update_request_vec) {
-      auto edge = request.edge;
-      if (request.is_delete) {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 1" << "\n";
-#endif
-        count_delete += graph_store.erase_edge(edge.first, edge.second);
-      } else {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 0" << "\n";
-#endif
-        count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
-      }
-    }
+//    const double time_start = MPI_Wtime();
+//    unsigned char dummy = 0;
+//    for (auto request : update_request_vec) {
+//      auto edge = request.edge;
+//      if (request.is_delete) {
+//#if DEBUG_MODE
+//        ofs_edges << edge.first << " " << edge.second << " 1" << "\n";
+//#endif
+//        count_delete += graph_store.erase_edge(edge.first, edge.second);
+//      } else {
+//#if DEBUG_MODE
+//        ofs_edges << edge.first << " " << edge.second << " 0" << "\n";
+//#endif
+//        count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
+//      }
+//    }
 
-    /// flush_mmmap(mapped_file);
-    sync_dimmap();
+//    /// flush_mmmap(mapped_file);
+//    sync_dimmap();
 
-    havoqgt::havoqgt_env()->world_comm().barrier();
-    const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
-    if (mpi_rank == 0) print_usages(segment_manager);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-#if VERBOSE
-    for (int i = 0; i < mpi_size; ++i) {
-      if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "]" << std::endl;
-        graph_store.print_status();
-      }
-      havoqgt::havoqgt_env()->world_comm().barrier();
-    }
-#endif
+//    havoqgt::havoqgt_env()->world_comm().barrier();
+//    const double time_end = MPI_Wtime();
+//    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
+//    if (mpi_rank == 0) print_usages(segment_manager);
+//    havoqgt::havoqgt_env()->world_comm().barrier();
+//#if VERBOSE
+//    for (int i = 0; i < mpi_size; ++i) {
+//      if (i == mpi_rank) {
+//        std::cout << "[" << mpi_rank << "]" << std::endl;
+//        graph_store.print_status();
+//      }
+//      havoqgt::havoqgt_env()->world_comm().barrier();
+//    }
+//#endif
 
-    ++loop_cnt;
+//    ++loop_cnt;
 
-    const bool local_is_finished = (edges_itr == edges_itr_end);
-    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  if (mpi_rank == 0) {
-    std::cout << "\n-- All edge updations done --" << std::endl;
-    print_usages(segment_manager);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
-      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
-    }
-  }
+//    const bool local_is_finished = (edges_itr == edges_itr_end);
+//    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
+//  }
+//  havoqgt::havoqgt_env()->world_comm().barrier();
+//  if (mpi_rank == 0) {
+//    std::cout << "\n-- All edge updations done --" << std::endl;
+//    print_usages(segment_manager);
+//  }
+//  havoqgt::havoqgt_env()->world_comm().barrier();
+//  for (int i = 0; i < mpi_size; ++i) {
+//    if (i == mpi_rank) {
+//      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
+//      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
+//    }
+//  }
 
-}
+//}
 
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size (log10) = " << chunk_size_log10 << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
-      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
+//      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
 
       if (fname_edge_list.empty()) {
         std::cout << "Building RMAT graph Scale: " << vert_scale << std::endl;

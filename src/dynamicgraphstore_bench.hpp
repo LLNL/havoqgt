@@ -27,9 +27,7 @@
 
 #define SORT_BY_CHUNK 0
 
-using vertex_id_type        = uint64_t;
-using vertex_meta_data_type = unsigned char;
-using edge_weight_type      = unsigned char;
+using vertex_id_type       = uint64_t;
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = graphstore::rhh::segment_manager_t;

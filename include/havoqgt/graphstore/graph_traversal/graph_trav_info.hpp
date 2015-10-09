@@ -20,7 +20,6 @@ struct trv_inf {
       count_visited_vertices(0),
       count_visited_edges(0)
   {
-    init();
   }
 
   ~trv_inf()
@@ -29,17 +28,19 @@ struct trv_inf {
     delete[] tree;
   }
 
-  void init()
+  void init(const bool is_allocate_maps)
   {
-    is_visited = new bool[num_vertices];
-    std::cout << "Allocate is_visited:\t" <<  (double)num_vertices * sizeof(bool) / (1ULL<<30) << " GB" << std::endl;
+    if (is_allocate_maps) {
+      is_visited = new bool[num_vertices];
+      std::cout << "Allocate is_visited:\t" <<  (double)num_vertices * sizeof(bool) / (1ULL<<30) << " GB" << std::endl;
 
-    tree = new vertex_type[num_vertices];
-    std::cout << "Allocate tree:\t" <<  (double)num_vertices * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
+      tree = new vertex_type[num_vertices];
+      std::cout << "Allocate tree:\t" <<  (double)num_vertices * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
 
-    for (size_t i = 0 ; i < num_vertices; ++i) {
-      is_visited[i] = false;
-      tree[i] = std::numeric_limits<vertex_type>::max();
+      for (size_t i = 0 ; i < num_vertices; ++i) {
+        is_visited[i] = false;
+        tree[i] = std::numeric_limits<vertex_type>::max();
+      }
     }
     count_visited_vertices = 0;
     count_visited_edges = 0;

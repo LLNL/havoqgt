@@ -24,9 +24,9 @@ private:
   using size_type = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
   using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
-  using high_mid_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
-  using high_mid_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, high_mid_edge_chunk_type*>;
-  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, high_mid_src_vertex_value_type, size_type>;
+  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
+  using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
+  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type>;
   using segment_manager_type           = rhh::segment_manager_t;
 
 public:
@@ -34,7 +34,7 @@ public:
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
     rhh::init_allocator<typename low_degree_table_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename high_mid_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
+    rhh::init_allocator<typename mid_high_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
     rhh::init_allocator<typename mid_high_degree_table_type::allocator, segment_manager_type>(segment_manager);
 
     m_low_degree_table = low_degree_table_type::allocate(2);
@@ -42,7 +42,7 @@ public:
 
     std::cout << "Element size: \n"
               << " low_degree_table " << low_degree_table_type::kElementSize << "\n"
-              << " high_mid_edge_chunk " << high_mid_edge_chunk_type::kElementSize << "\n"
+              << " mid_high_edge_chunk " << mid_high_edge_chunk_type::kElementSize << "\n"
               << " mid_high_degree_table " << mid_high_degree_table_type::kElementSize << std::endl;
   }
 
@@ -51,7 +51,7 @@ public:
     low_degree_table_type::deallocate(m_low_degree_table);
     mid_high_degree_table_type::deallocate(m_mid_high_degree_table);
     rhh::destroy_allocator<typename low_degree_table_type::allocator>();
-    rhh::destroy_allocator<typename high_mid_edge_chunk_type::allocator>();
+    rhh::destroy_allocator<typename mid_high_edge_chunk_type::allocator>();
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
   }
 
@@ -95,9 +95,9 @@ public:
       } else {
 
         /// --- move the elements from low table to high-mid table --- ///
-        high_mid_edge_chunk_type* adj_list = high_mid_edge_chunk_type::allocate(middle_high_degree_threshold);
+        mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(middle_high_degree_threshold);
         auto itr_single = m_low_degree_table->find(src);
-        high_mid_src_vertex_value_type value((*itr_single).first, nullptr);
+        mid_high_src_vertex_value_type value((*itr_single).first, nullptr);
         for (; !itr_single.is_end(); ++itr_single) {
           rhh_container_utility::insert(&adj_list, (*itr_single).second, (*itr_single).third);
           m_low_degree_table->erase(itr_single);
@@ -116,7 +116,7 @@ public:
         rhh_container_utility::insert(&m_low_degree_table, src, value);
       } else {
         /// --- the high-mid table has source vertex --- ///
-        high_mid_edge_chunk_type* adj_list = itr_src->second;
+        mid_high_edge_chunk_type* adj_list = itr_src->second;
         auto itr_trg = adj_list->find(trg);
 
         if (itr_trg.is_end()) {
@@ -175,7 +175,7 @@ EDGE_INSERTED:
     auto itr_matrix = m_mid_high_degree_table->find(src);
     /// has source vertex ?
     if (itr_matrix.is_end()) return false;
-    high_mid_edge_chunk_type* adj_list = itr_matrix->second;
+    mid_high_edge_chunk_type* adj_list = itr_matrix->second;
 
     for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
       adj_list->erase(itr);
@@ -190,7 +190,7 @@ EDGE_INSERTED:
           rhh_container_utility::insert(&m_low_degree_table, src, value);
           adj_list->erase(itr);
         }
-        high_mid_edge_chunk_type::deallocate(adj_list);
+        mid_high_edge_chunk_type::deallocate(adj_list);
         m_mid_high_degree_table->erase(itr_matrix);
         /// rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
       } else {
@@ -207,16 +207,39 @@ EDGE_INSERTED:
     return m_mid_high_degree_table->erase(vertex);
   }
 
+  void vertex_meta_data(const vertex_id_type& vertex, vertex_meta_data_type& meta_data)
+  {
+    auto itr = m_low_degree_table->find(vertex);
+    if (!itr.is_end()) {
+      meta_data = itr->first;
+      return;
+    }
+
+    auto itr_matrix = m_mid_high_degree_table->find(vertex);
+    if (!itr_matrix.is_end()) {
+      meta_data = itr_matrix->first;
+    }
+  }
+
   void clear()
   {
     // for (auto itr = m_mid_high_degree_table->begin(); !itr.is_end(); ++itr)
     for (const auto& itr : *m_mid_high_degree_table) {
-      high_mid_edge_chunk_type* const adj_list = itr.value.second;
+      mid_high_edge_chunk_type* const adj_list = itr.value.second;
       adj_list->clear();
     }
     m_low_degree_table->clear();
   }
 
+  typename low_degree_table_type::whole_iterator begin_low_edges()
+  {
+    return m_low_degree_table->begin();
+  }
+
+  typename mid_high_degree_table_type::whole_iterator begin_mid_high_edges()
+  {
+    return m_mid_high_degree_table->begin();
+  }
 
   typename low_degree_table_type::value_iterator find_low_edge (vertex_id_type& src_vrt)
   {
@@ -228,17 +251,17 @@ EDGE_INSERTED:
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename high_mid_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
+  typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
-    high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
+    mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->begin();
   }
 
-  typename high_mid_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
+  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
-    const high_mid_edge_chunk_type* const adj_list = itr_matrix->second;
+    const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->cbegin();
   }
 
@@ -309,7 +332,7 @@ EDGE_INSERTED:
                 << "\n size: " << size_sum
                 << "\n capacity: " << capacity_sum
                 << "\n rate: " << (double)(size_sum) / capacity_sum
-                << "\n capacity*element_size(GB): " << (double)capacity_sum * high_mid_edge_chunk_type::kElementSize  / (1ULL<<30) << std::endl;
+                << "\n capacity*element_size(GB): " << (double)capacity_sum * mid_high_edge_chunk_type::kElementSize  / (1ULL<<30) << std::endl;
 
       std::cout << "average probedistance: ";
       for (int i = 0; i < utility::array_length(histgram_ave_prbdist); ++i) {

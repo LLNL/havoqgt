@@ -43,7 +43,7 @@
 using mapped_file_type      = boost::interprocess::managed_mapped_file;
 using segment_manager_type  = graphstore::rhh::segment_manager_t;
 using vertex_id_type        = uint64_t;
-using vertex_meta_data_type = unsigned char;
+using vertex_meta_data_type = bool;
 using edge_weight_type      = unsigned char;
 using graphstore_type       = graphstore::graphstore_rhhda<
                                 vertex_id_type,
@@ -108,6 +108,7 @@ void constract_graph(mapped_file_type& mapped_file,
   std::cout << "inserted edges : " << count_inserted << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
+  print_usages(segment_manager);
 }
 
 

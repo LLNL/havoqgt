@@ -23,8 +23,21 @@ class bfs_core {
 
   bfs_core()=delete;
 
-  static void run_bfs (graph_type& graph, graph_trv_info::trv_inf<vertex_type>& inf, std::queue<vertex_type>& frontier_queue, std::queue<vertex_type>& next_queue)
+  static void run_bfs_sync (
+      graph_type& graph,
+      graph_trv_info::trv_inf<vertex_type>& inf,
+      std::queue<vertex_type>& frontier_queue,
+      std::queue<vertex_type>& next_queue,
+      vertex_type& start_vrtx)
   {
+
+    /// ---- init inf ---- ///
+    auto tic_init = graphstore::utility::duration_time();
+    inf.init(true);
+    inf.is_visited[start_vrtx] = true;
+    inf.tree[start_vrtx] = start_vrtx;
+    std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
+
     /// --- BFS main loop -------- ///
     size_t level = 0;
     while (true) {
@@ -63,8 +76,25 @@ class bfs_core <graph_type, vertex_type, true> {
 
   bfs_core()=delete;
 
-  static void run_bfs (graph_type& graph, graph_trv_info::trv_inf<vertex_type>& inf, std::queue<vertex_type>& frontier_queue, std::queue<vertex_type>& next_queue)
+  static void run_bfs_sync (
+      graph_type& graph,
+      graph_trv_info::trv_inf<vertex_type>& inf,
+      std::queue<vertex_type>& frontier_queue,
+      std::queue<vertex_type>& next_queue,
+      vertex_type& start_vrtx)
   {
+
+    /// ---- init inf ---- ///
+    auto tic_init = graphstore::utility::duration_time();
+    inf.init(false);
+    for (auto itr = graph.begin_low_edges(); !itr.is_end(); ++itr) {
+      itr->value.first = false;
+    }
+    for (auto itr = graph.begin_mid_high_edges(); !itr.is_end(); ++itr) {
+      itr->value.first = false;
+    }
+    std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
+
     /// --- BFS main loop -------- ///
     size_t level = 0;
     while (true) {
@@ -80,20 +110,24 @@ class bfs_core <graph_type, vertex_type, true> {
         /// push adjacent vertices to the next queue
         for (auto edge = graph.find_low_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->second;
-          if (!inf.is_visited[dst]) {
+          bool is_visited = false;
+          graph.vertex_meta_data(dst, is_visited);
+          if (!is_visited) {
             next_queue.push(dst);
-            inf.tree[dst] = src;
-            inf.is_visited[dst] = true;
+            /// inf.tree[dst] = src;
+            is_visited = true;
           }
           ++(inf.count_visited_edges);
         }
 
         for (auto edge = graph.find_mid_high_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->key;
-          if (!inf.is_visited[dst]) {
+          bool is_visited = false;
+          graph.vertex_meta_data(dst, is_visited);
+          if (!is_visited) {
             next_queue.push(dst);
-            inf.tree[dst] = src;
-            inf.is_visited[dst] = true;
+            /// inf.tree[dst] = src;
+            is_visited = true;
           }
           ++(inf.count_visited_edges);
         }
@@ -113,19 +147,16 @@ void bfs_sync(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, s
 {
 
   /// ---- Initialization ----- ////
+  auto tic_init = graphstore::utility::duration_time();
   graph_trv_info::trv_inf<vertex_type> inf(max_vertex_id, num_edges);
   std::queue<vertex_type> frontier_queue;
   std::queue<vertex_type> next_queue;
-
-  /// ---- Set source vertex ---- ///
   frontier_queue.push(start_vrtx);
-
-  inf.is_visited[start_vrtx] = true;
-  inf.tree[start_vrtx] = start_vrtx;
+  std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
   /// --- BFS main loop -------- ///
   auto tic = graphstore::utility::duration_time();
-  bfs_core<graph_type, vertex_type, is_rhhda>::run_bfs(graph, inf, frontier_queue, next_queue);
+  bfs_core<graph_type, vertex_type, is_rhhda>::run_bfs_sync(graph, inf, frontier_queue, next_queue, start_vrtx);
   double duration_sec = graphstore::utility::duration_time_sec(tic);
 
   std::cout << "-----------" << std::endl;
