@@ -207,18 +207,15 @@ EDGE_INSERTED:
     return m_mid_high_degree_table->erase(vertex);
   }
 
-  void vertex_meta_data(const vertex_id_type& vertex, vertex_meta_data_type& meta_data)
+  vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
   {
     auto itr = m_low_degree_table->find(vertex);
     if (!itr.is_end()) {
-      meta_data = itr->first;
-      return;
+      return itr->first;
     }
 
     auto itr_matrix = m_mid_high_degree_table->find(vertex);
-    if (!itr_matrix.is_end()) {
-      meta_data = itr_matrix->first;
-    }
+    return itr_matrix->first;
   }
 
   void clear()

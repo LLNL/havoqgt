@@ -110,8 +110,7 @@ class bfs_core <graph_type, vertex_type, true> {
         /// push adjacent vertices to the next queue
         for (auto edge = graph.find_low_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->second;
-          bool is_visited = false;
-          graph.vertex_meta_data(dst, is_visited);
+          bool& is_visited = graph.vertex_meta_data(dst);
           if (!is_visited) {
             next_queue.push(dst);
             /// inf.tree[dst] = src;
@@ -122,8 +121,7 @@ class bfs_core <graph_type, vertex_type, true> {
 
         for (auto edge = graph.find_mid_high_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->key;
-          bool is_visited = false;
-          graph.vertex_meta_data(dst, is_visited);
+          bool& is_visited = graph.vertex_meta_data(dst);
           if (!is_visited) {
             next_queue.push(dst);
             /// inf.tree[dst] = src;
