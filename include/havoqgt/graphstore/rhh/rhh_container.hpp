@@ -400,7 +400,7 @@ public:
 
   whole_iterator end()
   {
-    return whole_iterator(this, kKeyNotFound);
+    return whole_iterator(nullptr, kKeyNotFound);
   }
 
   const_whole_iterator cbegin() const
@@ -410,7 +410,7 @@ public:
 
   const_whole_iterator cend() const
   {
-    return const_whole_iterator(this, kKeyNotFound);
+    return const_whole_iterator(nullptr, kKeyNotFound);
   }
 
 

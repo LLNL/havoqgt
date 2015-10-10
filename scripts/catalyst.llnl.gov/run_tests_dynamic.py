@@ -42,7 +42,7 @@ else:
 
 log_dir = "logs/flush/"
 executable_dir = "src/"
-executable = "dynamicdegreeawaregraphstore_bench"
+executable = "rhhda_bench"
 
 
 command_strings = []

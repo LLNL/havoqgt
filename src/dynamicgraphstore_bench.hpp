@@ -27,12 +27,12 @@
 
 #define SORT_BY_CHUNK 0
 
-using vertex_id_type       = uint64_t;
-
+/// --- typenames --- ///
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = graphstore::rhh::segment_manager_t;
 
 
+template<typename vertex_id_type>
 struct EdgeUpdateRequest
 {
   EdgeUpdateRequest(std::pair<vertex_id_type, vertex_id_type> _edge, bool _is_delete)
@@ -45,10 +45,12 @@ struct EdgeUpdateRequest
   bool is_delete;
 };
 
-bool edgerequest_asc( const EdgeUpdateRequest& left, const EdgeUpdateRequest& right ) {
+template<typename vertex_id_type>
+bool edgerequest_asc(const EdgeUpdateRequest<vertex_id_type>& left, const EdgeUpdateRequest<vertex_id_type>& right ) {
   return left.edge.first < right.edge.first;
 }
-using request_vector_type = std::vector<EdgeUpdateRequest>;
+template<typename vertex_id_type>
+using request_vector_type = std::vector<EdgeUpdateRequest<vertex_id_type>>;
 
 
 void print_usages(segment_manager_type *const segment_manager)
@@ -93,16 +95,20 @@ void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 #endif
 }
 
-
-double sort_requests(request_vector_type& requests)
+template<typename vertex_id_type>
+double sort_requests(request_vector_type<vertex_id_type>& requests)
 {
   const double time_start1 = MPI_Wtime();
   std::sort(requests.begin(), requests.end(), edgerequest_asc);
   return (MPI_Wtime() - time_start1);
 }
 
-template <typename Edges_itr>
-void generate_insertion_requests(Edges_itr& edges_itr, Edges_itr& edges_itr_last, const size_t chunk_size, request_vector_type& requests, const size_t delete_ratio)
+template <typename Edges_itr, typename vertex_id_type>
+void generate_insertion_requests(Edges_itr& edges_itr,
+                                 Edges_itr& edges_itr_last,
+                                 const size_t chunk_size,
+                                 request_vector_type<vertex_id_type>& requests,
+                                 const size_t delete_ratio)
 {
   const int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
 
@@ -112,7 +118,7 @@ void generate_insertion_requests(Edges_itr& edges_itr, Edges_itr& edges_itr_last
   const double time_start = MPI_Wtime();
   for (size_t cnt = 0; edges_itr != edges_itr_last && cnt < chunk_size; ++edges_itr, ++cnt) {
     const bool is_delete = (rand() % 100 < delete_ratio);
-    EdgeUpdateRequest request(*edges_itr, is_delete);
+    EdgeUpdateRequest<vertex_id_type> request(*edges_itr, is_delete);
     requests.push_back(request);
     //    std::cerr << edges_itr->first << " " << edges_itr->second << "\n";
   }

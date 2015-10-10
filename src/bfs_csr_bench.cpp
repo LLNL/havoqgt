@@ -20,12 +20,12 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-using mapped_file_type      = boost::interprocess::managed_mapped_file;
-using segment_manager_type  = boost::interprocess::managed_mapped_file::segment_manager;
+//using mapped_file_type      = boost::interprocess::managed_mapped_file;
+//using segment_manager_type  = boost::interprocess::managed_mapped_file::segment_manager;
 
 using index_type = uint64_t;
-using vertex_type = uint64_t;
-using graph_type = csr_graph_struct::csr_graph<havoqgt::parallel_edge_list_reader, index_type, vertex_type, segment_manager_type>;
+using vertex_id_type = uint64_t;
+using graph_type = csr_graph_struct::csr_graph<havoqgt::parallel_edge_list_reader, index_type, vertex_id_type, segment_manager_type>;
 
 std::string fname_graph_;
 std::string fname_segmentfile_;
@@ -53,7 +53,7 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
     std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graph_type, vertex_type, false>(graph, source_list_[i], max_vertex_id, num_edges);
+    bfs_sync<graph_type, vertex_id_type, false>(graph, source_list_[i], max_vertex_id, num_edges);
     std::cout << "finish: ";
     graphstore::utility::print_time();
 

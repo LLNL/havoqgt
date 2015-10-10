@@ -16,7 +16,7 @@
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/graph_traversal/graph_trav_info.hpp>
 
-template <typename graph_type, typename vertex_type, bool is_rhhda>
+template <typename graph_type, typename vertex_type, int type>
 class bfs_core {
 
  public:
@@ -70,7 +70,7 @@ class bfs_core {
 };
 
 template <typename graph_type, typename vertex_type>
-class bfs_core <graph_type, vertex_type, true> {
+class bfs_core <graph_type, vertex_type, 1> {
 
  public:
 
@@ -93,6 +93,7 @@ class bfs_core <graph_type, vertex_type, true> {
     for (auto itr = graph.begin_mid_high_edges(); !itr.is_end(); ++itr) {
       itr->value.first = false;
     }
+    graph.vertex_meta_data(start_vrtx) = true;
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
     /// --- BFS main loop -------- ///
@@ -103,7 +104,6 @@ class bfs_core <graph_type, vertex_type, true> {
       /// loop for current frontier
       while (!frontier_queue.empty()) {
         vertex_type src = frontier_queue.front();
-  //      std::cout << "src " << src << std::endl;
         frontier_queue.pop();
         ++inf.count_visited_vertices;
 
@@ -140,7 +140,61 @@ class bfs_core <graph_type, vertex_type, true> {
 };
 
 
-template <typename graph_type, typename vertex_type, bool is_rhhda>
+template <typename graph_type, typename vertex_type>
+class bfs_core <graph_type, vertex_type, 2> {
+
+ public:
+
+  bfs_core()=delete;
+
+  static void run_bfs_sync (
+      graph_type& graph,
+      graph_trv_info::trv_inf<vertex_type>& inf,
+      std::queue<vertex_type>& frontier_queue,
+      std::queue<vertex_type>& next_queue,
+      vertex_type& start_vrtx)
+  {
+
+    /// ---- init inf ---- ///
+    auto tic_init = graphstore::utility::duration_time();
+    inf.init(false);
+    graph.find(start_vrtx)->second.first = true;
+    std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
+
+    /// --- BFS main loop -------- ///
+    size_t level = 0;
+    while (true) {
+      std::cout << "Lv. " << level << ", size of frontier queue =\t" << frontier_queue.size() << std::endl;
+
+      /// loop for current frontier
+      while (!frontier_queue.empty()) {
+        vertex_type src = frontier_queue.front();
+        frontier_queue.pop();
+        ++inf.count_visited_vertices;
+
+        /// push adjacent vertices to the next queue
+        auto adjlist_vec = graph.find(src)->second.second;
+        for (auto edge : adjlist_vec) {
+          const vertex_type dst = edge;
+          bool& is_visited = graph.find(dst)->second.first;
+          if (!is_visited) {
+            next_queue.push(dst);
+            /// inf.tree[dst] = src;
+            is_visited = true;
+          }
+          ++(inf.count_visited_edges);
+        }
+      }  /// end of loop for a frontier
+
+      if (next_queue.empty()) break; /// termination condition
+      frontier_queue.swap(next_queue);
+      ++level;
+    } /// end of BFS loop
+  }
+};
+
+
+template <typename graph_type, typename vertex_type, int type>
 void bfs_sync(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, size_t num_edges)
 {
 
@@ -154,7 +208,7 @@ void bfs_sync(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, s
 
   /// --- BFS main loop -------- ///
   auto tic = graphstore::utility::duration_time();
-  bfs_core<graph_type, vertex_type, is_rhhda>::run_bfs_sync(graph, inf, frontier_queue, next_queue, start_vrtx);
+  bfs_core<graph_type, vertex_type, type>::run_bfs_sync(graph, inf, frontier_queue, next_queue, start_vrtx);
   double duration_sec = graphstore::utility::duration_time_sec(tic);
 
   std::cout << "-----------" << std::endl;

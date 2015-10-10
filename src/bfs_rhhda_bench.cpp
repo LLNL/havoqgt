@@ -39,9 +39,7 @@
   midle_high_degree_threshold = 4
 };
 
- /// --- typenames --- ///
-using mapped_file_type      = boost::interprocess::managed_mapped_file;
-using segment_manager_type  = graphstore::rhh::segment_manager_t;
+/// --- typenames --- ///
 using vertex_id_type        = uint64_t;
 using vertex_meta_data_type = bool;
 using edge_weight_type      = unsigned char;
@@ -51,6 +49,7 @@ using graphstore_type       = graphstore::graphstore_rhhda<
                                 edge_weight_type,
                                 midle_high_degree_threshold>;
 
+/// --- option variables --- ///
 vertex_id_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
 std::string fname_segmentfile_;
@@ -68,7 +67,7 @@ void constract_graph(mapped_file_type& mapped_file,
   std::cout << "-- Disp status of before generation --" << std::endl;
   print_usages(segment_manager);
 
-  request_vector_type update_request_vec = request_vector_type();
+  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
 
   size_t count_inserted = 0;
 
@@ -106,8 +105,8 @@ void constract_graph(mapped_file_type& mapped_file,
 
   std::cout << "\n-- All edge updations done --" << std::endl;
   std::cout << "inserted edges : " << count_inserted << std::endl;
-  std::cout << "whole construction time : " << whole_construction_time << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
+  std::cout << "whole construction time : " << whole_construction_time << std::endl;
   print_usages(segment_manager);
 }
 
@@ -123,7 +122,7 @@ void run_bfs(graphstore_type& graph)
     std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graphstore_type, vertex_id_type, true>(graph, source_list_[i], max_vertex_id_, num_edges_);
+    bfs_sync<graphstore_type, vertex_id_type, 1>(graph, source_list_[i], max_vertex_id_, num_edges_);
     std::cout << "finish: ";
     graphstore::utility::print_time();
     std::cout << "\n" << std::endl;
@@ -206,13 +205,6 @@ int main(int argc, char** argv) {
   }
 
 
-  /// --- Read a segument file --- ///
-//  std::cout << "\n<<Read segment>>" << std::endl;
-//  mapped_file_type mapped_file = mapped_file_type(
-//                                   boost::interprocess::read_only,
-//                                   fname_segmentfile.str().c_str());
-
-
   /// --- create a segument file --- ///
   std::cout << "Delete segment file: " << fname_segmentfile_ << std::endl;
   boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
@@ -236,7 +228,7 @@ int main(int argc, char** argv) {
   std::cout << "\n<Allocate graphstore_rhhda>" << std::endl;
   graphstore_type graph_store(segment_manager);
 
-
+  /// --- Graph Construction --- ////
   std::cout << "\n<Construct graph>" << std::endl;
   havoqgt::havoqgt_init(&argc, &argv);
   {
