@@ -107,6 +107,7 @@ class bfs_core <graph_type, vertex_type, 1> {
         frontier_queue.pop();
         ++inf.count_visited_vertices;
 
+        size_t count_visited_edges = 0;
         /// push adjacent vertices to the next queue
         for (auto edge = graph.find_low_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->second;
@@ -116,8 +117,10 @@ class bfs_core <graph_type, vertex_type, 1> {
             /// inf.tree[dst] = src;
             is_visited = true;
           }
-          ++(inf.count_visited_edges);
+          ++count_visited_edges;
         }
+        inf.count_visited_edges += count_visited_edges;
+        if (count_visited_edges > 0) continue;
 
         for (auto edge = graph.find_mid_high_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->key;
@@ -127,8 +130,9 @@ class bfs_core <graph_type, vertex_type, 1> {
             /// inf.tree[dst] = src;
             is_visited = true;
           }
-          ++(inf.count_visited_edges);
+          ++count_visited_edges;
         }
+        inf.count_visited_edges += count_visited_edges;
 
       }  /// end of loop for a frontier
 

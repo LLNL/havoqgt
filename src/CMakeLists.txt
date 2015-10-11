@@ -12,7 +12,7 @@ endfunction()
 
 add_exe( bfs_csr_bench )
 add_exe( bfs_rhhda_bench )
-add_exe( bfs_baseline )
+add_exe( bfs_baseline_bench )
 add_exe( rhhda_bench )
 add_exe( baseline_bench )
 add_exe( pa_graph_generator )

@@ -149,5 +149,13 @@ void flush_mmmap(mapped_file_type& mapped_file)
   mapped_file.flush();
 }
 
+void madvice(mapped_file_type& mapped_file)
+{
+  std::cout << "Call adise_dontneed" << std::endl;
+  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+  assert(false);
+  /// assert(mapped_file.advise(advise));
+}
+
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP
 
