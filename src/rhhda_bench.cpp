@@ -26,7 +26,8 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
                                  segment_manager_type *const segment_manager,
                                  graphstore::graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, midle_high_degree_threshold>& graph_store,
                                  Edges& edges,
-                                 const uint64_t chunk_size, const size_t edges_delete_ratio)
+                                 const uint64_t chunk_size,
+                                 const size_t edges_delete_ratio)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
@@ -68,10 +69,12 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
-
+    std::cout << "shrink to fit low table" << std::endl;
     graph_store.shrink_to_fit_low_table();
 
+    std::cout << "sync mmap" << std::endl;
     /// flush_mmmap(mapped_file);
+    std::cout << "sync di-mmap" << std::endl;
     sync_dimmap();
 
     havoqgt::havoqgt_env()->world_comm().barrier();
@@ -154,7 +157,7 @@ int main(int argc, char** argv) {
       fname_output          = argv[pos++];
       segmentfile_init_size = boost::lexical_cast<uint64_t>(argv[pos++]);
       delete_file           = boost::lexical_cast<uint32_t>(argv[pos++]);
-      chunk_size_log10        = boost::lexical_cast<uint64_t>(argv[pos++]);
+      chunk_size_log10      = boost::lexical_cast<uint64_t>(argv[pos++]);
       edges_delete_ratio    = boost::lexical_cast<uint64_t>(argv[pos++]);
       if (pos < argc) {
         std::string fname(argv[pos++]);

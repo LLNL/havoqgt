@@ -475,15 +475,14 @@ public:
 
 
   /// --- allocator & deallocator --- ///
-  inline static rhh_contatiner_selftype* allocate(size_t capacity)
+  inline static rhh_contatiner_selftype* allocate(const size_t capacity)
   {
     rhh_contatiner_selftype* rhh = reinterpret_cast<rhh_contatiner_selftype*>(allocator::instance().allocate(capacity));
     rhh->m_num_elems = 0;
     rhh->m_capacity = capacity; /// XXX: if capacity is not power of 2, this is not actual capacity
     rhh->m_next = nullptr;
 
-    const size_type cap = rhh->m_capacity;
-    for (size_type i = 0; i < cap; ++i) {
+    for (size_type i = 0; i < capacity; ++i) {
       property_program::empty(rhh->m_body[i].property);
     }
     return rhh;
@@ -541,7 +540,9 @@ public:
   {
     for (size_type i = 0; i < m_capacity; ++i) {
       const size_type d = property_program::extract_probedistance(m_body[i].property);
-      if (d >= size) exit(1);
+      if (d >= size && !property_program::is_empty(m_body[i].property)) {
+        exit(1);
+      }
       ++histgram[d];
     }
     if (m_next != nullptr) {
@@ -631,7 +632,7 @@ private:
     const size_type hash = key_hash_func::hash(key);
     size_type pos = cal_desired_position(hash);
     const size_type mask = (m_capacity - 1);
-    bool is_needed_to_rehash = false;
+    bool is_required_rehash = false;
 
     while(true) {
       property_type exist_property = m_body[pos].property;
@@ -644,7 +645,7 @@ private:
           return false;
         }
         construct(pos, prb_dist, std::move(key), std::move(value));
-        if (prb_dist >= m_capacity) is_needed_to_rehash = true;
+        if (prb_dist >= m_capacity) is_required_rehash = true;
         break;
       }
 
@@ -660,7 +661,7 @@ private:
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
-          if (prb_dist >= m_capacity) is_needed_to_rehash = true;
+          if (prb_dist >= m_capacity) is_required_rehash = true;
           break;
         }
         m_body[pos].property = prb_dist;
@@ -674,7 +675,7 @@ private:
     }
 
     /// TODO: this is a temporary code
-    if (is_needed_to_rehash) {
+    if (is_required_rehash) {
       rehash_rhh();
     }
 
@@ -726,15 +727,31 @@ private:
     key_type wk_key;
     value_type wk_val;
 
+
     rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
-    std::memcpy(&(tmp_rhh->m_body), &(m_body), m_capacity * kElementSize);
 
     for (size_type i = 0; i < m_capacity; ++i) {
-      const property_type property = tmp_rhh->m_body[i].property;
+      const property_type property = m_body[i].property;
       if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
-        insert_into_body(std::move(tmp_rhh->m_body[i].key), std::move(tmp_rhh->m_body[i].value), wk_key, wk_val);
+        /// should check the return value ?
+        tmp_rhh->insert_into_body(std::move(m_body[i].key), std::move(m_body[i].value), wk_key, wk_val);
+        ++tmp_rhh->m_num_elems;
       }
     }
+    std::memcpy(&(m_body), &(tmp_rhh->m_body), m_capacity * kElementSize);
+
+    deallocate(tmp_rhh);
+
+//    rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
+//    std::memcpy(&(tmp_rhh->m_body), &(m_body), m_capacity * kElementSize);
+
+//    m_capacity = 0;
+//    for (size_type i = 0; i < m_capacity; ++i) {
+//      const property_type property = tmp_rhh->m_body[i].property;
+//      if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
+//        insert_into_body(std::move(tmp_rhh->m_body[i].key), std::move(tmp_rhh->m_body[i].value), wk_key, wk_val);
+//      }
+//    }
   }
 
   /// --- private valiable --- ///

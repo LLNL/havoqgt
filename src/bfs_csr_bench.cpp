@@ -135,6 +135,8 @@ int main(int argc, char* argv[])
 
   parse_options(argc, argv);
 
+  std::cout << "Delete segment file: " << fname_segmentfile_ << std::endl;
+  boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
   std::cout << "Create and map a segument file" << std::endl;
   mapped_file_type mapped_file = mapped_file_type(
                                    boost::interprocess::create_only,

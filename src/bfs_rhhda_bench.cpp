@@ -90,14 +90,19 @@ void constract_graph(mapped_file_type& mapped_file,
       max_vertex_id_ = std::max(max_vertex_id_, edge.second);
       count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy_weight);
     }
+    std::cout << "shrink to fit low table" << std::endl;
     graph_store.shrink_to_fit_low_table();
     double t = graphstore::utility::duration_time_sec(local_start);
     construction_time += t;
     std::cout << "progress (sec.): " << t << std::endl;
 
     ++loop_cnt;
+//    graph_store.print_all_elements_low();
+//    graph_store.print_all_elements_mh();
   }
+  std::cout << "sync mmap" << std::endl;
   flush_mmmap(mapped_file);
+  std::cout << "sync di-mmap" << std::endl;
   sync_dimmap();
   const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
 
@@ -108,6 +113,7 @@ void constract_graph(mapped_file_type& mapped_file,
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
   print_usages(segment_manager);
+
 }
 
 
@@ -240,7 +246,7 @@ int main(int argc, char** argv) {
           segment_manager,
           graph_store,
           edgelist,
-          static_cast<uint64_t>(std::pow(2, 20)));
+          static_cast<uint64_t>(std::pow(10, 6)));
   }
 
 

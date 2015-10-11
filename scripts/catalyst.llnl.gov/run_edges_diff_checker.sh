@@ -3,7 +3,7 @@
 mkdir ./work 2> /dev/null
 mkdir ./work/debuglog 2> /dev/null
 srun --clear-ssd echo "Clear the ssd"
-./src/dynamicdegreeawaregraphstore_bench 21 16 /l/ssd/graph_out 38 1 20 10  2>&1 | tee  /l/ssd/edge_diff_check.log
+./src/rhhda_bench 21 16 /l/ssd/graph_out 38 1 6 10  2>&1 | tee  /l/ssd/edge_diff_check.log
 
 
 ls -lsth /l/ssd/*  2>&1 | tee -a  /l/ssd/edge_diff_check.log
