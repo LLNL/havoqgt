@@ -15,22 +15,32 @@ N_PROCS = 1
 
 DEBUG = True
 if DEBUG:
-	USE_PDEBUG = False
-USE_DIMMAP = True
+	USE_PDEBUG = True
+USE_DIMMAP = False
 USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
-MEMSIZE_DIMMAP = 1024*256*1
+MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_insert_delete.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_bfs_64bit.log"
 
 NORUN = False
 VERBOSE = True
 USE_CATALYST = True
 DELETE_WORK_FILES = False
 SEGMENT_SIZE = 39
-EDGES_FILELIST = os.getenv('EFILE_LIST', "./work/file_list")
+EDGES_FILELIST = ""
 TIME_LIMIT = 60 * 23
 # --------------------------- #
+
+# all directories mush finished with /
+
+#log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/csr/"
+log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/rhhda/"
+executable_dir = "src/"
+#executable = "bfs_csr_bench"
+#executable = "bfs_rhhda_bench"
+executable = "bfs_baseline"
+
 
 if USE_DIMMAP:
 	graph_dir = "/dimmap/"
@@ -39,11 +49,8 @@ else:
 		graph_dir = "/l/ssd/"
 	else:
 		graph_dir = "/usr/localdisk/fusion/"
+# --------------------------- #
 
-log_dir = "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/"
-executable_dir = "src/"
-#executable = "rhhda_bench"
-executable = "baseline_bench"
 
 command_strings = []
 test_count = 0
@@ -296,58 +303,65 @@ def add_command(nodes, processes, cmd):
 
 	command_strings.append([nodes, processes, " ".join(cmd)])
 
-def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_list):
+def create_commands(vertices, edges, sources):
 
 	graph_file = graph_dir+"out.graph"
 
-	for k in delete_ratio_list:
-		delete_segment_file = 0
-                chunk_size_log10 = 6
-		edges_factor = 16
-		scale = initial_scale
-
-		while (scale <= max_scale):
-			cmd = [executable, str(scale), str(edges_factor),
-			       graph_file, str(SEGMENT_SIZE), str(delete_segment_file),
-                               str(chunk_size_log10), str(k), EDGES_FILELIST]
-			add_command(N_NODES, N_PROCS, cmd)
-			scale = scale + scale_increments
+	cmd = [executable,
+          "-f " + graph_file,
+          "-s " + str(SEGMENT_SIZE),
+          "-v " + str(vertices),
+          "-m " + str(edges),
+          "-e " + EDGES_FILELIST,
+	  "-r " + str(sources)]
+	add_command(N_NODES, N_PROCS, cmd)
 
 init_test_dir()
 
-delete_ratio_list = [0]
+EDGES_FILELIST="./work/file_list_s24_24bit_srt"
+create_commands(16777215, 536870912, "19:27:107:205")
+#EDGES_FILELIST="./work/file_list_s24_64bit"
+#create_commands(16777215, 536870912, "15428645219388420392:12498923965135111468:25747834266022759:17885833413188943371")
 
+# ----------------------------------------------------------------------------- #
+#EDGES_FILELIST="./work/file_list_pa_s24"
+#create_commands(16777215, 536870912,   "0:100:10000:1000000")
+
+#EDGES_FILELIST="./work/file_list_pa_s25"
+#create_commands(33554431, 1073741824,  "0:100:10000:1000000")
+
+#EDGES_FILELIST="./work/file_list_pa_s26"
+#create_commands(67108863, 2147483648,  "0:100:10000:1000000")
+
+#EDGES_FILELIST="./work/file_list_pa_s27"
+#create_commands(134217727, 4294967296, "0:100:10000:1000000")
+
+#EDGES_FILELIST="./work/file_list_pa_s28"
+#create_commands(268435455, 8589934592, "0:100:10000:1000000")
+
+# ----------------------------------------------------------------------------- #
 #EDGES_FILELIST="./work/file_list_rmat_s24"
-#create_commands(27, 1, 27, delete_ratio_list)
+#create_commands(16777215, 516342777, "19:34:95:8388909")
 
-# -------------------------------------------- #
-#EDGES_FILELIST="./work/file_list_srt_1d"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s25"
+#create_commands(33554431, 1038084840, "10591922:450603:1995341:16804660")
 
-#EDGES_FILELIST="./work/file_list_srt_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s26"
+#create_commands(67108863, 2085382386, "43120631:59842546:41011490:3414910")
 
-#EDGES_FILELIST="./work/file_list_srt_rnd"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s27"
+#create_commands(134217727, 4186303132, "31215187:60795196:39972004:73931709")
 
-#EDGES_FILELIST="./work/file_list_bfs_1d"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s28"
+#create_commands(268435455, 8398735166, "50870634:245226115:50147806:94642094")
+# ----------------------------------------------------------------------------- #
 
-#EDGES_FILELIST="./work/file_list_bfs_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s29"
+#create_commands(536870911, 16842289225)
 
-#EDGES_FILELIST="./work/file_list_bfs_rnd"
-#create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rmat_s30"
+#create_commands(1073741823, 33759505803)
 
-EDGES_FILELIST="./work/file_list_rnd_1d"
-create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_rnd_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-EDGES_FILELIST="./work/file_list_rnd_rnd"
-create_commands(27, 1, 27, delete_ratio_list)
-# --------------------------------------------- #
 
 #make bash file and run it
 generate_shell_file()
@@ -357,5 +371,3 @@ log("Finished after generating %d Srun Tasks\n" %(test_count))
 
 if not DEBUG:
 	log_global()
-
-

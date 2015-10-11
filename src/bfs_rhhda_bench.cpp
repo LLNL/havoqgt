@@ -35,8 +35,8 @@
  std::ofstream ofs_edges;
 #endif
 
- enum : size_t {
-  midle_high_degree_threshold = 2
+enum : size_t {
+  midle_high_degree_threshold = 4
 };
 
 /// --- typenames --- ///
