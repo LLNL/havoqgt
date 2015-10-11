@@ -12,7 +12,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 #------------------------
-num_files = 1
+num_files = 9
 #keyword = "segment size"
 keyword = "Execution time"
 col_num = 5 # NOTE: [ awk -1 ]

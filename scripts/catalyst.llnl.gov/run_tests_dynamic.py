@@ -13,15 +13,15 @@ N_NODES = 1
 N_PROCS = 1
 
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
-	USE_PDEBUG = True
+	USE_PDEBUG = False
 USE_DIMMAP = True
 USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
-MEMSIZE_DIMMAP = 1024*256*4
+MEMSIZE_DIMMAP = 1024*256*1
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_poster_cameraready.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_insert_delete.log"
 
 NORUN = False
 VERBOSE = True
@@ -40,10 +40,10 @@ else:
 	else:
 		graph_dir = "/usr/localdisk/fusion/"
 
-log_dir = "logs/flush/"
+log_dir = "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/"
 executable_dir = "src/"
-executable = "rhhda_bench"
-
+#executable = "rhhda_bench"
+executable = "baseline_bench"
 
 command_strings = []
 test_count = 0
@@ -302,7 +302,7 @@ def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_lis
 
 	for k in delete_ratio_list:
 		delete_segment_file = 0
-                chunk_size_log10 = 6
+                chunk_size_log10 = 4
 		edges_factor = 16
 		scale = initial_scale
 
@@ -317,7 +317,37 @@ init_test_dir()
 
 delete_ratio_list = [0]
 
+#EDGES_FILELIST="./work/file_list_rmat_s24"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+# -------------------------------------------- #
+#EDGES_FILELIST="./work/file_list_srt_1d"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_srt_2d"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_srt_rnd"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_bfs_1d"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_bfs_2d"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_bfs_rnd"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+EDGES_FILELIST="./work/file_list_rnd_1d"
 create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_rnd_2d"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+EDGES_FILELIST="./work/file_list_rnd_rnd"
+create_commands(27, 1, 27, delete_ratio_list)
+# --------------------------------------------- #
 
 #make bash file and run it
 generate_shell_file()
