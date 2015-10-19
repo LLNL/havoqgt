@@ -57,6 +57,7 @@
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/impl/vertex_data.hpp>
+#include <havoqgt/mpi.hpp>
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <boost/dynamic_bitset.hpp>
@@ -216,9 +217,55 @@ int main(int argc, char** argv) {
   double time_end = MPI_Wtime();
 
   uint64_t visited_total = 0;
-  uint64_t global_count = 1;
-  uint32_t colour = 1;
+  bool finished = false;
+  uint32_t num_colours = 0;
+  const int AGGR_SIZE = 100;
 
+  std::vector<uint32_t> colour_counts = *(new std::vector<uint32_t>());
+
+  // Agregates 100 colours per all reduce.
+  for (uint32_t colour = 0; finished != true; colour += AGGR_SIZE) {
+    std::vector<uint64_t> local_count = *(new std::vector<uint64_t>());
+    local_count.resize(AGGR_SIZE, 0);
+    std::vector<uint64_t> global_count = *(new std::vector<uint64_t>());
+    global_count.resize(AGGR_SIZE, 0);
+    colour_counts.resize(colour_counts.size() + AGGR_SIZE, 0);
+
+    for (auto v = graph->vertices_begin(); v != graph->vertices_end(); v++) {
+      auto v_col = vertex_colour_data[*v];
+      if (v_col >= colour && v_col < (colour + AGGR_SIZE)) {
+        local_count[v_col % AGGR_SIZE]++;
+      }
+    }
+    havoqgt::mpi::mpi_all_reduce(local_count, global_count,
+                                 std::plus<uint64_t>(), MPI_COMM_WORLD);
+
+    for (uint32_t i = 0; i < AGGR_SIZE; i++) {
+      if (global_count[i] != 0 || colour == 0) {  // Colour 0 will have 0 count.
+        colour_counts[colour + i] = global_count[i];
+        visited_total += global_count[i];
+
+        // Print out per-colour count if desired.
+        if (col_count && mpi_rank == 0) {
+          std::cout << "Colour " << colour + i << ": " << global_count[i]
+                    << std::endl;
+        }
+      } else {
+        num_colours = colour + i - 1;  // One offset since 0 is not a colour.
+        finished = true;
+        break;
+      }
+    }
+  }
+
+  if (mpi_rank == 0 && visited_total > 1) {
+    std::cout << "Number of Colours = " << num_colours <<  std::endl
+              << "Visited total = " << visited_total << std::endl
+              << "GC Time = " << time_end - time_start << std::endl;
+  }
+
+/*
+  // Unoptimized way to get count of each colour.
   for (; global_count != 0; colour++) {
     uint64_t local_count = 0;
     graph_type::vertex_iterator vitr;
@@ -255,6 +302,8 @@ int main(int argc, char** argv) {
               << "Visited total = " << visited_total << std::endl
               << "GC Time = " << time_end - time_start << std::endl;
   }
+*/
+
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 
