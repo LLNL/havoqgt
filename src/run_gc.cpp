@@ -241,7 +241,8 @@ int main(int argc, char** argv) {
                                  std::plus<uint64_t>(), MPI_COMM_WORLD);
 
     for (uint32_t i = 0; i < AGGR_SIZE; i++) {
-      if (global_count[i] != 0 || colour == 0) {  // Colour 0 will have 0 count.
+      // Note: colour 0 (colour = 0, i = 0) will have 0 count.
+      if (global_count[i] != 0 || (colour == 0 && i == 0)) {
         colour_counts[colour + i] = global_count[i];
         visited_total += global_count[i];
 
