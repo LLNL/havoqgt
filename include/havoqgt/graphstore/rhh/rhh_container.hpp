@@ -676,7 +676,7 @@ private:
 
     /// TODO: this is a temporary code
     if (is_required_rehash) {
-      rehash_rhh();
+      rehash_elements();
     }
 
     return true;
@@ -722,11 +722,10 @@ private:
   }
 
 
-  void rehash_rhh()
+  void rehash_elements()
   {
     key_type wk_key;
     value_type wk_val;
-
 
     rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
 
@@ -738,20 +737,10 @@ private:
         ++tmp_rhh->m_num_elems;
       }
     }
-    std::memcpy(&(m_body), &(tmp_rhh->m_body), m_capacity * kElementSize);
+    std::memcpy(&(m_body[0]), &(tmp_rhh->m_body[0]), m_capacity * kElementSize);
 
     deallocate(tmp_rhh);
 
-//    rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
-//    std::memcpy(&(tmp_rhh->m_body), &(m_body), m_capacity * kElementSize);
-
-//    m_capacity = 0;
-//    for (size_type i = 0; i < m_capacity; ++i) {
-//      const property_type property = tmp_rhh->m_body[i].property;
-//      if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
-//        insert_into_body(std::move(tmp_rhh->m_body[i].key), std::move(tmp_rhh->m_body[i].value), wk_key, wk_val);
-//      }
-//    }
   }
 
   /// --- private valiable --- ///

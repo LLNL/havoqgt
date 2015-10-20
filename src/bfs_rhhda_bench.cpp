@@ -74,9 +74,9 @@ void constract_graph(mapped_file_type& mapped_file,
   double construction_time = 0;
   size_t loop_cnt = 0;
   auto global_start = graphstore::utility::duration_time();
-  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end();
-       edges_itr != edges_itr_end;
-       ++edges_itr) {
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+  while (edges_itr != edges_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     update_request_vec.clear();
@@ -97,8 +97,6 @@ void constract_graph(mapped_file_type& mapped_file,
     std::cout << "progress (sec.): " << t << std::endl;
 
     ++loop_cnt;
-//    graph_store.print_all_elements_low();
-//    graph_store.print_all_elements_mh();
   }
   std::cout << "sync mmap" << std::endl;
   flush_mmmap(mapped_file);
@@ -246,7 +244,7 @@ int main(int argc, char** argv) {
           segment_manager,
           graph_store,
           edgelist,
-          static_cast<uint64_t>(std::pow(10, 6)));
+          static_cast<uint64_t>(std::pow(10, 1)));
   }
 
 

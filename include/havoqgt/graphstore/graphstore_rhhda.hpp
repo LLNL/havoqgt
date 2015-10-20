@@ -215,7 +215,6 @@ EDGE_INSERTED:
     }
 
     auto itr_matrix = m_mid_high_degree_table->find(vertex);
-//    assert(!itr_matrix.is_end());
     return itr_matrix->first;
   }
 

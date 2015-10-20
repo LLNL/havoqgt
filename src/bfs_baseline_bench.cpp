@@ -155,7 +155,7 @@ void generate_source_list(const int num_sources)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
-  std::mt19937_64 gen(seed);
+  boost::mt19937_64 gen(seed);
   std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
   for (size_t i = 0; i < num_sources; ++i) {
     source_list_.push_back(dis(gen));

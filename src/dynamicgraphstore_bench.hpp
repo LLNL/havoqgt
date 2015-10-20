@@ -120,7 +120,7 @@ void generate_insertion_requests(Edges_itr& edges_itr,
     const bool is_delete = (rand() % 100 < delete_ratio);
     EdgeUpdateRequest<vertex_id_type> request(*edges_itr, is_delete);
     requests.push_back(request);
-    //    std::cerr << edges_itr->first << " " << edges_itr->second << "\n";
+    // std::cerr << edges_itr->first << " " << edges_itr->second << "\n";
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
   if (mpi_rank == 0) std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;

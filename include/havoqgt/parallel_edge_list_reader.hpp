@@ -52,7 +52,7 @@
 #ifndef HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 #define HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 
-#define DIRECT_IO_IN_EDGELIST_READER 1
+#define DIRECT_IO_IN_EDGELIST_READER 0
 #if DIRECT_IO_IN_EDGELIST_READER
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <memory>
@@ -91,8 +91,8 @@
       , m_count(count){
         if(m_count == 0) {
           get_next();
-        m_count = 0; //reset to zero
-      }
+          m_count = 0; //reset to zero
+        }
     }
 
     const edge_type& operator*() const { return m_current; }
@@ -134,7 +134,7 @@
       ++m_count;
 
       /// TODO: this is a temporal implementation for dynamicgraph
-      if (!ret) {
+      if (!ret) { /// has reached to EOF
           m_count = m_ptr_reader->m_local_edge_count;
       }
 
@@ -170,6 +170,9 @@
 
 #if DIRECT_IO_IN_EDGELIST_READER
     std::cout << "Direct I/O mode\n";
+#else
+    std::cout << "ifstream mode\n";
+#endif
     char* p = getenv ("NUM_EDGES");
     if (p) {
       std::cout << "get m_local_edge_count from a environment variable" << std::endl;
@@ -177,20 +180,6 @@
     } else {
       m_local_edge_count = std::numeric_limits<uint64_t>::max();
     }
-#else
-    std::cout << "ifstream mode\n";
-    /// First pass to calc max vertex and count edges.
-    open_files();
-    //std::cout << "files open" << std::endl;
-    edge_type edge;
-    // uint64_t local_max_vertex = 0;
-    while(try_read_edge(edge)) {
-      ++m_local_edge_count;
-      // local_max_vertex = std::max(edge.first, local_max_vertex);
-      // local_max_vertex = std::max(edge.second, local_max_vertex);
-    }
-    // m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
-#endif
   }
 
 

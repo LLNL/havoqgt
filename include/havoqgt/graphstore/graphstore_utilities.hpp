@@ -220,7 +220,7 @@ class direct_file_reader
 #else
         const int flags = O_RDONLY;
         std::cerr << "O_DIRECT is not suported\n";
-        std::cerr << "just use normal I/O\n";
+        std::cerr << "will use normal I/O\n";
 #endif
         m_fd = ::open(fname, flags);
         if (m_fd == -1) {
@@ -275,11 +275,6 @@ class direct_file_reader
             read_size -= off;
         }
 
-//        char* const buf = reinterpret_cast<char*>(m_buffer);
-//        for (int i=0; i < m_end_buf_pos; ++i) {
-//            std::cout << buf[i] << " ";
-//        }
-//        std::cout << std::endl;
 
         return read_size;
     }
