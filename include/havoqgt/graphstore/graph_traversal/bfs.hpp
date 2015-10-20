@@ -178,8 +178,8 @@ class bfs_core <graph_type, vertex_type, 2> {
 
         /// push adjacent vertices to the next queue
         auto adjlist_vec = graph.find(src)->second.second;
-        for (auto edge : adjlist_vec) {
-          const vertex_type dst = edge;
+        for (const auto edge : adjlist_vec) {
+          const vertex_type dst = edge.first;
           bool& is_visited = graph.find(dst)->second.first;
           if (!is_visited) {
             next_queue.push(dst);

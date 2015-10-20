@@ -35,76 +35,81 @@ std::ofstream ofs_edges;
 #endif
 
 /// --- typenames --- ///
-using vertex_id_type          = uint64_t;
-using vec_segment_allocator_type  = boost::interprocess::allocator<vertex_id_type, segment_manager_type>;
-using vector_type = boost::interprocess::vector<vertex_id_type, vec_segment_allocator_type>;
+using vertex_id_type        = uint64_t;
 
-using map_value_type = std::pair<bool, vector_type>;
-using map_element_type = std::pair<const vertex_id_type, map_value_type>;
-using map_segment_allocator_type  = boost::interprocess::allocator<map_element_type, segment_manager_type>;
-using graphstore_type = boost::unordered_map<vertex_id_type,
-                                             map_value_type,
-                                             boost::hash<vertex_id_type>,
-                                             std::equal_to<vertex_id_type>,
-                                             map_segment_allocator_type>;
+/// adjacency list
+using edge_property_type    = unsigned char;
+using edge_vec_element_type = std::pair<vertex_id_type, edge_property_type>;
+using vec_allocator_type    = boost::interprocess::allocator<edge_vec_element_type, segment_manager_type>;
+using edge_vec_type         = boost::interprocess::vector<edge_vec_element_type, vec_allocator_type>;
 
+/// vertex table
+using vertex_property_type  = bool;
+using map_value_type        = std::pair<vertex_property_type, edge_vec_type>;
+using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
+using map_allocator_type    = boost::interprocess::allocator<map_element_type, segment_manager_type>;
+using graphstore_type       = boost::unordered_map<vertex_id_type,
+                                                   map_value_type,
+                                                   boost::hash<vertex_id_type>,
+                                                   std::equal_to<vertex_id_type>,
+                                                   map_allocator_type>;
 
-/// --- option variables --- ///
+/// --- global variables --- ///
 vertex_id_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
-std::string fname_segmentfile_;
-std::vector<std::string> fname_edge_list_;
-size_t segment_size_log2_ = 30;
-std::vector<vertex_id_type> source_list_;
 
-
-template <typename Edges, typename allocator_type>
+template <typename edges_type, typename allocator_type>
 void constract_graph(mapped_file_type& mapped_file,
                      segment_manager_type *const segment_manager,
                      graphstore_type& graphstore,
                      allocator_type& allocator,
-                     Edges& edges, const size_t chunk_size)
+                     edges_type& edges, const size_t chunk_size)
 {
   std::cout << "-- Disp status of before generation --" << std::endl;
   print_usages(segment_manager);
 
   request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
 
-  size_t count_inserted = 0;
+  uint64_t count_inserted = 0;
+  uint64_t count_duplicated = 0;
 
   double construction_time = 0;
   size_t loop_cnt = 0;
-  auto global_start = graphstore::utility::duration_time();
-  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end();
-       edges_itr != edges_itr_end;
-       ++edges_itr) {
+
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+
+    auto global_start = graphstore::utility::duration_time();
+  while (edges_itr != edges_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     update_request_vec.clear();
     generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, 0);
 
     auto local_start = graphstore::utility::duration_time();
-    unsigned char dummy = 0;
-    uint64_t count_inserted = 0;
-    uint64_t count_duplicated = 0;
     for (auto request : update_request_vec) {
       auto edge = request.edge;
       max_vertex_id_ = std::max(max_vertex_id_, edge.first);
       max_vertex_id_ = std::max(max_vertex_id_, edge.second);
 
-      /// ------- insert core ------- ///
+      edge_property_type dummy_weight = 0;
+
+      /// ------- insertion core ------- ///
       auto value = graphstore.find(edge.first);
       if (value == graphstore.end()) { // new vertex
-        map_value_type map_value(false, vector_type(1, edge.second, allocator));
+        const vertex_property_type vp = false;
+        map_value_type map_value(vp,
+                                 edge_vec_type(1, edge_vec_element_type(edge.second, dummy_weight), allocator));
         graphstore.insert(map_element_type(edge.first, map_value));
         ++count_inserted;
       } else {
-        vector_type& adjacency_list_vec = value->second.second;
-        if (boost::find<vector_type>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() ) {
+        edge_vec_type& edge_vec = value->second.second;
+        edge_vec_element_type trg_edge(edge.second, dummy_weight);
+        if (boost::find<edge_vec_type>(edge_vec, trg_edge) != edge_vec.end() ) {
           ++count_duplicated;
           continue;
         }
-        adjacency_list_vec.push_back(edge.second);
+        edge_vec.push_back(trg_edge);
         ++count_inserted;
       }
     } /// end of chunk
@@ -114,7 +119,7 @@ void constract_graph(mapped_file_type& mapped_file,
 
     ++loop_cnt;
   }
-  flush_mmmap(mapped_file);
+  // flush_mmmap(mapped_file);
   sync_dimmap();
   const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
 
@@ -122,6 +127,7 @@ void constract_graph(mapped_file_type& mapped_file,
 
   std::cout << "\n-- All edge updations done --" << std::endl;
   std::cout << "inserted edges : " << count_inserted << std::endl;
+  std::cout << "depulicated edges : " << count_duplicated << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
   print_usages(segment_manager);
@@ -130,18 +136,18 @@ void constract_graph(mapped_file_type& mapped_file,
 
 
 
-void run_bfs(graphstore_type& graph)
+void run_bfs(graphstore_type& graph, std::vector<vertex_id_type>& source_list)
 {
   std::cout << "\n--- BFS ---" << std::endl;
 
   std::cout << "max_vertex_id:\t" << max_vertex_id_ << std::endl;
   std::cout << "num_edges:\t"     << num_edges_     << std::endl;
 
-  for (int i = 0; i < source_list_.size(); ++i) {
-    std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
+  for (int i = 0; i < source_list.size(); ++i) {
+    std::cout << "BFS[" << i << "]: src=\t" << source_list[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graphstore_type, vertex_id_type, 2>(graph, source_list_[i], max_vertex_id_, num_edges_);
+    bfs_sync<graphstore_type, vertex_id_type, 2>(graph, source_list[i], max_vertex_id_, num_edges_);
     std::cout << "finish: ";
     graphstore::utility::print_time();
     std::cout << "\n" << std::endl;
@@ -151,17 +157,23 @@ void run_bfs(graphstore_type& graph)
 }
 
 
-void generate_source_list(const int num_sources)
+void generate_source_list(const int num_sources, std::vector<vertex_id_type>& source_list)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
   boost::mt19937_64 gen(seed);
   std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
   for (size_t i = 0; i < num_sources; ++i) {
-    source_list_.push_back(dis(gen));
+    source_list.push_back(dis(gen));
   }
 }
 
+
+/// --- option variables --- ///
+std::string fname_segmentfile_;
+std::vector<std::string> fname_edge_list_;
+size_t segment_size_log2_ = 30;
+std::vector<vertex_id_type> source_list_;
 
 void parse_options(int argc, char **argv)
 {
@@ -207,7 +219,8 @@ void parse_options(int argc, char **argv)
 }
 
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
   std::cout << "CMD line:";
   for (int i=0; i<argc; ++i) {
@@ -261,15 +274,15 @@ int main(int argc, char** argv) {
           graphstore,
           boost_seg_allocator,
           edgelist,
-          static_cast<uint64_t>(std::pow(2, 20)));
+          static_cast<uint64_t>(std::pow(10, 6)));
   }
 
 
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
   if (source_list_.empty())
-    generate_source_list(4);
-  run_bfs(graphstore);
+    generate_source_list(4, source_list_);
+  run_bfs(graphstore, source_list_);
 
   return 0;
 }

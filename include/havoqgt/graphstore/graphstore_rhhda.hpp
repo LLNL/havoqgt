@@ -41,9 +41,10 @@ public:
     m_mid_high_degree_table = mid_high_degree_table_type::allocate(2);
 
     std::cout << "Element size: \n"
-              << " low_degree_table " << low_degree_table_type::kElementSize << "\n"
-              << " mid_high_edge_chunk " << mid_high_edge_chunk_type::kElementSize << "\n"
-              << " mid_high_degree_table " << mid_high_degree_table_type::kElementSize << std::endl;
+              << " low_degree_table = " << low_degree_table_type::kElementSize << "\n"
+              << " mid_high_edge_chunk = " << mid_high_edge_chunk_type::kElementSize << "\n"
+              << " mid_high_degree_table = " << mid_high_degree_table_type::kElementSize << std::endl;
+    std::cout << "middle_high_degree_threshold = " << middle_high_degree_threshold << std::endl;
   }
 
   ~graphstore_rhhda() {
@@ -426,8 +427,10 @@ public:
     m_mid_high_degree_table = mid_high_degree_table_type::allocate(2);
 
     std::cout << "Element size: \n"
-              << " mid_high_edge_chunk " << mid_high_edge_chunk_type::kElementSize << "\n"
-              << " mid_high_degree_table " << mid_high_degree_table_type::kElementSize << std::endl;
+              << " low_degree_table = " << low_degree_table_type::kElementSize << "\n"
+              << " mid_high_edge_chunk = " << mid_high_edge_chunk_type::kElementSize << "\n"
+              << " mid_high_degree_table = " << mid_high_degree_table_type::kElementSize << std::endl;
+    std::cout << "middle_high_degree_threshold (using only m_h table) = " << 0 << std::endl;
   }
 
   ~graphstore_rhhda() {
