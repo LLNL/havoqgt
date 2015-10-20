@@ -467,12 +467,13 @@ public:
 
     auto itr_src = m_mid_high_degree_table->find(src);
     if (itr_src.is_end()) {
-      /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
-      mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(1);
+      /// --- new vertex --- ///
+      mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(2);
+      rhh_container_utility::insert(&adj_list, trg, weight);
       mid_high_src_vertex_value_type value(vertex_meta_data_type(), adj_list);
       rhh_container_utility::insert(&m_mid_high_degree_table, src, value);
     } else {
-      /// --- the high-mid table has source vertex --- ///
+      /// --- high-mid table has source vertex --- ///
       mid_high_edge_chunk_type* adj_list = itr_src->second;
       auto itr_trg = adj_list->find(trg);
 

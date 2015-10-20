@@ -33,32 +33,18 @@ inline bool has_key(rhh_type* const rhh, typename rhh_type::key_type& key)
 template <typename rhh_type, typename key_type, typename value_type>
 inline void insert(rhh_type** rhh, key_type key, value_type value)
 {
+  /// --- check capacity --- ///
   if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
     (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
-  // --- Consider long probe distance --- //
+
+  /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
     rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
     new_rhh->assign_to_chained_rhh((*rhh));
     (*rhh) = new_rhh;
   }
 }
-
-//template <typename rhh_type>
-//inline void shrink_to_fit(rhh_type** rhh)
-//{
-//  const typename rhh_type::size_type cur_size = (*rhh)->size();
-//  typename rhh_type::size_type new_capacity = (*rhh)->capacity();
-//  while ( cur_size <
-//            static_cast<double>(new_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor ) {
-//    new_capacity /= graphstore::rhh::kCapacityGrowingFactor;
-//  }
-
-//  if ((*rhh)->capacity() > new_capacity) {
-//    (*rhh) = rhh_type::resize((*rhh), new_capacity);
-//  }
-
-//}
 
 template <typename rhh_type>
 inline void shrink_to_fit(rhh_type** rhh)
@@ -76,7 +62,6 @@ inline void shrink_to_fit(rhh_type** rhh)
   }
 
   (*rhh) = rhh_type::resize((*rhh), new_capacity);
-
 }
 
 } /// namespace rhh_container_utility
