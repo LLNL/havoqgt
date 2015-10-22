@@ -69,6 +69,10 @@ class bfs_core {
   }
 };
 
+
+///
+/// \brief The bfs_core<graph_type, vertex_type, _Tp3> class
+///   bfs core for rhhda model
 template <typename graph_type, typename vertex_type>
 class bfs_core <graph_type, vertex_type, 1> {
 
@@ -144,6 +148,9 @@ class bfs_core <graph_type, vertex_type, 1> {
 };
 
 
+///
+/// \brief The bfs_core<graph_type, vertex_type, _Tp3> class
+/// bfs core for baseline model
 template <typename graph_type, typename vertex_type>
 class bfs_core <graph_type, vertex_type, 2> {
 
@@ -162,6 +169,9 @@ class bfs_core <graph_type, vertex_type, 2> {
     /// ---- init inf ---- ///
     auto tic_init = graphstore::utility::duration_time();
     inf.init(false);
+    for (auto itr : graph) {
+      itr.second.first = false;
+    }
     graph.find(start_vrtx)->second.first = true;
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 

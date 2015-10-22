@@ -17,19 +17,23 @@
 
 namespace graphstore {
 
-template <typename vertex_id_type, typename vertex_meta_data_type, typename edge_weight_type, size_t middle_high_degree_threshold>
+template <typename vertex_id_type,
+          typename vertex_meta_data_type,
+          typename edge_weight_type,
+          typename segment_manager_type,
+          size_t middle_high_degree_threshold>
 class graphstore_rhhda
 {
-private:
+ private:
   using size_type = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
-  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
-  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
+  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
+  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
   using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
-  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type>;
-  using segment_manager_type           = rhh::segment_manager_t;
+  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
 
-public:
+
+ public:
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
@@ -58,12 +62,12 @@ public:
 
   void shrink_to_fit_low_table()
   {
-    rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+    rhh::shrink_to_fit(&m_low_degree_table);
   }
 
   void shrink_to_fit_mid_high_table()
   {
-    rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
+    rhh::shrink_to_fit(&m_mid_high_degree_table);
   }
 
   ///
@@ -92,7 +96,7 @@ public:
       if (count_in_single + 1 < middle_high_degree_threshold) {
         /// --- insert into the low table --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
-        rhh_container_utility::insert(&m_low_degree_table, src, value);
+        rhh::insert(&m_low_degree_table, src, value);
       } else {
 
         /// --- move the elements from low table to high-mid table --- ///
@@ -100,13 +104,13 @@ public:
         auto itr_single = m_low_degree_table->find(src);
         mid_high_src_vertex_value_type value((*itr_single).first, nullptr);
         for (; !itr_single.is_end(); ++itr_single) {
-          rhh_container_utility::insert(&adj_list, (*itr_single).second, (*itr_single).third);
+          rhh::insert(&adj_list, (*itr_single).second, (*itr_single).third);
           m_low_degree_table->erase(itr_single);
         }
-        rhh_container_utility::insert(&adj_list, trg, weight);
+        rhh::insert(&adj_list, trg, weight);
         value.second = adj_list;
-        rhh_container_utility::insert(&m_mid_high_degree_table, src, value);
-        /// rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+        rhh::insert(&m_mid_high_degree_table, src, value);
+        /// rhh::shrink_to_fit(&m_low_degree_table);
       }
 
     } else {
@@ -114,7 +118,7 @@ public:
       if (itr_src.is_end()) {
         /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
         low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
-        rhh_container_utility::insert(&m_low_degree_table, src, value);
+        rhh::insert(&m_low_degree_table, src, value);
       } else {
         /// --- the high-mid table has source vertex --- ///
         mid_high_edge_chunk_type* adj_list = itr_src->second;
@@ -122,7 +126,7 @@ public:
 
         if (itr_trg.is_end()) {
           /// --- insert the edge --- ///
-          rhh_container_utility::insert(&adj_list, trg, weight);
+          rhh::insert(&adj_list, trg, weight);
           itr_src->second = adj_list;
         } else {
           /// --- if the same edge is found, do nothing --- ///
@@ -132,7 +136,7 @@ public:
 
     }
 
-    /// TODO: insert the target vertex into the source vertex list
+/// TODO: insert the target vertex into the source vertex list
 EDGE_INSERTED:
     return true;
   }
@@ -143,7 +147,7 @@ EDGE_INSERTED:
     if (itr_single.is_end()) {
       auto itr = m_mid_high_degree_table->find(vertex);
       if (itr.is_end()) {
-        rhh_container_utility::insert(m_low_degree_table, vertex, low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
+        rhh::insert(m_low_degree_table, vertex, low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
         return true;
       }
     }
@@ -169,7 +173,7 @@ EDGE_INSERTED:
     }
 
     if (count > 0) {
-      /// rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+      /// rhh::shrink_to_fit(&m_low_degree_table);
       return count;
     }
 
@@ -188,14 +192,14 @@ EDGE_INSERTED:
         const vertex_meta_data_type& meta_data = itr_matrix->first;
         for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
           low_degree_table_value_type value(meta_data, itr->key, itr->value);
-          rhh_container_utility::insert(&m_low_degree_table, src, value);
+          rhh::insert(&m_low_degree_table, src, value);
           adj_list->erase(itr);
         }
         mid_high_edge_chunk_type::deallocate(adj_list);
         m_mid_high_degree_table->erase(itr_matrix);
-        /// rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
+        /// rhh::shrink_to_fit(&m_mid_high_degree_table);
       } else {
-        /// rhh_container_utility::shrink_to_fit(&adj_list);
+        /// rhh::shrink_to_fit(&adj_list);
         itr_matrix->second = adj_list;
       }
     }
@@ -393,7 +397,7 @@ EDGE_INSERTED:
   }
 
 
-private:
+ private:
   low_degree_table_type* m_low_degree_table;
   mid_high_degree_table_type* m_mid_high_degree_table;
 
@@ -403,19 +407,22 @@ private:
 ///
 /// \brief The graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, 0> class
 ///   partial speciallization class when middle_high_degree_threshold is 0
-template <typename vertex_id_type, typename vertex_meta_data_type, typename edge_weight_type>
-class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type, 0>
+template <typename vertex_id_type,
+          typename vertex_meta_data_type,
+          typename edge_weight_type,
+          typename segment_manager_type>
+class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type, segment_manager_type, 0>
 {
-private:
+ private:
   using size_type = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
-  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type>;
-  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type>;
+  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
+  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
   using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
-  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type>;
-  using segment_manager_type           = rhh::segment_manager_t;
+  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
 
-public:
+
+ public:
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
@@ -443,12 +450,12 @@ public:
 
   void shrink_to_fit_low_table()
   {
-    rhh_container_utility::shrink_to_fit(&m_low_degree_table);
+    rhh::shrink_to_fit(&m_low_degree_table);
   }
 
   void shrink_to_fit_mid_high_table()
   {
-    rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
+    rhh::shrink_to_fit(&m_mid_high_degree_table);
   }
 
   ///
@@ -469,9 +476,9 @@ public:
     if (itr_src.is_end()) {
       /// --- new vertex --- ///
       mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(2);
-      rhh_container_utility::insert(&adj_list, trg, weight);
+      rhh::insert(&adj_list, trg, weight);
       mid_high_src_vertex_value_type value(vertex_meta_data_type(), adj_list);
-      rhh_container_utility::insert(&m_mid_high_degree_table, src, value);
+      rhh::insert(&m_mid_high_degree_table, src, value);
     } else {
       /// --- high-mid table has source vertex --- ///
       mid_high_edge_chunk_type* adj_list = itr_src->second;
@@ -479,7 +486,7 @@ public:
 
       if (itr_trg.is_end()) {
         /// --- insert the edge --- ///
-        rhh_container_utility::insert(&adj_list, trg, weight);
+        rhh::insert(&adj_list, trg, weight);
         itr_src->second = adj_list;
       } else {
         /// --- if the same edge is found, do nothing --- ///
@@ -497,7 +504,7 @@ public:
     auto itr = m_mid_high_degree_table->find(vertex);
     if (itr.is_end()) {
       mid_high_src_vertex_value_type value(meta_data, nullptr);
-      rhh_container_utility::insert(&m_mid_high_degree_table, vertex, value);
+      rhh::insert(&m_mid_high_degree_table, vertex, value);
       return true;
     }
     return false;
@@ -529,7 +536,7 @@ public:
       if (adj_list->size() == 0) {
         mid_high_edge_chunk_type::deallocate(adj_list);
         m_mid_high_degree_table->erase(itr_matrix);
-        /// rhh_container_utility::shrink_to_fit(&m_mid_high_degree_table);
+        /// rhh::shrink_to_fit(&m_mid_high_degree_table);
       }
     }
 
@@ -697,7 +704,7 @@ public:
   }
 
 
-private:
+ private:
   low_degree_table_type* m_low_degree_table;
   mid_high_degree_table_type* m_mid_high_degree_table;
 

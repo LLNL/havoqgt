@@ -28,13 +28,13 @@ public:
   virtual void deallocate_free_blocks() =0;
 };
 
-template<size_t allocate_size>
+template<typename segment_manager_type, size_t allocate_size>
 class static_node_allocator : public static_node_allocator_wrp
 {
 
 public:
 
-  static_node_allocator(segment_manager_t* segment_manager)
+  static_node_allocator(segment_manager_type* segment_manager)
     : m_node_allocator(segment_manager)
   {
     static_assert(kNodeAllocatorChunkSize >= allocate_size, "sizeof(rhhda_static) is larger than kNodeAllocatorChunkSize");
@@ -67,13 +67,13 @@ private:
   enum NodesPerChunk : size_t {
     kNodesPerChunk  = kNodeAllocatorChunkSize / allocate_size,
   };
-  using node_allocator_type  = boost::interprocess::node_allocator<dummy_node_type,  segment_manager_t, kNodesPerChunk>;
+  using node_allocator_type  = boost::interprocess::node_allocator<dummy_node_type,  segment_manager_type, kNodesPerChunk>;
 
   node_allocator_type m_node_allocator;
 };
 
 
-template<size_t element_size, size_t extra_size>
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class static_node_allocators_holder
 {
 public:
@@ -84,28 +84,28 @@ public:
   /// \brief rhhda_allocator_holder
   /// \param segment_manager
   ///
-  explicit static_node_allocators_holder(segment_manager_t* segment_manager) :
+  explicit static_node_allocators_holder(segment_manager_type* segment_manager) :
     m_static_node_allocators{{
-      new static_node_allocator<element_size * num_elements[ 0] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 1] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 2] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 3] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 4] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 5] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 6] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 7] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 8] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 9] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[10] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[11] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[12] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[13] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[14] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[15] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[16] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[17] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[18] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[19] + extra_size>(segment_manager)
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 0] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 1] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 2] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 3] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 4] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 5] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 6] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 7] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 8] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 9] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[10] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[11] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[12] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[13] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[14] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[15] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[16] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[17] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[18] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[19] + extra_size>(segment_manager)
     }}
   {}
 
@@ -173,13 +173,13 @@ private:
 
 
 
-template<size_t element_size, size_t extra_size>
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder_sglt
 {
 
  public:
 
-  using self_type = allocator_holder_sglt<element_size, extra_size>;
+  using self_type = allocator_holder_sglt<segment_manager_type, element_size, extra_size>;
 
   static self_type& instance() {
     static self_type _instance;
@@ -231,7 +231,7 @@ class allocator_holder_sglt
     m_node_allocators->deallocate_free_blocks();
   }
 
-  void init(segment_manager_t* segment_manager)
+  void init(segment_manager_type* segment_manager)
   {
     m_raw_allocator = new raw_allocator_type(segment_manager);
     m_node_allocators = new node_allocators_type(segment_manager);
@@ -246,9 +246,9 @@ class allocator_holder_sglt
 
 private:
   /// raw allocator
-  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_t>;
+  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_type>;
   /// node allocators
-  using node_allocators_type  = static_node_allocators_holder<element_size, extra_size>;
+  using node_allocators_type  = static_node_allocators_holder<segment_manager_type, element_size, extra_size>;
 
   allocator_holder_sglt(){}
   allocator_holder_sglt(const self_type &other){}
@@ -274,7 +274,7 @@ void destroy_allocator()
 }
 
 
-template<size_t element_size, size_t extra_size>
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder
 {
 public:
@@ -282,7 +282,7 @@ public:
   /// \brief Constructor
   /// \param segment_manager
   ///
-  explicit allocator_holder(segment_manager_t* segment_manager)
+  explicit allocator_holder(segment_manager_type* segment_manager)
     : m_raw_allocator(segment_manager),
       m_node_allocators(segment_manager)
   {
@@ -337,9 +337,9 @@ public:
 
 private:
   /// raw allocator
-  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_t>;
+  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_type>;
   /// node allocators
-  using node_allocators_type  = static_node_allocators_holder<element_size, extra_size>;
+  using node_allocators_type  = static_node_allocators_holder<segment_manager_type, element_size, extra_size>;
 
 
   /// ---- Private Variables ------ ///

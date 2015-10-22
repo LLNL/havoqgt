@@ -29,7 +29,7 @@
 
 /// --- typenames --- ///
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = graphstore::rhh::segment_manager_t;
+using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
 
 template<typename vertex_id_type>
