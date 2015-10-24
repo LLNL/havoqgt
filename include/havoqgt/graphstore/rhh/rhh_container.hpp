@@ -18,6 +18,8 @@
 #include <havoqgt/graphstore/rhh/rhh_element_base.h>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
+#define RHH_DETAILED_ANALYSYS
+
 namespace graphstore {
 
 namespace rhh {
@@ -630,6 +632,9 @@ class rhh_container_base {
     property_program::init_property(m_body[pos].property, dist);
     m_body[pos].key   = std::move(key);
     m_body[pos].value = std::move(value);
+    if (dist >= m_capacity) {
+      rehash_elements();
+    }
   }
 
 
@@ -649,7 +654,7 @@ class rhh_container_base {
     const size_type hash = key_hash_func::hash(key);
     size_type pos = cal_desired_position(hash);
     const size_type mask = (m_capacity - 1);
-    bool is_required_rehash = false;
+
 
     while(true) {
       property_type exist_property = m_body[pos].property;
@@ -662,8 +667,7 @@ class rhh_container_base {
           return false;
         }
         construct(pos, prb_dist, std::move(key), std::move(value));
-        is_required_rehash = (prb_dist >= m_capacity);
-        break;
+        return true;
       }
 
       /// If the existing elem has probed equal or less than new, then swap places with existing
@@ -678,8 +682,7 @@ class rhh_container_base {
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
-          is_required_rehash = (prb_dist >= m_capacity);
-          break;
+          return true;
         }
         m_body[pos].property = prb_dist;
         using std::swap;
@@ -689,14 +692,14 @@ class rhh_container_base {
       }
       pos = (pos+1) & mask;
       ++prb_dist;
+
+#ifdef RHH_DETAILED_ANALYSYS
+      ++(rhh::rhh_log_holder::instance().max_distance_to_moved);
+#endif
     }
 
-    /// TODO: this is a temporary code
-    if (is_required_rehash) {
-      rehash_elements();
-    }
 
-    return true;
+    return false;
   }
 
 

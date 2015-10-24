@@ -19,7 +19,9 @@
 namespace graphstore {
 namespace rhh {
 
-/// Wrapper class for static_node_allocator to management the class using array data structure
+///
+/// \brief The static_node_allocator_wrp class
+///   Wrapper class for static_node_allocator class to management the classes using an array data structure
 class static_node_allocator_wrp
 {
 public:
@@ -28,13 +30,16 @@ public:
   virtual void deallocate_free_blocks() =0;
 };
 
+////
+/// \brief The static_node_allocator class
+///   actual class which holds a node allocater
 template<typename segment_manager_type, size_t allocate_size>
 class static_node_allocator : public static_node_allocator_wrp
 {
 
 public:
 
-  static_node_allocator(segment_manager_type* segment_manager)
+  explicit static_node_allocator(segment_manager_type* segment_manager)
     : m_node_allocator(segment_manager)
   {
     static_assert(kNodeAllocatorChunkSize >= allocate_size, "sizeof(rhhda_static) is larger than kNodeAllocatorChunkSize");
@@ -73,6 +78,10 @@ private:
 };
 
 
+///
+/// \brief The static_node_allocators_holder class
+///   array of node allocators (static_node_allocator_wrp class).
+///   depends on the required size, uses proper sized node allocator
 template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class static_node_allocators_holder
 {
@@ -250,10 +259,11 @@ private:
   /// node allocators
   using node_allocators_type  = static_node_allocators_holder<segment_manager_type, element_size, extra_size>;
 
-  allocator_holder_sglt(){}
-  allocator_holder_sglt(const self_type &other){}
-  self_type &operator=(const self_type &other){}
-
+  allocator_holder_sglt() {}
+  allocator_holder_sglt(const self_type &)  = delete;
+  allocator_holder_sglt(const self_type &&) = delete;
+  self_type &operator=(const self_type &)   = delete;
+  self_type &operator=(const self_type &&)  = delete;
 
   /// ---- Private Variables ------ ///
   raw_allocator_type*  m_raw_allocator;
@@ -274,6 +284,9 @@ void destroy_allocator()
 }
 
 
+///
+/// \brief The allocator_holder class
+///   Note that not using
 template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder
 {
@@ -300,10 +313,10 @@ public:
   ///   void* pointer for allocated memory spaces
   void* allocate(const size_t capacity)
   {
-    if (capacity >= node_allocators_type::kMaxCapacity) {
-      return reinterpret_cast<void*>(m_raw_allocator.allocate(capacity * element_size + extra_size).get());
-    } else {
+    if (capacity <= node_allocators_type::kMaxCapacity) {
       return reinterpret_cast<void*>(m_node_allocators.allocate(capacity));
+    } else {
+      return reinterpret_cast<void*>(m_raw_allocator.allocate(capacity * element_size + extra_size).get());
     }
   }
 
@@ -317,11 +330,11 @@ public:
   ///
   void deallocate(void *ptr, const size_t capacity)
   {
-    if (capacity >= node_allocators_type::kMaxCapacity) {
+    if (capacity <= node_allocators_type::kMaxCapacity) {
+      m_node_allocators.deallocate(ptr, capacity);
+    } else {
       m_raw_allocator.deallocate(boost::interprocess::offset_ptr<char>(reinterpret_cast<char*>(ptr)),
                                  capacity * element_size + extra_size);
-    } else {
-      m_node_allocators.deallocate(ptr, capacity);
     }
   }
 

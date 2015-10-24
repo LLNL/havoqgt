@@ -36,7 +36,7 @@
 #endif
 
 enum : size_t {
-  midle_high_degree_threshold = 4
+  midle_high_degree_threshold = 2
 };
 
 /// --- typenames --- ///

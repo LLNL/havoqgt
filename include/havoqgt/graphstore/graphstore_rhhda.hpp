@@ -49,6 +49,10 @@ class graphstore_rhhda
               << " mid_high_edge_chunk = " << mid_high_edge_chunk_type::kElementSize << "\n"
               << " mid_high_degree_table = " << mid_high_degree_table_type::kElementSize << std::endl;
     std::cout << "middle_high_degree_threshold = " << middle_high_degree_threshold << std::endl;
+
+#ifdef RHH_DETAILED_ANALYSYS
+    graphstore::utility::rhh_log_holder::instance().init();
+#endif
   }
 
   ~graphstore_rhhda() {
@@ -137,7 +141,6 @@ class graphstore_rhhda
     }
 
 /// TODO: insert the target vertex into the source vertex list
-EDGE_INSERTED:
     return true;
   }
 

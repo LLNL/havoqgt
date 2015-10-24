@@ -35,7 +35,7 @@ class bfs_core {
     auto tic_init = graphstore::utility::duration_time();
     inf.init(true);
     inf.is_visited[start_vrtx] = true;
-    inf.tree[start_vrtx] = start_vrtx;
+    /// inf.tree[start_vrtx] = start_vrtx;
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
     /// --- BFS main loop -------- ///
@@ -55,7 +55,7 @@ class bfs_core {
           const vertex_type dst = *edge;
           if (!inf.is_visited[dst]) {
             next_queue.push(dst);
-            inf.tree[dst] = src;
+            /// inf.tree[dst] = src;
             inf.is_visited[dst] = true;
           }
           ++(inf.count_visited_edges);
@@ -69,7 +69,7 @@ class bfs_core {
   }
 };
 
-
+#define BFS_USE_BITMAP 1
 ///
 /// \brief The bfs_core<graph_type, vertex_type, _Tp3> class
 ///   bfs core for rhhda model
@@ -90,6 +90,10 @@ class bfs_core <graph_type, vertex_type, 1> {
 
     /// ---- init inf ---- ///
     auto tic_init = graphstore::utility::duration_time();
+#if BFS_USE_BITMAP
+    inf.init(true);
+    inf.is_visited[start_vrtx] = true;
+#else
     inf.init(false);
     for (auto itr = graph.begin_low_edges(); !itr.is_end(); ++itr) {
       itr->value.first = false;
@@ -98,6 +102,7 @@ class bfs_core <graph_type, vertex_type, 1> {
       itr->value.first = false;
     }
     graph.vertex_meta_data(start_vrtx) = true;
+#endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
     /// --- BFS main loop -------- ///
@@ -115,7 +120,11 @@ class bfs_core <graph_type, vertex_type, 1> {
         /// push adjacent vertices to the next queue
         for (auto edge = graph.find_low_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->second;
+#if BFS_USE_BITMAP
+          bool& is_visited = inf.is_visited[dst];
+#else
           bool& is_visited = graph.vertex_meta_data(dst);
+#endif
           if (!is_visited) {
             next_queue.push(dst);
             /// inf.tree[dst] = src;
@@ -128,7 +137,11 @@ class bfs_core <graph_type, vertex_type, 1> {
 
         for (auto edge = graph.find_mid_high_edge(src); !edge.is_end(); ++edge) {
           const vertex_type dst = edge->key;
+#if BFS_USE_BITMAP
+          bool& is_visited = inf.is_visited[dst];
+#else
           bool& is_visited = graph.vertex_meta_data(dst);
+#endif
           if (!is_visited) {
             next_queue.push(dst);
             /// inf.tree[dst] = src;
@@ -168,11 +181,16 @@ class bfs_core <graph_type, vertex_type, 2> {
 
     /// ---- init inf ---- ///
     auto tic_init = graphstore::utility::duration_time();
+#if BFS_USE_BITMAP
+    inf.init(true);
+    inf.is_visited[start_vrtx] = true;
+#else
     inf.init(false);
     for (auto itr : graph) {
       itr.second.first = false;
     }
     graph.find(start_vrtx)->second.first = true;
+#endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
     /// --- BFS main loop -------- ///
@@ -190,7 +208,11 @@ class bfs_core <graph_type, vertex_type, 2> {
         auto adjlist_vec = graph.find(src)->second.second;
         for (const auto edge : adjlist_vec) {
           const vertex_type dst = edge.first;
+#if BFS_USE_BITMAP
+          bool& is_visited = inf.is_visited[dst];
+#else
           bool& is_visited = graph.find(dst)->second.first;
+#endif
           if (!is_visited) {
             next_queue.push(dst);
             /// inf.tree[dst] = src;

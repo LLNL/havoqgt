@@ -41,13 +41,12 @@ struct element_size
 // ---- A template helper used to select A or B based on a condition --- ///
 template<bool cond, typename A, typename B>
 struct if_{
-  typedef A type;
+  using type = A;
 };
 template<typename A, typename B>
 struct if_<false, A, B> {
-  typedef B type;
+  using type = B;
 };
-
 
 
 template<typename key_type, typename hash_type>
