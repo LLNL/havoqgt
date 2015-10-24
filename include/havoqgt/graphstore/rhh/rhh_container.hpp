@@ -20,7 +20,7 @@
 
 namespace graphstore {
 
-namespace rhh_container_utility {
+namespace rhh {
 
 /// ---- Utility functions ---- ///
 template <typename rhh_type>
@@ -29,14 +29,24 @@ inline bool has_key(rhh_type* const rhh, typename rhh_type::key_type& key)
   return (rhh->find(key) != rhh_type::kKeyNotFound);
 }
 
-/// Note: this function causes copy of a key and a value !!
+
+///
+/// \brief insert
+///   insert a element with checking the capacity and a probde distance.
+///   if the probe distance exceed a threshold, allocate a chainged table
+///   Note: this function causes copy of a key and a value !!
+/// \param rhh
+/// \param key
+/// \param value
 template <typename rhh_type, typename key_type, typename value_type>
 inline void insert(rhh_type** rhh, key_type key, value_type value)
 {
+  /// --- check capacity --- ///
   if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
     (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
-  // --- Consider long probe distance --- //
+
+  /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
     rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
     new_rhh->assign_to_chained_rhh((*rhh));
@@ -44,21 +54,27 @@ inline void insert(rhh_type** rhh, key_type key, value_type value)
   }
 }
 
-//template <typename rhh_type>
-//inline void shrink_to_fit(rhh_type** rhh)
-//{
-//  const typename rhh_type::size_type cur_size = (*rhh)->size();
-//  typename rhh_type::size_type new_capacity = (*rhh)->capacity();
-//  while ( cur_size <
-//            static_cast<double>(new_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor ) {
-//    new_capacity /= graphstore::rhh::kCapacityGrowingFactor;
-//  }
+///
+/// \brief insert_sizeup
+///   insert a element with checking the capacity and a probde distance.
+///   if the probe distance exceed a threshold, grow the table (not alocating chained table)
+///   Note: this function causes copy of a key and a value !!
+/// \param rhh
+/// \param key
+/// \param value
+template <typename rhh_type, typename key_type, typename value_type>
+inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
+{
+  /// --- check capacity --- ///
+  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
+    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+  }
 
-//  if ((*rhh)->capacity() > new_capacity) {
-//    (*rhh) = rhh_type::resize((*rhh), new_capacity);
-//  }
-
-//}
+  /// --- Consider long probe distance --- ///
+  while (!(*rhh)->insert(key, value, key, value)) {
+    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+  }
+}
 
 template <typename rhh_type>
 inline void shrink_to_fit(rhh_type** rhh)
@@ -76,27 +92,27 @@ inline void shrink_to_fit(rhh_type** rhh)
   }
 
   (*rhh) = rhh_type::resize((*rhh), new_capacity);
-
 }
 
-} /// namespace rhh_container_utility
+} /// namespace rhh
 
 
 template<typename _key_type,
          typename _value_type,
          typename _size_type,
+         typename _segment_manager_type,
          typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
-         typename _property_program = rhh_container_utility::rhh_property_program_base<unsigned char>>
+         typename _property_program = rhh::rhh_property_program_base<unsigned char>>
 class rhh_container_base {
-
-public:
-  using property_program   = _property_program;
-  using key_type           = _key_type;
-  using key_hash_func      = _key_hash_func;
-  using value_type         = _value_type;
-  using size_type          = _size_type;
-  using property_type      = typename property_program::property_type;
-  using probedistance_type = typename property_program::probedistance_type;
+ public:
+  using property_program     = _property_program;
+  using key_type             = _key_type;
+  using key_hash_func        = _key_hash_func;
+  using value_type           = _value_type;
+  using size_type            = _size_type;
+  using segment_manager_type = _segment_manager_type;
+  using property_type        = typename property_program::property_type;
+  using probedistance_type   = typename property_program::probedistance_type;
 
   /// TODO: specializetion for no value case
   #pragma pack(1)
@@ -113,9 +129,10 @@ public:
     kElementSize = sizeof(element_type)
   };
 
-  using rhh_contatiner_selftype = rhh_container_base<key_type, value_type, size_type, key_hash_func, property_program>;
-  using allocator               = graphstore::rhh::allocator_holder_sglt<kElementSize,
-                                                                           sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
+  using rhh_contatiner_selftype = rhh_container_base<key_type, value_type, size_type, segment_manager_type, key_hash_func, property_program>;
+  using allocator               = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
+                                                                         kElementSize,
+                                                                         sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
 
   enum : size_t {
     kCapacityGrowingFactor = 2ULL
@@ -551,10 +568,10 @@ public:
   }
 
 
-  /// ---------------------------------------------------------- ///
-  ///                         private
-  /// ---------------------------------------------------------- ///
-private:
+ /// ---------------------------------------------------------- ///
+ ///                         private
+ /// ---------------------------------------------------------- ///
+ private:
 
   inline void erase_element_at(size_type pos)
   {
@@ -645,7 +662,7 @@ private:
           return false;
         }
         construct(pos, prb_dist, std::move(key), std::move(value));
-        if (prb_dist >= m_capacity) is_required_rehash = true;
+        is_required_rehash = (prb_dist >= m_capacity);
         break;
       }
 
@@ -661,7 +678,7 @@ private:
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
-          if (prb_dist >= m_capacity) is_required_rehash = true;
+          is_required_rehash = (prb_dist >= m_capacity);
           break;
         }
         m_body[pos].property = prb_dist;
@@ -685,7 +702,8 @@ private:
 
   ///
   /// \brief make_with_source_rhh
-  ///         allocate new rhh with new_capacity and move all elements from source_rhh with handling long probe distance case
+  ///         allocate new rhh with new_capacity and move all elements from
+  ///         a source_rhh with handling long probe distance case
   /// \param source_rhh
   /// \param new_capacity
   /// \return
@@ -740,7 +758,6 @@ private:
     std::memcpy(&(m_body[0]), &(tmp_rhh->m_body[0]), m_capacity * kElementSize);
 
     deallocate(tmp_rhh);
-
   }
 
   /// --- private valiable --- ///

@@ -46,6 +46,7 @@ using edge_weight_type      = unsigned char;
 using graphstore_type       = graphstore::graphstore_rhhda<vertex_id_type,
                                                            vertex_meta_data_type,
                                                            edge_weight_type,
+                                                           segment_manager_type,
                                                            midle_high_degree_threshold>;
 
 /// --- global variables --- ///

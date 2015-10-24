@@ -12,7 +12,7 @@
 #include <havoqgt/graphstore/rhh/rhh_utilities.h>
 
 namespace graphstore {
-namespace rhh_container_utility {
+namespace rhh {
 
 template<typename _property_type>
 class rhh_property_program_base {
