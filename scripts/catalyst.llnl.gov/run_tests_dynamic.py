@@ -19,9 +19,10 @@ if DEBUG:
 USE_DIMMAP = True
 USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
-MEMSIZE_DIMMAP = 1024*256*1
+MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_insert_delete.log"
+#GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_insert_delete_final.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_etc.log"
 
 NORUN = False
 VERBOSE = True
@@ -40,10 +41,11 @@ else:
 	else:
 		graph_dir = "/usr/localdisk/fusion/"
 
-log_dir = "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/"
+#log_dir = "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/"
+log_dir = "/g/g90/iwabuchi/results/sc_ipdps/etc/"
 executable_dir = "src/"
-#executable = "rhhda_bench"
-executable = "baseline_bench"
+executable = "rhhda_bench"
+#executable = "baseline_bench"
 
 command_strings = []
 test_count = 0
@@ -122,7 +124,7 @@ def init_test_dir():
 
 
 	if MONITOR_IO:
-		io_monitoring_report_file = log_dir + "io_monitering_report.log"
+		io_monitoring_report_file = log_dir + "io_monitering_report"
 
 def generate_shell_file():
 	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
@@ -192,7 +194,7 @@ def generate_shell_file():
 
 			if MONITOR_IO:
 				s += block_start + "echo start I/O monitoring \n" + block_end
-				s += "iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + " 2>&1 & \n"
+				s += "iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + "_" + str(i)+".log" + " 2>&1 & \n"
 
 			# s += "export NUM_EDGES=157286400000\n"
 
@@ -301,15 +303,14 @@ def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_lis
 	graph_file = graph_dir+"out.graph"
 
 	for k in delete_ratio_list:
-		delete_segment_file = 0
-                chunk_size_log10 = 6
+		chunk_size_log10 = 6
 		edges_factor = 16
 		scale = initial_scale
 
 		while (scale <= max_scale):
-			cmd = [executable, str(scale), str(edges_factor),
-			       graph_file, str(SEGMENT_SIZE), str(delete_segment_file),
-                               str(chunk_size_log10), str(k), EDGES_FILELIST]
+			cmd = [executable, "-s" + str(scale), "-e" + str(edges_factor),
+			       "-o" + graph_file, "-f" + str(SEGMENT_SIZE),
+                               "-c" + str(chunk_size_log10), "-r" + str(k), "-i" + EDGES_FILELIST]
 			add_command(N_NODES, N_PROCS, cmd)
 			scale = scale + scale_increments
 
@@ -318,6 +319,12 @@ init_test_dir()
 delete_ratio_list = [0]
 
 #EDGES_FILELIST="./work/file_list_rmat_s24"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_s24_64bit"
+#create_commands(27, 1, 27, delete_ratio_list)
+
+#EDGES_FILELIST="./work/file_list_rnd_1d_fine"
 #create_commands(27, 1, 27, delete_ratio_list)
 
 # -------------------------------------------- #
@@ -345,8 +352,8 @@ create_commands(27, 1, 27, delete_ratio_list)
 #EDGES_FILELIST="./work/file_list_rnd_2d"
 #create_commands(27, 1, 27, delete_ratio_list)
 
-EDGES_FILELIST="./work/file_list_rnd_rnd"
-create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rnd_rnd"
+#create_commands(27, 1, 27, delete_ratio_list)
 # --------------------------------------------- #
 
 #make bash file and run it

@@ -11,14 +11,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import matplotlib.pyplot as plt
 
-make_figure_separately = False
+# --------------------------------------------------- #
+make_figures_separately = False
 #target_dir_list = ["./logs/20150217_223445/", "./logs/20150217_222611/"]
 #legend_labels_list = ["full-memory, without-sort", "normal-mmap, sort-chunk"]
 #legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
-target_dir_list = ["./20150224_180659/", "./20150224_180917/", "./20150224_181010/", "./20150224_181211/"]
-legend_labels_list = ["normal-mmap, sort-chunk", "normal-mmap, without-sort", "di-mmap, without-sort", "di-mmap, sort-chunk"]
-#legend_labels_list = ["normal-mmap, without-sort", "normal-mmap, sort-chunk", "di-mmap, without-sort", "di-mmap, sort-chunk"]
-
+target_dir_list = ["/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/debug/20151022_135730/",
+                   "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/debug/20151022_135637/",
+                   "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/debug/20151022_121447/"]
+legend_labels_list = ["th0",
+                      "th1",
+                      "th2"]
+# --------------------------------------------------- #
 target_file = "io_monitering_report.log"
 column_labels = ["rrqm/s", "wrqm/s", "r/s", "w/s", "rMB/s", "wMB/s", "avgrq-sz", "avgqu-sz", "await", "svctm", "%%util"]
 device_name = "md0"
@@ -65,7 +69,7 @@ def read_data(_target_dir_list):
 # --- plot result --- #
 def plot_result(_target_dir_list, _index):
 
-  if make_figure_separately:
+  if make_figures_separately:
     f_log = open(_target_dir_list[0]+"iostat_result.log", "w")
     for ylabel in column_labels:
       column_for_a_file = values_root[ylabel][target_files_list[0]]
@@ -108,7 +112,7 @@ def plot_result(_target_dir_list, _index):
       tmp = ylabel.replace("/", "")
       tmp = tmp.replace("%%", "")
       outname = ""
-      if make_figure_separately:
+      if make_figures_separately:
         outname = _target_dir_list[0] + tmp + ".png"
       else:
         outname = "/g/g90/iwabuchi/tmp/" + tmp + ".png"
@@ -119,7 +123,7 @@ def plot_result(_target_dir_list, _index):
 
 
 def main():
-  if make_figure_separately:
+  if make_figures_separately:
     for i, t_d in enumerate(target_dir_list):
       target_dir = []
       target_dir.append(t_d)
