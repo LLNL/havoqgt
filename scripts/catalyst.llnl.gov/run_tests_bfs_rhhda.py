@@ -13,7 +13,7 @@ N_NODES = 1
 N_PROCS = 1
 
 
-DEBUG = True
+DEBUG = False
 if DEBUG:
 	USE_PDEBUG = True
 USE_DIMMAP = False
@@ -21,7 +21,7 @@ USE_DIMMAP_FOR_TUNE = False
 MONITOR_IO = False
 MEMSIZE_DIMMAP = 1024*256*4
 #MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_bfs_64bit.log"
+GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_bfs_24bit.log"
 
 NORUN = False
 VERBOSE = True
@@ -35,11 +35,12 @@ TIME_LIMIT = 60 * 23
 # all directories mush finished with /
 
 #log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/csr/"
-log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/rhhda/"
+#log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/rhhda/"
+log_dir = "/g/g90/iwabuchi/results/sc_ipdps/bfs/baseline/"
 executable_dir = "src/"
 #executable = "bfs_csr_bench"
 #executable = "bfs_rhhda_bench"
-executable = "bfs_baseline"
+executable = "bfs_baseline_bench"
 
 
 if USE_DIMMAP:
@@ -318,8 +319,8 @@ def create_commands(vertices, edges, sources):
 
 init_test_dir()
 
-EDGES_FILELIST="./work/file_list_s24_24bit_srt"
-create_commands(16777215, 536870912, "19:27:107:205")
+#EDGES_FILELIST="./work/file_list_s24_24bit_srt"
+#create_commands(16777215, 536870912, "19:27:107:205")
 #EDGES_FILELIST="./work/file_list_s24_64bit"
 #create_commands(16777215, 536870912, "15428645219388420392:12498923965135111468:25747834266022759:17885833413188943371")
 
@@ -340,8 +341,8 @@ create_commands(16777215, 536870912, "19:27:107:205")
 #create_commands(268435455, 8589934592, "0:100:10000:1000000")
 
 # ----------------------------------------------------------------------------- #
-#EDGES_FILELIST="./work/file_list_rmat_s24"
-#create_commands(16777215, 516342777, "19:34:95:8388909")
+EDGES_FILELIST="./work/file_list_rmat_s24"
+create_commands(16777215, 536870912, "19:34:95:8388909")
 
 #EDGES_FILELIST="./work/file_list_rmat_s25"
 #create_commands(33554431, 1038084840, "10591922:450603:1995341:16804660")
