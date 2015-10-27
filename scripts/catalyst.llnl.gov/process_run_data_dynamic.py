@@ -11,13 +11,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import matplotlib.pyplot as plt
 
+
+
 #------------------------
 num_files = 1
-#keyword = "segment size"
 keyword = "Execution time"
-col_num = 5 # NOTE: [ awk -1 ]
-#is_cumulate = False
 is_cumulate = True
+#keyword = "segment size"
+#is_cumulate = False
+col_num = 5 # NOTE: [ awk -1 ]
 #------------------------
 
 

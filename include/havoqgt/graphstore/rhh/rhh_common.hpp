@@ -10,11 +10,7 @@
 namespace graphstore {
 namespace rhh {
 
-using segment_manager_t = boost::interprocess::managed_mapped_file::segment_manager;
-
-struct no_chain {};
-struct chain {};
-
+/// using segment_manager_t = boost::interprocess::managed_mapped_file::segment_manager;
 
 }
 }

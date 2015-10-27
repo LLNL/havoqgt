@@ -39,30 +39,7 @@
 namespace graphstore {
 namespace utility {
 
-
-void print_time() {
-  std::time_t result = std::time(nullptr);
-  std::cout << std::asctime(std::localtime(&result)); /// don't need std::endl
-}
-
-std::chrono::high_resolution_clock::time_point duration_time()
-{
-  return std::chrono::high_resolution_clock::now();
-}
-
-uint64_t duration_time_usec(std::chrono::high_resolution_clock::time_point& tic)
-{
-  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
-  return std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count();
-}
-
-double duration_time_sec(std::chrono::high_resolution_clock::time_point& tic)
-{
-  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
-  return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);
-}
-
-
+/// --------- Deta Structure ------------ ///
 #pragma pack(1)
 template <typename T1, typename T2>
 struct packed_pair
@@ -100,6 +77,74 @@ size_t array_length(const T (&)[SIZE])
     return SIZE;
 }
 
+
+
+/// --------- For Debug --------------- ///
+void print_time() {
+  std::time_t result = std::time(nullptr);
+  std::cout << std::asctime(std::localtime(&result)); /// don't need std::endl
+}
+
+std::chrono::high_resolution_clock::time_point duration_time()
+{
+  return std::chrono::high_resolution_clock::now();
+}
+
+uint64_t duration_time_usec(std::chrono::high_resolution_clock::time_point& tic)
+{
+  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
+  return std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count();
+}
+
+double duration_time_sec(std::chrono::high_resolution_clock::time_point& tic)
+{
+  auto duration_time = std::chrono::high_resolution_clock::now() - tic;
+  return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);
+}
+
+class rhh_log_holder {
+
+ public:
+
+  using self_type = rhh_log_holder;
+
+  static self_type& instance()
+  {
+    static self_type _instance;
+    return _instance;
+  }
+
+  void tally()
+  {
+    ++max_distance_to_moved_histgram[max_distance_to_moved];
+    max_distance_to_moved = 0;
+  }
+
+  void init()
+  {
+    max_distance_to_moved = 0;
+    for (int i = 0; i < 1024; ++i) {
+      max_distance_to_moved_histgram[i] = 0;
+    }
+  }
+
+  size_t max_distance_to_moved;
+  size_t max_distance_to_moved_histgram[1024];
+
+
+ private:
+
+  rhh_log_holder() {}
+
+  rhh_log_holder(const self_type &)  = delete;
+  rhh_log_holder(const self_type &&) = delete;
+  self_type &operator=(const self_type &)   = delete;
+  self_type &operator=(const self_type &&)  = delete;
+
+};
+
+
+/// -------------- For I/O ---------------- ///
 int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
 {
     int result = ::posix_memalign(actual_buffer, align_size, length);
@@ -220,7 +265,7 @@ class direct_file_reader
 #else
         const int flags = O_RDONLY;
         std::cerr << "O_DIRECT is not suported\n";
-        std::cerr << "just use normal I/O\n";
+        std::cerr << "will use normal I/O\n";
 #endif
         m_fd = ::open(fname, flags);
         if (m_fd == -1) {
@@ -275,11 +320,6 @@ class direct_file_reader
             read_size -= off;
         }
 
-//        char* const buf = reinterpret_cast<char*>(m_buffer);
-//        for (int i=0; i < m_end_buf_pos; ++i) {
-//            std::cout << buf[i] << " ";
-//        }
-//        std::cout << std::endl;
 
         return read_size;
     }
@@ -332,6 +372,7 @@ class direct_file_reader
 };
 
 
+//// ---------- System Status --------- ///
 bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, size_t* const freeram, size_t* const usedram,
                                size_t* const bufferram, size_t* const totalswap, size_t* const freeswap )
 {

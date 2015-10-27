@@ -19,7 +19,9 @@
 namespace graphstore {
 namespace rhh {
 
-/// Wrapper class for static_node_allocator to management the class using array data structure
+///
+/// \brief The static_node_allocator_wrp class
+///   Wrapper class for static_node_allocator class to management the classes using an array data structure
 class static_node_allocator_wrp
 {
 public:
@@ -28,13 +30,16 @@ public:
   virtual void deallocate_free_blocks() =0;
 };
 
-template<size_t allocate_size>
+////
+/// \brief The static_node_allocator class
+///   actual class which holds a node allocater
+template<typename segment_manager_type, size_t allocate_size>
 class static_node_allocator : public static_node_allocator_wrp
 {
 
 public:
 
-  static_node_allocator(segment_manager_t* segment_manager)
+  explicit static_node_allocator(segment_manager_type* segment_manager)
     : m_node_allocator(segment_manager)
   {
     static_assert(kNodeAllocatorChunkSize >= allocate_size, "sizeof(rhhda_static) is larger than kNodeAllocatorChunkSize");
@@ -67,13 +72,17 @@ private:
   enum NodesPerChunk : size_t {
     kNodesPerChunk  = kNodeAllocatorChunkSize / allocate_size,
   };
-  using node_allocator_type  = boost::interprocess::node_allocator<dummy_node_type,  segment_manager_t, kNodesPerChunk>;
+  using node_allocator_type  = boost::interprocess::node_allocator<dummy_node_type,  segment_manager_type, kNodesPerChunk>;
 
   node_allocator_type m_node_allocator;
 };
 
 
-template<size_t element_size, size_t extra_size>
+///
+/// \brief The static_node_allocators_holder class
+///   array of node allocators (static_node_allocator_wrp class).
+///   depends on the required size, uses proper sized node allocator
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class static_node_allocators_holder
 {
 public:
@@ -84,28 +93,28 @@ public:
   /// \brief rhhda_allocator_holder
   /// \param segment_manager
   ///
-  explicit static_node_allocators_holder(segment_manager_t* segment_manager) :
+  explicit static_node_allocators_holder(segment_manager_type* segment_manager) :
     m_static_node_allocators{{
-      new static_node_allocator<element_size * num_elements[ 0] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 1] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 2] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 3] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 4] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 5] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 6] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 7] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 8] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[ 9] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[10] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[11] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[12] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[13] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[14] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[15] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[16] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[17] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[18] + extra_size>(segment_manager),
-      new static_node_allocator<element_size * num_elements[19] + extra_size>(segment_manager)
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 0] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 1] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 2] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 3] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 4] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 5] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 6] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 7] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 8] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[ 9] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[10] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[11] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[12] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[13] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[14] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[15] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[16] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[17] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[18] + extra_size>(segment_manager),
+      new static_node_allocator<segment_manager_type, element_size * num_elements[19] + extra_size>(segment_manager)
     }}
   {}
 
@@ -173,13 +182,13 @@ private:
 
 
 
-template<size_t element_size, size_t extra_size>
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder_sglt
 {
 
  public:
 
-  using self_type = allocator_holder_sglt<element_size, extra_size>;
+  using self_type = allocator_holder_sglt<segment_manager_type, element_size, extra_size>;
 
   static self_type& instance() {
     static self_type _instance;
@@ -231,7 +240,7 @@ class allocator_holder_sglt
     m_node_allocators->deallocate_free_blocks();
   }
 
-  void init(segment_manager_t* segment_manager)
+  void init(segment_manager_type* segment_manager)
   {
     m_raw_allocator = new raw_allocator_type(segment_manager);
     m_node_allocators = new node_allocators_type(segment_manager);
@@ -246,14 +255,15 @@ class allocator_holder_sglt
 
 private:
   /// raw allocator
-  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_t>;
+  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_type>;
   /// node allocators
-  using node_allocators_type  = static_node_allocators_holder<element_size, extra_size>;
+  using node_allocators_type  = static_node_allocators_holder<segment_manager_type, element_size, extra_size>;
 
-  allocator_holder_sglt(){}
-  allocator_holder_sglt(const self_type &other){}
-  self_type &operator=(const self_type &other){}
-
+  allocator_holder_sglt() {}
+  allocator_holder_sglt(const self_type &)  = delete;
+  allocator_holder_sglt(const self_type &&) = delete;
+  self_type &operator=(const self_type &)   = delete;
+  self_type &operator=(const self_type &&)  = delete;
 
   /// ---- Private Variables ------ ///
   raw_allocator_type*  m_raw_allocator;
@@ -274,7 +284,10 @@ void destroy_allocator()
 }
 
 
-template<size_t element_size, size_t extra_size>
+///
+/// \brief The allocator_holder class
+///   Note that not using
+template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder
 {
 public:
@@ -282,7 +295,7 @@ public:
   /// \brief Constructor
   /// \param segment_manager
   ///
-  explicit allocator_holder(segment_manager_t* segment_manager)
+  explicit allocator_holder(segment_manager_type* segment_manager)
     : m_raw_allocator(segment_manager),
       m_node_allocators(segment_manager)
   {
@@ -300,10 +313,10 @@ public:
   ///   void* pointer for allocated memory spaces
   void* allocate(const size_t capacity)
   {
-    if (capacity >= node_allocators_type::kMaxCapacity) {
-      return reinterpret_cast<void*>(m_raw_allocator.allocate(capacity * element_size + extra_size).get());
-    } else {
+    if (capacity <= node_allocators_type::kMaxCapacity) {
       return reinterpret_cast<void*>(m_node_allocators.allocate(capacity));
+    } else {
+      return reinterpret_cast<void*>(m_raw_allocator.allocate(capacity * element_size + extra_size).get());
     }
   }
 
@@ -317,11 +330,11 @@ public:
   ///
   void deallocate(void *ptr, const size_t capacity)
   {
-    if (capacity >= node_allocators_type::kMaxCapacity) {
+    if (capacity <= node_allocators_type::kMaxCapacity) {
+      m_node_allocators.deallocate(ptr, capacity);
+    } else {
       m_raw_allocator.deallocate(boost::interprocess::offset_ptr<char>(reinterpret_cast<char*>(ptr)),
                                  capacity * element_size + extra_size);
-    } else {
-      m_node_allocators.deallocate(ptr, capacity);
     }
   }
 
@@ -337,9 +350,9 @@ public:
 
 private:
   /// raw allocator
-  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_t>;
+  using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_type>;
   /// node allocators
-  using node_allocators_type  = static_node_allocators_holder<element_size, extra_size>;
+  using node_allocators_type  = static_node_allocators_holder<segment_manager_type, element_size, extra_size>;
 
 
   /// ---- Private Variables ------ ///

@@ -35,27 +35,23 @@
  std::ofstream ofs_edges;
 #endif
 
- enum : size_t {
-  midle_high_degree_threshold = 4
+enum : size_t {
+  midle_high_degree_threshold = 2
 };
 
 /// --- typenames --- ///
 using vertex_id_type        = uint64_t;
 using vertex_meta_data_type = bool;
 using edge_weight_type      = unsigned char;
-using graphstore_type       = graphstore::graphstore_rhhda<
-                                vertex_id_type,
-                                vertex_meta_data_type,
-                                edge_weight_type,
-                                midle_high_degree_threshold>;
+using graphstore_type       = graphstore::graphstore_rhhda<vertex_id_type,
+                                                           vertex_meta_data_type,
+                                                           edge_weight_type,
+                                                           segment_manager_type,
+                                                           midle_high_degree_threshold>;
 
-/// --- option variables --- ///
+/// --- global variables --- ///
 vertex_id_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
-std::string fname_segmentfile_;
-std::vector<std::string> fname_edge_list_;
-size_t segment_size_log2_ = 30;
-std::vector<vertex_id_type> source_list_;
 
 
 template <typename Edges>
@@ -73,10 +69,12 @@ void constract_graph(mapped_file_type& mapped_file,
 
   double construction_time = 0;
   size_t loop_cnt = 0;
+
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+
   auto global_start = graphstore::utility::duration_time();
-  for (auto edges_itr = edges.begin(), edges_itr_end = edges.end();
-       edges_itr != edges_itr_end;
-       ++edges_itr) {
+  while (edges_itr != edges_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     update_request_vec.clear();
@@ -97,8 +95,6 @@ void constract_graph(mapped_file_type& mapped_file,
     std::cout << "progress (sec.): " << t << std::endl;
 
     ++loop_cnt;
-//    graph_store.print_all_elements_low();
-//    graph_store.print_all_elements_mh();
   }
   std::cout << "sync mmap" << std::endl;
   flush_mmmap(mapped_file);
@@ -117,18 +113,18 @@ void constract_graph(mapped_file_type& mapped_file,
 }
 
 
-void run_bfs(graphstore_type& graph)
+void run_bfs(graphstore_type& graph, std::vector<vertex_id_type>& source_list)
 {
   std::cout << "\n--- BFS ---" << std::endl;
 
   std::cout << "max_vertex_id:\t" << max_vertex_id_ << std::endl;
   std::cout << "num_edges:\t"     << num_edges_     << std::endl;
 
-  for (int i = 0; i < source_list_.size(); ++i) {
-    std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
+  for (int i = 0; i < source_list.size(); ++i) {
+    std::cout << "BFS[" << i << "]: src=\t" << source_list[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graphstore_type, vertex_id_type, 1>(graph, source_list_[i], max_vertex_id_, num_edges_);
+    bfs_sync<graphstore_type, vertex_id_type, 1>(graph, source_list[i], max_vertex_id_, num_edges_);
     std::cout << "finish: ";
     graphstore::utility::print_time();
     std::cout << "\n" << std::endl;
@@ -138,17 +134,23 @@ void run_bfs(graphstore_type& graph)
 }
 
 
-void generate_source_list(const int num_sources)
+void generate_source_list(const int num_sources, std::vector<vertex_id_type>& source_list)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
   std::mt19937_64 gen(seed);
   std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
   for (size_t i = 0; i < num_sources; ++i) {
-    source_list_.push_back(dis(gen));
+    source_list.push_back(dis(gen));
   }
 }
 
+
+/// --- option variables --- ///
+std::string fname_segmentfile_;
+std::vector<std::string> fname_edge_list_;
+size_t segment_size_log2_ = 30;
+std::vector<vertex_id_type> source_list_;
 
 void parse_options(int argc, char **argv)
 {
@@ -212,7 +214,6 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  std::cout << "Delete segment file: " << fname_segmentfile_ << std::endl;
   boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
   std::cout << "\n<<Construct segment>>" << std::endl;
   std::cout << "Create and map a segument file" << std::endl;
@@ -253,8 +254,8 @@ int main(int argc, char** argv) {
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
   if (source_list_.empty())
-    generate_source_list(4);
-  run_bfs(graph_store);
+    generate_source_list(4, source_list_);
+  run_bfs(graph_store, source_list_);
 
   return 0;
 }
