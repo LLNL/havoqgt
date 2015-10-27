@@ -134,6 +134,11 @@ int main(int argc, char* argv[])
   std::cout << std::endl;
 
   parse_options(argc, argv);
+  if (!fname_edge_list_.empty())
+    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
+  for (auto itr : fname_edge_list_) {
+    std::cout << "Load edge list from " << itr << std::endl;
+  }
 
   std::cout << "Delete segment file: " << fname_segmentfile_ << std::endl;
   boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());

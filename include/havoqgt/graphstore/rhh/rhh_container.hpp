@@ -149,7 +149,7 @@ public:
     WholeForwardIterator(const WholeForwardIterator& src)
     {
       m_rhh_ptr = src.m_rhh_ptr;
-      m_pos      = src.m_pos;
+      m_pos     = src.m_pos;
     }
 
     void swap(WholeForwardIterator &other) noexcept
@@ -451,7 +451,7 @@ public:
   /// \brief load_factor
   /// \return
   ///     average probe distance
-  inline size_type load_factor() const
+  inline double load_factor() const
   {
     size_type total = 0;
     for (size_type pos = 0; pos < m_capacity; ++pos) {
@@ -461,9 +461,9 @@ public:
     }
 
     if (m_num_elems > 0)
-      return total / m_num_elems;
+      return static_cast<double>(total) / static_cast<double>(m_num_elems);
     else
-      return 0;
+      return 0.0;
 
   }
 
@@ -645,7 +645,7 @@ private:
           return false;
         }
         construct(pos, prb_dist, std::move(key), std::move(value));
-        if (prb_dist >= m_capacity) is_required_rehash = true;
+        is_required_rehash = (prb_dist >= m_capacity);
         break;
       }
 
@@ -661,7 +661,7 @@ private:
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
-          if (prb_dist >= m_capacity) is_required_rehash = true;
+          is_required_rehash = (prb_dist >= m_capacity);
           break;
         }
         m_body[pos].property = prb_dist;
@@ -727,7 +727,6 @@ private:
     key_type wk_key;
     value_type wk_val;
 
-
     rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
 
     for (size_type i = 0; i < m_capacity; ++i) {
@@ -738,20 +737,9 @@ private:
         ++tmp_rhh->m_num_elems;
       }
     }
-    std::memcpy(&(m_body), &(tmp_rhh->m_body), m_capacity * kElementSize);
+    std::memcpy(&(m_body[0]), &(tmp_rhh->m_body[0]), m_capacity * kElementSize);
 
     deallocate(tmp_rhh);
-
-//    rhh_contatiner_selftype* const tmp_rhh = allocate(m_capacity);
-//    std::memcpy(&(tmp_rhh->m_body), &(m_body), m_capacity * kElementSize);
-
-//    m_capacity = 0;
-//    for (size_type i = 0; i < m_capacity; ++i) {
-//      const property_type property = tmp_rhh->m_body[i].property;
-//      if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
-//        insert_into_body(std::move(tmp_rhh->m_body[i].key), std::move(tmp_rhh->m_body[i].value), wk_key, wk_val);
-//      }
-//    }
   }
 
   /// --- private valiable --- ///

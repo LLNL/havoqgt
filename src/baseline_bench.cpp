@@ -77,22 +77,22 @@ void apply_edges_update_requests(adjacency_matrix_map_vec_t& adjacency_matrix_ma
         assert(false);
       } else {
 
-	//	std::cout << edge.first << " " << edge.second << "\n";
+        //	std::cout << edge.first << " " << edge.second << "\n";
 
         auto value = adjacency_matrix_map_vec_.find(edge.first);
         if (value == adjacency_matrix_map_vec_.end()) { // new vertex
           uint64_vector_t vec(1, edge.second, seg_allocator);
           adjacency_matrix_map_vec_.insert(map_value_vec_t(edge.first, vec));
-	  ++count_inserted;
+          ++count_inserted;
         } else {
           uint64_vector_t& adjacency_list_vec = value->second;
 
           if (boost::find<uint64_vector_t>(adjacency_list_vec, edge.second) != adjacency_list_vec.end() ) {
-	    ++count_duplicated;
+            ++count_duplicated;
             continue;
-	  }
+          }
           adjacency_list_vec.push_back(edge.second);
-	  ++count_inserted;
+          ++count_inserted;
         }
       }
     }
@@ -180,10 +180,10 @@ int main(int argc, char** argv) {
 
     if (argc < 8) {
       std::cerr << "usage: <Scale> <Edge factor> <segmentfile name>"
-      << " <segmentfile_init_size_log2 (log2)> <delete file on exit>"
-      << " <chunk_size_log10> <edges_delete_ratio>"
-      << " <edgelist file>"
-      << " (argc:" << argc << " )." << std::endl;
+                << " <segmentfile_init_size_log2 (log2)> <delete file on exit>"
+                << " <chunk_size_log10> <edges_delete_ratio>"
+                << " <edgelist file>"
+                << " (argc:" << argc << " )." << std::endl;
       exit(-1);
     } else {
       int pos = 1;
@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
         fin.open(fname);
         size_t count = 0;
         while (std::getline(fin, line)) {
-         if (num_local_files * mpi_rank <= count && count < num_local_files * (mpi_rank + 1)) {
+          if (num_local_files * mpi_rank <= count && count < num_local_files * (mpi_rank + 1)) {
             fname_edge_list.push_back(line);
           }
           ++count;
@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
       std::cout << "Delete on Exit = " << delete_file << std::endl;
       std::cout << "Chunk size (log10) = " << chunk_size_log10 << std::endl;
       std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
-//      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
+      //      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
 
       if (fname_edge_list.empty()) {
         std::cout << "Building RMAT graph Scale: " << vert_scale << std::endl;
@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
 
 #if DEBUG_MODE
       {
-      if (mpi_size > 1) {
+        if (mpi_size > 1) {
           assert(false);
         }
         std::stringstream fname;
@@ -294,8 +294,8 @@ int main(int argc, char** argv) {
     if (fname_edge_list.empty()) {
       uint64_t num_edges_per_rank = num_vertices * edge_factor / mpi_size;
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-        vert_scale, num_edges_per_rank,
-        0.57, 0.19, 0.19, 0.05, true, false);
+                                        vert_scale, num_edges_per_rank,
+                                        0.57, 0.19, 0.19, 0.05, true, false);
       apply_edges_update_requests(adjacency_matrix_map_vec,
                                   rmat,
                                   segment_manager,

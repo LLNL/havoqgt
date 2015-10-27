@@ -10,7 +10,11 @@
 #include <utility>
 #include <algorithm>
 #include <functional>
-#include <fcntl.h>
+
+#ifdef __linux__
+  #define _GNU_SOURCE
+  #include <fcntl.h>
+#endif
 
 #include <boost/interprocess/managed_mapped_file.hpp>
 
@@ -85,10 +89,12 @@ void print_usages(segment_manager_type *const segment_manager)
 
 void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 {
-#if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L
+#ifdef __linux__
     int fd  = open(fname, O_RDWR);
     assert(fd != -1);
-    int ret = posix_fallocate(fd, 0, size);
+    /// posix_fallocate dosen't work on XFS ?
+    /// (dosen't actually expand the file size ?)
+    int ret = fallocate(fd, 0, 0, size);
     assert(ret == 0);
     close(fd);
     asdf.flush();

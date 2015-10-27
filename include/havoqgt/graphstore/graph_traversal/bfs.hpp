@@ -114,7 +114,6 @@ class bfs_core <graph_type, vertex_type, 1> {
           bool& is_visited = graph.vertex_meta_data(dst);
           if (!is_visited) {
             next_queue.push(dst);
-            /// inf.tree[dst] = src;
             is_visited = true;
           }
           ++count_visited_edges;
@@ -127,7 +126,6 @@ class bfs_core <graph_type, vertex_type, 1> {
           bool& is_visited = graph.vertex_meta_data(dst);
           if (!is_visited) {
             next_queue.push(dst);
-            /// inf.tree[dst] = src;
             is_visited = true;
           }
           ++count_visited_edges;

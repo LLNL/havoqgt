@@ -202,20 +202,18 @@ EDGE_INSERTED:
     return count;
   }
 
-  size_type erase_vertex(vertex_id_type& vertex)
-  {
-    return m_mid_high_degree_table->erase(vertex);
-  }
+//  inline size_type erase_vertex(vertex_id_type& vertex)
+//  {
+//    return m_mid_high_degree_table->erase(vertex);
+//  }
 
-  vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
+  inline vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
   {
     auto itr = m_low_degree_table->find(vertex);
     if (!itr.is_end()) {
       return itr->first;
     }
-
     auto itr_matrix = m_mid_high_degree_table->find(vertex);
-//    assert(!itr_matrix.is_end());
     return itr_matrix->first;
   }
 
@@ -312,7 +310,7 @@ EDGE_INSERTED:
 
         /// --- average probe distance (laod factor) ---- ///
         assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
-        ++histgram_ave_prbdist[adj_list->load_factor()];
+        ++histgram_ave_prbdist[static_cast<size_t>(adj_list->load_factor())];
 
         /// --- capacity --- ///
         capacity_sum += adj_list->capacity() * adj_list->depth();
