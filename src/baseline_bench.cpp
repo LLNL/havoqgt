@@ -183,36 +183,6 @@ void parse_options(int argc, char **argv)
     havoqgt::get_environment().print();
   }
 
-<<<<<<< HEAD
-    uint64_t num_vertices = 1;
-    uint64_t vert_scale;
-    uint64_t edge_factor;
-    uint32_t delete_file;
-    uint64_t chunk_size_log10;
-    uint64_t segmentfile_init_size_log2;
-    uint64_t edges_delete_ratio = 0;
-    std::string fname_output;
-    std::vector<std::string> fname_edge_list;
-
-    if (argc < 8) {
-      std::cerr << "usage: <Scale> <Edge factor> <segmentfile name>"
-                << " <segmentfile_init_size_log2 (log2)> <delete file on exit>"
-                << " <chunk_size_log10> <edges_delete_ratio>"
-                << " <edgelist file>"
-                << " (argc:" << argc << " )." << std::endl;
-      exit(-1);
-    } else {
-      int pos = 1;
-      vert_scale            = boost::lexical_cast<uint64_t>(argv[pos++]);
-      edge_factor           = boost::lexical_cast<uint64_t>(argv[pos++]);
-      fname_output          = argv[pos++];
-      segmentfile_init_size_log2 = boost::lexical_cast<uint64_t>(argv[pos++]);
-      delete_file           = boost::lexical_cast<uint32_t>(argv[pos++]);
-      chunk_size_log10      = boost::lexical_cast<uint64_t>(argv[pos++]);
-      edges_delete_ratio    = boost::lexical_cast<uint64_t>(argv[pos++]);
-      if (pos < argc) {
-        std::string fname(argv[pos++]);
-=======
   char c;
   while ((c = getopt (argc, argv, "s:e:dc:o:r:i:")) != -1) {
     switch (c) {
@@ -243,7 +213,6 @@ void parse_options(int argc, char **argv)
       case 'i':
       {
         std::string fname(optarg);
->>>>>>> origin/develop_keita
         std::ifstream fin(fname);
         std::string line;
         if (!fin.is_open()) {
@@ -259,13 +228,8 @@ void parse_options(int argc, char **argv)
         fin.open(fname);
         size_t count = 0;
         while (std::getline(fin, line)) {
-<<<<<<< HEAD
-          if (num_local_files * mpi_rank <= count && count < num_local_files * (mpi_rank + 1)) {
-            fname_edge_list.push_back(line);
-=======
          if (num_local_files * mpi_rank <= count && count < num_local_files * (mpi_rank + 1)) {
             fname_edge_list_.push_back(line);
->>>>>>> origin/develop_keita
           }
           ++count;
         }
@@ -290,18 +254,6 @@ int main(int argc, char** argv)
     uint64_t num_vertices = (1ULL << vertex_scale_);
 
     if (mpi_rank == 0) {
-<<<<<<< HEAD
-      std::cout << "Segment file name = " << fname_output << std::endl;
-      std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2 << std::endl;
-      std::cout << "Delete on Exit = " << delete_file << std::endl;
-      std::cout << "Chunk size (log10) = " << chunk_size_log10 << std::endl;
-      std::cout << "Edges Delete Ratio = " << edges_delete_ratio << std::endl;
-      //      std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
-
-      if (fname_edge_list.empty()) {
-        std::cout << "Building RMAT graph Scale: " << vert_scale << std::endl;
-        std::cout << "Building RMAT graph Edge factor: " << edge_factor << std::endl;
-=======
       std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
       std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
       std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
@@ -310,7 +262,6 @@ int main(int argc, char** argv)
       if (fname_edge_list_.empty()) {
         std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
         std::cout << "Building RMAT graph Edge factor: " << edge_factor_ << std::endl;
->>>>>>> origin/develop_keita
       } else {
         for (const auto itr : fname_edge_list_)
           std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
@@ -370,16 +321,9 @@ int main(int argc, char** argv)
     if (fname_edge_list_.empty()) { /// generate edges
       uint64_t num_edges_per_rank = num_vertices * edge_factor_ / mpi_size;
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-<<<<<<< HEAD
-                                        vert_scale, num_edges_per_rank,
-                                        0.57, 0.19, 0.19, 0.05, true, false);
-      apply_edges_update_requests(adjacency_matrix_map_vec,
-                                  rmat,
-=======
         vertex_scale_, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
       apply_edges_update_requests(mapped_file,
->>>>>>> origin/develop_keita
                                   segment_manager,
                                   graph_store,
                                   allocator,

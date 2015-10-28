@@ -25,7 +25,7 @@
 
 using index_type = uint64_t;
 using vertex_id_type = uint64_t;
-using graph_type = csr_graph_struct::csr_graph<havoqgt::parallel_edge_list_reader, index_type, vertex_id_type, segment_manager_type>;
+using graph_type = csr_graph::csr_graph_container<havoqgt::parallel_edge_list_reader, index_type, vertex_id_type, segment_manager_type>;
 
 std::string fname_graph_;
 std::string fname_segmentfile_;

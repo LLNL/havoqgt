@@ -18,7 +18,7 @@
 #include <havoqgt/graphstore/rhh/rhh_element_base.h>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
-#define RHH_DETAILED_ANALYSYS
+/// #define RHH_DETAILED_ANALYSYS
 
 namespace graphstore {
 
