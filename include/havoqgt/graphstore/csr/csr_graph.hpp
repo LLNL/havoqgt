@@ -25,11 +25,11 @@
 namespace csr_graph {
 
 
-template <typename edge_list_type, typename index_t, typename vertex_t, typename segment_manager_t>
+template <typename index_t, typename vertex_t, typename segment_manager_t>
 class csr_graph_container {
 public:
 
-  using graph_self_type = csr_graph_container<edge_list_type, index_t, vertex_t, segment_manager_t>;
+  using graph_self_type = csr_graph_container<index_t, vertex_t, segment_manager_t>;
   using index_type = index_t;
   using vertex_type = vertex_t;
   using index_allocator = boost::interprocess::allocator<index_t, segment_manager_t>;
@@ -251,12 +251,9 @@ public:
 
 
 
-  csr_graph_container(
-      edge_list_type& edge_list,
-      size_t max_vertex_id,
-      size_t num_edges,
-      segment_manager_t* segment_manager
-      ) :
+  csr_graph_container(size_t max_vertex_id,
+                      size_t num_edges,
+                      segment_manager_t* segment_manager) :
     m_num_vertices(max_vertex_id + 1),
     m_num_edges(num_edges),
     m_index_array(nullptr),
@@ -264,15 +261,11 @@ public:
     m_index_allocator(segment_manager),
     m_adjlist_allocator(segment_manager)
   {
-//    allocate_graph();
-//#if 1
-//    construct_csr(edge_list);
-//#else
-//    construct_csr_from_sorted_edgelist(edge_list);
-//#endif
+    allocate_graph();
   }
 
-  csr_graph_container(std::string& prefix, segment_manager_t* segment_manager) :
+  csr_graph_container(std::string& prefix,
+                      segment_manager_t* segment_manager) :
     m_num_vertices(0),
     m_num_edges(0),
     m_index_array(nullptr),
@@ -280,9 +273,9 @@ public:
     m_index_allocator(segment_manager),
     m_adjlist_allocator(segment_manager)
   {
-//    load_info(prefix);
-//    allocate_graph();
-//    load_graph(prefix);
+    load_info(prefix);
+    allocate_graph();
+    load_graph(prefix);
   }
 
   ~csr_graph_container()
@@ -369,7 +362,6 @@ private:
 
   }
 
-
   void deallocate_graph()
   {
     m_num_vertices = 0;
@@ -378,121 +370,68 @@ private:
     m_adjlist_allocator.deallocate(m_adjlist_pointer, m_num_edges);
   }
 
-//  void construct_csr(edge_list_type& edge_list)
-//  {
-//    std::cout << "Counting degree" << std::endl;
-//    for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
-//      const vertex_type src = edge_itr->first;
-//      ++m_index_array[src+1];
-//    }
-//    cumulate_array(m_index_array, m_num_vertices);
-//    assert(m_index_array[m_num_vertices] == m_num_edges);
-//    graphstore::utility::print_time();
 
-//    std::cout << "Constructing adj-list" << std::endl;
-//    for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
-//      const vertex_type src = edge_itr->first;
-//      const vertex_type dst = edge_itr->second;
-//      m_adj_list[m_index_array[src]++] = dst;
-//    }
-//    right_shift_aray(m_index_array, m_num_vertices);
-//    m_index_array[0] = 0;
-//    assert(m_index_array[m_num_vertices] == m_num_edges);
-//    graphstore::utility::print_time();
+  void load_info(std::string& prefix)
+  {
+    std::cout << "Load info from a file" << std::endl;
 
-//    //    for (size_t i = 0; i < m_num_vertices+1; ++i) std::cout << m_index_array[i] << " ";
-//    //    std::cout << std::endl;
+    std::ifstream inf_file(prefix + "_inf");
+    std::cout << prefix << "_inf" << std::endl;
 
-//  }
+    std::string line;
+    assert(std::getline(inf_file, line));
 
-//  void construct_csr_from_sorted_edgelist(edge_list_type& edge_list)
-//  {
-//    std::cout << "Constructing adj-list from sorted edge list" << std::endl;
-//    size_t cnt_edges = 0;
-//    vertex_type last_src_vertex = 0;
-//    for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
-//      const vertex_type src = edge_itr->first;
-//      const vertex_type dst = edge_itr->second;
-//      assert(last_src_vertex <= src); /// must be sorted
-//      assert(src < m_num_vertices);   /// must be small than the max vertex ID
+    assert(std::getline(inf_file, line));
+    std::stringstream ssline(line);
+    ssline >> m_num_vertices >> m_num_edges;
 
-//      ++m_index_array[src];
-//      m_adj_list[cnt_edges++] = dst;
+    std::cout << "m_num_vertices:\t" << m_num_vertices << std::endl;
+    std::cout << "#edges:\t" << m_num_edges << std::endl;
 
-//      if (last_src_vertex < src)
-//        last_src_vertex = src;
-//    }
-//    std::cout << "last_src_vertex + 1 == m_num_vertices :" << last_src_vertex + 1 << " <= " << m_num_vertices << std::endl;
-//    assert(last_src_vertex + 1 <= m_num_vertices);
-//    std::cout << "cnt_edges == m_num_edges :" << cnt_edges << " == " << m_num_edges << std::endl;
-//    assert(cnt_edges == m_num_edges);
-//    graphstore::utility::print_time();
+    inf_file.close();
+  }
 
-//    std::cout << "Modificate index-array" << std::endl;
-//    cumulate_array(m_index_array, m_num_vertices);
-//    right_shift_aray(m_index_array, m_num_vertices);
-//    m_index_array[0] = 0;
-//    std::cout << "m_index_array[m_num_vertices] == m_num_edges :" << m_index_array[m_num_vertices] << " == " << m_num_edges << std::endl;
-//    // assert(m_index_array[m_num_vertices] == m_num_edges);
-//    graphstore::utility::print_time();
-//  }
+  void load_graph(std::string& prefix)
+  {
+    std::cout << "Load graph from files" << std::endl;
 
-//  void cumulate_array(index_type* array, size_t length)
-//  {
-//    for (size_t i = 0; i < length; ++i) {
-//      array[i+1] += array[i];
-//    }
-//  }
+    std::ifstream idx_file(prefix + "_idx", std::ifstream::binary);
+    std::ifstream adj_file(prefix + "_adj", std::ifstream::binary);
 
-//  void right_shift_aray(index_type* array, size_t length)
-//  {
-//    for (size_t i = length; i > 0; --i) {
-//      array[i] = array[i-1];
-//    }
-//  }
+    assert(m_num_vertices > 0 && m_index_array);
+    assert(m_num_edges    > 0 && m_adj_list);
 
-//  void load_info(std::string& prefix)
-//  {
-//    std::cout << "Load info from a file" << std::endl;
+    idx_file.read(reinterpret_cast<char*>(m_index_array),
+                  sizeof(index_type) * (m_num_vertices+1));
+    adj_file.read(reinterpret_cast<char*>(m_adj_list),
+                  sizeof(vertex_type) * m_num_edges);
 
-//    std::ifstream inf_file(prefix + "_inf");
-//    std::cout << prefix << "_inf" << std::endl;
+    std::cout << "Loading graph from files done" << std::endl;
+    std::cout << m_index_array[m_num_vertices] << std::endl;
 
-//    std::string line;
-//    assert(std::getline(inf_file, line));
+    adj_file.close();
+    idx_file.close();
+  }
 
-//    assert(std::getline(inf_file, line));
-//    std::stringstream ssline(line);
-//    ssline >> m_num_vertices >> m_num_edges;
+  void dump_csr_graph(std::string& prefix)
+  {
+    std::ofstream idx_file(prefix + "_idx", std::ofstream::binary);
+    std::ofstream adj_file(prefix + "_adj", std::ofstream::binary);
+    std::ofstream inf_file(prefix + "_inf");
 
-//    std::cout << "m_num_vertices:\t" << m_num_vertices << std::endl;
-//    std::cout << "#edges:\t" << m_num_edges << std::endl;
+    inf_file << "#vertices #edges\n";
+    inf_file << m_num_vertices << " " << m_num_edges << "\n";
 
-//    inf_file.close();
-//  }
+    idx_file.write(reinterpret_cast<char*>(m_index_array),
+                   sizeof(index_type) * (m_num_vertices+1));
+    adj_file.write(reinterpret_cast<char*>(m_adj_list),
+                   sizeof(vertex_type) * m_num_edges);
 
-//  void load_graph(std::string& prefix)
-//  {
-//    std::cout << "Load graph from files" << std::endl;
+    inf_file.close();
+    idx_file.close();
+    adj_file.close();
+  }
 
-//    std::ifstream idx_file(prefix + "_idx", std::ifstream::binary);
-//    std::ifstream adj_file(prefix + "_adj", std::ifstream::binary);
-
-//    assert(m_num_vertices > 0 && m_index_array);
-//    assert(m_num_edges    > 0 && m_adj_list);
-
-//    idx_file.read(reinterpret_cast<char*>(m_index_array), sizeof(index_type)  * (m_num_vertices+1));
-//    adj_file.read(reinterpret_cast<char*>(m_adj_list),    sizeof(vertex_type) * m_num_edges);
-//    // std::cout << "error: only " << idx_file.gcount() << " could be read" << sizeof(index_type)  * (m_num_vertices+1);
-//    // assert(idx_file);
-//    // assert(adj_file);
-
-//    std::cout << "Loading graph from files done" << std::endl;
-//    std::cout << m_index_array[m_num_vertices] << std::endl;
-
-//    adj_file.close();
-//    idx_file.close();
-//  }
 
   size_t m_num_vertices;
   size_t m_num_edges;
@@ -523,30 +462,11 @@ namespace utilities {
     }
   }
 
-  template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
-  void dump_csr_graph(csr_graph_container<edge_list_type, index_type, vertex_type, segment_manager_t>& csr,
-                      std::string& prefix)
-  {
-    std::ofstream idx_file(prefix + "_idx", std::ofstream::binary);
-    std::ofstream adj_file(prefix + "_adj", std::ofstream::binary);
-    std::ofstream inf_file(prefix + "_inf");
-
-    inf_file << "#vertices #edges\n";
-    inf_file << csr.num_vertices() << " " << csr.num_edges() << "\n";
-
-    idx_file.write(reinterpret_cast<char*>(csr.index_array()), sizeof(index_type)  * (csr.num_vertices()+1));
-    adj_file.write(reinterpret_cast<char*>(csr.adj_list()),    sizeof(vertex_type) * csr.num_edges());
-
-    inf_file.close();
-    idx_file.close();
-    adj_file.close();
-  }
-
 }
 
 
 template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
-void construct_csr(csr_graph_container<edge_list_type, index_type, vertex_type, segment_manager_t>& csr,
+void construct_csr(csr_graph_container<index_type, vertex_type, segment_manager_t>& csr,
                    edge_list_type& edge_list)
 {
   std::cout << "Counting degree" << std::endl;
@@ -554,7 +474,7 @@ void construct_csr(csr_graph_container<edge_list_type, index_type, vertex_type, 
     const vertex_type src = edge_itr->first;
     ++csr.index_array()[src+1];
   }
-  cumulate_array(csr.index_array(), csr.num_vertices());
+  utilities::cumulate_array(csr.index_array(), csr.num_vertices());
   assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
   graphstore::utility::print_time();
 
@@ -564,7 +484,7 @@ void construct_csr(csr_graph_container<edge_list_type, index_type, vertex_type, 
     const vertex_type dst = edge_itr->second;
     csr.adj_list()[csr.index_array()[src]++] = dst;
   }
-  right_shift_aray(csr.index_array(), csr.num_vertices());
+  utilities::right_shift_aray(csr.index_array(), csr.num_vertices());
   csr.index_array()[0] = 0;
   assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
   graphstore::utility::print_time();
@@ -572,7 +492,7 @@ void construct_csr(csr_graph_container<edge_list_type, index_type, vertex_type, 
 }
 
 template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
-void construct_csr_from_sorted_edgelist(csr_graph_container<edge_list_type, index_type, vertex_type, segment_manager_t>& csr,
+void construct_csr_from_sorted_edgelist(csr_graph_container<index_type, vertex_type, segment_manager_t>& csr,
                                         edge_list_type& edge_list)
 {
   std::cout << "Constructing adj-list from sorted edge list" << std::endl;
@@ -597,165 +517,14 @@ void construct_csr_from_sorted_edgelist(csr_graph_container<edge_list_type, inde
   graphstore::utility::print_time();
 
   std::cout << "Modificate index-array" << std::endl;
-  cumulate_array(csr.index_array(), csr.num_vertices());
-  right_shift_aray(csr.index_array(), csr.num_vertices());
+  utilities::cumulate_array(csr.index_array(), csr.num_vertices());
+  utilities::right_shift_aray(csr.index_array(), csr.num_vertices());
   csr.index_array()[0] = 0;
   std::cout << "csr.index_array()[csr.num_vertices()] == csr.num_edges() :" << csr.index_array()[csr.num_vertices()] << " == " << csr.num_edges() << std::endl;
   // assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
   graphstore::utility::print_time();
 }
 
-
-template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
-void load_info(csr_graph_container<edge_list_type, index_type, vertex_type, segment_manager_t>& csr,
-               std::string& prefix)
-{
-  std::cout << "Load info from a file" << std::endl;
-
-  std::ifstream inf_file(prefix + "_inf");
-  std::cout << prefix << "_inf" << std::endl;
-
-  std::string line;
-  assert(std::getline(inf_file, line));
-
-  assert(std::getline(inf_file, line));
-  std::stringstream ssline(line);
-  ssline >> csr.num_vertices() >> csr.num_edges();
-
-  std::cout << "csr.num_vertices():\t" << csr.num_vertices() << std::endl;
-  std::cout << "#edges:\t" << csr.num_edges() << std::endl;
-
-  inf_file.close();
-}
-
-template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
-void load_graph(csr_graph_container<edge_list_type, index_type, vertex_type, segment_manager_t>& csr,
-                std::string& prefix)
-{
-  std::cout << "Load graph from files" << std::endl;
-
-  std::ifstream idx_file(prefix + "_idx", std::ifstream::binary);
-  std::ifstream adj_file(prefix + "_adj", std::ifstream::binary);
-
-  assert(csr.num_vertices() > 0 && csr.index_array());
-  assert(csr.num_edges()    > 0 && csr.adj_list());
-
-  idx_file.read(reinterpret_cast<char*>(csr.index_array()), sizeof(index_type)  * (csr.num_vertices()+1));
-  adj_file.read(reinterpret_cast<char*>(csr.adj_list()),    sizeof(vertex_type) * csr.num_edges());
-  // std::cout << "error: only " << idx_file.gcount() << " could be read" << sizeof(index_type)  * (csr.num_vertices()+1);
-  // assert(idx_file);
-  // assert(adj_file);
-
-  std::cout << "Loading graph from files done" << std::endl;
-  std::cout << csr.index_array()[csr.num_vertices()] << std::endl;
-
-  adj_file.close();
-  idx_file.close();
-}
-
-
-
-
-#if 0
-template <typename edge_list_type, typename index_t, typename vertex_t>
-void dump_unvisited_edges(csr_graph<edge_list_type, index_t, vertex_t>& graph,
-                          graph_trv_info::trv_inf<vertex_t>& inf,
-                          std::string fname,
-                          std::string fname_wk)
-{
-  using csr_graph_type = csr_graph<edge_list_type, index_t, vertex_t>;
-  std::vector<std::pair<vertex_t, vertex_t>> unvisited_edges;
-  size_t visited_edges = inf.count_total_visited_edges();
-
-#if 0
-  const index_type* index_array = graph.index_array();
-  const vertex_type* adj_list = graph.adj_list();
-  for (vertex_type src = 0; src < graph.num_vertices(); ++src) {
-    for (index_type i = index_array[src]; i < index_array[src+1]; ++i) {
-      if (!inf.global_edge_is_visited[i]) {
-        vertex_type dst = adj_list[i];
-        unvisited_edges.push_back(std::make_pair(src, dst));
-      }
-    }
-  }
-  std::cout << "#unvisited_edges:\t" << unvisited_edges.size() << std::endl;
-  assert(graph.num_edges() == inf.count_total_visited_edges() + unvisited_edges.size());
-
-#else
-  {
-    std::cout << "Dump unvisited edges" << std::endl;
-    // assert(graph.num_edges() == visited_edges + unvisited_edges.size());
-
-    std::ofstream ofs_wk(fname_wk);
-    size_t count = 0;
-    size_t fname_count = 0;
-    const typename csr_graph_type::index_type* index_array = graph.index_array();
-    const typename csr_graph_type::vertex_type* adj_list = graph.adj_list();
-    for (vertex_t src = 0; src < graph.num_vertices(); ++src) {
-      for (index_t i = index_array[src]; i < index_array[src+1]; ++i) {
-        if (!inf.global_edge_is_visited[i]) {
-          // if (count % (1ULL << 28) == 0) {
-          //    std::stringstream fname;
-          //    fname << fname_prefix << std::setfill('0') << std::setw(5) << fname_count;
-          //    std::cout << "open : " << fname.str().c_str() << std::endl;
-          //    if (ofs_wk.is_open()) ofs_wk.close();
-          //    ofs_wk.open(fname.str().c_str());
-          //    ++fname_count;
-          //  }
-          vertex_t dst = adj_list[i];
-          ofs_wk << src << " " << dst << "\n";
-          ++count;
-        }
-      }
-    }
-    assert(graph.num_edges() == visited_edges + count);
-    unvisited_edges.reserve(count);
-
-    std::cout << "#unvisited_edges:\t" << unvisited_edges.size() << std::endl;
-  }
-
-  std::cout << "!!! Delete the graph !!!" << std::endl;
-  graph.~csr_graph();
-  std::cout << "!!! Delete the trv_inf !!!" << std::endl;
-  inf.~trv_inf();
-
-  {
-    std::cout << "Reload unvisited edges" << std::endl;
-    std::ifstream ifs_wk(fname_wk);
-    std::string line;
-    while (std::getline(ifs_wk, line)) {
-      std::stringstream ssline(line);
-      uint64_t src_vtx, dst_vtx;
-      ssline >> src_vtx >> dst_vtx;
-      unvisited_edges.push_back(std::make_pair(src_vtx, dst_vtx));
-    }
-  }
-
-  {
-    std::cout << "Truncate work file" << std::endl;
-    std::ofstream ofs_wk(fname_wk, std::ofstream::trunc);
-  }
-
-#endif
-
-  unsigned seed2 = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << "shuffle vector. seed: " << seed2 << std::endl;
-  std::shuffle(unvisited_edges.begin(), unvisited_edges.end(), std::default_random_engine(seed2));
-
-  std::cout << "Writing unvisited edges" << std::endl;
-  std::ofstream ofs_crawling(fname);
-  assert(ofs_crawling.good());
-  for (auto itr = unvisited_edges.begin(), end = unvisited_edges.end();
-       itr != end;
-       ++itr)
-  {
-    ofs_crawling << itr->first << " " << itr->second << "\n";
-  }
-
-  ofs_crawling.close();
-}
-
-#endif
 
 }
 #endif // CSR_GRAPH_HPP
