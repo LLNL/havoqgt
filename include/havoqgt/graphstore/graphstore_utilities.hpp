@@ -90,13 +90,13 @@ std::chrono::high_resolution_clock::time_point duration_time()
   return std::chrono::high_resolution_clock::now();
 }
 
-uint64_t duration_time_usec(std::chrono::high_resolution_clock::time_point& tic)
+uint64_t duration_time_usec(const std::chrono::high_resolution_clock::time_point& tic)
 {
   auto duration_time = std::chrono::high_resolution_clock::now() - tic;
   return std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count();
 }
 
-double duration_time_sec(std::chrono::high_resolution_clock::time_point& tic)
+double duration_time_sec(const std::chrono::high_resolution_clock::time_point& tic)
 {
   auto duration_time = std::chrono::high_resolution_clock::now() - tic;
   return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);

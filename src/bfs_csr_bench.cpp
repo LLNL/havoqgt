@@ -25,7 +25,7 @@
 
 using index_type = uint64_t;
 using vertex_id_type = uint64_t;
-using graph_type = csr_graph::csr_graph_container<havoqgt::parallel_edge_list_reader, index_type, vertex_id_type, segment_manager_type>;
+using graph_type = csr_graph::csr_graph_container<index_type, vertex_id_type>;
 
 std::string fname_graph_;
 std::string fname_segmentfile_;
@@ -53,7 +53,7 @@ void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
     std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
 
     graphstore::utility::print_time();
-    bfs_sync<graph_type, vertex_id_type, false>(graph, source_list_[i], max_vertex_id, num_edges);
+    bfs_sync<graph_type, vertex_id_type, 0>(graph, source_list_[i], max_vertex_id, num_edges);
     std::cout << "finish: ";
     graphstore::utility::print_time();
 
@@ -155,9 +155,9 @@ int main(int argc, char* argv[])
   graph_type* graph;
   if (!fname_graph_.empty()) {
     std::cout << "--- Constructing a graph from file ---" << std::endl;
-    graph = new graph_type(fname_graph_, segment_manager);
-    max_vertex_id_ = graph->num_vertices() - 1;
-    num_edges_ = graph->num_edges();
+//    graph = new graph_type(fname_graph_, segment_manager);
+//    max_vertex_id_ = graph->num_vertices() - 1;
+//    num_edges_ = graph->num_edges();
 
   } else {
     std::cout << "\n--- Initializing edgelist ---" << std::endl;
@@ -171,7 +171,8 @@ int main(int argc, char* argv[])
         havoqgt::parallel_edge_list_reader edge_list(fname_edge_list_);
         std::cout << "\n--- Constructing csr graph ---" << std::endl;
         graphstore::utility::print_time();
-        graph = new graph_type(edge_list, max_vertex_id_, num_edges_, segment_manager);
+        graph = new graph_type(max_vertex_id_, num_edges_);
+        graph->construct(edge_list);
       }
     }
 

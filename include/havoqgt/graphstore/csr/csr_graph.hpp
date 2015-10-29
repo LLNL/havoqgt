@@ -17,13 +17,341 @@
 #include <chrono>
 #include <algorithm>
 #include <utility>
+#include <tuple>
 
 #include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/container/vector.hpp>
+#include <boost/container/set.hpp>
+#include <boost/sort/sort.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 namespace csr_graph {
 
+template <typename index_type, typename vertex_type>
+class csr_graph_container {
+ public:
+
+  using index_array_element_type =  index_type;
+  using index_array_type         = boost::container::vector<index_array_element_type>;
+
+  using adjlist_array_element_type = vertex_type;
+  using adjlist_array_type = boost::container::vector<adjlist_array_element_type>;
+
+  csr_graph_container(size_t nv, size_t ne) :
+    m_num_vertices(nv),
+    m_num_edges(ne),
+    m_index_array(index_array_element_type(), m_num_vertices + 1),
+    m_adjlist_array(adjlist_array_element_type(), m_num_edges)
+  { }
+
+  ~csr_graph_container()
+  {
+    m_num_vertices = 0;
+    m_num_edges = 0;
+  }
+
+  template<typename edge_list_type>
+  void construct(edge_list_type& edge_list)
+  {
+    std::cout << "Construct index-array" << std::endl;
+    const auto si = graphstore::utility::duration_time();
+    for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+         edge_itr != edge_itr_end;
+         ++edge_itr) {
+      const vertex_type src = edge_itr->first;
+      ++m_index_array[src+1];
+    }
+    for (size_t i = 0; i < m_num_vertices; ++i) {
+      m_index_array[i+1] += m_index_array[i];
+    }
+    assert(m_index_array[m_num_vertices] == m_num_edges);
+    std::cout << "finished:\t" << graphstore::utility::duration_time_sec(si) << std::endl;
+
+    std::cout << "Construct adjlist-array" << std::endl;
+    const auto sa = graphstore::utility::duration_time();
+    for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+         edge_itr != edge_itr_end;
+         ++edge_itr) {
+      const vertex_type src = edge_itr->first;
+      const vertex_type dst = edge_itr->second;
+      m_adjlist_array[m_index_array[src]++] = dst;
+    }
+    for (size_t i = m_num_vertices; i > 0; --i) {
+      m_index_array[i] = m_index_array[i-1];
+    }
+    m_index_array[0] = 0;
+    assert(m_index_array[m_num_vertices] == m_num_edges);
+    std::cout << "finished:\t" << graphstore::utility::duration_time_sec(sa) << std::endl;
+  }
+
+  typename adjlist_array_type::iterator adjacencylist(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src];
+    itr += s;
+    return itr;
+  }
+
+  typename adjlist_array_type::iterator adjacencylist_end(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src+1];
+    itr += s;
+    return itr;
+  }
+
+
+private:
+  uint64_t m_num_vertices;
+  uint64_t m_num_edges;
+  index_array_type  m_index_array;
+  adjlist_array_type m_adjlist_array;
+};
+
+
+///
+/// \brief The prop_csr_graph_container class
+///   property csr graph data structure
+///
+template <typename index_type, typename vertex_property_type, typename vertex_type, typename edge_property_type>
+class prop_csr_graph_container {
+ public:
+
+  using index_array_element_type   = std::pair<index_type, vertex_property_type>;
+  using index_array_type           = boost::container::vector<index_array_element_type>;
+
+  using adjlist_array_element_type = vertex_type;
+  using adjlist_array_type         = boost::container::vector<adjlist_array_element_type>;
+
+  using edge_property_element      = edge_property_type;
+  using edge_property_array_type   = boost::container::vector<edge_property_element>;
+
+  prop_csr_graph_container(size_t nv, size_t ne) :
+    m_num_vertices(nv),
+    m_num_edges(ne),
+    m_index_array(index_array_element_type(), m_num_vertices + 1),
+    m_adjlist_array(adjlist_array_element_type(), m_num_edges),
+    m_edge_property_array(edge_property_element(), m_num_edges)
+  { }
+
+  ~prop_csr_graph_container()
+  {
+    m_num_vertices = 0;
+    m_num_edges = 0;
+  }
+
+  template<typename edge_list_type>
+  void construct(edge_list_type& edge_list)
+  {
+    std::cout << "Construct index-array" << std::endl;
+    const auto si = graphstore::utility::duration_time();
+    for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+         edge_itr != edge_itr_end;
+         ++edge_itr) {
+      const vertex_type src = edge_itr->first;
+      ++m_index_array[src+1].first;
+    }
+    for (size_t i = 0; i < m_num_vertices; ++i) {
+      m_index_array[i+1].first += m_index_array[i].first;
+    }
+    assert(m_index_array[m_num_vertices].first == m_num_edges);
+    std::cout << "finished:\t" << graphstore::utility::duration_time_sec(si) << std::endl;
+
+    std::cout << "Construct adjlist-array" << std::endl;
+    const auto sa = graphstore::utility::duration_time();
+    for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+         edge_itr != edge_itr_end;
+         ++edge_itr) {
+      const vertex_type src = edge_itr->first;
+      const vertex_type dst = edge_itr->second;
+      m_adjlist_array[m_index_array[src].first++] = dst;
+    }
+    for (size_t i = m_num_vertices; i > 0; --i) {
+      m_index_array[i].first += m_index_array[i-1].first;
+    }
+    m_index_array[0] = 0;
+    assert(m_index_array[m_num_vertices].first == m_num_edges);
+    std::cout << "finished:\t" << graphstore::utility::duration_time_sec(sa) << std::endl;
+  }
+
+  vertex_property_type& vertex_property(vertex_type& src)
+  {
+    return m_index_array[src].second;
+  }
+
+  typename adjlist_array_type::iterator adjacencylist(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src].first;
+    itr += s;
+    return itr;
+  }
+
+  typename adjlist_array_type::iterator adjacencylist_end(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src+1].first;
+    itr += s;
+    return itr;
+  }
+
+ private:
+  uint64_t m_num_vertices;
+  uint64_t m_num_edges;
+  index_array_type  m_index_array;
+  adjlist_array_type m_adjlist_array;
+  edge_property_array_type m_edge_property_array;
+};
+
+
+///
+/// \brief The hyper_csr_graph_container class
+///   hyper property csr graph data structure
+///
+template <typename index_type, typename vertex_property_type, typename vertex_type, typename edge_property_type>
+class hyper_prop_csr_graph_container {
+ public:
+
+  enum index_array_element {
+    vertex_property = 0,
+    index =1
+  };
+
+  using vertex_array_element_type   = vertex_type;
+  using vertex_array_type           = boost::container::vector<vertex_array_element_type>;
+
+  using index_array_element_type   = std::pair<vertex_property_type, index_type>;
+  using index_array_type           = boost::container::vector<index_array_element_type>;
+
+  using adjlist_array_element_type = vertex_type;
+  using adjlist_array_type         = boost::container::vector<adjlist_array_element_type>;
+
+  using edge_property_element      = edge_property_type;
+  using edge_property_array_type   = boost::container::vector<edge_property_element>;
+
+
+  hyper_prop_csr_graph_container(size_t nv, size_t ne) :
+    m_num_vertices(nv),
+    m_num_edges(ne),
+    m_vertex_array(vertex_array_element_type(), m_num_vertices),
+    m_index_array(index_array_element_type(), m_num_vertices + 1),
+    m_adjlist_array(adjlist_array_element_type(), m_num_edges),
+    m_edge_property_array(edge_property_element(), m_num_edges)
+  { }
+
+  ~hyper_prop_csr_graph_container()
+  {
+    m_num_vertices = 0;
+    m_num_edges = 0;
+  }
+
+//  struct lessthan {
+//    inline bool operator()(const index_array_element_type &x, const index_array_element_type &y) const {
+//      return std::get<index_array_element::vertex>(x) < std::get<index_array_element::vertex>(y);
+//    }
+//  };
+
+  template<typename edge_list_type>
+  void construct(edge_list_type& edge_list)
+  {
+    std::cout << "Construct index-array" << std::endl;
+
+    {
+      std::cout << "Load vertices" << std::endl;
+      const auto start = graphstore::utility::duration_time();
+      boost::container::set<vertex_type> set;
+      index_type cnt_vrt = 0;
+      for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+           edge_itr != edge_itr_end;
+           ++edge_itr) {
+        const vertex_type src = edge_itr->first;
+        auto ret = set.insert(src);
+        if (ret.second) { /// new vertex
+          assert(cnt_vrt < m_num_vertices);
+          std::get<index_array_element::vertex>(m_index_array[cnt_vrt]) = src;
+          std::get<index_array_element::index>(m_index_array[cnt_vrt]) = 0;
+          ++cnt_vrt;
+        } else {
+          ++(std::get<index_array_element::index>(m_index_array[src]));
+        }
+      }
+      std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
+    }
+
+    {
+      std::cout << "Sort" << std::endl;
+      const auto start = graphstore::utility::duration_time();
+      boost::sort(m_index_array.begin(), m_index_array.end(), lessthan());
+      std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
+    }
+
+    {
+      std::cout << "Shift" << std::endl;
+      const auto start = graphstore::utility::duration_time();
+      for (size_t i = 0; i < m_num_vertices; ++i) {
+        std::get<index_array_element::index>(m_index_array[i+1]) += std::get<index_array_element::index>(m_index_array[i]);
+      }
+      for (size_t i = m_num_vertices; i > 0; --i) {
+        std::get<index_array_element::index>(m_index_array[i]) = std::get<index_array_element::index>(m_index_array[i-1]);
+      }
+      std::get<index_array_element::index>(m_index_array[0]) = 0;
+      assert(std::get<index_array_element::index>(m_index_array[m_num_vertices]) == m_num_edges);
+      std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
+    }
+
+    {
+      std::cout << "Construct adjlist-array" << std::endl;
+      const auto start = graphstore::utility::duration_time();
+      for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+           edge_itr != edge_itr_end;
+           ++edge_itr) {
+        const vertex_type src = edge_itr->first;
+        const vertex_type dst = edge_itr->second;
+        m_adjlist_array[std::get<index_array_element::index>(m_index_array[src])++] = dst;
+      }
+      for (size_t i = m_num_vertices; i > 0; --i) {
+        std::get<index_array_element::index>(m_index_array[i]) = std::get<index_array_element::index>(m_index_array[i-1]);
+      }
+      std::get<index_array_element::index>(m_index_array[0]) = 0;
+      assert(m_index_array[m_num_vertices].first == m_num_edges);
+      std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
+    }
+
+  }
+
+  index_array_type::iterator compute_index(vertex_type& src)
+  {
+
+  }
+
+  typename adjlist_array_type::iterator adjacencylist(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src].first;
+    itr += s;
+    return itr;
+  }
+
+  typename adjlist_array_type::iterator adjacencylist_end(vertex_type& src)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type s = m_index_array[src+1].first;
+    itr += s;
+    return itr;
+  }
+
+ private:
+  uint64_t m_num_vertices;
+  uint64_t m_num_edges;
+  vertex_array_type m_vertex_array;
+  index_array_type  m_index_array;
+  adjlist_array_type m_adjlist_array;
+  edge_property_array_type m_edge_property_array;
+};
+
+
+#if 0
 
 template <typename index_t, typename vertex_t, typename segment_manager_t>
 class csr_graph_container {
@@ -261,7 +589,7 @@ public:
     m_index_allocator(segment_manager),
     m_adjlist_allocator(segment_manager)
   {
-    allocate_graph();
+    allocate();
   }
 
   csr_graph_container(std::string& prefix,
@@ -273,14 +601,15 @@ public:
     m_index_allocator(segment_manager),
     m_adjlist_allocator(segment_manager)
   {
-    load_info(prefix);
-    allocate_graph();
-    load_graph(prefix);
+    /// Load a constructed graph from file
+    load_graph_info_from_file(prefix);
+    allocate();
+    load_graph_from_file(prefix);
   }
 
   ~csr_graph_container()
   {
-    deallocate_graph();
+    deallocate();
   }
 
   inline size_t& num_vertices ()
@@ -336,7 +665,7 @@ public:
 
 private:
 
-  void allocate_graph()
+  void allocate()
   {
     std::cout << "Allocating index-array and adj-list" << std::endl;
     m_index_pointer = m_index_allocator.allocate(m_num_vertices + 1);
@@ -349,6 +678,9 @@ private:
 
     std::cout << "Zero clear index-array" << std::endl;
     std::memset(m_index_array, 0, (m_num_vertices + 1ULL) * sizeof(index_type));
+    for (uint64_t i = 0; i < m_num_vertices; ++i) {
+      m_index_array[i] = index_type();
+    }
     graphstore::utility::print_time();
 
     std::cout << "Allocate adj_list:\t" <<  (double)(m_num_edges) * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
@@ -356,13 +688,13 @@ private:
 
     std::cout << "Touch adj_list" << std::endl;
     for (uint64_t p = 0; p < m_num_edges; p += 4096 / sizeof(vertex_type)) {
-      m_adj_list[p] = 0;
+      m_adj_list[p] = vertex_type();
     }
     graphstore::utility::print_time();
 
   }
 
-  void deallocate_graph()
+  void deallocate()
   {
     m_num_vertices = 0;
     m_num_edges = 0;
@@ -371,7 +703,7 @@ private:
   }
 
 
-  void load_info(std::string& prefix)
+  void load_graph_info_from_file(std::string& prefix)
   {
     std::cout << "Load info from a file" << std::endl;
 
@@ -391,7 +723,7 @@ private:
     inf_file.close();
   }
 
-  void load_graph(std::string& prefix)
+  void load_graph_from_file(std::string& prefix)
   {
     std::cout << "Load graph from files" << std::endl;
 
@@ -440,29 +772,8 @@ private:
   index_allocator m_index_allocator;
   adjlist_allocator m_adjlist_allocator;
   typename index_allocator::pointer m_index_pointer;
-  typename index_allocator::pointer m_adjlist_pointer;
+  typename adjlist_allocator::pointer m_adjlist_pointer;
 };
-
-
-namespace utilities {
-
-  template<typename index_type>
-  void cumulate_array(index_type* array, size_t length)
-  {
-    for (size_t i = 0; i < length; ++i) {
-      array[i+1] += array[i];
-    }
-  }
-
-  template<typename index_type>
-  void right_shift_aray(index_type* array, size_t length)
-  {
-    for (size_t i = length; i > 0; --i) {
-      array[i] = array[i-1];
-    }
-  }
-
-}
 
 
 template <typename edge_list_type, typename index_type, typename vertex_type, typename segment_manager_t>
@@ -473,6 +784,32 @@ void construct_csr(csr_graph_container<index_type, vertex_type, segment_manager_
   for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
     const vertex_type src = edge_itr->first;
     ++csr.index_array()[src+1];
+  }
+  utilities::cumulate_array(csr.index_array(), csr.num_vertices());
+  assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
+  graphstore::utility::print_time();
+
+  std::cout << "Constructing adj-list" << std::endl;
+  for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
+    const vertex_type src = edge_itr->first;
+    const vertex_type dst = edge_itr->second;
+    csr.adj_list()[csr.index_array()[src]++] = dst;
+  }
+  utilities::right_shift_aray(csr.index_array(), csr.num_vertices());
+  csr.index_array()[0] = 0;
+  assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
+  graphstore::utility::print_time();
+
+}
+
+template <typename edge_list_type, typename index_type, typename index_prop_type, typename vertex_type, typename segment_manager_t>
+void construct_csr_ip(csr_graph_container<std::pair<index_type, index_prop_type>, vertex_type, segment_manager_t>& csr,
+                   edge_list_type& edge_list)
+{
+  std::cout << "Counting degree" << std::endl;
+  for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end(); edge_itr != edge_itr_end; ++edge_itr) {
+    const vertex_type src = edge_itr->first;
+    ++csr.index_array()[src+1].first;
   }
   utilities::cumulate_array(csr.index_array(), csr.num_vertices());
   assert(csr.index_array()[csr.num_vertices()] == csr.num_edges());
@@ -525,6 +862,7 @@ void construct_csr_from_sorted_edgelist(csr_graph_container<index_type, vertex_t
   graphstore::utility::print_time();
 }
 
+#endif
 
 }
 #endif // CSR_GRAPH_HPP

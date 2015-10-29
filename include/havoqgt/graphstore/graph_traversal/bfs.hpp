@@ -24,6 +24,25 @@ class bfs_core {
   bfs_core()=delete;
 
   static void run_bfs_sync (
+      graph_type&,
+      graph_trv_info::trv_inf<vertex_type>&,
+      std::queue<vertex_type>&,
+      std::queue<vertex_type>&,
+      vertex_type&)
+  {
+    assert(false);
+  }
+};
+
+
+template <typename graph_type, typename vertex_type>
+class bfs_core <graph_type, vertex_type, 0> {
+
+ public:
+
+  bfs_core()=delete;
+
+  static void run_bfs_sync (
       graph_type& graph,
       graph_trv_info::trv_inf<vertex_type>& inf,
       std::queue<vertex_type>& frontier_queue,
@@ -50,8 +69,9 @@ class bfs_core {
         frontier_queue.pop();
         ++inf.count_visited_vertices;
 
+
         /// push adjacent vertices to the next queue
-        for (auto edge = graph.begin_adjlist(src), end = graph.end_adjlist(src); edge != end; ++edge) {
+        for (auto edge = graph.adjacencylist(src), end = graph.adjacencylist_end(src); edge != end; ++edge) {
           const vertex_type dst = *edge;
           if (!inf.is_visited[dst]) {
             next_queue.push(dst);
@@ -69,12 +89,67 @@ class bfs_core {
   }
 };
 
+template <typename graph_type, typename vertex_type>
+class bfs_core <graph_type, vertex_type, 1> {
+
+ public:
+
+  bfs_core()=delete;
+
+  static void run_bfs_sync (
+      graph_type& graph,
+      graph_trv_info::trv_inf<vertex_type>& inf,
+      std::queue<vertex_type>& frontier_queue,
+      std::queue<vertex_type>& next_queue,
+      vertex_type& start_vrtx)
+  {
+
+    /// ---- init inf ---- ///
+    auto tic_init = graphstore::utility::duration_time();
+    inf.init(true);
+    inf.is_visited[start_vrtx] = true;
+    /// inf.tree[start_vrtx] = start_vrtx;
+    std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
+
+    /// --- BFS main loop -------- ///
+    size_t level = 0;
+    while (true) {
+      std::cout << "Lv. " << level << ", size of frontier queue =\t" << frontier_queue.size() << std::endl;
+
+      /// loop for current frontier
+      while (!frontier_queue.empty()) {
+        vertex_type src = frontier_queue.front();
+        // std::cout << "src " << src << std::endl;
+        frontier_queue.pop();
+        ++inf.count_visited_vertices;
+
+
+        /// push adjacent vertices to the next queue
+        for (auto edge = graph.adjacencylist(src), end = graph.adjacencylist_end(src); edge != end; ++edge) {
+          const vertex_type dst = *edge;
+          if (!inf.is_visited[dst]) {
+            next_queue.push(dst);
+            /// inf.tree[dst] = src;
+            inf.is_visited[dst] = true;
+          }
+          ++(inf.count_visited_edges);
+        }
+      }  /// end of loop for a frontier
+
+      if (next_queue.empty()) break; /// termination condition
+      frontier_queue.swap(next_queue);
+      ++level;
+    } /// end of BFS loop
+  }
+};
+
+
 #define BFS_USE_BITMAP 1
 ///
 /// \brief The bfs_core<graph_type, vertex_type, _Tp3> class
 ///   bfs core for rhhda model
 template <typename graph_type, typename vertex_type>
-class bfs_core <graph_type, vertex_type, 1> {
+class bfs_core <graph_type, vertex_type, 3> {
 
  public:
 
@@ -163,7 +238,7 @@ class bfs_core <graph_type, vertex_type, 1> {
 /// \brief The bfs_core<graph_type, vertex_type, _Tp3> class
 /// bfs core for baseline model
 template <typename graph_type, typename vertex_type>
-class bfs_core <graph_type, vertex_type, 2> {
+class bfs_core <graph_type, vertex_type, 4> {
 
  public:
 
@@ -229,7 +304,7 @@ class bfs_core <graph_type, vertex_type, 2> {
 
 
 template <typename graph_type, typename vertex_type, int type>
-void bfs_sync(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, size_t num_edges)
+void bfs_driver(graph_type& graph, vertex_type start_vrtx, size_t max_vertex_id, size_t num_edges)
 {
 
   /// ---- Initialization ----- ////

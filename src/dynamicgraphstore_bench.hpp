@@ -98,6 +98,8 @@ void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
     assert(ret == 0);
     close(fd);
     asdf.flush();
+#else
+#warning fallocate() is not supported
 #endif
 }
 
@@ -153,6 +155,15 @@ void sync_dimmap()
 void flush_mmmap(mapped_file_type& mapped_file)
 {
   mapped_file.flush();
+}
+
+void sync_mmap()
+{
+#if _BSD_SOURCE || _XOPEN_SOURCE >= 500
+  sync();
+#else
+#warning sync(2) is not supported
+#endif
 }
 
 void madvice(mapped_file_type& mapped_file)
