@@ -84,8 +84,9 @@ size_t binary_search(array_type& array, size_t len, key_type& key)
   size_t left = 0;
   size_t right = len;
 
-  while (left < right) {
-    const size_t center = (right - left) / 2;
+  while (left <= right) {
+    // 5-0 / 2 = 2, 5-
+    const size_t center = (right + left) / 2;
     if (array[center] == key) return center;
 
     if (key < array[center]) {

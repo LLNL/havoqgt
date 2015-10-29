@@ -14,65 +14,101 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/environment.hpp>
+
 #include <havoqgt/graphstore/csr/csr_graph.hpp>
-#include <havoqgt/graphstore/graph_traversal/bfs.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 #include "dynamicgraphstore_bench.hpp"
+#include "bfs_bench.hpp"
 
-//using mapped_file_type      = boost::interprocess::managed_mapped_file;
-//using segment_manager_type  = boost::interprocess::managed_mapped_file::segment_manager;
+using index_type      = uint64_t;
+using vertex_type     = uint64_t;
+#if BFS_USE_BITMAP
+using graphstore_type = csr_graph::csr_graph_container<index_type, vertex_type>;
+#else
+using vertex_prop_type = bool;
+using edge_prop_type = unsigned char;
+#if 1
+using graphstore_type = csr_graph::prop_csr_graph_container<index_type, vertex_prop_type, vertex_type, edge_prop_type>;
+#else
+using graphstore_type = csr_graph::hyper_prop_csr_graph_container<index_type, vertex_prop_type, vertex_type, edge_prop_type>;
+#endif
+#endif
 
-using index_type = uint64_t;
-using vertex_id_type = uint64_t;
-using graph_type = csr_graph::csr_graph_container<index_type, vertex_id_type>;
+template <typename graphstore_type, typename vertex_type>
+void run_bfs_sync (graphstore_type& graph,
+                   trv_inf<vertex_type>& inf,
+                   std::queue<vertex_type>& frontier_queue,
+                   std::queue<vertex_type>& next_queue,
+                   vertex_type& start_vrtx)
+{
+
+  /// ---- init inf ---- ///
+  auto tic_init = graphstore::utility::duration_time();
+#if BFS_USE_BITMAP
+  inf.init(true);
+  inf.is_visited[start_vrtx] = true;
+#else
+  inf.init(false);
+  bool init(false);
+  graph.init_vertex_property(init);
+  graph.vertex_property(start_vrtx) = true;
+#endif
+  /// inf.tree[start_vrtx] = start_vrtx;
+  std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
+
+  /// --- BFS main loop -------- ///
+  size_t level = 0;
+  while (true) {
+    std::cout << "Lv. " << level << ", size of frontier queue =\t" << frontier_queue.size() << std::endl;
+
+    /// loop for current frontier
+    while (!frontier_queue.empty()) {
+      vertex_type src = frontier_queue.front();
+      // std::cout << "src " << src << std::endl;
+      frontier_queue.pop();
+      ++inf.count_visited_vertices;
+
+
+      /// push adjacent vertices to the next queue
+      for (auto edge = graph.adjacencylist(src), end = graph.adjacencylist_end(src); edge != end; ++edge) {
+        const vertex_type dst = *edge;
+#if BFS_USE_BITMAP
+        bool& is_visited = inf.is_visited[dst];
+#else
+        bool& is_visited = graph.vertex_property(dst);
+#endif
+        if (!is_visited) {
+          next_queue.push(dst);
+          /// inf.tree[dst] = src;
+          is_visited = true;
+        }
+        ++(inf.count_visited_edges);
+      }
+    }  /// end of loop for a frontier
+
+    if (next_queue.empty()) break; /// termination condition
+    frontier_queue.swap(next_queue);
+    ++level;
+  } /// end of BFS loop
+}
+
+/// Avoid linker errors with template function
+template void run_bfs_sync<graphstore_type, vertex_type>(graphstore_type&,
+                                                         trv_inf<vertex_type>&,
+                                                         std::queue<vertex_type>&,
+                                                         std::queue<vertex_type>&,
+                                                         vertex_type&);
+
 
 std::string fname_graph_;
 std::string fname_segmentfile_;
 size_t segment_size_log2_ = 30;
 std::vector<std::string> fname_edge_list_;
-size_t max_vertex_id_ = 0;
+vertex_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
-std::vector<vertex_id_type> source_list_;
-
-
-void run_bfs(graph_type& graph, size_t max_vertex_id, size_t num_edges)
-{
-  std::cout << "\n--- BFS ---" << std::endl;
-
-  std::cout << "max_vertex_id:\t" << max_vertex_id << std::endl;
-  std::cout << "num_edges:\t"     << num_edges     << std::endl;
-
-#if USE_SRC_CANDIDATE_TBL
-  bool* table = new bool[graph->num_vertices()];
-  std::cout << "Allocated src_candidats_table: " << sizeof(bool) * graph->num_vertices() / (1ULL << 30) << " GB" << std::endl;
-  find_startvertex_candidates(graph, table);
-#endif
-
-  for (int i = 0; i < source_list_.size(); ++i) {
-    std::cout << "BFS[" << i << "]: src=\t" << source_list_[i] << std::endl;
-
-    graphstore::utility::print_time();
-    bfs_sync<graph_type, vertex_id_type, 0>(graph, source_list_[i], max_vertex_id, num_edges);
-    std::cout << "finish: ";
-    graphstore::utility::print_time();
-
-    std::cout << "\n" << std::endl;
-  }
-  std::cout << "BFS done." << std::endl;
-
-}
-
-void generate_source_list(const int num_sources)
-{
-  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << "generate sources using a seed: " << seed << std::endl;
-  std::mt19937_64 gen(seed);
-  std::uniform_int_distribution<vertex_id_type> dis(0, max_vertex_id_);
-  for (size_t i = 0; i < num_sources; ++i) {
-    source_list_.push_back(dis(gen));
-  }
-}
+std::vector<vertex_type> source_list_;
 
 void parse_options(int argc, char **argv)
 {
@@ -116,7 +152,7 @@ void parse_options(int argc, char **argv)
         std::string buf;
         std::stringstream sstrm(optarg);
         while (std::getline(sstrm, buf, ':'))
-            source_list_.push_back(boost::lexical_cast<size_t>(buf));
+          source_list_.push_back(boost::lexical_cast<size_t>(buf));
         break;
       }
     }
@@ -152,12 +188,13 @@ int main(int argc, char* argv[])
   fallocate(fname_segmentfile_.c_str(), std::pow(2, segment_size_log2_), mapped_file);
 
 
-  graph_type* graph;
+  graphstore_type* graph;
   if (!fname_graph_.empty()) {
     std::cout << "--- Constructing a graph from file ---" << std::endl;
-//    graph = new graph_type(fname_graph_, segment_manager);
-//    max_vertex_id_ = graph->num_vertices() - 1;
-//    num_edges_ = graph->num_edges();
+    assert(false);
+    //    graph = new graph_type(fname_graph_, segment_manager);
+    //    max_vertex_id_ = graph->num_vertices() - 1;
+    //    num_edges_ = graph->num_edges();
 
   } else {
     std::cout << "\n--- Initializing edgelist ---" << std::endl;
@@ -165,13 +202,12 @@ int main(int argc, char* argv[])
     havoqgt::havoqgt_init(&argc, &argv);
     {
       int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-      int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
       havoqgt::get_environment();
       if (mpi_rank == 0) {
         havoqgt::parallel_edge_list_reader edge_list(fname_edge_list_);
         std::cout << "\n--- Constructing csr graph ---" << std::endl;
         graphstore::utility::print_time();
-        graph = new graph_type(max_vertex_id_, num_edges_);
+        graph = new graphstore_type(max_vertex_id_ + 1, num_edges_);
         graph->construct(edge_list);
       }
     }
@@ -181,9 +217,9 @@ int main(int argc, char* argv[])
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
   if (source_list_.empty())
-    generate_source_list(4);
-  run_bfs(*graph, max_vertex_id_, num_edges_);
+    generate_source_list(4, max_vertex_id_, source_list_);
+  run_bfs(*graph, max_vertex_id_, max_vertex_id_, source_list_);
 
   delete graph;
-  delete segment_manager;
+//  delete segment_manager;
 }
