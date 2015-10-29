@@ -78,6 +78,26 @@ size_t array_length(const T (&)[SIZE])
 }
 
 
+template<typename array_type, typename key_type>
+size_t binary_search(array_type& array, size_t len, key_type& key)
+{
+  size_t left = 0;
+  size_t right = len;
+
+  while (left < right) {
+    const size_t center = (right - left) / 2;
+    if (array[center] == key) return center;
+
+    if (key < array[center]) {
+      right = center;
+    } else {
+      left = center;
+    }
+  }
+
+  return len;
+}
+
 
 /// --------- For Debug --------------- ///
 void print_time() {

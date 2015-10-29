@@ -23,6 +23,7 @@
 #include <boost/container/vector.hpp>
 #include <boost/container/set.hpp>
 #include <boost/sort/sort.hpp>
+#include <boost/range/algorithm.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
@@ -218,6 +219,10 @@ class hyper_prop_csr_graph_container {
     index =1
   };
 
+  enum : index_type {
+    kNotFound = std::numeric_limits<index_type>::max()
+  };
+
   using vertex_array_element_type   = vertex_type;
   using vertex_array_type           = boost::container::vector<vertex_array_element_type>;
 
@@ -234,11 +239,17 @@ class hyper_prop_csr_graph_container {
   hyper_prop_csr_graph_container(size_t nv, size_t ne) :
     m_num_vertices(nv),
     m_num_edges(ne),
-    m_vertex_array(vertex_array_element_type(), m_num_vertices),
-    m_index_array(index_array_element_type(), m_num_vertices + 1),
-    m_adjlist_array(adjlist_array_element_type(), m_num_edges),
-    m_edge_property_array(edge_property_element(), m_num_edges)
-  { }
+    m_vertex_array(),
+    m_index_array(),
+    m_adjlist_array(),
+    m_edge_property_array()
+  {
+    m_vertex_array.reserve(m_num_vertices); /// this is only reserve
+    index_array_element_type init_value(vertex_property_type(), 0);
+    m_index_array.resize(init_value, m_num_vertices + 1);
+    m_adjlist_array.resize(adjlist_array_element_type(), m_num_edges);
+    m_edge_property_array.resize(edge_property_element(), m_num_edges);
+  }
 
   ~hyper_prop_csr_graph_container()
   {
@@ -261,19 +272,12 @@ class hyper_prop_csr_graph_container {
       std::cout << "Load vertices" << std::endl;
       const auto start = graphstore::utility::duration_time();
       boost::container::set<vertex_type> set;
-      index_type cnt_vrt = 0;
       for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
            edge_itr != edge_itr_end;
            ++edge_itr) {
         const vertex_type src = edge_itr->first;
-        auto ret = set.insert(src);
-        if (ret.second) { /// new vertex
-          assert(cnt_vrt < m_num_vertices);
-          std::get<index_array_element::vertex>(m_index_array[cnt_vrt]) = src;
-          std::get<index_array_element::index>(m_index_array[cnt_vrt]) = 0;
-          ++cnt_vrt;
-        } else {
-          ++(std::get<index_array_element::index>(m_index_array[src]));
+        if (set.insert(src)) { /// new vertex
+          m_vertex_array.push_back(src);
         }
       }
       std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
@@ -282,8 +286,19 @@ class hyper_prop_csr_graph_container {
     {
       std::cout << "Sort" << std::endl;
       const auto start = graphstore::utility::duration_time();
-      boost::sort(m_index_array.begin(), m_index_array.end(), lessthan());
+      boost::sort(m_vertex_array.begin(), m_vertex_array.end());
       std::cout << "finished:\t" << graphstore::utility::duration_time_sec(start) << std::endl;
+    }
+
+    {
+      std::cout << "Count degree" << std::endl;
+      for (const auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
+           edge_itr != edge_itr_end;
+           ++edge_itr) {
+        const vertex_type src = edge_itr->first;
+        const index_type index = compute_index(src);
+        ++(std::get<index_array_element::index>(m_index_array[index]));
+      }
     }
 
     {
@@ -308,7 +323,8 @@ class hyper_prop_csr_graph_container {
            ++edge_itr) {
         const vertex_type src = edge_itr->first;
         const vertex_type dst = edge_itr->second;
-        m_adjlist_array[std::get<index_array_element::index>(m_index_array[src])++] = dst;
+        const index_type index = compute_index(src);
+        m_adjlist_array[std::get<index_array_element::index>(m_index_array[index])++] = dst;
       }
       for (size_t i = m_num_vertices; i > 0; --i) {
         std::get<index_array_element::index>(m_index_array[i]) = std::get<index_array_element::index>(m_index_array[i-1]);
@@ -320,23 +336,27 @@ class hyper_prop_csr_graph_container {
 
   }
 
-  index_array_type::iterator compute_index(vertex_type& src)
+  index_type compute_index(const vertex_type& src) const
   {
-
+    /// Since existing find function, e.g., std::find, returns iterator and will cause overhead,
+    /// we just use original binary search implementaion.
+    return graphstore::utility::binary_search(m_vertex_array, m_vertex_array.size(), src);
   }
 
-  typename adjlist_array_type::iterator adjacencylist(vertex_type& src)
+  typename adjlist_array_type::iterator adjacencylist(const vertex_type& src) const
   {
     auto itr = m_adjlist_array.begin();
-    const index_type s = m_index_array[src].first;
+    const index_type index = compute_index(src);
+    const index_type s = m_index_array[index].first;
     itr += s;
     return itr;
   }
 
-  typename adjlist_array_type::iterator adjacencylist_end(vertex_type& src)
+  typename adjlist_array_type::iterator adjacencylist_end(const vertex_type& src) const
   {
     auto itr = m_adjlist_array.begin();
-    const index_type s = m_index_array[src+1].first;
+    const index_type index = compute_index(src);
+    const index_type s = m_index_array[index+1].first;
     itr += s;
     return itr;
   }
