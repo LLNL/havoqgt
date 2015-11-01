@@ -184,7 +184,7 @@ void parse_options(int argc, char **argv)
   }
 
   char c;
-  while ((c = getopt (argc, argv, "s:e:dc:o:r:i:")) != -1) {
+  while ((c = getopt (argc, argv, "s:e:dc:o:f:r:i:")) != -1) {
     switch (c) {
       case 's':
         vertex_scale_ = boost::lexical_cast<size_t>(optarg);
@@ -196,6 +196,10 @@ void parse_options(int argc, char **argv)
 
       case 'o':
         fname_segmentfile_ = optarg;
+        break;
+
+      case 'f':
+        segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
 
       case 'd':
