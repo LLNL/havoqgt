@@ -5,6 +5,8 @@
 #ifndef GRAPHSTORE_UTILITIES_HPP
 #define GRAPHSTORE_UTILITIES_HPP
 
+#include <iostream>
+#include <algorithm>
 #include <string>
 #include <cstring>
 #include <chrono>
@@ -51,8 +53,57 @@ struct packed_pair
 
   packed_pair(T1 t1, T2 t2) :
     first(t1),
-    second(t2){}
+    second(t2)
+  {}
+
+  packed_pair(const packed_pair<T1, T2>& other) :
+    first(other.first),
+    second(other.second)
+  {}
+
+  packed_pair(packed_pair<T1, T2>&& other) noexcept :
+    first(std::move(other.first)),
+    second(std::move(other.second))
+  {}
+
+  packed_pair<T1, T2>& operator=(packed_pair<T1, T2> other)
+  {
+    swap(other);
+    return *this;
+  }
+
+  void swap(packed_pair<T1, T2>& other)
+  {
+    using std::swap;
+    swap(first, other.first);
+    swap(second, other.second);
+  }
+
+//  packed_pair<T1, T2>& operator=(const packed_pair<T1, T2>& other)
+//  {
+//    first = other.first;
+//    second = other.second;
+//    return *this;
+//  }
+
+//  packed_pair<T1, T2>& operator=(packed_pair<T1, T2>&& other)
+//  {
+//    using std::swap;
+//    swap(first, other.first);
+//    swap(second, other.second);
+//    return *this;
+//  }
+
 };
+template<typename T1, typename T2>
+inline bool operator==(const packed_pair<T1, T2>& lhs, const packed_pair<T1, T2>& rhs) {
+    return lhs.first == rhs.first && lhs.second == rhs.second;
+}
+template<typename T1, typename T2>
+inline bool operator!=(const packed_pair<T1, T2>& lhs, const packed_pair<T1, T2>& rhs) {
+    return !(lhs == rhs);
+}
+
 
 #pragma pack(1)
 template <typename T1, typename T2, typename T3>
@@ -67,8 +118,62 @@ struct packed_tuple
   packed_tuple(T1 t1, T2 t2, T3 t3) :
     first(t1),
     second(t2),
-    third(t3){}
+    third(t3)
+  {}
+
+  packed_tuple(const packed_tuple<T1, T2, T3>& other) :
+    first(other.first),
+    second(other.second),
+    third(other.third)
+  {}
+
+  packed_tuple(packed_tuple<T1, T2, T3>&& other) noexcept :
+    first(std::move(other.first)),
+    second(std::move(other.second)),
+    third(std::move(other.third))
+  {}
+
+  packed_tuple<T1, T2, T3>& operator=(packed_tuple<T1, T2, T3> other)
+  {
+    swap(other);
+    return *this;
+  }
+
+  void swap(packed_tuple<T1, T2, T3>& other)
+  {
+    using std::swap;
+    swap(first, other.first);
+    swap(second, other.second);
+    swap(third,  other.third);
+  }
+
+//  packed_tuple<T1, T2, T3>& operator=(const packed_tuple<T1, T2, T3>& other)
+//  {
+//    first  = other.first;
+//    second = other.second;
+//    third  = other.third;
+//    return *this;
+//  }
+
+//  packed_tuple<T1, T2, T3>& operator=(packed_tuple<T1, T2, T3>&& other)
+//  {
+//    using std::swap;
+//    swap(first,  other.first);
+//    swap(second, other.second);
+//    swap(third,  other.third);
+//    return *this;
+//  }
 };
+
+template<typename T1, typename T2, typename T3>
+inline bool operator==(const packed_tuple<T1, T2, T3>& lhs, const packed_tuple<T1, T2, T3>& rhs) {
+    return lhs.first == rhs.first && lhs.second == rhs.second && lhs.third == rhs.third;
+}
+
+template<typename T1, typename T2, typename T3>
+inline bool operator!=(const packed_tuple<T1, T2, T3>& lhs, const packed_tuple<T1, T2, T3>& rhs) {
+    return !(lhs == rhs);
+}
 
 
 template <typename T, std::size_t SIZE>
@@ -85,7 +190,6 @@ size_t binary_search(array_type& array, size_t len, key_type& key)
   size_t right = len;
 
   while (left <= right) {
-    // 5-0 / 2 = 2, 5-
     const size_t center = (right + left) / 2;
     if (array[center] == key) return center;
 

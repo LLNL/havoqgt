@@ -17,6 +17,8 @@
 #include <boost/interprocess/offset_ptr.hpp>
 #include <boost/interprocess/containers/set.hpp>
 
+#include <havoqgt/graphstore/graphstore_utilities.hpp>
+
 #include "dynamicgraphstore_bench.hpp"
 
 #define VERBOSE 0
@@ -31,14 +33,17 @@ using vertex_id_type         = uint64_t;
 
 /// adjacency list
 using edge_property_type    = unsigned char;
-using edge_vec_element_type = std::pair<vertex_id_type, edge_property_type>;
+using edge_vec_element_type = graphstore::utility::packed_pair<vertex_id_type, edge_property_type>;
+/// using edge_vec_element_type = std::pair<vertex_id_type, edge_property_type>;
 using vec_allocator_type    = boost::interprocess::allocator<edge_vec_element_type, segment_manager_type>;
 using edge_vec_type         = boost::interprocess::vector<edge_vec_element_type, vec_allocator_type>;
 
 /// vertex table
 using vertex_property_type  = bool;
-using map_value_type        = std::pair<vertex_property_type, edge_vec_type>;
+using map_value_type        = graphstore::utility::packed_pair<vertex_property_type, edge_vec_type>;
 using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
+// using map_value_type        = std::pair<vertex_property_type, edge_vec_type>;
+// using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
 using map_allocator_type    = boost::interprocess::allocator<map_element_type, segment_manager_type>;
 using graphstore_type       = boost::unordered_map<vertex_id_type,
                                                    map_value_type,

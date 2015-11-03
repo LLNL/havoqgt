@@ -105,7 +105,7 @@ template<typename _key_type,
          typename _segment_manager_type,
          typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
          typename _property_program = rhh::rhh_property_program_base<unsigned char>>
-class rhh_container_base {
+class rhh_container {
  public:
   using property_program     = _property_program;
   using key_type             = _key_type;
@@ -131,7 +131,7 @@ class rhh_container_base {
     kElementSize = sizeof(element_type)
   };
 
-  using rhh_contatiner_selftype = rhh_container_base<key_type, value_type, size_type, segment_manager_type, key_hash_func, property_program>;
+  using rhh_contatiner_selftype = rhh_container<key_type, value_type, size_type, segment_manager_type, key_hash_func, property_program>;
   using allocator               = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
                                                                          kElementSize,
                                                                          sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
@@ -145,7 +145,7 @@ class rhh_container_base {
   template <typename Type>
   class WholeForwardIterator : public std::iterator<std::forward_iterator_tag, Type>
   {
-    friend class rhh_container_base;
+    friend class rhh_container;
     using whole_iterator_selftype = WholeForwardIterator<Type>;
     using rhh_type = rhh_contatiner_selftype;
 
@@ -262,7 +262,7 @@ class rhh_container_base {
   template <typename Type>
   class ValueForwardIterator : public std::iterator<std::forward_iterator_tag, Type>
   {
-    friend class rhh_container_base;
+    friend class rhh_container;
     using value_iterator_selftype = ValueForwardIterator<Type>;
     using rhh_type                = rhh_contatiner_selftype;
 
@@ -371,12 +371,37 @@ class rhh_container_base {
 
 
   /// --- Explicitly Delete -- ///
-  rhh_container_base()  = delete;
-  ~rhh_container_base() = delete;
-  rhh_container_base(const rhh_contatiner_selftype& src) = delete;
-  rhh_container_base& operator=(const rhh_container_base&) = delete;
-  rhh_container_base(const rhh_container_base&&) = delete;
-  rhh_container_base& operator=(rhh_container_base&& old_obj) = delete;
+//  rhh_container()
+//  {
+
+//  }
+//  ~rhh_container()
+//  {
+
+//  }
+
+//  rhh_container(const rhh_contatiner_selftype& src)
+//  {
+//    int i = 0;
+//  }
+//  rhh_container& operator=(const rhh_container&)
+//  {
+//    int i = 0;
+//  }
+//  rhh_container(const rhh_container&&)
+//  {
+//    int i = 0;
+//  }
+//  rhh_container& operator=(rhh_container&& old_obj)
+//  {
+//    int i = 0;
+//  }
+  /// rhh_container()  = delete;
+  /// ~rhh_container() = delete;
+  /// rhh_container(const rhh_contatiner_selftype& src) = delete;
+  /// rhh_container& operator=(const rhh_container&) = delete;
+  /// rhh_container(const rhh_container&&) = delete;
+  /// rhh_container& operator=(rhh_container&& old_obj) = delete;
 
   /// --- operator ---- ///
   //  inline element_type& operator[](size_type pos) {

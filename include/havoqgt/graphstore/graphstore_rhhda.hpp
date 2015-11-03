@@ -6,14 +6,13 @@
 #ifndef GRAPHSTORE_RHHDA_HPP
 #define GRAPHSTORE_RHHDA_HPP
 
-#include <tuple>
-
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.h>
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
+
 
 namespace graphstore {
 
@@ -27,10 +26,10 @@ class graphstore_rhhda
  private:
   using size_type = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
-  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
-  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
+  using low_degree_table_type          = rhh_container<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
+  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
   using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
-  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
+  using mid_high_degree_table_type     = rhh_container<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
 
 
  public:
@@ -84,7 +83,7 @@ class graphstore_rhhda
   ///   true: if inserted
   ///   false: if a duplicated edge is found
   ///
-  bool insert_edge(vertex_id_type& src, vertex_id_type& trg, edge_weight_type& weight)
+  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_weight_type& weight)
   {
 
     /// -- count the degree of the source vertex in the low degree table -- ///
@@ -140,17 +139,19 @@ class graphstore_rhhda
 
     }
 
-/// TODO: insert the target vertex into the source vertex list
+    /// TODO: insert the target vertex into the source vertex list
     return true;
   }
 
-  inline bool insert_vertex(vertex_id_type& vertex, vertex_meta_data_type& meta_data)
+  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_meta_data_type& meta_data)
   {
     auto itr_single = m_low_degree_table->find(vertex);
     if (itr_single.is_end()) {
       auto itr = m_mid_high_degree_table->find(vertex);
       if (itr.is_end()) {
-        rhh::insert(m_low_degree_table, vertex, low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
+        rhh::insert(m_low_degree_table,
+                    vertex,
+                    low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
         return true;
       }
     }
@@ -418,10 +419,10 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
  private:
   using size_type = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
-  using low_degree_table_type          = rhh_container_base<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
-  using mid_high_edge_chunk_type       = rhh_container_base<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
+  using low_degree_table_type          = rhh_container<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
+  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
   using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
-  using mid_high_degree_table_type     = rhh_container_base<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
+  using mid_high_degree_table_type     = rhh_container<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
 
 
  public:
