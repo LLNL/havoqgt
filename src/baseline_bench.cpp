@@ -117,8 +117,7 @@ void apply_edges_update_requests(mapped_file_type& mapped_file,
       }
     }
 
-    // flush_mmmap(mapped_file);
-    sync_dimmap();
+    sync_mmap();
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     const double time_end = MPI_Wtime();

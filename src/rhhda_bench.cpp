@@ -76,6 +76,9 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
 //    std::cout << "shrink to fit low table" << std::endl;
 //    graph_store.shrink_to_fit_low_table();
 
+    std::cout << "rehash low table" << std::endl;
+    graph_store.rehash_low_table();
+
     sync_mmap();
     havoqgt::havoqgt_env()->world_comm().barrier();
 

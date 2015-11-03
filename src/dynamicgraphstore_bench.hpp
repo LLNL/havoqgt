@@ -170,12 +170,22 @@ void sync_mmap()
 #endif
 }
 
-void madvice(mapped_file_type& mapped_file)
+void mapped_file_madvice(mapped_file_type& mapped_file)
 {
   std::cout << "Call adise_dontneed" << std::endl;
   boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
   assert(false);
   /// assert(mapped_file.advise(advise));
+}
+
+void segment_manager_zero_free_memory(segment_manager_type& segment_manager, mapped_file_type& mapped_file)
+{
+    std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
+    segment_manager.zero_free_memory();
+    std::cout << "Call mapped_file.flush()" << std::endl;
+    mapped_file.flush();
+    std::cout << "Call sync" << std::endl;
+    sync_mmap();
 }
 
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP
