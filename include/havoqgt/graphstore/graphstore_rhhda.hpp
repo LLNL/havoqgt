@@ -73,6 +73,16 @@ class graphstore_rhhda
     rhh::shrink_to_fit(&m_mid_high_degree_table);
   }
 
+  void rehash_low_table()
+  {
+    m_low_degree_table->rehash();
+  }
+
+  void rehash_mid_high_table()
+  {
+    m_mid_high_degree_table->rehash();
+  }
+
   ///
   /// \brief insert_edge
   ///   inert a edge uniquely

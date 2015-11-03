@@ -491,6 +491,11 @@ class rhh_container {
     --m_num_elems;
   }
 
+  inline void rehash()
+  {
+    rehash_elements();
+  }
+
   /// --- Hash policy --- ///
   /// \brief load_factor
   /// \return

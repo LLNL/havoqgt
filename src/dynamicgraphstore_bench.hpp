@@ -142,24 +142,28 @@ void generate_insertion_requests(Edges_itr& edges_itr,
 
 void flush_dimmap()
 {
+  std::cout << "flush di-mmap" << std::endl;
   std::ofstream flusher("/sys/class/di-mmap-runtimeA/flush_buffer");
   flusher << "1" << std::endl;
 }
 
 void sync_dimmap()
 {
+  std::cout << "sync di-mmap" << std::endl;
   std::ofstream flusher("/proc/di-mmap-runtimeA-tuning");
   flusher << "mmap_sync_buffers" << std::endl;
 }
 
 void flush_mmmap(mapped_file_type& mapped_file)
 {
+  std::cout << "flush mmap" << std::endl;
   mapped_file.flush();
 }
 
 void sync_mmap()
 {
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500
+  std::cout << "sync mmap: sync(2)" << std::endl;
   sync();
 #else
 #warning sync(2) is not supported
