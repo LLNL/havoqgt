@@ -104,19 +104,9 @@ void parse_options(int argc, char **argv)
           std::cerr << fname << std::endl;
           HAVOQGT_ERROR_MSG("Unable to open a file");
         }
-        size_t num_files = 0;
         while (std::getline(fin, line)) {
-          ++num_files;
-        }
-        const size_t num_local_files = (num_files + mpi_size - 1) / mpi_size;
-        fin.close();
-        fin.open(fname);
-        size_t count = 0;
-        while (std::getline(fin, line)) {
-         if (num_local_files * mpi_rank <= count && count < num_local_files * (mpi_rank + 1)) {
-            fname_edge_list_.push_back(line);
-          }
-          ++count;
+          /// Note: parallel_edge_list_reader will assign files to multiple process
+          fname_edge_list_.push_back(line);
         }
         break;
       }
