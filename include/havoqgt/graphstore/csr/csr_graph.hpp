@@ -90,7 +90,7 @@ class csr_graph_container {
     std::cout << "finished:\t" << graphstore::utility::duration_time_sec(sa) << std::endl;
   }
 
-  typename adjlist_array_type::iterator adjacencylist(vertex_type& src)
+  typename adjlist_array_type::iterator adjacencylist(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
     const index_type s = m_index_array[src];
@@ -98,7 +98,7 @@ class csr_graph_container {
     return itr;
   }
 
-  typename adjlist_array_type::iterator adjacencylist_end(vertex_type& src)
+  typename adjlist_array_type::iterator adjacencylist_end(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
     const index_type s = m_index_array[src+1];

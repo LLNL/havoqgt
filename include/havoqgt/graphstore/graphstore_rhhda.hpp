@@ -24,7 +24,7 @@ template <typename vertex_id_type,
 class graphstore_rhhda
 {
  private:
-  using size_type = size_t;
+  using size_type                      = size_t;
   using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
   using low_degree_table_type          = rhh_container<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
   using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;

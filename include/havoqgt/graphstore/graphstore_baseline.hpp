@@ -11,48 +11,49 @@
 
 namespace graphstore {
 
-template <typename vertex_id_type,
+template <typename vertex_type,
           typename vertex_property_type,
           typename edge_property_type,
           typename segment_manager_type>
 class graphstore_baseline
 {
  private:
-  /// --- typenames --- ///
+
+  using size_type             = size_t;
   template <typename t1, typename t2>
-  using pair_type = graphstore::utility::packed_pair<t1, t2>;
+  using pair_type             = graphstore::utility::packed_pair<t1, t2>;
   using allocator_type        = boost::interprocess::allocator<void, segment_manager_type>;
 
 
   /// adjacency list
-  using edge_vec_element_type = typename pair_type<vertex_id_type, edge_property_type>;
+  using edge_vec_element_type = pair_type<vertex_type, edge_property_type>;
   using vec_allocator_type    = boost::interprocess::allocator<edge_vec_element_type, segment_manager_type>;
   using edge_vec_type         = boost::interprocess::vector<edge_vec_element_type, vec_allocator_type>;
 
   /// vertex table
-  using map_value_type        = typename pair_type<vertex_property_type, edge_vec_type>;
-  using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
+  using map_value_type        = pair_type<vertex_property_type, edge_vec_type>;
+  using map_element_type      = std::pair<const vertex_type, map_value_type>;
   using map_allocator_type    = boost::interprocess::allocator<map_element_type, segment_manager_type>;
-  using map_table_type        = boost::unordered_map<vertex_id_type,
+  using map_table_type        = boost::unordered_map<vertex_type,
                                                      map_value_type,
-                                                     boost::hash<vertex_id_type>,
-                                                     std::equal_to<vertex_id_type>,
+                                                     boost::hash<vertex_type>,
+                                                     std::equal_to<vertex_type>,
                                                      map_allocator_type>;
 
   enum : size_t {
-    kEmptyValue = std::numeric_limits<vertex_id_type>::max()
+    kEmptyValue = std::numeric_limits<vertex_type>::max()
   };
 
 
  public:
 
-  graphstore_baseline(segment_manager_type& segment_manager) :
+  explicit graphstore_baseline(segment_manager_type* segment_manager) :
     m_allocator(segment_manager),
     m_map_table(m_allocator)
   {}
 
 
-  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_property_type& edge_property)
+  bool insert_edge(const vertex_type& src, const vertex_type& trg, const edge_property_type& edge_property)
   {
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) { // new vertex
@@ -65,7 +66,7 @@ class graphstore_baseline
       edge_vec_element_type trg_edge(trg, edge_property);
       // --- find duplicated edge --- //
       for (const auto edge : edge_vec) {
-        if (edge ==  trg) {
+        if (edge.first ==  trg) {
           return false; /// found duplicated edge
         }
       }
@@ -78,25 +79,49 @@ class graphstore_baseline
         }
       }
 
-      /// --- since there is no empty spase, add at end --- ///
-      edge_vec.push_back(trg);
+      /// --- since there is no empty spase, add it at end --- ///
+      edge_vec.push_back(edge_vec_element_type(trg, edge_property));
     }
 
     return true;
   }
 
-  size_type erase_edge(vertex_id_type& src, vertex_id_type& trg)
+  size_type erase_edge(vertex_type& src, vertex_type& trg)
   {
   }
 
-  inline vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
+  inline vertex_property_type& vertex_meta_data(const vertex_type& vertex)
   {
     return m_map_table.find(vertex)->second.first;
   }
 
+  typename edge_vec_type::iterator adjacencylist(const vertex_type& src)
+  {
+    const auto itr = m_map_table.find(src);
+    edge_vec_type& edge_vec = itr->second.second;
+    return edge_vec.begin();
+  }
+
+  typename edge_vec_type::iterator adjacencylist_end(const vertex_type& src)
+  {
+    const auto itr = m_map_table.find(src);
+    edge_vec_type& edge_vec = itr->second.second;
+    return edge_vec.end();
+  }
+
+
   void clear()
   {
 
+  }
+
+  void print_status()
+  {
+
+  }
+
+  void fprint_all_elements(std::ofstream& of)
+  {
   }
 
   allocator_type m_allocator;

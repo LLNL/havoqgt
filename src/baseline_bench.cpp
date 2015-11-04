@@ -18,6 +18,7 @@
 #include <boost/interprocess/containers/set.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
+#include <havoqgt/graphstore/graphstore_baseline.hpp>
 
 #include "dynamicgraphstore_bench.hpp"
 
@@ -29,152 +30,13 @@ std::ofstream ofs_edges;
 #endif
 
 /// --- typenames --- ///
-using vertex_id_type         = uint64_t;
-
-/// adjacency list
+using vertex_id_type        = uint64_t;
 using edge_property_type    = unsigned char;
-using edge_vec_element_type = graphstore::utility::packed_pair<vertex_id_type, edge_property_type>;
-/// using edge_vec_element_type = std::pair<vertex_id_type, edge_property_type>;
-using vec_allocator_type    = boost::interprocess::allocator<edge_vec_element_type, segment_manager_type>;
-using edge_vec_type         = boost::interprocess::vector<edge_vec_element_type, vec_allocator_type>;
-
-/// vertex table
 using vertex_property_type  = bool;
-using map_value_type        = graphstore::utility::packed_pair<vertex_property_type, edge_vec_type>;
-using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
-// using map_value_type        = std::pair<vertex_property_type, edge_vec_type>;
-// using map_element_type      = std::pair<const vertex_id_type, map_value_type>;
-using map_allocator_type    = boost::interprocess::allocator<map_element_type, segment_manager_type>;
-using graphstore_type       = boost::unordered_map<vertex_id_type,
-                                                   map_value_type,
-                                                   boost::hash<vertex_id_type>,
-                                                   std::equal_to<vertex_id_type>,
-                                                   map_allocator_type>;
-
-enum : size_t {
-  kEmptyValue = std::numeric_limits<vertex_id_type>::max()
-};
-
-template <typename Edges, typename allocator_type>
-void apply_edges_update_requests(mapped_file_type& mapped_file,
-                                 segment_manager_type *const segment_manager,
-                                 graphstore_type& graphstore,
-                                 allocator_type& allocator,
-                                 Edges& edges,
-                                 const size_t chunk_size,
-                                 int edges_delete_ratio)
-{
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
-  if (mpi_rank == 0) print_usages(segment_manager);
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
-
-  size_t count_inserted = 0;
-  size_t count_delete = 0;
-  uint64_t loop_cnt = 0;
-
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  bool global_is_finished = false;
-
-  while (!global_is_finished) {
-    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
-
-    update_request_vec.clear();
-    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-    uint64_t count_inserted = 0;
-    uint64_t count_duplicated = 0;
-    unsigned char dummy_weight = 0;
-
-    const double time_start = MPI_Wtime();
-    for (auto request : update_request_vec) {
-      auto edge = request.edge;
-      if (request.is_delete) {
-        assert(false);
-      } else {
-
-        auto value = graphstore.find(edge.first);
-        if (value == graphstore.end()) { // new vertex
-          const vertex_property_type vp = false;
-          map_value_type map_value(vp,
-                                   edge_vec_type(1, edge_vec_element_type(edge.second, dummy_weight), allocator));
-          graphstore.insert(map_element_type(edge.first, map_value));
-          ++count_inserted;
-        } else {
-          edge_vec_type& edge_vec = value->second.second;
-          edge_vec_element_type trg_edge(edge.second, dummy_weight);
-          // -- find duplicated edge --- //
-          for (const auto e : edge_vec) {
-            if (e ==  trg_edge) {
-              ++count_duplicated;
-              continue;
-            }
-          }
-          /// -- find blank space and insert it into there if found -- ///
-          for (auto e : edge_vec) {
-            if (e.first == kEmptyValue) {
-              e.first = edge.second;
-              e.second = dummy_weight;
-              ++count_inserted;
-              continue;
-            }
-          }
-          edge_vec.push_back(trg_edge);
-          ++count_inserted;
-        }
-      }
-    }
-
-    sync_mmap();
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-    const double time_end = MPI_Wtime();
-
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << time_end - time_start << std::endl;
-    if (mpi_rank == 0) std::cout << "ins =\t" << count_inserted << std::endl;
-    if (mpi_rank == 0) std::cout << "dup =\t" << count_duplicated << std::endl;
-    if (mpi_rank == 0) print_usages(segment_manager);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-#if VERBOSE
-    for (int i = 0; i < mpi_size; ++i) {
-      if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "]" << std::endl;
-        graph_store.print_status();
-      }
-      havoqgt::havoqgt_env()->world_comm().barrier();
-    }
-#endif
-
-    ++loop_cnt;
-
-    const bool local_is_finished = (edges_itr == edges_itr_end);
-    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  if (mpi_rank == 0) {
-    std::cout << "\n-- All edge updations done --" << std::endl;
-    print_usages(segment_manager);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
-      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
-    }
-  }
-
-}
-
+using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
+                                                              vertex_property_type,
+                                                              edge_property_type,
+                                                              segment_manager_type>;
 
 /// --- option variables --- ///
 uint64_t vertex_scale_               = 18;
@@ -334,8 +196,7 @@ int main(int argc, char** argv)
 
 
     std::cout << "Allocate graphstore baseline" << std::endl;
-    boost::interprocess::allocator<void, segment_manager_type> allocator(segment_manager);
-    graphstore_type graph_store(allocator);
+    graphstore_type graph_store(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     if (mpi_rank == 0) {
@@ -346,13 +207,12 @@ int main(int argc, char** argv)
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
         vertex_scale_, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
-      apply_edges_update_requests(mapped_file,
-                                  segment_manager,
-                                  graph_store,
-                                  allocator,
-                                  rmat,
-                                  static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
-                                  edges_delete_ratio_);
+      apply_edge_update_requests<vertex_id_type>(mapped_file,
+                                                 segment_manager,
+                                                 graph_store,
+                                                 rmat,
+                                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
+                                                 edges_delete_ratio_);
     } else {
       const double time_start = MPI_Wtime();
       havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
@@ -360,13 +220,11 @@ int main(int argc, char** argv)
       if (mpi_rank == 0) {
         std::cout << "TIME: Initializing a edge list reader (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
       }
-      apply_edges_update_requests(mapped_file,
-                                  segment_manager,
-                                  graph_store,
-                                  allocator,
-                                  edgelist,
-                                  static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
-                                  edges_delete_ratio_);
+      apply_edge_update_requests<vertex_id_type>(mapped_file,
+                                                 segment_manager,
+                                                 graph_store,
+                                                 edgelist, static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
+                                                 edges_delete_ratio_);
     }
 
 

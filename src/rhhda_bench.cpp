@@ -5,123 +5,25 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-#define VERBOSE 0
-
-#define DEBUG_MODE 0
-#if DEBUG_MODE
-std::ofstream ofs_edges;
-#endif
-
 enum : size_t {
   midle_high_degree_threshold = 1
 };
 
 using vertex_id_type = uint64_t;
-using vertex_meta_data_type = unsigned char;
-using edge_weight_type = unsigned char;
+using vertex_property_data_type = unsigned char;
+using edge_property_type = unsigned char;
 using graphstore_type  = graphstore::graphstore_rhhda<vertex_id_type,
-                                                      vertex_meta_data_type,
-                                                      edge_weight_type,
+                                                      vertex_property_data_type,
+                                                      edge_property_type,
                                                       segment_manager_type,
                                                       midle_high_degree_threshold>;
-
-template <typename Edges>
-void apply_edge_update_requests(mapped_file_type& mapped_file,
-                                segment_manager_type *const segment_manager,
-                                graphstore_type& graph_store,
-                                Edges& edges,
-                                const uint64_t chunk_size,
-                                const uint64_t edges_delete_ratio)
-{
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
-
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
-  if (mpi_rank == 0) print_usages(segment_manager);
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  uint64_t loop_cnt = 0;
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  bool global_is_finished = false;
-  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
-
-  size_t count_inserted = 0;
-  size_t count_delete = 0;
-
-  while (!global_is_finished) {
-    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
-
-    update_request_vec.clear();
-    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-    const double time_start = MPI_Wtime();
-    unsigned char dummy = 0;
-    for (auto request : update_request_vec) {
-      auto edge = request.edge;
-      if (request.is_delete) {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 1" << "\n";
-#endif
-        count_delete += graph_store.erase_edge(edge.first, edge.second);
-      } else {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 0" << "\n";
-#endif
-        count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
-      }
-    }
-//    std::cout << "shrink to fit low table" << std::endl;
-//    graph_store.shrink_to_fit_low_table();
-
-    std::cout << "rehash low table" << std::endl;
-    graph_store.rehash_low_table();
-
-    sync_mmap();
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-    const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
-    if (mpi_rank == 0) print_usages(segment_manager);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-#if VERBOSE
-    for (int i = 0; i < mpi_size; ++i) {
-      if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "]" << std::endl;
-        graph_store.print_status();
-      }
-      havoqgt::havoqgt_env()->world_comm().barrier();
-    }
-#endif
-
-    ++loop_cnt;
-
-    const bool local_is_finished = (edges_itr == edges_itr_end);
-    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  if (mpi_rank == 0) {
-    std::cout << "\n-- All edge updations done --" << std::endl;
-    print_usages(segment_manager);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
-      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
-    }
-  }
-
-}
 
 
 /// --- option variables --- ///
 uint64_t vertex_scale_               = 18;
 uint64_t edge_factor_                = 16;
 uint64_t segmentfile_init_size_log2_ = 30;
-bool     is_delete_segment_file_on_exit_on_exit_     = false;
+bool is_delete_segment_file_on_exit_on_exit_  = false;
 uint64_t chunk_size_log10_           = 6;
 int edges_delete_ratio_              = 0;
 std::string fname_segmentfile_;
@@ -287,12 +189,12 @@ int main(int argc, char** argv) {
       havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
         vertex_scale_, num_edges_per_rank,
         0.57, 0.19, 0.19, 0.05, true, false);
-      apply_edge_update_requests(mapped_file,
-                                 segment_manager,
-                                 graph_store,
-                                 rmat,
-                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
-                                 edges_delete_ratio_);
+      apply_edge_update_requests<vertex_id_type>(mapped_file,
+                                                 segment_manager,
+                                                 graph_store,
+                                                 rmat,
+                                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
+                                                 edges_delete_ratio_);
     } else {
       const double time_start = MPI_Wtime();
       havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
@@ -301,12 +203,12 @@ int main(int argc, char** argv) {
         std::cout << "TIME: Initializing a edge list reader (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
       }
 
-      apply_edge_update_requests(mapped_file,
-                                 segment_manager,
-                                 graph_store,
-                                 edgelist,
-                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
-                                 edges_delete_ratio_);
+      apply_edge_update_requests<vertex_id_type>(mapped_file,
+                                                 segment_manager,
+                                                 graph_store,
+                                                 edgelist,
+                                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
+                                                 edges_delete_ratio_);
     }
 
 

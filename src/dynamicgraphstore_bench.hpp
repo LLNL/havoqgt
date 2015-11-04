@@ -29,7 +29,14 @@
 #include <havoqgt/graphstore/rhh/rhh_common.hpp>
 
 #include <havoqgt/graphstore/graphstore_rhhda.hpp>
+#include <havoqgt/graphstore/graphstore_baseline.hpp>
 
+#define VERBOSE 0
+
+#define DEBUG_MODE 0
+#if DEBUG_MODE
+std::ofstream ofs_edges;
+#endif
 
 #define SORT_BY_CHUNK 0
 
@@ -113,9 +120,9 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
   return (MPI_Wtime() - time_start1);
 }
 
-template <typename Edges_itr, typename vertex_id_type>
-void generate_insertion_requests(Edges_itr& edges_itr,
-                                 Edges_itr& edges_itr_last,
+template <typename edgelist_itr_type, typename vertex_id_type>
+void generate_insertion_requests(edgelist_itr_type& edgelist_itr,
+                                 edgelist_itr_type& edgelist_itr_last,
                                  const size_t chunk_size,
                                  request_vector_type<vertex_id_type>& requests,
                                  const size_t delete_ratio)
@@ -126,9 +133,9 @@ void generate_insertion_requests(Edges_itr& edges_itr,
   requests.reserve(chunk_size);
 
   const double time_start = MPI_Wtime();
-  for (size_t cnt = 0; edges_itr != edges_itr_last && cnt < chunk_size; ++edges_itr, ++cnt) {
+  for (size_t cnt = 0; edgelist_itr != edgelist_itr_last && cnt < chunk_size; ++edgelist_itr, ++cnt) {
     const bool is_delete = (rand() % 100 < delete_ratio);
-    EdgeUpdateRequest<vertex_id_type> request(*edges_itr, is_delete);
+    EdgeUpdateRequest<vertex_id_type> request(*edgelist_itr, is_delete);
     requests.push_back(request);
     // std::cerr << edges_itr->first << " " << edges_itr->second << "\n";
   }
@@ -189,6 +196,103 @@ void segment_manager_zero_free_memory(segment_manager_type& segment_manager, map
     std::cout << "Call sync" << std::endl;
     sync_mmap();
 }
+
+
+
+
+
+template <typename vertex_id_type, typename graphstore_type, typename edgelist_type>
+void apply_edge_update_requests(mapped_file_type& mapped_file,
+                                segment_manager_type *const segment_manager,
+                                graphstore_type& graph_store,
+                                edgelist_type& edges,
+                                const uint64_t chunk_size,
+                                const uint64_t edges_delete_ratio)
+{
+  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
+  if (mpi_rank == 0) print_usages(segment_manager);
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  uint64_t loop_cnt = 0;
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+  bool global_is_finished = false;
+  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
+
+  size_t count_inserted = 0;
+  size_t count_delete = 0;
+
+  while (!global_is_finished) {
+    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+
+    update_request_vec.clear();
+    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    const double time_start = MPI_Wtime();
+    unsigned char dummy = 0;
+    for (auto request : update_request_vec) {
+      auto edge = request.edge;
+      if (request.is_delete) {
+#if DEBUG_MODE
+        ofs_edges << edge.first << " " << edge.second << " 1" << "\n";
+#endif
+        count_delete += graph_store.erase_edge(edge.first, edge.second);
+      } else {
+#if DEBUG_MODE
+        ofs_edges << edge.first << " " << edge.second << " 0" << "\n";
+#endif
+        count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
+      }
+    }
+//    std::cout << "shrink to fit low table" << std::endl;
+//    graph_store.shrink_to_fit_low_table();
+
+//    std::cout << "rehash low table" << std::endl;
+//    graph_store.opt();
+
+    sync_mmap();
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    const double time_end = MPI_Wtime();
+    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
+    if (mpi_rank == 0) print_usages(segment_manager);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+#if VERBOSE
+    for (int i = 0; i < mpi_size; ++i) {
+      if (i == mpi_rank) {
+        std::cout << "[" << mpi_rank << "]" << std::endl;
+        graph_store.print_status();
+      }
+      havoqgt::havoqgt_env()->world_comm().barrier();
+    }
+#endif
+
+    ++loop_cnt;
+
+    const bool local_is_finished = (edges_itr == edges_itr_end);
+    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  if (mpi_rank == 0) {
+    std::cout << "\n-- All edge updations done --" << std::endl;
+    print_usages(segment_manager);
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
+      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
+    }
+  }
+
+}
+
+
 
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP
 
