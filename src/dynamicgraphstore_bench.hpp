@@ -12,7 +12,9 @@
 #include <functional>
 
 #ifdef __linux__
+#ifndef _GNU_SOURCE
   #define _GNU_SOURCE
+#endif
   #include <fcntl.h>
 #endif
 

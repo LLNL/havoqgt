@@ -54,6 +54,10 @@ using graphstore_type       = boost::unordered_map<vertex_type,
                                                    std::equal_to<vertex_type>,
                                                    map_allocator_type>;
 
+enum : size_t {
+  kEmptyValue = std::numeric_limits<vertex_type>::max()
+};
+
 /// --- global variables --- ///
 vertex_type max_vertex_id_ = 0;
 size_t num_edges_ = 0;
@@ -105,9 +109,21 @@ void constract_graph(mapped_file_type& mapped_file,
       } else {
         edge_vec_type& edge_vec = value->second.second;
         edge_vec_element_type trg_edge(edge.second, dummy_weight);
-        if (boost::find<edge_vec_type>(edge_vec, trg_edge) != edge_vec.end() ) {
-          ++count_duplicated;
-          continue;
+        // -- find duplicated edge --- //
+        for (const auto e : edge_vec) {
+          if (e ==  trg_edge) {
+            ++count_duplicated;
+            continue;
+          }
+        }
+        /// -- find blank space and insert it into there if found -- ///
+        for (auto e : edge_vec) {
+          if (e.first == kEmptyValue) {
+            e.first = edge.second;
+            e.second = dummy_weight;
+            ++count_inserted;
+            continue;
+          }
         }
         edge_vec.push_back(trg_edge);
         ++count_inserted;
