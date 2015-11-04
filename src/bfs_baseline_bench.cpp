@@ -70,7 +70,8 @@ void constract_graph(mapped_file_type& mapped_file,
                      edges_type& edges, const size_t chunk_size)
 {
   std::cout << "-- Disp status of before generation --" << std::endl;
-  print_usages(segment_manager);
+  std::cout << "segment size (GB); " << get_segment_size(segment_manager) << std::endl;
+  print_system_mem_usages();
 
   request_vector_type<vertex_type> update_request_vec = request_vector_type<vertex_type>();
 
@@ -146,7 +147,8 @@ void constract_graph(mapped_file_type& mapped_file,
   std::cout << "depulicated edges : " << count_duplicated << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
-  print_usages(segment_manager);
+  std::cout << "segment size (GB); " << get_segment_size(segment_manager) << std::endl;
+  print_system_mem_usages();
 
 }
 
@@ -301,7 +303,7 @@ int main(int argc, char** argv)
   /// --- Get a segument manager --- ///
   std::cout << "\n<Get a segment manager>" << std::endl;
   segment_manager_type* segment_manager = mapped_file.get_segment_manager();
-  print_usages(segment_manager);
+  print_system_mem_usages();
 
 
   /// --- Allocate graphstore_rhh_matrix --- ///

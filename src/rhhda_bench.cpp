@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
 
     /// --- create a segument --- ///
     segment_manager_type* segment_manager = mapped_file.get_segment_manager();
-    if (mpi_rank == 0) print_usages(segment_manager);
+    if (mpi_rank == 0) print_system_mem_usages();
     havoqgt::havoqgt_env()->world_comm().barrier();
 
 

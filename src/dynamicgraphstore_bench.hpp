@@ -66,33 +66,36 @@ template<typename vertex_id_type>
 using request_vector_type = std::vector<EdgeUpdateRequest<vertex_id_type>>;
 
 
-void print_usages(segment_manager_type *const segment_manager)
+double get_segment_size(segment_manager_type *const segment_manager)
 {
   const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  std::cout << "Usage: segment size (GiB) =\t"<< static_cast<double>(usages) / (1ULL << 30) << "\n";
-  std::cout << "----------------------------" << std::endl;
+  return static_cast<double>(usages) / (1ULL << 30);
+}
+
+void print_system_mem_usages()
+{
   size_t mem_unit, totalram, freeram, usedram, bufferram, totalswap, freeswap;
   if (graphstore::utility::get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
-    std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
-    std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
+//    std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
     std::cout << "Usage: freeram(GiB):\t" << static_cast<double>(freeram) / (1<<30ULL) << "\n";
     std::cout << "Usage: usedram(GiB):\t" << static_cast<double>(usedram) / (1<<30ULL) << "\n";
-    std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
-    std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
-    std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
-    std::cout << "----------------------------" << std::endl;
+//    std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
+//    std::cout << "----------------------------" << std::endl;
   }
-  size_t size, resident, share, text, lib, data, dt;
-  if (graphstore::utility::get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
-    std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
-    std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
-    std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
-    std::cout << "Usage: text(GiB):\t" << static_cast<double>(text) / (1<<30ULL) << "\n";
-    std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
-    std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
-    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
-    std::cout << "----------------------------" << std::endl;
-  }
+//  size_t size, resident, share, text, lib, data, dt;
+//  if (graphstore::utility::get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
+//    std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: text(GiB):\t" << static_cast<double>(text) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
+//    std::cout << "----------------------------" << std::endl;
+//  }
 }
 
 
@@ -121,7 +124,7 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
 }
 
 template <typename edgelist_itr_type, typename vertex_id_type>
-void generate_insertion_requests(edgelist_itr_type& edgelist_itr,
+vertex_id_type generate_insertion_requests(edgelist_itr_type& edgelist_itr,
                                  edgelist_itr_type& edgelist_itr_last,
                                  const size_t chunk_size,
                                  request_vector_type<vertex_id_type>& requests,
@@ -132,12 +135,14 @@ void generate_insertion_requests(edgelist_itr_type& edgelist_itr,
   assert(requests.size() == 0);
   requests.reserve(chunk_size);
 
+  vertex_id_type max_vertex_id = 0;
   const double time_start = MPI_Wtime();
   for (size_t cnt = 0; edgelist_itr != edgelist_itr_last && cnt < chunk_size; ++edgelist_itr, ++cnt) {
     const bool is_delete = (rand() % 100 < delete_ratio);
     EdgeUpdateRequest<vertex_id_type> request(*edgelist_itr, is_delete);
     requests.push_back(request);
-    // std::cerr << edges_itr->first << " " << edges_itr->second << "\n";
+    max_vertex_id = std::max(max_vertex_id, edgelist_itr->first);
+    max_vertex_id = std::max(max_vertex_id, edgelist_itr->second);
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
   if (mpi_rank == 0) std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
@@ -147,6 +152,8 @@ void generate_insertion_requests(edgelist_itr_type& edgelist_itr,
   havoqgt::havoqgt_env()->world_comm().barrier();
   if (mpi_rank == 0) std::cout << "TIME: Sorting chunk (sec.) =\t" << elapsed_time << std::endl;
  #endif
+
+  return max_vertex_id;
 }
 
 void flush_dimmap()
@@ -214,25 +221,33 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   havoqgt::havoqgt_env()->world_comm().barrier();
 
   if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
-  if (mpi_rank == 0) print_usages(segment_manager);
+  if (mpi_rank == 0) print_system_mem_usages();
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+    }
+  }
   havoqgt::havoqgt_env()->world_comm().barrier();
 
   uint64_t loop_cnt = 0;
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  bool global_is_finished = false;
-  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
-
   size_t count_inserted = 0;
   size_t count_delete = 0;
+  bool global_is_finished = false;
+
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
 
   while (!global_is_finished) {
     if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
+    /// --- generate edges --- ///
     update_request_vec.clear();
     generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
+    /// --- update edges --- ///
     const double time_start = MPI_Wtime();
     unsigned char dummy = 0;
     for (auto request : update_request_vec) {
@@ -249,19 +264,25 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
-//    std::cout << "shrink to fit low table" << std::endl;
-//    graph_store.shrink_to_fit_low_table();
 
-//    std::cout << "rehash low table" << std::endl;
-//    graph_store.opt();
+    /// --- sync --- ///
+    const double time_start_sync = MPI_Wtime();
+    if (mpi_rank == 0) sync_mmap();
 
-    sync_mmap();
-    havoqgt::havoqgt_env()->world_comm().barrier();
 
+    /// --- print status --- ///
     const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
-    if (mpi_rank == 0) print_usages(segment_manager);
     havoqgt::havoqgt_env()->world_comm().barrier();
+    for (int i = 0; i < mpi_size; ++i) {
+      if (i == mpi_rank) {
+        std::cout << "[" << mpi_rank << "] TIME: sync time (sec.) =\t" << (time_end - time_start_sync) << std::endl;
+        std::cout << "[" << mpi_rank << "] TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
+        std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+      }
+    }
+    havoqgt::havoqgt_env()->world_comm().barrier();
+    if (mpi_rank == 0) print_system_mem_usages();
+
 #if VERBOSE
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
@@ -274,21 +295,27 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
 
     ++loop_cnt;
 
+    /// --- Has everyone finished ? --- ///
     const bool local_is_finished = (edges_itr == edges_itr_end);
     MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
-  if (mpi_rank == 0) {
-    std::cout << "\n-- All edge updations done --" << std::endl;
-    print_usages(segment_manager);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  /// --- print summary information --- ///
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
       std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
       std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
     }
   }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  if (mpi_rank == 0) {
+    std::cout << "\n-- All edge updations done --" << std::endl;
+    print_system_mem_usages();
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
 
 }
 
