@@ -4,7 +4,7 @@
 #include <boost/unordered_map.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/interprocess/managed_mapped_file.hpp>
+
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
@@ -109,6 +109,11 @@ class graphstore_baseline
     return edge_vec.end();
   }
 
+
+  void opt()
+  {
+
+  }
 
   void clear()
   {

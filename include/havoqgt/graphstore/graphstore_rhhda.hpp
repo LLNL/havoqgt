@@ -9,6 +9,7 @@
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
+
 #include <havoqgt/graphstore/rhh/rhh_utilities.h>
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
@@ -61,6 +62,11 @@ class graphstore_rhhda
     rhh::destroy_allocator<typename low_degree_table_type::allocator>();
     rhh::destroy_allocator<typename mid_high_edge_chunk_type::allocator>();
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
+  }
+
+  void opt()
+  {
+    rehash_low_table();
   }
 
   void shrink_to_fit_low_table()

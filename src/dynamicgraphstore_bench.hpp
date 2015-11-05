@@ -26,10 +26,7 @@
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
-#include <havoqgt/graphstore/rhh/rhh_common.hpp>
 
-#include <havoqgt/graphstore/graphstore_rhhda.hpp>
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
 
 #define VERBOSE 0
 
@@ -48,11 +45,13 @@ using segment_manager_type = boost::interprocess::managed_mapped_file::segment_m
 template<typename vertex_id_type>
 struct EdgeUpdateRequest
 {
-  EdgeUpdateRequest(std::pair<vertex_id_type, vertex_id_type> _edge, bool _is_delete)
-  {
-    edge = _edge;
-    is_delete = _is_delete;
-  }
+  EdgeUpdateRequest()
+  { }
+
+  EdgeUpdateRequest(const std::pair<vertex_id_type, vertex_id_type>& _edge, const bool _is_delete) :
+    edge(_edge),
+    is_delete(_is_delete)
+  { }
 
   std::pair<vertex_id_type, vertex_id_type> edge;
   bool is_delete;
@@ -124,36 +123,40 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
 }
 
 template <typename edgelist_itr_type, typename vertex_id_type>
-vertex_id_type generate_insertion_requests(edgelist_itr_type& edgelist_itr,
-                                 edgelist_itr_type& edgelist_itr_last,
-                                 const size_t chunk_size,
-                                 request_vector_type<vertex_id_type>& requests,
-                                 const size_t delete_ratio)
+std::pair<vertex_id_type, size_t> generate_insertion_requests(edgelist_itr_type& edgelist_itr,
+                                                              edgelist_itr_type& edgelist_itr_last,
+                                                              request_vector_type<vertex_id_type>& requests)
 {
   const int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
 
-  assert(requests.size() == 0);
-  requests.reserve(chunk_size);
-
   vertex_id_type max_vertex_id = 0;
+  size_t cnt = 0;
   const double time_start = MPI_Wtime();
-  for (size_t cnt = 0; edgelist_itr != edgelist_itr_last && cnt < chunk_size; ++edgelist_itr, ++cnt) {
-    const bool is_delete = (rand() % 100 < delete_ratio);
+  while (edgelist_itr != edgelist_itr_last) {
+    const bool is_delete = false;
     EdgeUpdateRequest<vertex_id_type> request(*edgelist_itr, is_delete);
-    requests.push_back(request);
+    requests[cnt] = request;
     max_vertex_id = std::max(max_vertex_id, edgelist_itr->first);
     max_vertex_id = std::max(max_vertex_id, edgelist_itr->second);
+    ++edgelist_itr;
+    ++cnt;
+    if (requests.capacity() <= cnt) break;
   }
+  requests.resize(cnt);
   havoqgt::havoqgt_env()->world_comm().barrier();
+
   if (mpi_rank == 0) std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
   std::cout << mpi_rank << ": Status: # generated insetion requests =\t"<< requests.size() << std::endl;
+
 #if SORT_BY_CHUNK
   const double elapsed_time = sort_requests(requests);
   havoqgt::havoqgt_env()->world_comm().barrier();
   if (mpi_rank == 0) std::cout << "TIME: Sorting chunk (sec.) =\t" << elapsed_time << std::endl;
  #endif
 
-  return max_vertex_id;
+  return std::make_pair(max_vertex_id, cnt);
 }
 
 void flush_dimmap()
@@ -194,6 +197,7 @@ void mapped_file_madvice(mapped_file_type& mapped_file)
   /// assert(mapped_file.advise(advise));
 }
 
+
 void segment_manager_zero_free_memory(segment_manager_type& segment_manager, mapped_file_type& mapped_file)
 {
     std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
@@ -203,9 +207,6 @@ void segment_manager_zero_free_memory(segment_manager_type& segment_manager, map
     std::cout << "Call sync" << std::endl;
     sync_mmap();
 }
-
-
-
 
 
 template <typename vertex_id_type, typename graphstore_type, typename edgelist_type>
@@ -237,14 +238,14 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
 
   auto edges_itr = edges.begin();
   auto edges_itr_end = edges.end();
-  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
+  request_vector_type<vertex_id_type> update_request_vec;
+  update_request_vec.reserve(chunk_size);
 
   while (!global_is_finished) {
     if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     /// --- generate edges --- ///
-    update_request_vec.clear();
-    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, edges_delete_ratio);
+    generate_insertion_requests(edges_itr, edges_itr_end, update_request_vec);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     /// --- update edges --- ///
@@ -264,6 +265,9 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
       }
     }
+
+    /// this is a temp implementation
+    graph_store.opt();
 
     /// --- sync --- ///
     const double time_start_sync = MPI_Wtime();

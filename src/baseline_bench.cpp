@@ -3,13 +3,9 @@
  * LLNL / TokyoTech
  */
 
+#include <iostream>
+#include <fstream>
 
-#include <boost/unordered_set.hpp>
-#include <boost/unordered_map.hpp>
-#include <boost/container/map.hpp>
-#include <boost/range/algorithm.hpp>
-
-#include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 #include <boost/interprocess/containers/map.hpp>
@@ -123,7 +119,7 @@ int main(int argc, char** argv)
     int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
-    havoqgt::havoqgt_env()->world_comm().size();
+    havoqgt::havoqgt_env()->world_comm().barrier();
 
     parse_options(argc, argv);
     uint64_t num_vertices = (1ULL << vertex_scale_);

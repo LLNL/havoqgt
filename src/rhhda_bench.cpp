@@ -3,7 +3,12 @@
  * LLNL / TokyoTech
  */
 
+#include <iostream>
+#include <fstream>
+
+/// must include the files below with this order ??
 #include "dynamicgraphstore_bench.hpp"
+#include <havoqgt/graphstore/graphstore_rhhda.hpp>
 
 enum : size_t {
   midle_high_degree_threshold = 1
@@ -104,7 +109,7 @@ int main(int argc, char** argv) {
     int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
-    havoqgt::havoqgt_env()->world_comm().size();
+    havoqgt::havoqgt_env()->world_comm().barrier();
 
     parse_options(argc, argv);
     uint64_t num_vertices = (1ULL << vertex_scale_);

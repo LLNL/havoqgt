@@ -64,22 +64,21 @@ void constract_graph(mapped_file_type& mapped_file,
   std::cout << "segment size (GB); " << get_segment_size(segment_manager) << std::endl;
   print_system_mem_usages();
 
-  request_vector_type<vertex_type> update_request_vec = request_vector_type<vertex_type>();
 
   size_t count_inserted = 0;
-
-  double construction_time = 0;
   size_t loop_cnt = 0;
+  double construction_time = 0;
 
   auto edges_itr = edges.begin();
   auto edges_itr_end = edges.end();
+  request_vector_type<vertex_type> update_request_vec = request_vector_type<vertex_type>();
+  update_request_vec.reserve(chunk_size);
 
   auto global_start = graphstore::utility::duration_time();
   while (edges_itr != edges_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
-    update_request_vec.clear();
-    generate_insertion_requests(edges_itr, edges_itr_end, chunk_size, update_request_vec, 0);
+    generate_insertion_requests(edges_itr, edges_itr_end, update_request_vec);
 
     unsigned char dummy_weight = 0;
     auto local_start = graphstore::utility::duration_time();
