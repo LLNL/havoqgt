@@ -14,8 +14,8 @@
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_common.hpp>
-#include <havoqgt/graphstore/rhh/rhh_utilities.h>
-#include <havoqgt/graphstore/rhh/rhh_element_base.h>
+#include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
+#include <havoqgt/graphstore/rhh/rhh_element_base.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
 /// #define RHH_DETAILED_ANALYSYS

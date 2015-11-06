@@ -3,8 +3,8 @@
 
 #include <boost/unordered_map.hpp>
 #include <boost/interprocess/containers/vector.hpp>
+#include <boost/range/algorithm/find.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
-
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
@@ -40,11 +40,6 @@ class graphstore_baseline
                                                      std::equal_to<vertex_type>,
                                                      map_allocator_type>;
 
-  enum : size_t {
-    kEmptyValue = std::numeric_limits<vertex_type>::max()
-  };
-
-
  public:
 
   explicit graphstore_baseline(segment_manager_type* segment_manager) :
@@ -63,19 +58,11 @@ class graphstore_baseline
       m_map_table.insert(map_element_type(src, map_value));
     } else {
       edge_vec_type& edge_vec = value->second.second;
-      edge_vec_element_type trg_edge(trg, edge_property);
-      // --- find duplicated edge --- //
+
+      /// --- find duplicated edge --- ///
       for (const auto edge : edge_vec) {
         if (edge.first ==  trg) {
           return false; /// found duplicated edge
-        }
-      }
-      /// --- find blank space and insert it into there if found --- ///
-      for (auto edge : edge_vec) {
-        if (edge.first == kEmptyValue) {
-          edge.first = trg;
-          edge.second = edge_property;
-          return true;
         }
       }
 
@@ -88,6 +75,25 @@ class graphstore_baseline
 
   size_type erase_edge(vertex_type& src, vertex_type& trg)
   {
+    auto value = m_map_table.find(src);
+    if (value == m_map_table.end()) {
+      return 0;
+    }
+
+    size_t count = 0;
+    edge_vec_type& edge_vec = value->second.second;
+    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
+      if (itr->first ==  trg) {
+        edge_vec.erase(itr, itr+1);
+        ++count;
+      }
+    }
+
+    if (edge_vec.size() == 0) {
+      m_map_table.erase(value);
+    }
+
+    return count;
   }
 
   inline vertex_property_type& vertex_meta_data(const vertex_type& vertex)
@@ -120,7 +126,7 @@ class graphstore_baseline
 
   }
 
-  void print_status()
+  void print_status(const int level) const
   {
 
   }

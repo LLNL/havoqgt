@@ -9,7 +9,7 @@
 #include <havoqgt/detail/hash.hpp>
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_common.hpp>
-#include <havoqgt/graphstore/rhh/rhh_utilities.h>
+#include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
 
 namespace graphstore {
 namespace rhh {

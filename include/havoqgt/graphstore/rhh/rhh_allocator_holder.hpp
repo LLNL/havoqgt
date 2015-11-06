@@ -146,25 +146,25 @@ public:
 
 private:
   static constexpr size_t num_elements[20] = {
-    1ULL,
-    2ULL,
-    4ULL,
-    8ULL,
-    16ULL,
-    32ULL,
-    64ULL,
-    128ULL,
-    256ULL,
-    512ULL,
-    1024ULL,
-    2048ULL,
-    4096ULL,
-    8192ULL,
-    16384ULL,
-    32768ULL,
-    65536ULL,
-    131072ULL,
-    262144ULL
+    1ULL << 0,
+    1ULL << 1,
+    1ULL << 2,
+    1ULL << 3,
+    1ULL << 4,
+    1ULL << 5,
+    1ULL << 6,
+    1ULL << 7,
+    1ULL << 8,
+    1ULL << 9,
+    1ULL << 10,
+    1ULL << 11,
+    1ULL << 12,
+    1ULL << 13,
+    1ULL << 14,
+    1ULL << 15,
+    1ULL << 16,
+    1ULL << 17,
+    1ULL << 18
   };
 
   ///
@@ -181,7 +181,9 @@ private:
 };
 
 
-
+///
+/// \brief The allocator_holder_sglt class
+///  singleton pattern
 template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder_sglt
 {
@@ -286,7 +288,7 @@ void destroy_allocator()
 
 ///
 /// \brief The allocator_holder class
-///   Note that not using
+///  not using now
 template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder
 {

@@ -27,8 +27,7 @@
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/graphstore_common.hpp>
 
-
-#define VERBOSE 0
+#define VERBOSE 1
 
 #define DEBUG_MODE 0
 #if DEBUG_MODE
@@ -123,7 +122,7 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
 }
 
 template <typename edgelist_itr_type, typename vertex_id_type>
-std::pair<vertex_id_type, size_t> generate_insertion_requests(edgelist_itr_type& edgelist_itr,
+std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& edgelist_itr,
                                                               edgelist_itr_type& edgelist_itr_last,
                                                               request_vector_type<vertex_id_type>& requests)
 {
@@ -231,11 +230,13 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
 
+  /// --- variables for analysys --- //
   uint64_t loop_cnt = 0;
   size_t count_inserted = 0;
   size_t count_delete = 0;
   bool global_is_finished = false;
 
+  /// --- iterator and array for edgelist --- ///
   auto edges_itr = edges.begin();
   auto edges_itr_end = edges.end();
   request_vector_type<vertex_id_type> update_request_vec;
@@ -245,7 +246,7 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     /// --- generate edges --- ///
-    generate_insertion_requests(edges_itr, edges_itr_end, update_request_vec);
+    generate_update_requests(edges_itr, edges_itr_end, update_request_vec);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     /// --- update edges --- ///
@@ -291,7 +292,7 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
         std::cout << "[" << mpi_rank << "]" << std::endl;
-        graph_store.print_status();
+        graph_store.print_status(0);
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
     }

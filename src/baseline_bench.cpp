@@ -18,8 +18,6 @@
 
 #include "dynamicgraphstore_bench.hpp"
 
-#define VERBOSE 0
-
 #define DEBUG_MODE 0
 #if DEBUG_MODE
 std::ofstream ofs_edges;
@@ -110,6 +108,7 @@ void parse_options(int argc, char **argv)
     }
   }
 }
+
 
 int main(int argc, char** argv)
 {
@@ -209,7 +208,8 @@ int main(int argc, char** argv)
       apply_edge_update_requests<vertex_id_type>(mapped_file,
                                                  segment_manager,
                                                  graph_store,
-                                                 edgelist, static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
+                                                 edgelist,
+                                                 static_cast<uint64_t>(std::pow(10, chunk_size_log10_)),
                                                  edges_delete_ratio_);
     }
 

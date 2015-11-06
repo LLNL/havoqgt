@@ -10,7 +10,7 @@
 #include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
-#include <havoqgt/graphstore/rhh/rhh_utilities.h>
+#include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
@@ -291,15 +291,28 @@ class graphstore_rhhda
   /// \brief print_status
   ///   Note: this function accesses entier data of the rhhda containers to compute statuses
   ///         thus, this function would affect pagecache and cause I/Os
-  void print_status()
+  void print_status(const int level) const
   {
     std::cout << "<low degree table>:"
-              << "\n size, capacity, rate: " << m_low_degree_table->size() << ", " << m_low_degree_table->capacity() * m_low_degree_table->depth()
+              << "\n size, capacity, rate: " << m_low_degree_table->size()
+              << ", " << m_low_degree_table->capacity() * m_low_degree_table->depth()
               << ", " << (double)(m_low_degree_table->size()) / (m_low_degree_table->capacity() * m_low_degree_table->depth())
               << "\n chaine depth: " << m_low_degree_table->depth()
-              << "\n average probedistance: " << m_low_degree_table->load_factor()
               << "\n capacity*element_size(GB): "
-                << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
+              << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_degree_table_type::kElementSize / (1ULL<<30) << std::endl;
+
+    std::cout << "<high-middle degree table>: "
+              << "\n size, capacity, rate: " << m_mid_high_degree_table->size()
+              << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()
+              << ", " << (double)(m_mid_high_degree_table->size()) / (m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth())
+              << "\n chaine depth : " << m_mid_high_degree_table->depth()
+              << "\n capacity*element_size(GB): "
+              << (double)m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth() * mid_high_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+    if (level == 0) return;
+
+    std::cout << "<low degree table>:"
+              << "\n average probedistance: " << m_low_degree_table->load_factor()
+              << std::endl;
     {
       size_type histgram_prbdist[low_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       std::cout << "probedistance: ";
@@ -310,13 +323,9 @@ class graphstore_rhhda
       std::cout << std::endl;
     }
 
-    std::cout << "<high-middle degree table>: "
-              << "\n size, capacity, rate: " << m_mid_high_degree_table->size() << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()
-              << ", " << (double)(m_mid_high_degree_table->size()) / (m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth())
-              << "\n chaine depth : " << m_mid_high_degree_table->depth()
+    std::cout << "<high-middle degree table>:"
               << "\n average probedistance: " << m_mid_high_degree_table->load_factor()
-              << "\n capacity*element_size(GB): "
-                << (double)m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth() * mid_high_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+              << std::endl;
     {
       size_type histgram_ave_prbdist[mid_high_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_type histgram_cap[50] = {0};
@@ -726,7 +735,6 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
  private:
   low_degree_table_type* m_low_degree_table;
   mid_high_degree_table_type* m_mid_high_degree_table;
-
 };
 
 }
