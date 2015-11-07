@@ -52,7 +52,7 @@
 #ifndef HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 #define HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 
-#define DIRECT_IO_IN_EDGELIST_READER 1
+#define DIRECT_IO_IN_EDGELIST_READER 0
 #if DIRECT_IO_IN_EDGELIST_READER
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <memory>

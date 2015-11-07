@@ -81,11 +81,13 @@ class graphstore_rhhda
 
   void rehash_low_table()
   {
+    std::cout << "rehash_low_table()" << std::endl;
     m_low_degree_table->rehash();
   }
 
   void rehash_mid_high_table()
   {
+    std::cout << "rehash_mid_high_table()" << std::endl;
     m_mid_high_degree_table->rehash();
   }
 

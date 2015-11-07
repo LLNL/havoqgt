@@ -232,8 +232,6 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
 
   /// --- variables for analysys --- //
   uint64_t loop_cnt = 0;
-  size_t count_inserted = 0;
-  size_t count_delete = 0;
   bool global_is_finished = false;
 
   /// --- iterator and array for edgelist --- ///
@@ -250,48 +248,59 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     /// --- update edges --- ///
+    size_t count_inserted = 0;
+    size_t count_deleted = 0;
+    size_t count_insert_req = 0;
+    size_t count_delete_req = 0;
+
     const double time_start = MPI_Wtime();
-    unsigned char dummy = 0;
+    const unsigned char dummy = 0;
     for (auto request : update_request_vec) {
       auto edge = request.edge;
       if (request.is_delete) {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 1" << "\n";
-#endif
-        count_delete += graph_store.erase_edge(edge.first, edge.second);
+        count_deleted += graph_store.erase_edge(edge.first, edge.second);
+        ++count_delete_req;
       } else {
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " 0" << "\n";
-#endif
         count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
+        ++count_insert_req;
       }
+#if DEBUG_MODE
+        ofs_edges << edge.first << " " << edge.second << " " << request.is_delete << "\n";
+#endif
     }
-
-    /// this is a temp implementation
-    graph_store.opt();
-
     /// --- sync --- ///
     const double time_start_sync = MPI_Wtime();
     if (mpi_rank == 0) sync_mmap();
 
+    /// this is a temp implementation
+    graph_store.opt();
 
     /// --- print status --- ///
     const double time_end = MPI_Wtime();
     havoqgt::havoqgt_env()->world_comm().barrier();
+    if (mpi_rank == 0) {
+      std::cout << "-- statics --" << std::endl;
+      std::cout << " inserted_edges,\t"
+                <<" deleted_edge,\t"
+                <<" exec_time,\t"
+                <<" segment_size(GiB)" << std::endl;
+    }
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "] TIME: sync time (sec.) =\t" << (time_end - time_start_sync) << std::endl;
-        std::cout << "[" << mpi_rank << "] TIME: Execution time (sec.) =\t" << (time_end - time_start) << std::endl;
-        std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+        std::cout << "[" << mpi_rank << "] "
+                  << count_insert_req        << "( " << count_inserted               << " ),\t"
+                  << count_delete_req        << "( " << count_deleted                << " ),\t"
+                  << (time_end - time_start) << "( " << (time_end - time_start_sync) << " ),\t"
+                  << get_segment_size(segment_manager) << std::endl;
       }
+      havoqgt::havoqgt_env()->world_comm().barrier();
     }
-    havoqgt::havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) print_system_mem_usages();
 
 #if VERBOSE
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "]" << std::endl;
+        std::cout << "[" << mpi_rank << "] Status" << std::endl;
         graph_store.print_status(0);
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
@@ -306,15 +315,6 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
 
-  /// --- print summary information --- ///
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] inserted edges : " << count_inserted << std::endl;
-      std::cout << "[" << mpi_rank << "] deleted edges : " << count_delete << std::endl;
-      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
-    }
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
 
   if (mpi_rank == 0) {
     std::cout << "\n-- All edge updations done --" << std::endl;
@@ -322,6 +322,13 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
 
+  /// --- print summary information --- ///
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+    }
+    havoqgt::havoqgt_env()->world_comm().barrier();
+  }
 }
 
 
