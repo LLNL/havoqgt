@@ -148,11 +148,8 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
   vertex_id_type max_vertex_id = 0;
   size_t cnt = 0;
   const double time_start = MPI_Wtime();
+  requests.clear();
   while (edgelist_itr != edgelist_itr_last) {
-//    const std::pair<vertex_id_type, vertex_id_type> edge(std::get<0>(*edgelist_itr),
-//                                                         std::get<1>(*edgelist_itr));
-//    const bool is_delete = std::get<2>(*edgelist_itr);
-//    EdgeUpdateRequest<vertex_id_type> request(edge, is_delete);
     requests.push_back(make_update_request(*edgelist_itr));
     max_vertex_id = std::max(max_vertex_id, std::get<0>(*edgelist_itr));
     max_vertex_id = std::max(max_vertex_id, std::get<1>(*edgelist_itr));
@@ -160,7 +157,8 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
     ++cnt;
     if (max_size <= cnt) break;
   }
-  requests.resize(cnt);
+  if (max_size != cnt)
+    requests.resize(cnt);
   havoqgt::havoqgt_env()->world_comm().barrier();
 
   if (mpi_rank == 0) std::cout << "generated edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
