@@ -59,6 +59,8 @@
 #include <limits>
 #endif
 
+#define EDGE_WITH_DELTE_FLAG 0
+
 #include <vector>
 #include <fstream>
 #include <deque>
@@ -67,6 +69,7 @@
 #include <utility>
 #include <stdint.h>
 #include <iostream>
+#include <tuple>
 
 #include <havoqgt/environment.hpp>
 
@@ -78,7 +81,8 @@
 
   public:
     typedef uint64_t                      vertex_descriptor;
-    typedef std::pair<uint64_t, uint64_t> edge_type;
+    typedef std::tuple<uint64_t, uint64_t, bool> edge_type;
+    /// typedef std::pair<uint64_t, uint64_t> edge_type;
 
   ///
   /// InputIterator class for rmat_edge_generator
@@ -168,11 +172,9 @@
       }
     }
 
-#if DIRECT_IO_IN_EDGELIST_READER
-    std::cout << "Direct I/O mode\n";
-#else
-    std::cout << "ifstream mode\n";
-#endif
+    std::cout << "DIRECT_IO_IN_EDGELIST_READER: " << DIRECT_IO_IN_EDGELIST_READER << std::endl;
+    std::cout << "EDGE_WITH_DELTE_FLAG: " << EDGE_WITH_DELTE_FLAG << std::endl;
+
     char* p = getenv ("NUM_EDGES");
     if (p) {
       std::cout << "get m_local_edge_count from a environment variable" << std::endl;
@@ -221,8 +223,13 @@ protected:
         std::string line;
         if (reader->getline(line)) {
             std::stringstream ssline(line);
-            ssline >> edge.first >> edge.second;
-//            std::cout << edge.first << edge.second << std::endl;
+#if EDGE_WITH_DELTE_FLAG
+        ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
+#else
+        ssline >> std::get<0>(edge) >> std::get<1>(edge);
+        std::get<2>(edge) = false;
+#endif
+        // ssline >> edge.first >> edge.second;
             return true;
         } else { /// No remaining lines, close file.
             delete m_ptr_ifstreams.front();
@@ -234,7 +241,13 @@ protected:
       std::string line;
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
         std::stringstream ssline(line);
-        ssline >> edge.first >> edge.second;
+#if EDGE_WITH_DELTE_FLAG
+        ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
+#else
+        ssline >> std::get<0>(edge) >> std::get<1>(edge);
+        std::get<2>(edge) = false;
+#endif
+        // ssline >> edge.first >> edge.second;
         return true;
       } else { //No remaining lines, close file.
         delete m_ptr_ifstreams.front();

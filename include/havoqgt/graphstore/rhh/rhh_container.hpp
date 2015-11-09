@@ -78,6 +78,31 @@ inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
   }
 }
 
+///
+/// \brief erase
+///   insert a element with checking the capacity and a probde distance.
+///   if the probe distance exceed a threshold, allocate a chainged table
+///   Note: this function causes copy of a key and a value !!
+/// \param rhh
+/// \param key
+/// \param value
+//template <typename rhh_type, typename key_type>
+//inline void erase(rhh_type** rhh, key_type key)
+//{
+//  /// --- check capacity --- ///
+//  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
+//    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+//  }
+
+//  /// --- Consider long probe distance --- ///
+//  while (!(*rhh)->insert(key, value, key, value)) {
+//    rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
+//    new_rhh->assign_to_chained_rhh((*rhh));
+//    (*rhh) = new_rhh;
+//  }
+//}
+
+
 template <typename rhh_type>
 inline void shrink_to_fit(rhh_type** rhh)
 {

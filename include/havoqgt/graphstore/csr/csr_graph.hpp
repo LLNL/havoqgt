@@ -166,7 +166,7 @@ class prop_csr_graph_container {
     for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
          edge_itr != edge_itr_end;
          ++edge_itr) {
-      const vertex_type src = edge_itr->first;
+      const vertex_type src = std::get<0>(*edge_itr);
       ++std::get<index_array_element::index>(m_index_array[src+1]);
     }
     for (size_t i = 0; i < m_num_vertices; ++i) {
@@ -180,8 +180,8 @@ class prop_csr_graph_container {
     for (auto edge_itr = edge_list.begin(), edge_itr_end = edge_list.end();
          edge_itr != edge_itr_end;
          ++edge_itr) {
-      const vertex_type src = edge_itr->first;
-      const vertex_type dst = edge_itr->second;
+      const vertex_type src = std::get<0>(*edge_itr);
+      const vertex_type dst = std::get<1>(*edge_itr);
       m_adjlist_array[std::get<index_array_element::index>(m_index_array[src])++] = dst;
     }
     for (size_t i = m_num_vertices; i > 0; --i) {

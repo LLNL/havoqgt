@@ -184,7 +184,7 @@ class graphstore_rhhda
   /// \param trg
   /// \return
   ///         the number of edges erased
-  size_type erase_edge(vertex_id_type& src, vertex_id_type& trg)
+  size_type erase_edge(const vertex_id_type& src, const vertex_id_type& trg)
   {
     size_type count = 0;
     for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
@@ -229,7 +229,7 @@ class graphstore_rhhda
     return count;
   }
 
-//  inline size_type erase_vertex(vertex_id_type& vertex)
+//  inline size_type erase_vertex(const vertex_id_type& vertex)
 //  {
 //    return m_mid_high_degree_table->erase(vertex);
 //  }
@@ -264,24 +264,24 @@ class graphstore_rhhda
     return m_mid_high_degree_table->begin();
   }
 
-  typename low_degree_table_type::value_iterator find_low_edge (vertex_id_type& src_vrt)
+  typename low_degree_table_type::value_iterator find_low_edge (const vertex_id_type& src_vrt)
   {
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename low_degree_table_type::const_value_iterator find_low_edge (vertex_id_type& src_vrt) const
+  typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const
   {
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
+  typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->begin();
   }
 
-  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
+  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt) const
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
@@ -478,6 +478,10 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
   }
 
+  void opt()
+  {
+  }
+
   void shrink_to_fit_low_table()
   {
     rhh::shrink_to_fit(&m_low_degree_table);
@@ -486,6 +490,18 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   void shrink_to_fit_mid_high_table()
   {
     rhh::shrink_to_fit(&m_mid_high_degree_table);
+  }
+
+  void rehash_low_table()
+  {
+    std::cout << "rehash_low_table()" << std::endl;
+    m_low_degree_table->rehash();
+  }
+
+  void rehash_mid_high_table()
+  {
+    std::cout << "rehash_mid_high_table()" << std::endl;
+    m_mid_high_degree_table->rehash();
   }
 
   ///
@@ -498,7 +514,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   ///   true: if inserted
   ///   false: if a duplicated edge is found
   ///
-  bool insert_edge(vertex_id_type& src, vertex_id_type& trg, edge_weight_type& weight)
+  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_weight_type& weight)
   {
 
 
@@ -529,7 +545,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   }
 
 
-  inline bool insert_vertex(vertex_id_type& vertex, vertex_meta_data_type& meta_data)
+  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_meta_data_type& meta_data)
   {
     auto itr = m_mid_high_degree_table->find(vertex);
     if (itr.is_end()) {
@@ -548,7 +564,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   /// \param trg
   /// \return
   ///         the number of edges erased
-  size_type erase_edge(vertex_id_type& src, vertex_id_type& trg)
+  size_type erase_edge(const vertex_id_type& src, const vertex_id_type& trg)
   {
     size_type count = 0;
 
@@ -573,10 +589,10 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
     return count;
   }
 
-  size_type erase_vertex(vertex_id_type& vertex)
-  {
-    return m_mid_high_degree_table->erase(vertex);
-  }
+//  size_type erase_vertex(const vertex_id_type& vertex)
+//  {
+//    return m_mid_high_degree_table->erase(vertex);
+//  }
 
   vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
   {
@@ -603,24 +619,24 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
     return m_mid_high_degree_table->begin();
   }
 
-  typename low_degree_table_type::value_iterator find_low_edge (vertex_id_type& src_vrt)
+  typename low_degree_table_type::value_iterator find_low_edge (const vertex_id_type& src_vrt)
   {
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename low_degree_table_type::const_value_iterator find_low_edge (vertex_id_type& src_vrt) const
+  typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const
   {
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (vertex_id_type& src_vrt)
+  typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
     return adj_list->begin();
   }
 
-  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (vertex_id_type& src_vrt) const
+  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt) const
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
     const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
@@ -632,16 +648,21 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   /// \brief print_status
   ///   Note: this function accesses entier data of the rhhda containers to compute statuses
   ///         thus, this function would affect pagecache and cause I/Os
-  void print_status()
+  void print_status(const int level) const
   {
 
     std::cout << "<high-middle degree table>: "
-              << "\n size, capacity, rate: " << m_mid_high_degree_table->size() << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()
+              << "\n size, capacity, rate: " << m_mid_high_degree_table->size()
+              << ", " << m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth()
               << ", " << (double)(m_mid_high_degree_table->size()) / (m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth())
               << "\n chaine depth : " << m_mid_high_degree_table->depth()
-              << "\n average probedistance: " << m_mid_high_degree_table->load_factor()
               << "\n capacity*element_size(GB): "
-                << (double)m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth() * mid_high_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+              << (double)m_mid_high_degree_table->capacity() * m_mid_high_degree_table->depth() * mid_high_degree_table_type::kElementSize  / (1ULL<<30) << std::endl;
+    if (level == 0) return;
+
+    std::cout << "<high-middle degree table>:"
+              << "\n average probedistance: " << m_mid_high_degree_table->load_factor()
+              << std::endl;
     {
       size_type histgram_ave_prbdist[mid_high_degree_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_type histgram_cap[50] = {0};
@@ -660,7 +681,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
 
         /// --- average probe distance (laod factor) ---- ///
         assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
-        ++histgram_ave_prbdist[adj_list->load_factor()];
+        ++histgram_ave_prbdist[static_cast<size_t>(adj_list->load_factor())];
 
         /// --- capacity --- ///
         capacity_sum += adj_list->capacity() * adj_list->depth();

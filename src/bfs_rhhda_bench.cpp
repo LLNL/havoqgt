@@ -76,7 +76,7 @@ void constract_graph(mapped_file_type& mapped_file,
   while (edges_itr != edges_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
-    generate_update_requests(edges_itr, edges_itr_end, update_request_vec);
+    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
 
     unsigned char dummy_weight = 0;
     auto local_start = graphstore::utility::duration_time();

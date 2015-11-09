@@ -57,6 +57,21 @@ struct EdgeUpdateRequest
 };
 
 template<typename vertex_id_type>
+EdgeUpdateRequest<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair)
+{
+  return EdgeUpdateRequest<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+                                           false);
+}
+
+template<typename vertex_id_type>
+EdgeUpdateRequest<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair)
+{
+  return EdgeUpdateRequest<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+                                           std::get<2>(pair));
+}
+
+
+template<typename vertex_id_type>
 bool edgerequest_asc(const EdgeUpdateRequest<vertex_id_type>& left, const EdgeUpdateRequest<vertex_id_type>& right ) {
   return left.edge.first < right.edge.first;
 }
@@ -121,10 +136,12 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
   return (MPI_Wtime() - time_start1);
 }
 
+
 template <typename edgelist_itr_type, typename vertex_id_type>
 std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& edgelist_itr,
                                                               edgelist_itr_type& edgelist_itr_last,
-                                                              request_vector_type<vertex_id_type>& requests)
+                                                              request_vector_type<vertex_id_type>& requests,
+                                                              size_t max_size)
 {
   const int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
 
@@ -132,22 +149,24 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
   size_t cnt = 0;
   const double time_start = MPI_Wtime();
   while (edgelist_itr != edgelist_itr_last) {
-    const bool is_delete = false;
-    EdgeUpdateRequest<vertex_id_type> request(*edgelist_itr, is_delete);
-    requests[cnt] = request;
-    max_vertex_id = std::max(max_vertex_id, edgelist_itr->first);
-    max_vertex_id = std::max(max_vertex_id, edgelist_itr->second);
+//    const std::pair<vertex_id_type, vertex_id_type> edge(std::get<0>(*edgelist_itr),
+//                                                         std::get<1>(*edgelist_itr));
+//    const bool is_delete = std::get<2>(*edgelist_itr);
+//    EdgeUpdateRequest<vertex_id_type> request(edge, is_delete);
+    requests.push_back(make_update_request(*edgelist_itr));
+    max_vertex_id = std::max(max_vertex_id, std::get<0>(*edgelist_itr));
+    max_vertex_id = std::max(max_vertex_id, std::get<1>(*edgelist_itr));
     ++edgelist_itr;
     ++cnt;
-    if (requests.capacity() <= cnt) break;
+    if (max_size <= cnt) break;
   }
   requests.resize(cnt);
   havoqgt::havoqgt_env()->world_comm().barrier();
 
-  if (mpi_rank == 0) std::cout << "TIME: Generate edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
+  if (mpi_rank == 0) std::cout << "generated edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
   havoqgt::havoqgt_env()->world_comm().barrier();
 
-  std::cout << mpi_rank << ": Status: # generated insetion requests =\t"<< requests.size() << std::endl;
+  std::cout << "[" << mpi_rank << "] # of generated insetion requests =\t"<< requests.size() << std::endl;
 
 #if SORT_BY_CHUNK
   const double elapsed_time = sort_requests(requests);
@@ -220,12 +239,12 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
   havoqgt::havoqgt_env()->world_comm().barrier();
 
-  if (mpi_rank == 0) std::cout << "-- Disp status of before generation --" << std::endl;
+  if (mpi_rank == 0) std::cout << "-- statuses of before generation --" << std::endl;
   if (mpi_rank == 0) print_system_mem_usages();
   havoqgt::havoqgt_env()->world_comm().barrier();
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+      std::cout << "[" << mpi_rank << "] segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
     }
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
@@ -241,11 +260,14 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   update_request_vec.reserve(chunk_size);
 
   while (!global_is_finished) {
-    if (mpi_rank == 0) std::cout << "\n[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+    if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
 
     /// --- generate edges --- ///
-    generate_update_requests(edges_itr, edges_itr_end, update_request_vec);
+    /// \brief generate_update_requests
+    if (mpi_rank == 0) std::cout << "-- generate requests --" << std::endl;
+    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
     havoqgt::havoqgt_env()->world_comm().barrier();
+    if (mpi_rank == 0) std::cout << "\n-- process requests --" << std::endl;
 
     /// --- update edges --- ///
     size_t count_inserted = 0;
@@ -271,15 +293,18 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     /// --- sync --- ///
     const double time_start_sync = MPI_Wtime();
     if (mpi_rank == 0) sync_mmap();
+    havoqgt::havoqgt_env()->world_comm().barrier();
 
     /// this is a temp implementation
-    graph_store.opt();
+    if (loop_cnt % 10 == 0) {
+      graph_store.opt();
+    }
 
-    /// --- print status --- ///
+    /// --- print results --- ///
     const double time_end = MPI_Wtime();
     havoqgt::havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) {
-      std::cout << "-- statics --" << std::endl;
+      std::cout << "\n-- results --" << std::endl;
       std::cout << " inserted_edges,\t"
                 <<" deleted_edge,\t"
                 <<" exec_time,\t"
@@ -287,10 +312,10 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     }
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "] "
-                  << count_insert_req        << "( " << count_inserted               << " ),\t"
-                  << count_delete_req        << "( " << count_deleted                << " ),\t"
-                  << (time_end - time_start) << "( " << (time_end - time_start_sync) << " ),\t"
+        std::cout << "prg [" << mpi_rank << "] "
+                  << count_insert_req        << " ( " << count_inserted               << " ),\t"
+                  << count_delete_req        << " ( " << count_deleted                << " ),\t"
+                  << (time_end - time_start) << " ( " << (time_end - time_start_sync) << " ),\t"
                   << get_segment_size(segment_manager) << std::endl;
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
@@ -298,9 +323,10 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     if (mpi_rank == 0) print_system_mem_usages();
 
 #if VERBOSE
+    if (mpi_rank == 0) std::cout << "\n-- graph store's status --" << std::endl;
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "] Status" << std::endl;
+        std::cout << "[" << mpi_rank << "]" << std::endl;
         graph_store.print_status(0);
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
