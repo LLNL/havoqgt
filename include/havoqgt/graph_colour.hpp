@@ -263,14 +263,14 @@ class gc_id_collector_visitor {
   bool pre_visit() const {
     assert((*counter_data())[vertex] == 0);
 
-    // Iterate over the vertex's edges and count those with higher ID.
+    // Iterate over the vertex's edges and count those with higher priority.
     typedef typename Graph::edge_iterator eitr_t;
     for (eitr_t edge  = (*graph_ref()).edges_begin(vertex);
                 edge != (*graph_ref()).edges_end(vertex); edge++) {
       vertex_locator nbr = edge.target();
-      size_t v1h = vertex.hash();
-      size_t v2h = nbr.hash();
-      if (v1h < v2h || (v1h == v2h && vertex < nbr)) {
+
+      // Check if neighbour has a greater priority.
+      if (vertex_locator::lesser_hash_priority(vertex, nbr)) {
         (*counter_data())[vertex]++;
       }
     }
@@ -373,9 +373,6 @@ class gc_visitor {
       bitmap->set(caller_colour - 1);  // One indexing offset.
     }
 
-    // TODO(Scott): Set caller as a coloured neighbour, so we dont need to
-    //              send a message to it later.
-
     // Decrease counter of number of vertices that need to colour before we do.
     (*counter_data())[vertex]--;
 
@@ -414,24 +411,48 @@ class gc_visitor {
 
     // Tell our neighbours that we have coloured ourself.
     typedef typename Graph::edge_iterator eitr_t;
-    for (eitr_t edge  = graph.edges_begin(vertex);
-                edge != graph.edges_end(vertex); edge++) {
-      vertex_locator neighbour = edge.target();
 
-      // Send the neighbour a visitor with our colour.
-      // TODO(Scott): No need to send a coloured vertex our colour.
-      gc_visitor new_visitor(neighbour, vertex, colour);
-      vis_queue->queue_visitor(new_visitor);
+    // TODO(Scott): This is not being compiled out. There is a noticable
+    //              performance diference when hard-coding the alg type.
+    //              Consider moving the type to a template parameter?
+    // Extra ability for optimization with hash based gc.
+    if ((*alg_type()) == 2) {
+      for (eitr_t edge  = graph.edges_begin(vertex);
+                  edge != graph.edges_end(vertex); edge++) {
+        vertex_locator neighbour = edge.target();
+
+        // When using hash based gc, we can tell if a nbr doesn't need this msg:
+        // if nbr has a greater priority, then they are already coloured.
+        if (vertex_locator::lesser_hash_priority(vertex, neighbour)) {
+          continue;
+        }
+
+        // Send the neighbour a visitor with our colour.
+        gc_visitor new_visitor(neighbour, vertex, colour);
+        vis_queue->queue_visitor(new_visitor);
+      }
+    // Regular gc.
+    } else {
+      for (eitr_t edge  = graph.edges_begin(vertex);
+                  edge != graph.edges_end(vertex); edge++) {
+        vertex_locator neighbour = edge.target();
+
+        // Send the neighbour a visitor with our colour.
+        gc_visitor new_visitor(neighbour, vertex, colour);
+        vis_queue->queue_visitor(new_visitor);
+      }
     }
     return false;
   }
 
 
   friend inline bool operator > (const gc_visitor& v1, const gc_visitor& v2) {
+    // No movement.
+    // return false;
     // By ID.
-    return !(v1.vertex < v2.vertex);
+    // return !(v1.vertex < v2.vertex);
     // By degree.
-  // return (*graph_ref()).degree(v1.vertex) > (*graph_ref()).degree(v2.vertex);
+    return (*graph_ref()).degree(v1.vertex) > (*graph_ref()).degree(v2.vertex);
   }
 
 
@@ -467,6 +488,14 @@ class gc_visitor {
   static NbrColourData*& nbr_colour_data() {
     static NbrColourData* data;
     return data;
+  }
+
+  static void set_alg_type(int* _alg_type) {
+    alg_type() = _alg_type;
+  }
+  static int*& alg_type() {
+    static int* alg_type;
+    return alg_type;
   }
 
 
@@ -579,9 +608,9 @@ void graph_colour(TGraph*           graph,
                   VertexColourData* vertex_colour_data,
                   CounterData*      counter_data,
                   NbrColourData*    nbr_colour_data,
-                  int               comp_type) {
+                  int               alg_type) {
   // Initialize counter based on type of comparison (id, degree).
-  switch (comp_type) {
+  switch (alg_type) {
     case 0:
       // Collect larger degree count for each vertex.
       gc_init_ldf(graph, counter_data);
@@ -609,6 +638,7 @@ void graph_colour(TGraph*           graph,
     colourer_t::set_vertex_colour_data(vertex_colour_data);
     colourer_t::set_counter_data(counter_data);
     colourer_t::set_nbr_colour_data(nbr_colour_data);
+    colourer_t::set_alg_type(&alg_type);
 
     typedef visitor_queue<colourer_t, havoqgt::detail::visitor_priority_queue,
                           TGraph> colourer_queue_t;
