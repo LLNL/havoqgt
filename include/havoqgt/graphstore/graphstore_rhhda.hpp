@@ -194,7 +194,7 @@ class graphstore_rhhda
       }
     }
     if (count > 0) {
-      rhh::shrink_to_fit(&m_low_degree_table);
+      rhh::shrink_to_fit(&m_low_degree_table, 2.0);
       return count;
     }
 

@@ -106,13 +106,15 @@ inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
 
 
 template <typename rhh_type>
-inline void shrink_to_fit(rhh_type** rhh)
+inline bool shrink_to_fit(rhh_type** rhh, const double lazy_factor = 1.0)
 {
   const typename rhh_type::size_type cur_size = (*rhh)->size();
   typename rhh_type::size_type cur_capacity = (*rhh)->capacity() * (*rhh)->depth();
-  if (cur_size > static_cast<double>(cur_capacity / graphstore::rhh::kCapacityGrowingFactor) * graphstore::rhh::kFullCapacitFactor) {
+
+//  std::cout << cur_size << " " << cur_capacity << std::endl;
+  if (cur_size > static_cast<double>(cur_capacity / graphstore::rhh::kCapacityGrowingFactor / lazy_factor) * graphstore::rhh::kFullCapacitFactor) {
     /// --- current capacity is fit to current size, do nothing --- ///
-    return ;
+    return false;
   }
 
   typename rhh_type::size_type new_capacity = 1;
@@ -121,6 +123,9 @@ inline void shrink_to_fit(rhh_type** rhh)
   }
 
   (*rhh) = rhh_type::resize((*rhh), new_capacity);
+
+  return true;
+//  std::cout << cur_size << " " << cur_capacity << " " << (*rhh)->capacity() * (*rhh)->depth() << std::endl;
 }
 
 } /// namespace rhh
@@ -506,13 +511,15 @@ class rhh_container {
     }
   }
 
-  inline void erase(whole_iterator& itr)
+  /// TODO: move to non-member function
+  inline void erase(const whole_iterator& itr)
   {
     itr.m_rhh_ptr->erase_element_at(itr.m_pos);
     --m_num_elems;
   }
 
-  inline void erase(value_iterator& itr)
+  /// TODO: move to non-member function ?
+  inline void erase(const value_iterator& itr)
   {
     itr.m_rhh_ptr->erase_element_at(itr.m_pos);
     --m_num_elems;
