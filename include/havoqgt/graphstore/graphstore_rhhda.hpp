@@ -193,17 +193,15 @@ class graphstore_rhhda
         ++count;
       }
     }
-
     if (count > 0) {
-      /// rhh::shrink_to_fit(&m_low_degree_table);
+      rhh::shrink_to_fit(&m_low_degree_table);
       return count;
     }
 
     auto itr_matrix = m_mid_high_degree_table->find(src);
     /// has source vertex ?
-    if (itr_matrix.is_end()) return false;
+    if (itr_matrix.is_end()) return 0;
     mid_high_edge_chunk_type* adj_list = itr_matrix->second;
-
     for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
       adj_list->erase(itr);
       ++count;
@@ -219,9 +217,9 @@ class graphstore_rhhda
         }
         mid_high_edge_chunk_type::deallocate(adj_list);
         m_mid_high_degree_table->erase(itr_matrix);
-        /// rhh::shrink_to_fit(&m_mid_high_degree_table);
+        rhh::shrink_to_fit(&m_mid_high_degree_table);
       } else {
-        /// rhh::shrink_to_fit(&adj_list);
+        rhh::shrink_to_fit(&adj_list);
         itr_matrix->second = adj_list;
       }
     }

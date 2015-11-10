@@ -68,7 +68,7 @@ template <typename rhh_type, typename key_type, typename value_type>
 inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
 {
   /// --- check capacity --- ///
-  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
+  if ((*rhh)->size() + 1 >= static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor) {
     (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
 
@@ -87,19 +87,21 @@ inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
 /// \param key
 /// \param value
 //template <typename rhh_type, typename key_type>
-//inline void erase(rhh_type** rhh, key_type key)
+//inline size_t erase(rhh_type** rhh, const key_type& key)
 //{
-//  /// --- check capacity --- ///
-//  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
-//    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+
+//  size_t num_erased = 0;
+//  for (auto itr = (*rhh)->find(key); !itr.is_end(); ++itr) {
+//    (*rhh)->erase(itr);
+//    ++num_erased;
 //  }
 
-//  /// --- Consider long probe distance --- ///
-//  while (!(*rhh)->insert(key, value, key, value)) {
-//    rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
-//    new_rhh->assign_to_chained_rhh((*rhh));
-//    (*rhh) = new_rhh;
+//  /// --- check capacity --- ///
+//  if (num_erased > 0 && (*rhh)->size() < static_cast<double>((*rhh)->capacity()) / graphstore::rhh::kFullCapacitFactor) {
+//    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() / graphstore::rhh::kCapacityGrowingFactor);
 //  }
+
+//  return num_erased;
 //}
 
 
