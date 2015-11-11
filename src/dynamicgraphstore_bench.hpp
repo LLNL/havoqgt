@@ -109,6 +109,11 @@ void print_system_mem_usages()
 //    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
 //    std::cout << "----------------------------" << std::endl;
 //  }
+
+  size_t dirty;
+  if (graphstore::utility::get_meminfo("Dirty", dirty)) {
+    std::cout << "Usage: Dirty(KB):\t" << dirty << "\n";
+  }
 }
 
 

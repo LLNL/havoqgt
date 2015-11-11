@@ -535,6 +535,32 @@ bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* co
   return is_succeed;
 }
 
+///
+/// \brief get_meminfo
+/// \param key
+///   exmample "MemTotal:"
+/// \return
+///
+bool get_meminfo(std::string key, size_t& val) {
+
+  key += ":";
+
+  std::string token;
+  std::ifstream file("/proc/meminfo");
+
+  while(file >> token) {
+      if(token == key) {
+          size_t val;
+          if(file >> val) {
+              return true;
+          } else {
+              return false;
+          }
+      }
+      file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+  return false;
+}
 
 } /// namespace utility
 } /// namespace graphstore
