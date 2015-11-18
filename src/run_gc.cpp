@@ -188,13 +188,15 @@ int main(int argc, char** argv) {
 
 
   // Graph Colouring data.
-  graph_type::vertex_data<uint32_t, std::allocator<uint32_t>>
-              vertex_colour_data(*graph);
-  graph_type::vertex_data<uint32_t, std::allocator<uint32_t>>
-              counter_data(*graph);
-  graph_type::vertex_data<boost::dynamic_bitset<>,
-                          std::allocator<boost::dynamic_bitset<>>>
-              nbr_colour_data(*graph);
+  typedef graph_type::vertex_data<uint32_t, std::allocator<uint32_t>>
+          u32vertex_data;
+  typedef graph_type::vertex_data<boost::dynamic_bitset<>,
+            std::allocator<boost::dynamic_bitset<>>>
+          bitvertex_data;
+
+  u32vertex_data vertex_colour_data(*graph);
+  u32vertex_data counter_data(*graph);
+  bitvertex_data nbr_colour_data(*graph);
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
@@ -211,8 +213,24 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
   double time_start = MPI_Wtime();
 
-  havoqgt::mpi::graph_colour(graph, &vertex_colour_data,
-                             &counter_data, &nbr_colour_data, comp_type);
+  switch(comp_type) {
+    case 0:
+      havoqgt::mpi::graph_colour
+        <graph_type, u32vertex_data, u32vertex_data, bitvertex_data, 0>
+        (graph, &vertex_colour_data, &counter_data, &nbr_colour_data);
+      break;
+    case 1:
+      havoqgt::mpi::graph_colour
+        <graph_type, u32vertex_data, u32vertex_data, bitvertex_data, 1>
+        (graph, &vertex_colour_data, &counter_data, &nbr_colour_data);
+      break;
+    case 2:
+      havoqgt::mpi::graph_colour
+        <graph_type, u32vertex_data, u32vertex_data, bitvertex_data, 2>
+        (graph, &vertex_colour_data, &counter_data, &nbr_colour_data);
+      break;
+  }
+
   MPI_Barrier(MPI_COMM_WORLD);
   double time_end = MPI_Wtime();
 

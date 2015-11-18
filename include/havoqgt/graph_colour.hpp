@@ -320,7 +320,7 @@ class gc_id_collector_visitor {
 
 
 template<typename Graph, typename VertexColourData, typename CounterData,
-         typename NbrColourData /* typename NbrIsColouredData */>
+         typename NbrColourData, int ALGTYPE>
 class gc_visitor {
  public:
   typedef typename Graph::vertex_locator vertex_locator;
@@ -412,11 +412,8 @@ class gc_visitor {
     // Tell our neighbours that we have coloured ourself.
     typedef typename Graph::edge_iterator eitr_t;
 
-    // TODO(Scott): This is not being compiled out. There is a noticable
-    //              performance diference when hard-coding the alg type.
-    //              Consider moving the type to a template parameter?
     // Extra ability for optimization with hash based gc.
-    if ((*alg_type()) == 2) {
+    if (ALGTYPE == 2) {
       for (eitr_t edge  = graph.edges_begin(vertex);
                   edge != graph.edges_end(vertex); edge++) {
         vertex_locator neighbour = edge.target();
@@ -488,14 +485,6 @@ class gc_visitor {
   static NbrColourData*& nbr_colour_data() {
     static NbrColourData* data;
     return data;
-  }
-
-  static void set_alg_type(int* _alg_type) {
-    alg_type() = _alg_type;
-  }
-  static int*& alg_type() {
-    static int* alg_type;
-    return alg_type;
   }
 
 
@@ -603,14 +592,14 @@ void gc_init_id(TGraph* graph, CounterData* counter_data) {
 
 // Launch point for graph colouring.
 template <typename TGraph,      typename VertexColourData,
-          typename CounterData, typename NbrColourData>
+          typename CounterData, typename NbrColourData,
+          int      ALGTYPE>
 void graph_colour(TGraph*           graph,
                   VertexColourData* vertex_colour_data,
                   CounterData*      counter_data,
-                  NbrColourData*    nbr_colour_data,
-                  int               alg_type) {
+                  NbrColourData*    nbr_colour_data) {
   // Initialize counter based on type of comparison (id, degree).
-  switch (alg_type) {
+  switch (ALGTYPE) {
     case 0:
       // Collect larger degree count for each vertex.
       gc_init_ldf(graph, counter_data);
@@ -633,12 +622,11 @@ void graph_colour(TGraph*           graph,
   // Finished collecting counter info, begin colouring.
   {
     typedef gc_visitor<TGraph, VertexColourData, CounterData,
-                       NbrColourData> colourer_t;
+                       NbrColourData, ALGTYPE> colourer_t;
     colourer_t::set_graph_ref(graph);
     colourer_t::set_vertex_colour_data(vertex_colour_data);
     colourer_t::set_counter_data(counter_data);
     colourer_t::set_nbr_colour_data(nbr_colour_data);
-    colourer_t::set_alg_type(&alg_type);
 
     typedef visitor_queue<colourer_t, havoqgt::detail::visitor_priority_queue,
                           TGraph> colourer_queue_t;
