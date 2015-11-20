@@ -84,10 +84,16 @@ class gc_ldf_collector_visitor {
   bool pre_visit() const {
     // No one would ever send a message to us if their degree was 0,
     // So this is the initialization step.
-    if (incoming_degree == 0) {  return true;  }
+    if (incoming_degree == 0) {
+      assert(!vertex.is_delegate_slave());
+      return true;
+    }
 
     // Don't count an edge to one's self!
     if (caller == vertex) {  return false;  }
+
+    // TODO(Scott): Necessary?
+    // if (vertex.is_delegate_slave()) {  return true;  }
 
     // Accumulate degree, if their degree is larger than ours.
     // (i.e. They will go first.)
@@ -113,7 +119,7 @@ class gc_ldf_collector_visitor {
       gc_ldf_collector_visitor new_v(neighbour, vertex, graph.degree(vertex));
       vis_queue->queue_visitor(new_v);
     }
-    return false;
+    return true;
   }
 
   // The queue is actually not necessary for this traversal.
@@ -272,6 +278,7 @@ class gc_id_collector_visitor {
       // Check if neighbour has a greater priority.
       if (vertex_locator::lesser_hash_priority(vertex, nbr)) {
         (*counter_data())[vertex]++;
+        assert(vertex != nbr);
       }
     }
     return false;
@@ -326,31 +333,36 @@ class gc_visitor {
   typedef typename Graph::vertex_locator vertex_locator;
   // Default constructor.
   gc_visitor() :
-          vertex(), caller(), caller_colour(0) {  }
+          vertex(), caller(), caller_colour(0), prop_colour(0) {  }
 
   // Baseline constructor.
   explicit gc_visitor(vertex_locator _vertex) :
-        vertex(_vertex), caller(_vertex), caller_colour(0) {  }
+        vertex(_vertex), caller(_vertex), caller_colour(0), prop_colour(0) {  }
 
   // Who I am, who notified me, what colour they notified me with.
-  gc_visitor(vertex_locator _vertex, vertex_locator _caller,
-                 uint32_t _colour) :
-      vertex(_vertex), caller(_caller), caller_colour(_colour) {  }
+  gc_visitor(vertex_locator _vertex, vertex_locator _caller, uint32_t _col) :
+      vertex(_vertex), caller(_caller), caller_colour(_col), prop_colour(0) {  }
 
 
   bool pre_visit() const {
+    assert(prop_colour == 0);
+
     // We need to resize our bitmap to our degree if we haven't done so before.
     // We also add one, due to the graph colouring property of colour being
     // between [0, degree+1]
     auto* bitmap = &((*nbr_colour_data())[vertex]);
-    if (bitmap->size() != (*graph_ref()).degree(vertex) + 1) {
-      bitmap->resize((*graph_ref()).degree(vertex) + 1);
+    if (!vertex.is_delegate_slave()) {
+      if (bitmap->size() != (*graph_ref()).degree(vertex) + 1) {
+        bitmap->resize((*graph_ref()).degree(vertex) + 1);
+      }
     }
 
     // No one will ever tell us their colour is zero, so must be initialization.
     if (caller_colour == 0) {
+      // Should only ever be called on a normal vertex, or a master.
+      assert(!vertex.is_delegate_slave());
       if ((*counter_data())[vertex] == 0) {
-        assert(((*vertex_colour_data())[vertex] == 0) && "visit point one");
+        assert(((*vertex_colour_data())[vertex] == 0) && "Entry point 1.");
         return true;
       } else {
         return false;
@@ -363,13 +375,17 @@ class gc_visitor {
     // If we get a message of someone telling us their colour, and if we know
     // we're already coloured, we don't have to do anything.
     if ((*counter_data())[vertex] == 0) {
-      assert(((*vertex_colour_data())[vertex]) != caller_colour);
+      //assert(((*vertex_colour_data())[vertex]) != caller_colour);
       return false;
     }
 
+    // If we pass above checks, we need to pass the pre-visit up to the master,
+    // if we are a delegate slave.
+    if (vertex.is_delegate_slave()) {  return true;  }
+
     // Recieved a colour.
     // Add incoming colour to invalid colour list, if needed.
-    if (caller_colour <= bitmap->size() && caller_colour != 0) {
+    if (caller_colour <= bitmap->size()) {
       bitmap->set(caller_colour - 1);  // One indexing offset.
     }
 
@@ -378,7 +394,7 @@ class gc_visitor {
 
     // If we decrease to zero, we will full visit.
     if ((*counter_data())[vertex] == 0) {
-      assert(((*vertex_colour_data())[vertex] == 0) && "visit point two");
+      assert(((*vertex_colour_data())[vertex] == 0) && "Entry point 2.");
       return true;
     }
     // Otherwise, we are not allowed to colour ourself yet.
@@ -387,26 +403,54 @@ class gc_visitor {
 
 
   template<typename VisitorQueueHandle>
-  bool visit(const Graph& graph, VisitorQueueHandle vis_queue) const {
-    assert((*counter_data())[vertex] == 0);
+  bool visit(const Graph& graph, VisitorQueueHandle vis_queue) {
+    uint32_t colour = 0;
 
-    // We should not re-colour a vertex!
-    // The only case that this should ever be hit is when we recieved message
-    // that decreased our counter enough that we are able to go, BEFORE
-    // the actual initialization pre-vist struck.
-    if ((*vertex_colour_data())[vertex] != 0) {  return false;  }
+    // Two paths: a slave needs to apply the master's colour, otherwise we are
+    // in charge to choose a colour.
+    if (!vertex.is_delegate_slave()) {
+      // Note: if we are master delegate or a normal vertex, we should have
+      // a counter of 0, being ready to go.
+      assert((*counter_data())[vertex] == 0);
 
-    // Colour the vertex.
-    auto* bitmap = &((*nbr_colour_data())[vertex]);
+      // We should not re-colour a vertex!
+      // The only case that this should ever be hit is when we recieved message
+      // that decreased our counter enough that we are able to go, BEFORE
+      // the actual initialization pre-vist struck.
+      if ((*vertex_colour_data())[vertex] != 0) {  return false;  }
 
-    // Ignore singletons (degree zero), assign them to colour 1.
-    uint32_t colour = 1;
-    if (bitmap->size() != 0) {
-      bitmap->flip();
-      colour = (bitmap->find_first() + 1);  // One indexing offset.
+      // Colour the vertex.
+      auto* bitmap = &((*nbr_colour_data())[vertex]);
+
+      // Ignore singletons (degree zero), assign them to colour 1.
+      colour = 1;
+      if (bitmap->size() != 0) {
+        bitmap->flip();
+        colour = (bitmap->find_first() + 1);  // One indexing offset.
+      }
+      (*vertex_colour_data())[vertex] = colour;
+      // Sanity check. We should never use the 'uncoloured' colour.
+      assert(colour != 0);
+
+      // Set our instance colour to the colour we arrived at. This is so that
+      // delegate slaves receive the chosen colour, as they need to broadcast
+      // this to their assigned neighbours.
+      if (vertex.is_delegate_master()) {
+        prop_colour = colour;
+      }
+
+    } else {
+      // Delegate slave: If we are a slave, we need to set our counter to 0,
+      // and apply the colour we were given.
+      (*counter_data())[vertex] = 0;
+
+      // Sanity check. We should never use the 'uncoloured' colour.
+      assert(prop_colour != 0);
+      colour = prop_colour;
+      (*vertex_colour_data())[vertex] = prop_colour;
     }
-    (*vertex_colour_data())[vertex] = colour;
 
+    // Sanity check. We should never use the 'uncoloured' colour.
     assert(colour != 0);
 
     // Tell our neighbours that we have coloured ourself.
@@ -439,7 +483,7 @@ class gc_visitor {
         vis_queue->queue_visitor(new_visitor);
       }
     }
-    return false;
+    return true;
   }
 
 
@@ -493,6 +537,7 @@ class gc_visitor {
   vertex_locator   vertex;
   vertex_locator   caller;
   uint32_t         caller_colour;
+  uint32_t         prop_colour = 0;
 } __attribute__((packed));
 
 
@@ -616,6 +661,9 @@ void graph_colour(TGraph*           graph,
       std::cerr << "Bad GC type!" << std::endl;
       exit(-1);
   }
+
+  // Combine all counters (add).
+  counter_data->all_reduce();
 
   double time_start = MPI_Wtime();
 

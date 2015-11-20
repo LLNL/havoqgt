@@ -95,6 +95,15 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     return false;
   }
 
+  bool is_delegate_slave() const {
+     return (is_delegate() && ((m_local_id % havoqgt_env()->world_comm().size())
+                               != havoqgt_env()->world_comm().rank()));
+  }
+  bool is_delegate_master() const {
+     return (is_delegate() && ((m_local_id % havoqgt_env()->world_comm().size())
+                               == havoqgt_env()->world_comm().rank()));
+  }
+
   bool is_delegate() const { return m_is_delegate == 1;}
   uint32_t owner() const { return m_owner_dest; }
   void set_dest(uint32_t dest) { m_owner_dest = dest; assert(m_owner_dest == dest);}
@@ -121,8 +130,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
       return x.m_is_delegate < y.m_is_delegate;
     }
   }
-  friend bool operator > (const vertex_locator& x,
-                          const vertex_locator& y) {  return !(x < y);  }
+  friend bool operator >= (const vertex_locator& x,
+                           const vertex_locator& y) {  return !(x < y);  }
 
 
   friend bool operator!=(const vertex_locator& x,
