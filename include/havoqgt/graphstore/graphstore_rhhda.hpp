@@ -121,7 +121,7 @@ class graphstore_rhhda
       } else {
 
         /// --- move the elements from low table to high-mid table --- ///
-        mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(middle_high_degree_threshold);
+        mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(middle_high_degree_threshold * 2);
         auto itr_single = m_low_degree_table->find(src);
         mid_high_src_vertex_value_type value((*itr_single).first, nullptr);
         for (; !itr_single.is_end(); ++itr_single) {
@@ -433,13 +433,13 @@ class graphstore_rhhda
 
 
 ///
-/// \brief The graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, 0> class
-///   partial speciallization class when middle_high_degree_threshold is 0
+/// \brief The graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, 1> class
+///   partial speciallization class when middle_high_degree_threshold is 1
 template <typename vertex_id_type,
           typename vertex_meta_data_type,
           typename edge_weight_type,
           typename segment_manager_type>
-class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type, segment_manager_type, 0>
+class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type, segment_manager_type, 1>
 {
  private:
   using size_type = size_t;

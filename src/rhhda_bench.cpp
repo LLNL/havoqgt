@@ -11,7 +11,7 @@
 #include <havoqgt/graphstore/graphstore_rhhda.hpp>
 
 enum : size_t {
-  midle_high_degree_threshold = 1
+  midle_high_degree_threshold = 2 // must be more or equal than 1
 };
 
 using vertex_id_type = uint64_t;

@@ -34,7 +34,7 @@
 #endif
 
 enum : size_t {
-  midle_high_degree_threshold = 1
+  midle_high_degree_threshold = 2 // must be more or equal than 1
 };
 
 /// --- typenames --- ///
