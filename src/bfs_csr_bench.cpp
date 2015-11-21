@@ -217,7 +217,7 @@ int main(int argc, char* argv[])
   /// ---------- Graph Traversal --------------- ///
   std::cout << "\n<Run BFS>" << std::endl;
   if (source_list_.empty())
-    generate_source_list(4, max_vertex_id_, source_list_);
+    generate_bfs_sources(4, max_vertex_id_, source_list_);
   run_bfs(*graph, max_vertex_id_, max_vertex_id_, source_list_);
 
   delete graph;

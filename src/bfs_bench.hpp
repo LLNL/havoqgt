@@ -98,7 +98,7 @@ void run_bfs(graphstore_type& graph, size_t max_vertex_id, size_t num_edges, std
 }
 
 template<typename vertex_type>
-void generate_source_list(const int num_sources,  const vertex_type max_vertex_id, std::vector<vertex_type>& source_list)
+void generate_bfs_sources(const int num_sources,  const vertex_type max_vertex_id, std::vector<vertex_type>& source_list)
 {
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "generate sources using a seed: " << seed << std::endl;
@@ -109,5 +109,63 @@ void generate_source_list(const int num_sources,  const vertex_type max_vertex_i
   }
 }
 
-#endif // BFS_BENCH_HPP
+template <typename vertex_id_type, typename graphstore_type, typename edgelist_type>
+void construct_graph(segment_manager_type *const segment_manager,
+                     graphstore_type& graph_store,
+                     edgelist_type& edges,
+                     const uint64_t chunk_size)
+{
+  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  havoqgt::havoqgt_env()->world_comm().barrier();
 
+  uint64_t loop_cnt = 0;
+  bool global_is_finished = false;
+
+  /// --- iterator and array for edgelist --- ///
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+  request_vector_type<vertex_id_type> update_request_vec;
+  update_request_vec.reserve(chunk_size);
+
+  const double time_start = MPI_Wtime();
+  while (!global_is_finished) {
+    if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
+
+    /// --- generate edges --- ///
+    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
+
+    const unsigned char dummy = 0;
+    for (auto request : update_request_vec) {
+      graph_store.insert_edge(request.edge.first, request.edge.second, dummy);
+    }
+    if (mpi_rank == 0) sync_mmap();
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    /// --- Has everyone finished ? --- ///
+    const bool local_is_finished = (edges_itr == edges_itr_end);
+    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
+
+    ++loop_cnt;
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  /// --- print results --- ///
+  if (mpi_rank == 0) {
+    const double time_end = MPI_Wtime();
+    std::cout << "\n-- All edge updations done --" << std::endl;
+    std::cout << "execution time (sec.) =\t" << time_end - time_start << std::endl;
+    print_system_mem_usages();
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  /// --- print summary information --- ///
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
+    }
+    havoqgt::havoqgt_env()->world_comm().barrier();
+  }
+}
+
+#endif // BFS_BENCH_HPP

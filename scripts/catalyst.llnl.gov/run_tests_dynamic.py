@@ -5,74 +5,72 @@ import subprocess
 import os
 import os.path
 import datetime
+import argparse
 
-USE_PDEBUG = False
+GRAPH_PATH="/l/ssd/"
+GRAPH_NAME="out.graph"
+GRAPH_PATH_DIMMAP="/dimmap/"
 
-# ---- Configuration ----- #
-N_NODES = 1
-N_PROCS = 1
+def parse_options:
+  global args
 
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--non_debug", "-D", action="store_false",
+                                  default=True,
+                                  help="non debug mode")
+  parser.add_argument("--dimmap", "-m", type=int,
+                                  default=0,
+                                  help="dimmap cache size (4KB)")
+  parser.add_argument("--dimmap_tune", "-T", action="store_true",
+                                       default=False,
+                                       help="use dimmap for tune")
+  parser.add_argument("--global_log_file", "-L", default="./tests_dynamic.log"
+                                           help="monitor I/O statistics using iostat")
+  parser.add_argument("--log_dir", "-l", default="./log"
+                                           help="path log directory")
+  parser.add_argument("--ppdebug", "-P", action="store_true",
+                                   default=False,
+                                   help="run on ppdebug")
+  parser.add_argument("--segment_size", "-S", type=int,
+                                        default="39"
+                                        help="segment_size in GB")
+  parser.add_argument("--chunk_size", "-c", type=int,
+                                        default="6"
+                                        help="chunk size in log10")
+  parser.add_argument("--time_limit", "-t", type=int,
+                                      default=23*60+59
+                                      help="time limit in min.")
+  parser.add_argument("--edge_files", "-E", default=""
+                                      help="edge filies")
+  parser.add_argument("--scale", "-s", type=int,
+                                      default=18
+                                      help="time limit in min.")
+  parser.add_argument("--edge_factor", "-e", type=int,
+                                      default=16
+                                      help="time limit in min.")
+  parser.add_argument("--verbose", "-v", action="store_true",
+                                   default=False,
+                                   help="verbose")
+  parser.add_argument("--num_procs", "-n", type=int,
+                                      default=1
+                                      help="num processes")
+  parser.add_argument("--num_nodes", "-N", type=int,
+                                      default=1
+                                      help="num nodes")
+  parser.add_argument("executable", help="path for executable")
+  parser.add_argument("motivation", default="debug",
+                                    help="motivation")
 
-DEBUG = True
-if DEBUG:
-	USE_PDEBUG = False
-USE_DIMMAP = True
-USE_DIMMAP_FOR_TUNE = False
-MONITOR_IO = False
-MEMSIZE_DIMMAP = 1024*256*4
-#MEMSIZE_DIMMAP = 1024*256*2*N_NODES*N_PROCS
-#GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_insert_delete_final.log"
-GLOBAL_LOG_FILE = "/g/g90/iwabuchi/logs/sc_ipdps_etc.log"
+  args = parser.parse_args()
 
-NORUN = False
-VERBOSE = True
-USE_CATALYST = True
-DELETE_WORK_FILES = False
-SEGMENT_SIZE = 39
-EDGES_FILELIST = os.getenv('EFILE_LIST', "./work/file_list")
-TIME_LIMIT = 60 * 23
-# --------------------------- #
-
-if USE_DIMMAP:
-	graph_dir = "/dimmap/"
-else:
-	if USE_CATALYST:
-		graph_dir = "/l/ssd/"
-	else:
-		graph_dir = "/usr/localdisk/fusion/"
-
-#log_dir = "/g/g90/iwabuchi/results/sc_ipdps/insert_delete/rhhda/"
-log_dir = "/g/g90/iwabuchi/results/sc_ipdps/etc/"
-executable_dir = "src/"
-executable = "rhhda_bench"
-#executable = "baseline_bench"
 
 command_strings = []
 test_count = 0
 
 def log(s):
-	if VERBOSE:
-		print s
+	print s
 	with open(log_file_name, 'a') as f:
 		f.write(s + "\n")
-
-def log_global():
-	fl = open(GLOBAL_LOG_FILE, 'a')
-	if not NORUN:
-	 fl.write("Job ID: " + job_id + "\n")
-	fl.write("Log dir: " + log_dir + "\n")
-	fl.write("graph_dir: " + graph_dir + "\n")
-	fl.write("motivation: " + motivation + "\n")
-	fl.write("DEBUG: " + str(DEBUG) + ", ")
-	fl.write("USE_DIMMAP: " + str(USE_DIMMAP) + ", ")
-	fl.write("USE_DIMMAP_FOR_TUNE: " + str(USE_DIMMAP_FOR_TUNE) + ", ")
-	if USE_DIMMAP or USE_DIMMAP_FOR_TUNE:
-		fl.write("MEMSIZE_DIMMAP: " + str(MEMSIZE_DIMMAP) + ", ")
-	fl.write("USE_CATALYST: " + str(USE_CATALYST) + ", ")
-	fl.write("DELETE_WORK_FILES: " + str(DELETE_WORK_FILES) + ", ")
-	fl.write("MONITOR_IO: " + str(MONITOR_IO) + "\n")
-	fl.write("---------------------------------------------\n\n")
-	fl.close()
 
 def init_test_dir():
 	global log_dir
@@ -82,8 +80,10 @@ def init_test_dir():
 	global io_monitoring_report_file
 	global motivation
 
-	if DEBUG:
-		log_dir += "debug/"
+  log_dir += args.log_dir
+
+	if !args.non_debug:
+		log_dir += "/debug/"
 		if not os.path.exists(log_dir):
 			os.makedirs(log_dir)
 
@@ -91,64 +91,50 @@ def init_test_dir():
 	while os.path.exists(log_dir+time_stamp):
 		time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
 
-	if USE_PDEBUG:
-		log_dir += "pdebug_"
+	if args.ppdebug:
+		log_dir += "/pdebug_"
 
 	log_dir += time_stamp + "/"
 	os.makedirs(log_dir)
 
 	log_file_name = log_dir + "run_tests.log"
 	log("Test Motivation:")
-	if len(sys.argv) == 2:
-		log(str(sys.argv[1]))
-		motivation = str(sys.argv[1])
-	elif DEBUG:
-		log("Debuging...")
-		log(log_dir)
-		motivation = "Debuging..."
-	else:
-		var = raw_input("Please input test motivation: ")
-		log(log_dir + ": " + var)
-		motivation = var
+	motivation = str(arg.motivation)
+  log(motivation)
 
 	sbatch_file = log_dir + "batch.sh"
 
-	if DEBUG:
-		executable = executable_dir+executable
-	else:
-		cmd = ['cp', executable_dir+executable, log_dir+executable]
-		p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-		while (p.poll() == None):
-			pass
-		executable = log_dir+executable
+  exe_splt=args.executable.split("/")
+  exe=exe_splt[-1]
+	cmd = ['cp', args.executable, log_dir+exe]
+	p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+	while (p.poll() == None):
+		pass
+	executable = log_dir+exe
 
-
-	if MONITOR_IO:
+	if args.iostat:
 		io_monitoring_report_file = log_dir + "io_monitering_report"
+
 
 def generate_shell_file():
 	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
 	block_end = "echo -e \"------------------------------------\"\n"
 	i = 0
 
-	if USE_CATALYST:
 		slurm_options = " --clear-ssd "
-	else:
-		slurm_options = ""
 
-	if USE_DIMMAP:
-		slurm_options += " --di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
-	elif USE_DIMMAP_FOR_TUNE:
-		slurm_options += " --di-mmap=npages=" + str(MEMSIZE_DIMMAP) + ",ver=1.1.21d,ra_tune=0 "
+	if args.dimmap > 0 && !args.dimmap_tune:
+		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+	elif args.dimmap > 0 && args.dimmap_tune:
+		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
 	else:
 	 	slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
-	if USE_PDEBUG:
+	if args.ppdebug:
 		slurm_options += " -ppdebug "
 
-	slurm_options += " -t" + str(TIME_LIMIT) + " "
-
-        slurm_options += " --msr-safe "
+	slurm_options += " -t" + str(args.time_limit) + " "
+  slurm_options += " --msr-safe "
 
 	with open(sbatch_file, 'w') as f:
 		f.write("#!/bin/bash\n")
@@ -200,10 +186,10 @@ def generate_shell_file():
 
 			s += block_start + "echo Executable Log \n" + block_end
 			s += "date \n"
-			s += "srun -N" +str(nodes) + " -n" + str(processes) + " -W" + str(TIME_LIMIT * 60) + " " + cmd_str + " \n"
+			s += "srun -N" +str(nodes) + " -n" + str(processes) + " -W" + str(args.time_limit * 60) + " " + cmd_str + " \n"
 			s += "date \n"
 
-			if MONITOR_IO:
+			if args.iostat:
 				s += block_start + "echo stop I/O monitoring \n" + block_end
 				s += "pkill iostat \n"
 				s += "ps -a \n"
@@ -211,57 +197,36 @@ def generate_shell_file():
 			s += block_start + "echo free -m \n" + block_end
 			s += "free -m \n"
 
-			if USE_CATALYST:
-				s += block_start + "echo df -h /l/ssd \n" + block_end
-				s += "df -h /l/ssd  \n"
-			else:
-				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
-				s += "df -h /usr/localdisk/fusion \n"
+			s += block_start + "echo df -h " + GRAPH_PATH + " \n" + block_end
+			s += "df -h " + GRAPH_PATH + "  \n"
 
-			if USE_CATALYST:
-				s += block_start + "echo du -sh /l/ssd/out.graph* \n" + block_end
-				s += "du -sh /l/ssd/out.graph* \n"
-			else:
-				s += block_start + "echo du -sh /usr/localdisk/fusion/out.graph* \n" + block_end
-				s += "du -sh /usr/localdisk/fusion/out.graph* \n"
+			s += block_start + "echo du -sh " + GRAPH_PATH + "/" + GRAPH_NAME + "* \n" + block_end
+			s += "du -sh " + GRAPH_PATH + "/" + GRAPH_NAME + "* \n"
 
-			if USE_DIMMAP:
-				s += block_start + "echo du -sh /dimmap/* \n" + block_end
-				s += "du -sh /dimmap/*\n"
+			if args.dimmap > 0 && !args.dimmap_tune:
+				s += block_start + "echo du -sh " + GRAPH_PATH_DIMMAP + "* \n" + block_end
+				s += "du -sh " +GRAPH_PATH_DIMMAP+ "/*\n"
 
-			if USE_CATALYST:
-				s += block_start + "echo ls -lsth /l/ssd/ \n" + block_end
-				s += "ls -lsth /l/ssd/\n"
-			else:
-				s += block_start + "echo ls -lsth /usr/localdisk/fusion/ \n" + block_end
-				s += "ls -lsth /usr/localdisk/fusion/ \n"
+			s += block_start + "echo ls -lsth " + GRAPH_PATH + " \n" + block_end
+			s += "ls -lsth " + GRAPH_PATH + "\n"
 
-			if USE_DIMMAP:
-				s += block_start + "echo ls -lsth /dimmap/ \n" + block_end
-				s += "ls -lsth /dimmap/\n"
+			if args.dimmap > 0 && !args.dimmap_tune:
+				s += block_start + "echo ls -lsth " + GRAPH_PATH_DIMMAP + " \n" + block_end
+				s += "ls -lsth " + GRAPH_PATH_DIMMAP + "\n"
 
-			if USE_DIMMAP:
+			if args.dimmap > 0 && !args.dimmap_tune:
 				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
 				s += "cat /proc/di-mmap-runtimeA-stats \n"
 
-			s += block_start + "dmesg | tail -n 500 \n" + block_end
-			s += "dmesg | tail -n 500 \n"
+      if args.verbose:
+  			s += block_start + "dmesg | tail -n 500 \n" + block_end
+  			s += "dmesg | tail -n 500 \n"
 
 			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
 			s += "iostat -m | grep Device 2>&1 \n"
 			s += "iostat -m | grep md0 2>&1 \n"
 
-			if DELETE_WORK_FILES:
-				if USE_CATALYST:
-					s += "rm /l/ssd/out.graph*\n"
-					s += "rm /dimmap/out.graph*\n"
-				else:
-					s += "rm /usr/localdisk/fusion/out.graph*\n"
-					s += "rm /dimmap/out.graph*\n"
-
 			s += "EOF\n\n"
-
-
 
 			f.write(sbatch + s+ "\n\n")
 
@@ -271,14 +236,14 @@ def generate_shell_file():
 def execute_shell_file():
 	global job_id
 
-	if not NORUN:
-		cmd = ['sh', sbatch_file]
-		job_id = subprocess.check_output(cmd)
+	cmd = ['sh', sbatch_file]
+	job_id = subprocess.check_output(cmd)
+
 
 def add_command(nodes, processes, cmd):
 	global test_count
 
-	if not DEBUG:
+	if args.non_debug:
 		cmd_log_fname = log_dir+"test_"+str(test_count)+".out"
 
 		log(str(test_count) + ":\t" + " ".join(cmd))
@@ -298,25 +263,39 @@ def add_command(nodes, processes, cmd):
 
 	command_strings.append([nodes, processes, " ".join(cmd)])
 
-def create_commands(initial_scale, scale_increments, max_scale, delete_ratio_list):
 
-	graph_file = graph_dir+"out.graph"
+def log_global():
+  fl = open(args.global_log_file, 'a')
+  fl.write("Job ID: " + job_id + "\n")
+  fl.write("Log dir: " + log_dir + "\n")
+  fl.write("graph_dir: " + graph_dir + "\n")
+  fl.write("motivation: " + motivation + "\n")
+  fl.write("non debug: " + str(args.non_debug) + ", ")
+  fl.write("dimmap: " + str(args.dimmap) + ", ")
+  fl.write("dimmap_tune: " + str(args.dimmap_tune) + ", ")
+  fl.write("iostat: " + str(args.iostat) + "\n")
+  fl.write("---------------------------------------------\n\n")
+  fl.close()
 
-	for k in delete_ratio_list:
-		chunk_size_log10 = 6
-		edges_factor = 16
-		scale = initial_scale
 
-		while (scale <= max_scale):
-			cmd = [executable, "-s" + str(scale), "-e" + str(edges_factor),
-			       "-o" + graph_file, "-f" + str(SEGMENT_SIZE),
-                               "-c" + str(chunk_size_log10), "-r" + str(k), "-i" + EDGES_FILELIST]
-			add_command(N_NODES, N_PROCS, cmd)
-			scale = scale + scale_increments
 
+
+parse_args()
 init_test_dir()
+cmd = [executable, "-s" + str(args.scale), "-e" + str(args.edge_factor),
+       "-o" + GRAPH_PATH + GRAPH_NAME, "-f" + str(args.segment_size),
+       "-c" + str(args.chunk_size), "-i" + args.edge_files]
+add_command(args.num_nodes, args.num_procs, cmd)
 
-delete_ratio_list = [0]
+#make bash file and run it
+generate_shell_file()
+execute_shell_file()
+
+log("Finished after generating %d Srun Tasks\n" %(test_count))
+
+if args.non_debug:
+  log_global()
+
 
 #EDGES_FILELIST="./work/file_list_rmat_s24"
 #create_commands(27, 1, 27, delete_ratio_list)
@@ -355,14 +334,4 @@ create_commands(27, 1, 27, delete_ratio_list)
 #EDGES_FILELIST="./work/file_list_rnd_rnd"
 #create_commands(27, 1, 27, delete_ratio_list)
 # --------------------------------------------- #
-
-#make bash file and run it
-generate_shell_file()
-execute_shell_file()
-
-log("Finished after generating %d Srun Tasks\n" %(test_count))
-
-if not DEBUG:
-	log_global()
-
 

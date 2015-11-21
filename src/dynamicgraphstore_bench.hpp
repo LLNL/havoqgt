@@ -41,13 +41,14 @@ using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
 
+/// --------------------------- edge update request ----------------------------------- ///
 template<typename vertex_id_type>
-struct EdgeUpdateRequest
+struct edge_update_request
 {
-  EdgeUpdateRequest()
+  edge_update_request()
   { }
 
-  EdgeUpdateRequest(const std::pair<vertex_id_type, vertex_id_type>& _edge, const bool _is_delete) :
+  edge_update_request(const std::pair<vertex_id_type, vertex_id_type>& _edge, const bool _is_delete) :
     edge(_edge),
     is_delete(_is_delete)
   { }
@@ -57,81 +58,27 @@ struct EdgeUpdateRequest
 };
 
 template<typename vertex_id_type>
-EdgeUpdateRequest<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair)
+edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair)
 {
-  return EdgeUpdateRequest<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+  return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
                                            false);
 }
 
 template<typename vertex_id_type>
-EdgeUpdateRequest<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair)
+edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair)
 {
-  return EdgeUpdateRequest<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+  return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
                                            std::get<2>(pair));
 }
 
 
 template<typename vertex_id_type>
-bool edgerequest_asc(const EdgeUpdateRequest<vertex_id_type>& left, const EdgeUpdateRequest<vertex_id_type>& right ) {
+bool edgerequest_asc(const edge_update_request<vertex_id_type>& left, const edge_update_request<vertex_id_type>& right ) {
   return left.edge.first < right.edge.first;
 }
 template<typename vertex_id_type>
-using request_vector_type = std::vector<EdgeUpdateRequest<vertex_id_type>>;
+using request_vector_type = std::vector<edge_update_request<vertex_id_type>>;
 
-
-double get_segment_size(segment_manager_type *const segment_manager)
-{
-  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  return static_cast<double>(usages) / (1ULL << 30);
-}
-
-void print_system_mem_usages()
-{
-  size_t mem_unit, totalram, freeram, usedram, bufferram, totalswap, freeswap;
-  if (graphstore::utility::get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
-//    std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
-//    std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
-    std::cout << "Usage: freeram(GiB):\t" << static_cast<double>(freeram) / (1<<30ULL) << "\n";
-    std::cout << "Usage: usedram(GiB):\t" << static_cast<double>(usedram) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
-//    std::cout << "----------------------------" << std::endl;
-  }
-//  size_t size, resident, share, text, lib, data, dt;
-//  if (graphstore::utility::get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
-//    std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: text(GiB):\t" << static_cast<double>(text) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
-//    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
-//    std::cout << "----------------------------" << std::endl;
-//  }
-
-  size_t dirty;
-  if (graphstore::utility::get_meminfo("Dirty", dirty)) {
-    std::cout << "Usage: Dirty(KB):\t" << dirty << "\n";
-  }
-}
-
-
-void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-{
-#ifdef __linux__
-    int fd  = open(fname, O_RDWR);
-    assert(fd != -1);
-    /// posix_fallocate dosen't work on XFS ?
-    /// (dosen't actually expand the file size ?)
-    int ret = fallocate(fd, 0, 0, size);
-    assert(ret == 0);
-    close(fd);
-    asdf.flush();
-#else
-#warning fallocate() is not supported
-#endif
-}
 
 template<typename vertex_id_type>
 double sort_requests(request_vector_type<vertex_id_type>& requests)
@@ -142,6 +89,7 @@ double sort_requests(request_vector_type<vertex_id_type>& requests)
 }
 
 
+/// --------------------------- generate edge update requests ----------------------------------- ///
 template <typename edgelist_itr_type, typename vertex_id_type>
 std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& edgelist_itr,
                                                               edgelist_itr_type& edgelist_itr_last,
@@ -180,18 +128,55 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
   return std::make_pair(max_vertex_id, cnt);
 }
 
-void flush_dimmap()
+
+/// --------------------------- utilities for system call ----------------------------------- ///
+void print_system_mem_usages()
 {
-  std::cout << "flush di-mmap" << std::endl;
-  std::ofstream flusher("/sys/class/di-mmap-runtimeA/flush_buffer");
-  flusher << "1" << std::endl;
+  size_t mem_unit, totalram, freeram, usedram, bufferram, totalswap, freeswap;
+  if (graphstore::utility::get_system_memory_usages(&mem_unit, &totalram, &freeram, &usedram, &bufferram, &totalswap, &freeswap)) {
+//    std::cout << "Usage: mem_unit:\t" << mem_unit << "\n";
+//    std::cout << "Usage: totalram(GiB):\t" << static_cast<double>(totalram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: freeram(GiB):\t" << static_cast<double>(freeram) / (1<<30ULL) << "\n";
+    std::cout << "Usage: usedram(GiB):\t" << static_cast<double>(usedram) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: bufferram(GiB):\t" << static_cast<double>(bufferram) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: totalswap(GiB):\t" << static_cast<double>(totalswap) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: freeswap(GiB):\t" << static_cast<double>(freeswap) / (1<<30ULL) << "\n";
+//    std::cout << "----------------------------" << std::endl;
+  }
+//  size_t size, resident, share, text, lib, data, dt;
+//  if (graphstore::utility::get_my_memory_usages(&size, &resident, &share, &text, &lib, &data, &dt)) {
+//    std::cout << "Usage: VmSize(GiB):\t" << static_cast<double>(size) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: VmRSS(GiB):\t" << static_cast<double>(resident) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: sharedpages(GiB):\t" << static_cast<double>(share) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: text(GiB):\t" << static_cast<double>(text) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: library(GiB):\t" << static_cast<double>(lib) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: data+stack(GiB):\t" << static_cast<double>(data) / (1<<30ULL) << "\n";
+//    std::cout << "Usage: dirtypages(GiB):\t" << static_cast<double>(dt) / (1<<30ULL) << "\n";
+//    std::cout << "----------------------------" << std::endl;
+//  }
+
+  size_t dirty;
+  if (graphstore::utility::get_meminfo("Dirty", dirty)) {
+    std::cout << "Usage: Dirty(KB):\t" << dirty << "\n";
+  }
 }
 
-void sync_dimmap()
+
+void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 {
-  std::cout << "sync di-mmap" << std::endl;
-  std::ofstream flusher("/proc/di-mmap-runtimeA-tuning");
-  flusher << "mmap_sync_buffers" << std::endl;
+#ifdef __linux__
+    std::cout << "Call fallocate()" << std::endl;
+    int fd  = open(fname, O_RDWR);
+    assert(fd != -1);
+    /// posix_fallocate dosen't work on XFS ?
+    /// (dosen't actually expand the file size ?)
+    int ret = fallocate(fd, 0, 0, size);
+    assert(ret == 0);
+    close(fd);
+    asdf.flush();
+#else
+#warning fallocate() is not supported
+#endif
 }
 
 void flush_mmmap(mapped_file_type& mapped_file)
@@ -210,7 +195,15 @@ void sync_mmap()
 #endif
 }
 
-void mapped_file_madvice(mapped_file_type& mapped_file)
+
+/// --------------------------- utilities for interprocess ----------------------------------- ///
+double get_segment_size(segment_manager_type *const segment_manager)
+{
+  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  return static_cast<double>(usages) / (1ULL << 30);
+}
+
+void interprocess_mapped_file_dontneed(mapped_file_type& mapped_file)
 {
   std::cout << "Call adise_dontneed" << std::endl;
   boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
@@ -229,137 +222,25 @@ void segment_manager_zero_free_memory(segment_manager_type& segment_manager, map
     sync_mmap();
 }
 
-
-template <typename vertex_id_type, typename graphstore_type, typename edgelist_type>
-void apply_edge_update_requests(mapped_file_type& mapped_file,
-                                segment_manager_type *const segment_manager,
-                                graphstore_type& graph_store,
-                                edgelist_type& edges,
-                                const uint64_t chunk_size,
-                                const uint64_t edges_delete_ratio)
+void interprocess_delete_segmentfile(const char* fname)
 {
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  if (mpi_rank == 0) std::cout << "-- statuses of before generation --" << std::endl;
-  if (mpi_rank == 0) print_system_mem_usages();
-  havoqgt::havoqgt_env()->world_comm().barrier();
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
-    }
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  /// --- variables for analysys --- //
-  uint64_t loop_cnt = 0;
-  bool global_is_finished = false;
-
-  /// --- iterator and array for edgelist --- ///
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  request_vector_type<vertex_id_type> update_request_vec;
-  update_request_vec.reserve(chunk_size);
-
-  while (!global_is_finished) {
-    if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
-
-    /// --- generate edges --- ///
-    /// \brief generate_update_requests
-    if (mpi_rank == 0) std::cout << "-- generate requests --" << std::endl;
-    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-    if (mpi_rank == 0) std::cout << "\n-- process requests --" << std::endl;
-
-    /// --- update edges --- ///
-    size_t count_inserted = 0;
-    size_t count_deleted = 0;
-    size_t count_insert_req = 0;
-    size_t count_delete_req = 0;
-
-    const double time_start = MPI_Wtime();
-    const unsigned char dummy = 0;
-    for (auto request : update_request_vec) {
-      auto edge = request.edge;
-      if (request.is_delete) {
-        count_deleted += graph_store.erase_edge(edge.first, edge.second);
-        ++count_delete_req;
-      } else {
-        count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy);
-        ++count_insert_req;
-      }
-#if DEBUG_MODE
-        ofs_edges << edge.first << " " << edge.second << " " << request.is_delete << "\n";
-#endif
-    }
-    /// --- sync --- ///
-    const double time_start_sync = MPI_Wtime();
-    if (mpi_rank == 0) sync_mmap();
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-    /// this is a temp implementation
-    if (loop_cnt % 10 == 0) {
-      graph_store.opt();
-    }
-
-    /// --- print results --- ///
-    const double time_end = MPI_Wtime();
-    havoqgt::havoqgt_env()->world_comm().barrier();
-    if (mpi_rank == 0) {
-      std::cout << "\n-- results --" << std::endl;
-      std::cout << " inserted_edges,\t"
-                <<" deleted_edge,\t"
-                <<" exec_time,\t"
-                <<" segment_size(GiB)" << std::endl;
-    }
-    for (int i = 0; i < mpi_size; ++i) {
-      if (i == mpi_rank) {
-        std::cout << "prg [" << mpi_rank << "] "
-                  << count_insert_req        << " ( " << count_inserted               << " ),\t"
-                  << count_delete_req        << " ( " << count_deleted                << " ),\t"
-                  << (time_end - time_start) << " ( " << (time_end - time_start_sync) << " ),\t"
-                  << get_segment_size(segment_manager) << std::endl;
-      }
-      havoqgt::havoqgt_env()->world_comm().barrier();
-    }
-    if (mpi_rank == 0) print_system_mem_usages();
-
-#if VERBOSE
-    if (mpi_rank == 0) std::cout << "\n-- graph store's status --" << std::endl;
-    for (int i = 0; i < mpi_size; ++i) {
-      if (i == mpi_rank) {
-        std::cout << "[" << mpi_rank << "]" << std::endl;
-        graph_store.print_status(0);
-      }
-      havoqgt::havoqgt_env()->world_comm().barrier();
-    }
-#endif
-
-    ++loop_cnt;
-
-    /// --- Has everyone finished ? --- ///
-    const bool local_is_finished = (edges_itr == edges_itr_end);
-    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-
-  if (mpi_rank == 0) {
-    std::cout << "\n-- All edge updations done --" << std::endl;
-    print_system_mem_usages();
-  }
-  havoqgt::havoqgt_env()->world_comm().barrier();
-
-  /// --- print summary information --- ///
-  for (int i = 0; i < mpi_size; ++i) {
-    if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(segment_manager) << std::endl;
-    }
-    havoqgt::havoqgt_env()->world_comm().barrier();
-  }
+  boost::interprocess::file_mapping::remove(fname);
 }
 
+/// --------------------------- utilieies for DI-MMAP ----------------------------------- ///
+void flush_dimmap()
+{
+  std::cout << "flush di-mmap" << std::endl;
+  std::ofstream flusher("/sys/class/di-mmap-runtimeA/flush_buffer");
+  flusher << "1" << std::endl;
+}
+
+void sync_dimmap()
+{
+  std::cout << "sync di-mmap" << std::endl;
+  std::ofstream flusher("/proc/di-mmap-runtimeA-tuning");
+  flusher << "mmap_sync_buffers" << std::endl;
+}
 
 
 #endif // DYNAMICGRAPHSTORE_BENCH_HPP

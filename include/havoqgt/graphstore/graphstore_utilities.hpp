@@ -34,7 +34,7 @@
 
 #define DISP_LOG_VAR(x) \
   do { \
-    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << static_cast<uint64_t>(x) << std::endl; } \
+    std::cout << "DEG: " << __FILE__ << "(" << __LINE__ << ") " << #x << " =\t" << x << std::endl; } \
   while (0)
 
 
