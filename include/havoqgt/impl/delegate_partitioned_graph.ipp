@@ -1793,10 +1793,14 @@ print_graph_statistics() {
       << "\tNode Partition = " << node_partitions << std::endl
       << "\tEdge Chunk Size = " << edge_chunk_size << std::endl
       << "\tProcesses_per_node = " << processes_per_node << std::endl
+<<<<<<< HEAD:include/havoqgt/delegate_partitioned_graph/delegate_partitioned_graph.ipp
+      //<< "\tDebuging = " << IS_DEBUGING << std::endl
+=======
       << "\tDebuging = " << IS_DEBUGING << std::endl
       << "========================================================" << std::endl
       << "End Graph Statistics" << std::endl
       << "========================================================" << std::endl
+>>>>>>> origin/master:include/havoqgt/impl/delegate_partitioned_graph.ipp
       << std::flush;
   }
 }

@@ -6,3 +6,4 @@ Makefile
 build/*
 *.cobaltlog
 *.error
+*.autosave
