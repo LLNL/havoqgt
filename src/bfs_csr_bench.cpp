@@ -115,15 +115,15 @@ void parse_options(int argc, char **argv)
 
   char c;
 
-  while ((c = getopt (argc, argv, "g:s:f:e:v:m:r:")) != -1) {
+  while ((c = getopt (argc, argv, "g:S:o:E:v:m:r:")) != -1) {
     switch (c) {
       case 'g':
         fname_graph_ = optarg;
         break;
-      case 'f':
+      case 'o':
         fname_segmentfile_ = optarg;
         break;
-      case 's':
+      case 'S':
         segment_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
       case 'v':
@@ -132,7 +132,7 @@ void parse_options(int argc, char **argv)
       case 'm':
         num_edges_ = boost::lexical_cast<size_t>(optarg);
         break;
-      case 'e':
+      case 'E':
       {
         std::string fname(optarg);
         std::ifstream fin(fname);

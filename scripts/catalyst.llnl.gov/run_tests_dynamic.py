@@ -7,295 +7,326 @@ import os.path
 import datetime
 import argparse
 
-GRAPH_PATH="/l/ssd/"
-GRAPH_NAME="out.graph"
-GRAPH_PATH_DIMMAP="/dimmap/"
+LOG_DIR="./log"
+EXEC_DIR="./src"
+EXEC_NAME="dynamic_construct_bench"
+SEG_FILE_DIR="/l/ssd"
+SEG_FILE_NAME="out.graph"
+SEG_FILE_DIR_DIMMAP="/dimmap"
 
-def parse_options:
-  global args
+NO_RUN=True
 
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--non_debug", "-D", action="store_false",
-                                  default=True,
-                                  help="non debug mode")
-  parser.add_argument("--dimmap", "-m", type=int,
-                                  default=0,
-                                  help="dimmap cache size (4KB)")
-  parser.add_argument("--dimmap_tune", "-T", action="store_true",
-                                       default=False,
-                                       help="use dimmap for tune")
-  parser.add_argument("--global_log_file", "-L", default="./tests_dynamic.log"
-                                           help="monitor I/O statistics using iostat")
-  parser.add_argument("--log_dir", "-l", default="./log"
-                                           help="path log directory")
-  parser.add_argument("--ppdebug", "-P", action="store_true",
-                                   default=False,
-                                   help="run on ppdebug")
-  parser.add_argument("--segment_size", "-S", type=int,
-                                        default="39"
-                                        help="segment_size in GB")
-  parser.add_argument("--chunk_size", "-c", type=int,
-                                        default="6"
-                                        help="chunk size in log10")
-  parser.add_argument("--time_limit", "-t", type=int,
-                                      default=23*60+59
-                                      help="time limit in min.")
-  parser.add_argument("--edge_files", "-E", default=""
-                                      help="edge filies")
-  parser.add_argument("--scale", "-s", type=int,
-                                      default=18
-                                      help="time limit in min.")
-  parser.add_argument("--edge_factor", "-e", type=int,
-                                      default=16
-                                      help="time limit in min.")
-  parser.add_argument("--verbose", "-v", action="store_true",
-                                   default=False,
-                                   help="verbose")
-  parser.add_argument("--num_procs", "-n", type=int,
-                                      default=1
-                                      help="num processes")
-  parser.add_argument("--num_nodes", "-N", type=int,
-                                      default=1
-                                      help="num nodes")
-  parser.add_argument("executable", help="path for executable")
-  parser.add_argument("motivation", default="debug",
-                                    help="motivation")
+def parse_args():
+	global args
 
-  args = parser.parse_args()
+	parser = argparse.ArgumentParser()
 
 
-command_strings = []
-test_count = 0
+	parser.add_argument("gstore_name", help="graphstore name")
+
+	# options for srun
+	parser.add_argument("--num_procs", "-n", type=int,
+							default=1,
+							help="num processes")
+	parser.add_argument("--num_nodes", "-N", type=int,
+							default=1,
+							help="num nodes")
+	parser.add_argument("--time_limit", "-t", type=int,
+							default=23*60+59,
+							help="time limit in min.")
+	parser.add_argument("--ppdebug", action="store_true",
+							default=False,
+							help="run on ppdebug")
+
+	# options for dynamic
+	parser.add_argument("--scale", "-s", type=int,
+							default=18,
+							help="time limit in min.")
+	parser.add_argument("--edge_factor", "-e", type=int,
+							default=16,
+							help="time limit in min.")
+	parser.add_argument("--segment_size", "-S", type=int,
+							default=39,
+							help="segment_size in GB")
+	parser.add_argument("--chunk_size", "-c", type=int,
+							default=6,
+							help="chunk size in log10")
+	parser.add_argument("--edge_files", "-E", default="",
+							help="edge filies")
+
+	# options for DI-MMAP
+	parser.add_argument("--dimmap", type=int,
+							default=0,
+							help="DI-MMAP cache size (4KB)")
+	parser.add_argument("--dimmap_tune", action="store_true",
+							default=False,
+							help="use DI-MMAP for tune")
+
+	# options for log
+	parser.add_argument("--motivation", "-m", default="motivation is not specified",
+	                                                            help="motivation")
+	parser.add_argument("--log_dir", "-l", default=LOG_DIR,
+							help="path log directory")
+	parser.add_argument("--global_log_file", default="./tests_dynamic_global_log.log",
+							help="monitor I/O statistics using iostat")
+
+	# options for this program
+	parser.add_argument("--product_mode", "-p", action="store_true",
+							default=False,
+							help="production mode")
+
+	parser.add_argument("--iostat", action="store_true",
+							default=False,
+							help="run iostat")
+							
+	parser.add_argument("--verbose", "-v", action="store_true",
+							default=False,
+							help="verbose")
+
+	args = parser.parse_args()
+
+
+def init_test_files():
+ 	global log_file_base
+ 	global log_file_name
+ 	global batch_file
+ 	global executable
+ 	global io_monitoring_report_file
+	global motivation
+
+	# init log directory
+	log_dir = args.log_dir
+	if not args.product_mode:
+		log_dir += "/debug"
+	if not os.path.exists(log_dir):
+		os.makedirs(log_dir)
+	
+	# init log file base
+	log_file_base = log_dir + "/"
+	time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+	while os.path.exists(log_file_base + time_stamp):
+		time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+	log_file_base += time_stamp
+	
+	# init log file	
+	log_file_name = log_file_base + ".log"
+	
+	# init batch.sh	
+	batch_file = log_file_base + "_batch.sh"
+	
+	# init exec file
+	cmd = ['cp', EXEC_DIR + "/" + EXEC_NAME, log_file_base + "_" + EXEC_NAME]
+	p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+	while (p.poll() == None):
+		pass
+	executable = log_file_base + "_" + EXEC_NAME
+	
+	# iostat
+	if args.iostat:
+		io_monitoring_report_file = log_file_base + "_iostat.log"
+
+	# log
+	log_dsc("log_file_base", log_file_base)
+
+	log_dsc("nodes", str(args.num_nodes))
+	
+	log_dsc("procs", str(args.num_procs))
+	
+	log_dsc("Test Motivation", args.motivation)
+
+	if args.iostat:
+		log("iostat running")	
+
+# --- write to log file ---- #
+def log_dsc(description, val):
+	print description + ": " + val
+	with open(log_file_name, 'a') as f:
+		f.write(description + ": " + val + "\n")
 
 def log(s):
 	print s
 	with open(log_file_name, 'a') as f:
 		f.write(s + "\n")
 
-def init_test_dir():
-	global log_dir
-	global log_file_name
-	global sbatch_file
-	global executable
-	global io_monitoring_report_file
-	global motivation
 
-  log_dir += args.log_dir
+# --- write to batch file --- #
+def add_cmd(command):
+	with open(batch_file, 'a') as f:
+		f.write(command + "\n")
 
-	if !args.non_debug:
-		log_dir += "/debug/"
-		if not os.path.exists(log_dir):
-			os.makedirs(log_dir)
+def add_dsc(description):
+	block_start = "echo -e \"\\n\\n------------------------------------\""
+	block_end = "echo -e \"------------------------------------\""
 
-	time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-	while os.path.exists(log_dir+time_stamp):
-		time_stamp = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-
-	if args.ppdebug:
-		log_dir += "/pdebug_"
-
-	log_dir += time_stamp + "/"
-	os.makedirs(log_dir)
-
-	log_file_name = log_dir + "run_tests.log"
-	log("Test Motivation:")
-	motivation = str(arg.motivation)
-  log(motivation)
-
-	sbatch_file = log_dir + "batch.sh"
-
-  exe_splt=args.executable.split("/")
-  exe=exe_splt[-1]
-	cmd = ['cp', args.executable, log_dir+exe]
-	p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-	while (p.poll() == None):
-		pass
-	executable = log_dir+exe
-
-	if args.iostat:
-		io_monitoring_report_file = log_dir + "io_monitering_report"
+	with open(batch_file, 'a') as f:
+		f.write("\n" + block_start + "\necho " + description + "\n" + block_end + "\n")
+	
+def add_dsc_cmd(command):
+	add_dsc(command)
+	add_cmd(command)
 
 
-def generate_shell_file():
-	block_start = "echo -e \"\\n\\n------------------------------------\"\n"
-	block_end = "echo -e \"------------------------------------\"\n"
-	i = 0
+# --- generate batch file --- #
+def generate_batch_file(exec_cmd):
 
-		slurm_options = " --clear-ssd "
-
-	if args.dimmap > 0 && !args.dimmap_tune:
-		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
-	elif args.dimmap > 0 && args.dimmap_tune:
-		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
+	# - -- slurm options --- #
+	slurm_options = " --clear-ssd "
+	if args.dimmap > 0 and not args.dimmap_tune:
+		slurm_options += " --dimmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+	elif args.dimmap > 0 and args.dimmap_tune:
+		slurm_options += " --dimmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
 	else:
-	 	slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
+		slurm_options += " --dimmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
 	if args.ppdebug:
 		slurm_options += " -ppdebug "
-
+		
 	slurm_options += " -t" + str(args.time_limit) + " "
-  slurm_options += " --msr-safe "
+	slurm_options += " --msr-safe "
+	log_dsc("slurm_options", slurm_options)
+	
+	# --- make batch file ---  #
+	add_cmd("#!/bin/bash")
+	add_cmd("sbatch " + slurm_options + \
+			" -N" + str(args.num_nodes) + \
+			" -o" + log_file_name + \
+			" -e" + log_file_name + \
+			" << EOF")
+    
+    	add_cmd("#!/bin/sh")
+	add_dsc("Nodes: ")
+	add_cmd("echo \"SLURM_NODELIST = \$SLURM_NODELIST\"")
+	
+	add_dsc("Tuned Info: ")
+	add_cmd("echo \"/proc/sys/vm/dirty_ratio = \$(cat /proc/sys/vm/dirty_ratio)\"")
+	add_cmd("echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\"")
+	add_cmd("echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\"")
 
-	with open(sbatch_file, 'w') as f:
-		f.write("#!/bin/bash\n")
-		for cmd in command_strings:
-			nodes = cmd[0]
-			processes = cmd[1]
-			cmd_str = cmd[2]
+	add_dsc_cmd("free -m")
 
-			if DEBUG:
-				cmd_log_fname = log_dir+"test_"+str(i)+".out"
-				cmd_error_log_fname = log_dir+"test_"+str(i)+".out"
-			else:
-				cmd_log_fname = log_dir+"test_"+str(i)+".out"
-				cmd_error_log_fname = log_dir+"test_"+str(i)+".out"
+	add_dsc("Top 10 for memory using process")
+	add_cmd("ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10")
 
-			sbatch = "sbatch " + slurm_options + " -N" +str(nodes) + " -o" + cmd_log_fname + " -e" + cmd_error_log_fname + " << EOF \n"
+	add_dsc_cmd("df -h " + SEG_FILE_DIR)
 
-			s = "#!/bin/sh\n"
+	add_dsc("io-stat -m | grep md0 2>&1")
+	add_cmd("iostat -m | grep Device 2>&1")
+	add_cmd("iostat -m | grep md0 2>&1")
 
-			s += block_start + "echo Nodes: \n" + block_end
-			s += "echo \"SLURM_NODELIST = \$SLURM_NODELIST \"\n"
+	if args.iostat:
+		add_dsc_cmd("iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + "_" + str(i)+".log" + " 2>&1 &")
 
-			s += block_start + "echo Tuned Info: \n" + block_end
-			s += "echo \"/proc/sys/vm/dirty_ratio = \$(cat /proc/sys/vm/dirty_ratio)\" \n"
-			s += "echo \"/proc/sys/vm/dirty_background_ratio = \$(cat /proc/sys/vm/dirty_background_ratio)\" \n"
-			s += "echo \"/proc/sys/vm/dirty_expire_centisecs = \$(cat /proc/sys/vm/dirty_expire_centisecs)\" \n"
+	add_dsc_cmd("date")
+	add_dsc_cmd("srun -N" +str(args.num_nodes) + " -n" + str(args.num_procs) + " -W" + str(args.time_limit * 60) + " " + exec_cmd)
+	add_dsc_cmd("date")
 
-			s += block_start + "echo free -m \n" + block_end
-			s += "free -m \n"
+	if args.iostat:
+		add_dsc("stop I/O monitoring")
+		add_cmd("pkill iostat")
+		add_cmd("ps -a")
 
-			s += block_start + "echo Top 10 for memory using process \n" + block_end
-			s += "ps alx  | awk '{printf (\"%d\\t%s\\n\", \\$8, \\$13)}' | sort -nr | head -10 \n"
-			if USE_CATALYST:
-				s += block_start + "echo df -h /l/ssd \n" + block_end
-				s += "df -h /l/ssd  \n"
-			else:
-				s += block_start + "echo df -h /usr/localdisk/fusion \n" + block_end
-				s += "df -h /usr/localdisk/fusion \n"
+	add_dsc_cmd("free -m")
+	add_dsc_cmd("df -h " + SEG_FILE_DIR)
+	add_dsc_cmd("du -sh " + SEG_FILE_DIR + "/*")
 
-			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
-			s += "iostat -m | grep Device 2>&1 \n"
-			s += "iostat -m | grep md0 2>&1 \n"
+	if args.dimmap > 0 and not args.dimmap_tune:
+		add_dsc_cmd("du -sh " +SEG_FILE_DIR_DIMMAP+ "/*")
 
-			if MONITOR_IO:
-				s += block_start + "echo start I/O monitoring \n" + block_end
-				s += "iostat -d -m -t -x -p md0 10 > " + io_monitoring_report_file + "_" + str(i)+".log" + " 2>&1 & \n"
+	add_dsc_cmd("ls -lsth " + SEG_FILE_DIR)
+	
+	if args.dimmap > 0 and not args.dimmap_tune:
+		add_dsc_cmd("ls -lsth " + SEG_FILE_DIR_DIMMAP)
 
-			# s += "export NUM_EDGES=157286400000\n"
+	if args.dimmap > 0 and not args.dimmap_tune:
+		add_dsc_cmd("cat /proc/dimmap-runtimeA-stats")
 
-			s += block_start + "echo Executable Log \n" + block_end
-			s += "date \n"
-			s += "srun -N" +str(nodes) + " -n" + str(processes) + " -W" + str(args.time_limit * 60) + " " + cmd_str + " \n"
-			s += "date \n"
-
-			if args.iostat:
-				s += block_start + "echo stop I/O monitoring \n" + block_end
-				s += "pkill iostat \n"
-				s += "ps -a \n"
-
-			s += block_start + "echo free -m \n" + block_end
-			s += "free -m \n"
-
-			s += block_start + "echo df -h " + GRAPH_PATH + " \n" + block_end
-			s += "df -h " + GRAPH_PATH + "  \n"
-
-			s += block_start + "echo du -sh " + GRAPH_PATH + "/" + GRAPH_NAME + "* \n" + block_end
-			s += "du -sh " + GRAPH_PATH + "/" + GRAPH_NAME + "* \n"
-
-			if args.dimmap > 0 && !args.dimmap_tune:
-				s += block_start + "echo du -sh " + GRAPH_PATH_DIMMAP + "* \n" + block_end
-				s += "du -sh " +GRAPH_PATH_DIMMAP+ "/*\n"
-
-			s += block_start + "echo ls -lsth " + GRAPH_PATH + " \n" + block_end
-			s += "ls -lsth " + GRAPH_PATH + "\n"
-
-			if args.dimmap > 0 && !args.dimmap_tune:
-				s += block_start + "echo ls -lsth " + GRAPH_PATH_DIMMAP + " \n" + block_end
-				s += "ls -lsth " + GRAPH_PATH_DIMMAP + "\n"
-
-			if args.dimmap > 0 && !args.dimmap_tune:
-				s += block_start + "echo cat /proc/di-mmap-runtimeA-stats \n" + block_end
-				s += "cat /proc/di-mmap-runtimeA-stats \n"
-
-      if args.verbose:
-  			s += block_start + "dmesg | tail -n 500 \n" + block_end
-  			s += "dmesg | tail -n 500 \n"
-
-			s += block_start + "echo io-stat -m | grep md0 2>&1\n" + block_end
-			s += "iostat -m | grep Device 2>&1 \n"
-			s += "iostat -m | grep md0 2>&1 \n"
-
-			s += "EOF\n\n"
-
-			f.write(sbatch + s+ "\n\n")
-
-			i +=1
+	if args.verbose:
+		add_dsc_cmd("dmesg | tail -n 500")
+		
+	add_dsc("io-stat -m | grep md0 2>&1")
+	add_cmd("iostat -m | grep Device 2>&1")
+	add_cmd("iostat -m | grep md0 2>&1")
+	
+	add_cmd("EOF\n")
 
 
 def execute_shell_file():
 	global job_id
 
-	cmd = ['sh', sbatch_file]
+	cmd = ['sh ', batch_file]
 	job_id = subprocess.check_output(cmd)
 
+	log_dsc("job_id", job_id)
 
-def add_command(nodes, processes, cmd):
-	global test_count
+#def create_command(nodes, processes, cmd):
 
-	if args.non_debug:
-		cmd_log_fname = log_dir+"test_"+str(test_count)+".out"
+#    with open(log_file_name, 'w') as f:
+ #       temp = "Test number: %d\n" %(test_count)
+  #      f.write(temp)
+   #     temp = "SRun Args: %s\n" %(" ".join(cmd))
+    #    f.write(temp)
+     #   temp = "Nodes: %d\n" %(nodes)
+      #  f.write(temp)
+       # temp = "Processes: %d\n" %(processes)
+        #f.write(temp)
+        #f.write("\n")
 
-		log(str(test_count) + ":\t" + " ".join(cmd))
+    #command_strings.append([nodes, processes, " ".join(cmd)])
 
-		with open(cmd_log_fname, 'w') as f:
-			temp = "Test number: %d\n" %(test_count)
-			f.write(temp)
-			temp = "SRun Args: %s\n" %(" ".join(cmd))
-			f.write(temp)
-			temp = "Nodes: %d\n" %(nodes)
-			f.write(temp)
-			temp = "Processes: %d\n" %(processes)
-			f.write(temp)
-			f.write("\n")
-
-	test_count += 1
-
-	command_strings.append([nodes, processes, " ".join(cmd)])
-
-
+	
 def log_global():
-  fl = open(args.global_log_file, 'a')
-  fl.write("Job ID: " + job_id + "\n")
-  fl.write("Log dir: " + log_dir + "\n")
-  fl.write("graph_dir: " + graph_dir + "\n")
-  fl.write("motivation: " + motivation + "\n")
-  fl.write("non debug: " + str(args.non_debug) + ", ")
-  fl.write("dimmap: " + str(args.dimmap) + ", ")
-  fl.write("dimmap_tune: " + str(args.dimmap_tune) + ", ")
-  fl.write("iostat: " + str(args.iostat) + "\n")
-  fl.write("---------------------------------------------\n\n")
-  fl.close()
+	with open(args.global_log_file, 'a') as f:
+		if not NO_RUN:
+			f.write("Job ID: " + job_id + "\n")
+		f.write("Log dir: " + log_dir + "\n")
+		f.write("Log base: " + log_file_base + "\n")
+		f.write("graph_dir: " + graph_dir + "\n")
+		f.write("nodes " + args.num_nodes + "\n")
+		f.write("procs " + args.num_procs + "\n")
+		f.write("motivation: " + motivation + "\n")
+		f.write("production mode: " + str(args.product_mode) + ", ")
+		f.write("dimmap: " + str(args.dimmap) + ", ")
+		f.write("dimmap_tune: " + str(args.dimmap_tune) + ", ")
+		f.write("iostat: " + str(args.iostat) + "\n")
+		f.write("---------------------------------------------\n\n")
+		f.close()
 
+if __name__ == '__main__':
+	
+	parse_args()
+	init_test_files()
+    
+	if args.dimmap > 0 and not args.dimmap_tune:
+		graph_path = SEG_FILE_DIR_DIMMAP + SEG_FILE_NAME
+	else:
+		graph_path = SEG_FILE_DIR + SEG_FILE_NAME
 
+	exec_cmd = ""
+	
+	if args.edge_files:
+		exec_cmd = executable + \
+			" -g" + args.gstore_name + \
+			" -o" + graph_path + \
+			" -S" + str(args.segment_size) + \
+			" -c" + str(args.chunk_size) + \
+			" -E" + args.edge_files
+	else:
+		exec_cmd = executable + \
+			" -g" + args.gstore_name + \
+			" -s" + str(args.scale) + \
+			" -e" + str(args.edge_factor) +\
+			" -o" + graph_path + \
+			" -S" + str(args.segment_size) + \
+			" -c" + str(args.chunk_size)
+	log_dsc("exec_cmd:", exec_cmd)
 
+	generate_batch_file(exec_cmd)
+	
+	if not NO_RUN:
+		execute_shell_file()
 
-parse_args()
-init_test_dir()
-cmd = [executable, "-s" + str(args.scale), "-e" + str(args.edge_factor),
-       "-o" + GRAPH_PATH + GRAPH_NAME, "-f" + str(args.segment_size),
-       "-c" + str(args.chunk_size), "-i" + args.edge_files]
-add_command(args.num_nodes, args.num_procs, cmd)
-
-#make bash file and run it
-generate_shell_file()
-execute_shell_file()
-
-log("Finished after generating %d Srun Tasks\n" %(test_count))
-
-if args.non_debug:
-  log_global()
-
+	if args.product_mode:
+		log_global()
 
 #EDGES_FILELIST="./work/file_list_rmat_s24"
 #create_commands(27, 1, 27, delete_ratio_list)
@@ -325,8 +356,8 @@ if args.non_debug:
 #EDGES_FILELIST="./work/file_list_bfs_rnd"
 #create_commands(27, 1, 27, delete_ratio_list)
 
-EDGES_FILELIST="./work/file_list_rnd_1d"
-create_commands(27, 1, 27, delete_ratio_list)
+#EDGES_FILELIST="./work/file_list_rnd_1d"
+#create_commands(27, 1, 27, delete_ratio_list)
 
 #EDGES_FILELIST="./work/file_list_rnd_2d"
 #create_commands(27, 1, 27, delete_ratio_list)

@@ -210,17 +210,17 @@ void parse_options(int argc, char **argv)
 
   char c;
 
-  while ((c = getopt (argc, argv, "s:f:e:r:")) != -1) {
+  while ((c = getopt (argc, argv, "S:o:E:r:")) != -1) {
     switch (c) {
-      case 's':
+      case 'S':
         segment_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
 
-      case 'f':
+      case 'o':
         fname_segmentfile_ = optarg;
         break;
 
-      case 'e':
+      case 'E':
       {
         std::string fname(optarg);
         std::ifstream fin(fname);
