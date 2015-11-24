@@ -4,8 +4,8 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 #include <havoqgt/environment.hpp>
-#include <havoqgt/distributed_db.hpp>
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
+#include <havoqgt/parallel_edge_list_reader.hpp>
+
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
@@ -13,10 +13,13 @@ using segment_manager_type = boost::interprocess::managed_mapped_file::segment_m
 using vertex_id_type        = uint64_t;
 using edge_property_type    = int;
 using vertex_property_type  = int;
+
+#include <havoqgt/graphstore/graphstore_baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
+
 
 void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 {
@@ -40,11 +43,12 @@ void usage()  {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -g <string>   - output graph base filename (required)\n"
+         << " -e <string>   - filename that has a list of edgelist files (required)\n"
          << " -h            - print help and exit\n\n";
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& graph_file) {
+void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<std::string>& edgelist_files) {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -53,26 +57,42 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file) {
     std::cout << std::endl;
   }
 
-  bool found_filename = false;
+  bool found_graph_filename_ = false;
+  bool found_edgelist_filename = false;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "g:h ")) != -1) {
+  while ((c = getopt(argc, argv, "g:e:h")) != -1) {
      switch (c) {
        case 'h':
          prn_help = true;
          break;
-      case 'g':
-         found_filename = true;
+       case 'g':
+         found_graph_filename_ = true;
          graph_file = optarg;
          break;
-      default:
+       case 'e':
+       {
+         found_edgelist_filename = true;
+         std::string fname(optarg);
+         std::ifstream fin(fname);
+         std::string line;
+         if (!fin.is_open()) {
+           std::cerr << fname << std::endl;
+           HAVOQGT_ERROR_MSG("Unable to open a file");
+         }
+         while (std::getline(fin, line)) {
+           edgelist_files.push_back(line);
+         }
+         break;
+       }
+       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
          prn_help = true;
          break;
      }
    }
-   if (prn_help || !found_filename) {
+   if (prn_help || !found_graph_filename_ || !found_edgelist_filename) {
      usage();
      exit(-1);
    }
@@ -91,14 +111,14 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     havoqgt::get_environment().print();
-    //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
 
+  /// --- parse argments ---- ///
   std::string graph_file;
-
-  parse_cmd_line(argc, argv, graph_file);
+  std::vector<std::string> edgelist_files;
+  parse_cmd_line(argc, argv, graph_file, edgelist_files);
   MPI_Barrier(MPI_COMM_WORLD);
 
 
@@ -111,43 +131,54 @@ int main(int argc, char** argv) {
 
   /// --- Call fallocate --- ///
   fallocate(fname_local.str().c_str(), graphfile_init_size, mapped_file);
-  havoqgt::havoqgt_env()->world_comm().barrier();
 
   /// --- get a segment_manager --- ///
   segment_manager_type* segment_manager = mapped_file.get_segment_manager();
-  havoqgt::havoqgt_env()->world_comm().barrier();
 
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(segment_manager);
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (mpi_rank == 0) {
-    std::cout << "Graph Loaded Ready." << std::endl;
+
+
+  /// ------- insert edges using parallel_edge_list_reader() ------- ///
+  {
+    /// --- setup a paraller edgelist reader --- ///
+    havoqgt::parallel_edge_list_reader edgelist(edgelist_files);
+
+    for (const auto edge : edgelist) {
+      vertex_id_type src = std::get<0>(edge);
+      vertex_id_type dst = std::get<1>(edge);
+      edge_property_type weight = 0;
+
+      bool is_inserted = graphstore.insert_edge(src, dst, weight);          // uniquely insert a edge
+    }
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 
 
 
-  /// ------- insert and delete ------- ///
-  for (int i = 0; i < 10; ++i) {
-    vertex_id_type src = i % 2;
-    vertex_id_type dst = i;
-    edge_property_type weight = i * 10;
+  /// ------- delete edges and update vertices' property data ------- ///
+  {
+    for (int i = 0; i < 10; ++i) {
+      vertex_id_type src = i % 2;
+      vertex_id_type dst = i;
 
-    bool is_inserted = graphstore.insert_edge(src, dst, weight);  // uniquely insert a edge
-    size_t erased_edges = graphstore.erase_edge(v1, v2);          // erase edges
+      vertex_property_type v_prop = graphstore.vertex_property_data(src);  // get a vertex property data or
+      graphstore.vertex_property_data(src) = v_prop;                       // update a vertex property data.
+                                                                           // Note that vertex_property_data() return a reference
 
-    vertex_property_type v_prop = graphstore.vertex_meta_data(src);  // get a vertex property data or
-    graphstore.vertex_meta_data(src) = v_prop;                       // update a vertex property data.
-                                                                     // Note that vertex_meta_data() return a reference
+      size_t erased_edges = graphstore.erase_edge(src, dst);               // erase edges
+    }
   }
+
 
   /// ------- iterator over an adjacencylist ------- ///
-  vertex_id_type src_vrtx = 0;
-  for (auto adj_edges = graphstore.adjacencylist(src_vrtx), end = graphstore.adjacencylist_end(src_vrtx);
-       adj_edges != end;
-       ++adj_edges) {
-    std::cout << "destination vertex: " << adj_edges->first << ", weight: " << adj_edges->second << std::endl;
+  {
+    vertex_id_type src_vrtx = 0;
+    for (auto adj_edges = graphstore.adjacencylist(src_vrtx), end = graphstore.adjacencylist_end(src_vrtx);
+         adj_edges != end;
+         ++adj_edges) {
+      std::cout << "destination vertex: " << adj_edges->first << ", weight: " << adj_edges->second << std::endl;
+    }
   }
 
 

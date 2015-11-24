@@ -50,6 +50,7 @@ class graphstore_baseline
 
   bool insert_edge(const vertex_type& src, const vertex_type& trg, const edge_property_type& edge_property)
   {
+
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) { // new vertex
       const vertex_property_type dummy_vp = false;
@@ -96,7 +97,7 @@ class graphstore_baseline
     return count;
   }
 
-  inline vertex_property_type& vertex_meta_data(const vertex_type& vertex)
+  inline vertex_property_type& vertex_property_data(const vertex_type& vertex)
   {
     return m_map_table.find(vertex)->second.first;
   }
