@@ -18,22 +18,122 @@
 namespace graphstore {
 
 template <typename vertex_id_type,
-          typename vertex_meta_data_type,
-          typename edge_weight_type,
+          typename vertex_property_type,
+          typename edge_property_type,
           typename segment_manager_type,
           size_t middle_high_degree_threshold>
 class graphstore_rhhda
 {
  private:
   using size_type                      = size_t;
-  using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
+  using low_degree_table_value_type    = utility::packed_tuple<vertex_property_type, vertex_id_type, edge_property_type>;
   using low_degree_table_type          = rhh_container<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
-  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
-  using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
+  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_property_type, size_type, segment_manager_type>;
+  using mid_high_src_vertex_value_type = utility::packed_pair<vertex_property_type, mid_high_edge_chunk_type*>;
   using mid_high_degree_table_type     = rhh_container<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
+  using graphstore_rhhda_selftype      = graphstore_rhhda<vertex_id_type, vertex_property_type, edge_property_type,
+                                                          segment_manager_type, middle_high_degree_threshold>;
 
 
  public:
+
+  friend class AdjlistForwardIterator;
+  using adjlist_edge_type = std::pair<const vertex_id_type, const edge_property_type>;
+  class AdjlistForwardIterator : public std::iterator<std::forward_iterator_tag, adjlist_edge_type>
+  {
+    friend class graphstore_rhhda;
+    using edge_iterator_selftype           = AdjlistForwardIterator;
+    using graphstore_type                  = graphstore_rhhda_selftype;
+    using low_deg_edge_iteratir_type       = typename low_degree_table_type::value_iterator;
+    using mid_high_deg_edge_iteratir_type  = typename mid_high_edge_chunk_type::whole_iterator;
+
+
+   public:
+
+    AdjlistForwardIterator() = delete;
+
+    AdjlistForwardIterator(graphstore_type* gstore, const vertex_id_type& src_vrt) :
+      m_low_itr(gstore->m_low_degree_table.find(src_vrt)),
+      m_mh_itr(gstore->m_mid_high_degree_table.find(src_vrt).begin()),
+      m_current_edge()
+    {
+      find_next_value();
+    }
+
+    AdjlistForwardIterator(low_deg_edge_iteratir_type& low_itr, mid_high_deg_edge_iteratir_type& mh_itr) :
+      m_low_itr(low_itr),
+      m_mh_itr(mh_itr),
+      m_current_edge()
+    {
+      find_next_value();
+    }
+
+
+    void swap(edge_iterator_selftype &other) noexcept
+    {
+      using std::swap;
+      swap(m_low_itr, other.m_low_itr);
+      swap(m_mh_itr, other.m_mh_itr);
+      swap(m_current_edge, other.m_current_edge);
+    }
+
+    edge_iterator_selftype &operator++ () // Pre-increment
+    {
+      find_next_value();
+      return *this;
+    }
+
+    edge_iterator_selftype operator++ (int) // Post-increment
+    {
+      edge_iterator_selftype tmp(*this);
+      find_next_value();
+      return tmp;
+    }
+
+    // two-way comparison: v.begin() == v.cbegin() and vice versa
+    bool operator == (const edge_iterator_selftype &rhs) const
+    {
+      return is_equal(rhs);
+    }
+
+    bool operator != (const edge_iterator_selftype &rhs) const
+    {
+      return !is_equal(rhs);
+    }
+
+    const adjlist_edge_type& operator* () const
+    {
+      return m_current_edge;
+    }
+
+    const adjlist_edge_type* operator-> () const
+    {
+      return &(m_current_edge);
+    }
+
+   private:
+
+    inline bool is_equal(const AdjlistForwardIterator &rhs) const
+    {
+      return (m_low_itr == rhs.m_low_itr) && (m_mh_itr == rhs.m_mh_itr);
+    }
+
+    inline void find_next_value()
+    {
+      if (!m_low_itr.is_end()) {
+        ++m_low_itr;
+        m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
+      } else if (!m_mh_itr.is_end()) {
+        ++m_mh_itr;
+        m_current_edge = adjlist_edge_type(m_mh_itr->first, m_mh_itr->second);
+      }
+    }
+
+    low_deg_edge_iteratir_type m_low_itr;
+    mid_high_deg_edge_iteratir_type m_mh_itr;
+    adjlist_edge_type m_current_edge;
+  };
+
 
   explicit graphstore_rhhda(segment_manager_type* segment_manager) {
     // -- init allocator -- //
@@ -63,6 +163,17 @@ class graphstore_rhhda
     rhh::destroy_allocator<typename mid_high_edge_chunk_type::allocator>();
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
   }
+
+  AdjlistForwardIterator adjacencylist(const vertex_id_type srt_vrtx) const
+  {
+    return AdjlistForwardIterator(*this, srt_vrtx);
+  }
+
+  AdjlistForwardIterator adjacencylist_end() const
+  {
+    // return AdjlistForwardIterator(AdjlistForwardIterator);
+  }
+
 
   void opt()
   {
@@ -101,7 +212,7 @@ class graphstore_rhhda
   ///   true: if inserted
   ///   false: if a duplicated edge is found
   ///
-  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_weight_type& weight)
+  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_property_type& weight)
   {
 
     /// -- count the degree of the source vertex in the low degree table -- ///
@@ -116,7 +227,7 @@ class graphstore_rhhda
     if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
       if (count_in_single + 1 < middle_high_degree_threshold) {
         /// --- insert into the low table --- ///
-        low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
+        low_degree_table_value_type value(vertex_property_type(), trg, weight);
         rhh::insert(&m_low_degree_table, src, value);
       } else {
 
@@ -138,7 +249,7 @@ class graphstore_rhhda
       auto itr_src = m_mid_high_degree_table->find(src);
       if (itr_src.is_end()) {
         /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
-        low_degree_table_value_type value(vertex_meta_data_type(), trg, weight);
+        low_degree_table_value_type value(vertex_property_type(), trg, weight);
         rhh::insert(&m_low_degree_table, src, value);
       } else {
         /// --- the high-mid table has source vertex --- ///
@@ -161,7 +272,7 @@ class graphstore_rhhda
     return true;
   }
 
-  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_meta_data_type& meta_data)
+  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_property_type& property_data)
   {
     auto itr_single = m_low_degree_table->find(vertex);
     if (itr_single.is_end()) {
@@ -169,7 +280,7 @@ class graphstore_rhhda
       if (itr.is_end()) {
         rhh::insert(m_low_degree_table,
                     vertex,
-                    low_degree_table_value_type(meta_data, vertex_id_type(), edge_weight_type()));
+                    low_degree_table_value_type(property_data, vertex_id_type(), edge_property_type()));
         return true;
       }
     }
@@ -209,9 +320,9 @@ class graphstore_rhhda
 
     if (count > 0) {
       if (adj_list->size() < middle_high_degree_threshold) {
-        const vertex_meta_data_type& meta_data = itr_matrix->first;
+        const vertex_property_type& property_data = itr_matrix->first;
         for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
-          low_degree_table_value_type value(meta_data, itr->key, itr->value);
+          low_degree_table_value_type value(property_data, itr->key, itr->value);
           rhh::insert(&m_low_degree_table, src, value);
           adj_list->erase(itr);
         }
@@ -232,7 +343,7 @@ class graphstore_rhhda
 //    return m_mid_high_degree_table->erase(vertex);
 //  }
 
-  inline vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
+  inline vertex_property_type& vertex_property_data(const vertex_id_type& vertex)
   {
     auto itr = m_low_degree_table->find(vertex);
     if (!itr.is_end()) {
@@ -433,20 +544,20 @@ class graphstore_rhhda
 
 
 ///
-/// \brief The graphstore_rhhda<vertex_id_type, vertex_meta_data_type, edge_weight_type, 1> class
+/// \brief The graphstore_rhhda<vertex_id_type, vertex_property_type, edge_property_type, 1> class
 ///   partial speciallization class when middle_high_degree_threshold is 1
 template <typename vertex_id_type,
-          typename vertex_meta_data_type,
-          typename edge_weight_type,
+          typename vertex_property_type,
+          typename edge_property_type,
           typename segment_manager_type>
-class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type, segment_manager_type, 1>
+class graphstore_rhhda <vertex_id_type, vertex_property_type, edge_property_type, segment_manager_type, 1>
 {
  private:
   using size_type = size_t;
-  using low_degree_table_value_type    = utility::packed_tuple<vertex_meta_data_type, vertex_id_type, edge_weight_type>;
+  using low_degree_table_value_type    = utility::packed_tuple<vertex_property_type, vertex_id_type, edge_property_type>;
   using low_degree_table_type          = rhh_container<vertex_id_type, low_degree_table_value_type, size_type, segment_manager_type>;
-  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_weight_type, size_type, segment_manager_type>;
-  using mid_high_src_vertex_value_type = utility::packed_pair<vertex_meta_data_type, mid_high_edge_chunk_type*>;
+  using mid_high_edge_chunk_type       = rhh_container<vertex_id_type, edge_property_type, size_type, segment_manager_type>;
+  using mid_high_src_vertex_value_type = utility::packed_pair<vertex_property_type, mid_high_edge_chunk_type*>;
   using mid_high_degree_table_type     = rhh_container<vertex_id_type, mid_high_src_vertex_value_type, size_type, segment_manager_type>;
 
 
@@ -512,7 +623,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   ///   true: if inserted
   ///   false: if a duplicated edge is found
   ///
-  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_weight_type& weight)
+  bool insert_edge(const vertex_id_type& src, const vertex_id_type& trg, const edge_property_type& weight)
   {
 
 
@@ -521,7 +632,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
       /// --- new vertex --- ///
       mid_high_edge_chunk_type* adj_list = mid_high_edge_chunk_type::allocate(2);
       rhh::insert(&adj_list, trg, weight);
-      mid_high_src_vertex_value_type value(vertex_meta_data_type(), adj_list);
+      mid_high_src_vertex_value_type value(vertex_property_type(), adj_list);
       rhh::insert(&m_mid_high_degree_table, src, value);
     } else {
       /// --- high-mid table has source vertex --- ///
@@ -543,11 +654,11 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
   }
 
 
-  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_meta_data_type& meta_data)
+  inline bool insert_vertex(const vertex_id_type& vertex, const vertex_property_type& property_data)
   {
     auto itr = m_mid_high_degree_table->find(vertex);
     if (itr.is_end()) {
-      mid_high_src_vertex_value_type value(meta_data, nullptr);
+      mid_high_src_vertex_value_type value(property_data, nullptr);
       rhh::insert(&m_mid_high_degree_table, vertex, value);
       return true;
     }
@@ -592,7 +703,7 @@ class graphstore_rhhda <vertex_id_type, vertex_meta_data_type, edge_weight_type,
 //    return m_mid_high_degree_table->erase(vertex);
 //  }
 
-  vertex_meta_data_type& vertex_meta_data(const vertex_id_type& vertex)
+  vertex_property_type& vertex_property_data(const vertex_id_type& vertex)
   {
     auto itr_matrix = m_mid_high_degree_table->find(vertex);
     return itr_matrix->first;

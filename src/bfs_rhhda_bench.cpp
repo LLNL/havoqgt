@@ -134,7 +134,7 @@ template <typename graphstore_type, typename vertex_type>
     for (auto itr = graph.begin_mid_high_edges(); !itr.is_end(); ++itr) {
       itr->value.first = false;
     }
-    graph.vertex_meta_data(start_vrtx) = true;
+    graph.vertex_property_data(start_vrtx) = true;
 #endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
@@ -156,7 +156,7 @@ template <typename graphstore_type, typename vertex_type>
 #if BFS_USE_BITMAP
           bool& is_visited = inf.is_visited[dst];
 #else
-          bool& is_visited = graph.vertex_meta_data(dst);
+          bool& is_visited = graph.vertex_property_data(dst);
 #endif
           if (!is_visited) {
             next_queue.push(dst);
@@ -172,7 +172,7 @@ template <typename graphstore_type, typename vertex_type>
 #if BFS_USE_BITMAP
           bool& is_visited = inf.is_visited[dst];
 #else
-          bool& is_visited = graph.vertex_meta_data(dst);
+          bool& is_visited = graph.vertex_property_data(dst);
 #endif
           if (!is_visited) {
             next_queue.push(dst);

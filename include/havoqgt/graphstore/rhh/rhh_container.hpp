@@ -284,7 +284,6 @@ class rhh_container {
     rhh_type* m_rhh_ptr;
     rhh_type::size_type m_pos;
   };
-  // iteratorをtypedefする
   using whole_iterator = WholeForwardIterator<element_type>;
   using const_whole_iterator = WholeForwardIterator<const element_type>;
 
@@ -312,11 +311,11 @@ class rhh_container {
       internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
     }
 
-    ValueForwardIterator(rhh_type* rhh, const key_type& key, rhh_type::size_type pos,  rhh_type::probedistance_type prb_dist) :
+    ValueForwardIterator(rhh_type* rhh, const key_type& key, rhh_type::size_type pos) :
       m_rhh_ptr(rhh),
       m_key(key),
       m_pos(pos),
-      m_prb_dist(prb_dist)
+      m_prb_dist(0)
     { }
 
     void swap(value_iterator_selftype &other) noexcept
@@ -382,7 +381,7 @@ class rhh_container {
     template<class OtherType>
     inline bool is_equal(const ValueForwardIterator<OtherType> &rhs) const
     {
-      return (m_rhh_ptr->m_body == rhs.m_rhh_ptr->m_body) && (m_pos == rhs.m_pos);
+      return (m_rhh_ptr == rhs.m_rhh_ptr) && (m_pos == rhs.m_pos);
     }
 
     inline void find_next_value()
@@ -397,7 +396,6 @@ class rhh_container {
     rhh_type::size_type m_pos;
     rhh_type::probedistance_type m_prb_dist;
   };
-  // iteratorをtypedefする
   using value_iterator       = ValueForwardIterator<value_type>;
   using const_value_iterator = ValueForwardIterator<const value_type>;
 
@@ -463,10 +461,15 @@ class rhh_container {
     return const_value_iterator(this, key);
   }
 
+  inline const_value_iterator find_end(const key_type& key) const
+  {
+    return const_value_iterator(nullptr, key, kKeyNotFound);
+  }
+
 
   inline std::pair<value_iterator, value_iterator> equal_range(const key_type& key)
   {
-    return std::make_pair(fin(key), value_iterator(nullptr, kKeyNotFound));
+    return std::make_pair(find(key), find_end(key));
   }
 
   whole_iterator begin()
@@ -682,12 +685,13 @@ class rhh_container {
       ++prb_dist;
     }
 
-    if ((*body_ptr)->m_next != nullptr) {
-      *body_ptr = (*body_ptr)->m_next;
+    *body_ptr = (*body_ptr)->m_next;
+    if ((*body_ptr) != nullptr) {
       internal_locate(key, body_ptr, pos, prb_dist);
-    } else {
-      pos = kKeyNotFound;
+      return;
     }
+
+    pos = kKeyNotFound;
   }
 
   inline void construct(const size_type pos, const probedistance_type dist,
