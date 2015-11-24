@@ -401,33 +401,8 @@ class rhh_container {
 
 
   /// --- Explicitly Delete -- ///
-//  rhh_container()
-//  {
-
-//  }
-//  ~rhh_container()
-//  {
-
-//  }
-
-//  rhh_container(const rhh_contatiner_selftype& src)
-//  {
-//    int i = 0;
-//  }
-//  rhh_container& operator=(const rhh_container&)
-//  {
-//    int i = 0;
-//  }
-//  rhh_container(const rhh_container&&)
-//  {
-//    int i = 0;
-//  }
-//  rhh_container& operator=(rhh_container&& old_obj)
-//  {
-//    int i = 0;
-//  }
-  /// rhh_container()  = delete;
-  /// ~rhh_container() = delete;
+  rhh_container()  = delete;
+  ~rhh_container() = delete;
   /// rhh_container(const rhh_contatiner_selftype& src) = delete;
   /// rhh_container& operator=(const rhh_container&) = delete;
   /// rhh_container(const rhh_container&&) = delete;
@@ -461,9 +436,9 @@ class rhh_container {
     return const_value_iterator(this, key);
   }
 
-  inline const_value_iterator find_end(const key_type& key) const
+  static inline value_iterator find_end(const key_type& key)
   {
-    return const_value_iterator(nullptr, key, kKeyNotFound);
+    return value_iterator(nullptr, key, kKeyNotFound);
   }
 
 
@@ -472,22 +447,22 @@ class rhh_container {
     return std::make_pair(find(key), find_end(key));
   }
 
-  whole_iterator begin()
+  inline whole_iterator begin()
   {
     return whole_iterator(this);
   }
 
-  whole_iterator end()
+  static inline whole_iterator end()
   {
     return whole_iterator(nullptr, kKeyNotFound);
   }
 
-  const_whole_iterator cbegin() const
+  inline const_whole_iterator cbegin() const
   {
     return const_whole_iterator(this);
   }
 
-  const_whole_iterator cend() const
+  static inline const_whole_iterator cend()
   {
     return const_whole_iterator(nullptr, kKeyNotFound);
   }

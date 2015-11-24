@@ -7,12 +7,12 @@
 #define GRAPHSTORE_RHHDA_HPP
 
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
-#include <havoqgt/graphstore/graphstore_common.hpp>
-#include <havoqgt/graphstore/graphstore_utilities.hpp>
-
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
+
+#include <havoqgt/graphstore/graphstore_common.hpp>
+#include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 
 namespace graphstore {
@@ -38,7 +38,8 @@ class graphstore_rhhda
  public:
 
   friend class AdjlistForwardIterator;
-  using adjlist_edge_type = std::pair<const vertex_id_type, const edge_property_type>;
+  using adjlist_edge_type = std::pair<vertex_id_type, edge_property_type>;
+
   class AdjlistForwardIterator : public std::iterator<std::forward_iterator_tag, adjlist_edge_type>
   {
     friend class graphstore_rhhda;
@@ -52,15 +53,15 @@ class graphstore_rhhda
 
     AdjlistForwardIterator() = delete;
 
-    AdjlistForwardIterator(graphstore_type* gstore, const vertex_id_type& src_vrt) :
-      m_low_itr(gstore->m_low_degree_table.find(src_vrt)),
-      m_mh_itr(gstore->m_mid_high_degree_table.find(src_vrt).begin()),
+    AdjlistForwardIterator(const graphstore_type* const gstore, const vertex_id_type& src_vrt) :
+      m_low_itr(gstore->m_low_degree_table->find(src_vrt)),
+      m_mh_itr(gstore->m_mid_high_degree_table->find(src_vrt)->second->begin()),
       m_current_edge()
     {
       find_next_value();
     }
 
-    AdjlistForwardIterator(low_deg_edge_iteratir_type& low_itr, mid_high_deg_edge_iteratir_type& mh_itr) :
+    AdjlistForwardIterator(low_deg_edge_iteratir_type low_itr, mid_high_deg_edge_iteratir_type mh_itr) :
       m_low_itr(low_itr),
       m_mh_itr(mh_itr),
       m_current_edge()
@@ -125,7 +126,7 @@ class graphstore_rhhda
         m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
       } else if (!m_mh_itr.is_end()) {
         ++m_mh_itr;
-        m_current_edge = adjlist_edge_type(m_mh_itr->first, m_mh_itr->second);
+        m_current_edge = adjlist_edge_type(m_mh_itr->key, m_mh_itr->value);
       }
     }
 
@@ -164,14 +165,14 @@ class graphstore_rhhda
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
   }
 
-  AdjlistForwardIterator adjacencylist(const vertex_id_type srt_vrtx) const
+  AdjlistForwardIterator adjacencylist(const vertex_id_type& srt_vrtx) const
   {
-    return AdjlistForwardIterator(*this, srt_vrtx);
+    return AdjlistForwardIterator(this, srt_vrtx);
   }
 
-  AdjlistForwardIterator adjacencylist_end() const
+  AdjlistForwardIterator adjacencylist_end(const vertex_id_type& srt_vrtx) const
   {
-    // return AdjlistForwardIterator(AdjlistForwardIterator);
+    return AdjlistForwardIterator(low_degree_table_type::find_end(srt_vrtx), mid_high_edge_chunk_type::end());
   }
 
 

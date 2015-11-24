@@ -14,11 +14,20 @@ using vertex_id_type        = uint64_t;
 using edge_property_type    = int;
 using vertex_property_type  = int;
 
+
+#if 0
 #include <havoqgt/graphstore/graphstore_baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
+#else
+#include <havoqgt/graphstore/graphstore_rhhda.hpp>
+using graphstore_type       = graphstore::graphstore_rhhda<vertex_id_type,
+                                                              vertex_property_type,
+                                                              edge_property_type,
+                                                              segment_manager_type>;
+#endif
 
 
 void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
