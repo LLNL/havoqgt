@@ -7,3 +7,4 @@ build/*
 *.cobaltlog
 *.error
 *.autosave
+*.DS_Store
