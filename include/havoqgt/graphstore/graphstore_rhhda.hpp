@@ -21,7 +21,7 @@ template <typename vertex_id_type,
           typename vertex_property_type,
           typename edge_property_type,
           typename segment_manager_type,
-          size_t middle_high_degree_threshold>
+          size_t middle_high_degree_threshold = 2>
 class graphstore_rhhda
 {
  private:
