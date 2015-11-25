@@ -37,13 +37,13 @@ class graphstore_rhhda
 
  public:
 
-  friend class AdjlistForwardIterator;
+  friend class adjlist_inputiterator;
   using adjlist_edge_type = std::pair<vertex_id_type, edge_property_type>;
 
-  class AdjlistForwardIterator : public std::iterator<std::forward_iterator_tag, adjlist_edge_type>
+  class adjlist_inputiterator : public std::iterator<std::input_iterator_tag, adjlist_edge_type>
   {
     friend class graphstore_rhhda;
-    using edge_iterator_selftype           = AdjlistForwardIterator;
+    using edge_iterator_selftype           = adjlist_inputiterator;
     using graphstore_type                  = graphstore_rhhda_selftype;
     using low_deg_edge_iteratir_type       = typename low_degree_table_type::value_iterator;
     using mid_high_deg_edge_iteratir_type  = typename mid_high_edge_chunk_type::whole_iterator;
@@ -51,22 +51,30 @@ class graphstore_rhhda
 
    public:
 
-    AdjlistForwardIterator() = delete;
+    adjlist_inputiterator() = delete;
 
-    AdjlistForwardIterator(const graphstore_type* const gstore, const vertex_id_type& src_vrt) :
-      m_low_itr(gstore->m_low_degree_table->find(src_vrt)),
-      m_mh_itr(gstore->m_mid_high_degree_table->find(src_vrt)->second->begin()),
+    adjlist_inputiterator(graphstore_type* gstore, const vertex_id_type& src_vrt) :
+      m_low_itr(gstore->find_low_edge(src_vrt)),
+      m_mh_itr(gstore->find_mid_high_edge(src_vrt)),
       m_current_edge()
     {
-      find_next_value();
+      if (!m_low_itr.is_end()) {
+        m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
+      } else if (!m_mh_itr.is_end()) {
+        m_current_edge = adjlist_edge_type(m_mh_itr->key, m_mh_itr->value);
+      }
     }
 
-    AdjlistForwardIterator(low_deg_edge_iteratir_type low_itr, mid_high_deg_edge_iteratir_type mh_itr) :
+    adjlist_inputiterator(low_deg_edge_iteratir_type low_itr, mid_high_deg_edge_iteratir_type mh_itr) :
       m_low_itr(low_itr),
       m_mh_itr(mh_itr),
       m_current_edge()
     {
-      find_next_value();
+      if (!m_low_itr.is_end()) {
+        m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
+      } else if (!m_mh_itr.is_end()) {
+        m_current_edge = adjlist_edge_type(m_mh_itr->key, m_mh_itr->value);
+      }
     }
 
 
@@ -114,7 +122,7 @@ class graphstore_rhhda
 
    private:
 
-    inline bool is_equal(const AdjlistForwardIterator &rhs) const
+    inline bool is_equal(const adjlist_inputiterator &rhs) const
     {
       return (m_low_itr == rhs.m_low_itr) && (m_mh_itr == rhs.m_mh_itr);
     }
@@ -123,10 +131,14 @@ class graphstore_rhhda
     {
       if (!m_low_itr.is_end()) {
         ++m_low_itr;
-        m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
+        if (!m_low_itr.is_end()) {
+          m_current_edge = adjlist_edge_type(m_low_itr->second, m_low_itr->third);
+        }
       } else if (!m_mh_itr.is_end()) {
         ++m_mh_itr;
-        m_current_edge = adjlist_edge_type(m_mh_itr->key, m_mh_itr->value);
+        if (!m_mh_itr.is_end()) {
+          m_current_edge = adjlist_edge_type(m_mh_itr->key, m_mh_itr->value);
+        }
       }
     }
 
@@ -165,14 +177,14 @@ class graphstore_rhhda
     rhh::destroy_allocator<typename mid_high_degree_table_type::allocator>();
   }
 
-  AdjlistForwardIterator adjacencylist(const vertex_id_type& srt_vrtx) const
+  adjlist_inputiterator adjacencylist(const vertex_id_type& srt_vrtx)
   {
-    return AdjlistForwardIterator(this, srt_vrtx);
+    return adjlist_inputiterator(this, srt_vrtx);
   }
 
-  AdjlistForwardIterator adjacencylist_end(const vertex_id_type& srt_vrtx) const
+  static adjlist_inputiterator adjacencylist_end(const vertex_id_type& srt_vrtx)
   {
-    return AdjlistForwardIterator(low_degree_table_type::find_end(srt_vrtx), mid_high_edge_chunk_type::end());
+    return adjlist_inputiterator(low_degree_table_type::find_end(srt_vrtx), mid_high_edge_chunk_type::end());
   }
 
 
@@ -379,24 +391,32 @@ class graphstore_rhhda
     return m_low_degree_table->find(src_vrt);
   }
 
-  typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const
-  {
-    return m_low_degree_table->find(src_vrt);
-  }
+//  typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const
+//  {
+//    return m_low_degree_table->find(src_vrt);
+//  }
 
   typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
-    mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
-    return adj_list->begin();
+    if (!itr_matrix.is_end()) {
+      mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
+      return adj_list->begin();
+    } else {
+      return mid_high_edge_chunk_type::end();
+    }
   }
 
-  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt) const
-  {
-    const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
-    const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
-    return adj_list->cbegin();
-  }
+//  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt) const
+//  {
+//    const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
+//    if (!itr_matrix.is_end()) {
+//      const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
+//      return adj_list->cbegin();
+//    } else {
+//      return mid_high_edge_chunk_type::cend();
+//    }
+//  }
 
 
   ///

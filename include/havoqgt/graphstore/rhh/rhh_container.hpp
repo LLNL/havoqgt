@@ -318,6 +318,8 @@ class rhh_container {
       m_prb_dist(0)
     { }
 
+    ValueForwardIterator(const value_iterator_selftype &) = default;
+
     void swap(value_iterator_selftype &other) noexcept
     {
       using std::swap;
@@ -431,10 +433,10 @@ class rhh_container {
     return value_iterator(this, key);
   }
 
-  inline const_value_iterator find(const key_type& key) const
-  {
-    return const_value_iterator(this, key);
-  }
+//  inline const_value_iterator find(const key_type& key) const
+//  {
+//    return const_value_iterator(this, key);
+//  }
 
   static inline value_iterator find_end(const key_type& key)
   {
@@ -457,15 +459,15 @@ class rhh_container {
     return whole_iterator(nullptr, kKeyNotFound);
   }
 
-  inline const_whole_iterator cbegin() const
-  {
-    return const_whole_iterator(this);
-  }
+//  inline const_whole_iterator cbegin() const
+//  {
+//    return const_whole_iterator(this);
+//  }
 
-  static inline const_whole_iterator cend()
-  {
-    return const_whole_iterator(nullptr, kKeyNotFound);
-  }
+//  static inline const_whole_iterator cend()
+//  {
+//    return const_whole_iterator(nullptr, kKeyNotFound);
+//  }
 
 
   /// ---- Modifiers ---- ///
