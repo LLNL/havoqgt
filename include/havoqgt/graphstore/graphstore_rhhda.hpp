@@ -184,7 +184,7 @@ class graphstore_rhhda
 
   static adjlist_inputiterator adjacencylist_end(const vertex_id_type& srt_vrtx)
   {
-    return adjlist_inputiterator(low_degree_table_type::find_end(srt_vrtx), mid_high_edge_chunk_type::end());
+    return adjlist_inputiterator(low_degree_table_type::find_end(), mid_high_edge_chunk_type::end());
   }
 
 
@@ -391,11 +391,6 @@ class graphstore_rhhda
     return m_low_degree_table->find(src_vrt);
   }
 
-//  typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const
-//  {
-//    return m_low_degree_table->find(src_vrt);
-//  }
-
   typename mid_high_edge_chunk_type::whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt)
   {
     const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
@@ -406,17 +401,6 @@ class graphstore_rhhda
       return mid_high_edge_chunk_type::end();
     }
   }
-
-//  typename mid_high_edge_chunk_type::const_whole_iterator find_mid_high_edge (const vertex_id_type& src_vrt) const
-//  {
-//    const auto itr_matrix = m_mid_high_degree_table->find(src_vrt);
-//    if (!itr_matrix.is_end()) {
-//      const mid_high_edge_chunk_type* const adj_list = itr_matrix->second;
-//      return adj_list->cbegin();
-//    } else {
-//      return mid_high_edge_chunk_type::cend();
-//    }
-//  }
 
 
   ///
@@ -741,7 +725,7 @@ class graphstore_rhhda <vertex_id_type, vertex_property_type, edge_property_type
 
   typename low_degree_table_type::whole_iterator begin_low_edges()
   {
-    return m_low_degree_table->end();
+    return low_degree_table_type::end();
   }
 
   typename mid_high_degree_table_type::whole_iterator begin_mid_high_edges()
@@ -751,7 +735,7 @@ class graphstore_rhhda <vertex_id_type, vertex_property_type, edge_property_type
 
   typename low_degree_table_type::value_iterator find_low_edge (const vertex_id_type& src_vrt)
   {
-    return m_low_degree_table->find(src_vrt);
+    return low_degree_table_type::find_end();
   }
 
   typename low_degree_table_type::const_value_iterator find_low_edge (const vertex_id_type& src_vrt) const

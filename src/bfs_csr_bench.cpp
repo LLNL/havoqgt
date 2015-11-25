@@ -211,7 +211,6 @@ int main(int argc, char* argv[])
         graph->construct(edge_list);
       }
     }
-
   }
 
   /// ---------- Graph Traversal --------------- ///

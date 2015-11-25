@@ -183,24 +183,16 @@ class rhh_container {
 
    public:
 
-    WholeForwardIterator() = delete;
+    explicit WholeForwardIterator() :
+      m_rhh_ptr(nullptr),
+      m_pos(kKeyNotFound)
+    { }
 
     explicit WholeForwardIterator(rhh_type* rhh) :
       m_rhh_ptr(rhh),
       m_pos(-1) /// Note: next_valid_element increment m_pos in the first line
     {
       next_valid_element();
-    }
-
-    WholeForwardIterator(rhh_type* rhh, rhh_type::size_type pos) :
-      m_rhh_ptr(rhh),
-      m_pos(pos)
-    { }
-
-    WholeForwardIterator(const WholeForwardIterator& src)
-    {
-      m_rhh_ptr = src.m_rhh_ptr;
-      m_pos     = src.m_pos;
     }
 
     void swap(WholeForwardIterator &other) noexcept
@@ -300,7 +292,12 @@ class rhh_container {
 
    public:
 
-    ValueForwardIterator() = delete;
+    ValueForwardIterator() :
+    m_rhh_ptr(nullptr),
+    m_key(),
+    m_pos(kKeyNotFound),
+    m_prb_dist()
+    { }
 
     ValueForwardIterator(rhh_type* rhh, const key_type& key) :
       m_rhh_ptr(rhh),
@@ -310,15 +307,6 @@ class rhh_container {
     {
       internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
     }
-
-    ValueForwardIterator(rhh_type* rhh, const key_type& key, rhh_type::size_type pos) :
-      m_rhh_ptr(rhh),
-      m_key(key),
-      m_pos(pos),
-      m_prb_dist(0)
-    { }
-
-    ValueForwardIterator(const value_iterator_selftype &) = default;
 
     void swap(value_iterator_selftype &other) noexcept
     {
@@ -374,7 +362,7 @@ class rhh_container {
     /// --- performance optimized methods --- ///
     inline bool is_end() const
     {
-      return (m_pos == rhh_type::kKeyNotFound);
+      return ((m_rhh_ptr == nullptr) && (m_pos == rhh_type::kKeyNotFound));
     }
 
 
@@ -433,21 +421,15 @@ class rhh_container {
     return value_iterator(this, key);
   }
 
-//  inline const_value_iterator find(const key_type& key) const
+  static inline value_iterator find_end()
+  {
+    return value_iterator();
+  }
+
+//  inline std::pair<value_iterator, value_iterator> equal_range(const key_type& key)
 //  {
-//    return const_value_iterator(this, key);
+//    return std::make_pair(find(key), find_end(key));
 //  }
-
-  static inline value_iterator find_end(const key_type& key)
-  {
-    return value_iterator(nullptr, key, kKeyNotFound);
-  }
-
-
-  inline std::pair<value_iterator, value_iterator> equal_range(const key_type& key)
-  {
-    return std::make_pair(find(key), find_end(key));
-  }
 
   inline whole_iterator begin()
   {
@@ -456,18 +438,8 @@ class rhh_container {
 
   static inline whole_iterator end()
   {
-    return whole_iterator(nullptr, kKeyNotFound);
+    return whole_iterator();
   }
-
-//  inline const_whole_iterator cbegin() const
-//  {
-//    return const_whole_iterator(this);
-//  }
-
-//  static inline const_whole_iterator cend()
-//  {
-//    return const_whole_iterator(nullptr, kKeyNotFound);
-//  }
 
 
   /// ---- Modifiers ---- ///
