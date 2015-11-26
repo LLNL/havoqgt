@@ -18,7 +18,7 @@
 #include "dynamicgraphstore_bench.hpp"
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/graphstore_baseline.hpp>
-#include <havoqgt/graphstore/graphstore_rhhda.hpp>
+#include <havoqgt/graphstore/graphstore_degawarerhh.hpp>
 
 
 /// --- typenames --- ///
@@ -31,13 +31,13 @@ using baseline_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               segment_manager_type>;
 
 enum : size_t {
-  midle_high_degree_threshold = 2 // must be more or equal than 1
+  middle_high_degree_threshold = 2 // must be more or equal than 1
 };
-using degawarerhh_type  = graphstore::graphstore_rhhda<vertex_id_type,
+using degawarerhh_type  = graphstore::graphstore_degawarerhh<vertex_id_type,
                                                       vertex_property_type,
                                                       edge_property_type,
                                                       segment_manager_type,
-                                                      midle_high_degree_threshold>;
+                                                      middle_high_degree_threshold>;
 
 
 /// --- option variables --- ///
@@ -392,4 +392,7 @@ int main(int argc, char** argv)
 
     havoqgt::havoqgt_env()->world_comm().barrier();
   }
+  havoqgt::havoqgt_finalize();
+
+  return 0;
 }

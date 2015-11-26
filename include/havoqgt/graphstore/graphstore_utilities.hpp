@@ -17,9 +17,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <boost/interprocess/managed_mapped_file.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
 #if __linux__
 #include <sys/sysinfo.h>
 #endif
+
 
 #define ENABLE_HAVOQGT_ERR_PROCEDURE 1
 #if ENABLE_HAVOQGT_ERR_PROCEDURE
@@ -40,7 +44,6 @@
 
 namespace graphstore {
 namespace utility {
-
 /// --------- Deta Structure ------------ ///
 #pragma pack(1)
 template <typename T1, typename T2>
@@ -78,21 +81,6 @@ struct packed_pair
     swap(first, other.first);
     swap(second, other.second);
   }
-
-//  packed_pair<T1, T2>& operator=(const packed_pair<T1, T2>& other)
-//  {
-//    first = other.first;
-//    second = other.second;
-//    return *this;
-//  }
-
-//  packed_pair<T1, T2>& operator=(packed_pair<T1, T2>&& other)
-//  {
-//    using std::swap;
-//    swap(first, other.first);
-//    swap(second, other.second);
-//    return *this;
-//  }
 
 };
 template<typename T1, typename T2>
@@ -147,22 +135,6 @@ struct packed_tuple
     swap(third,  other.third);
   }
 
-//  packed_tuple<T1, T2, T3>& operator=(const packed_tuple<T1, T2, T3>& other)
-//  {
-//    first  = other.first;
-//    second = other.second;
-//    third  = other.third;
-//    return *this;
-//  }
-
-//  packed_tuple<T1, T2, T3>& operator=(packed_tuple<T1, T2, T3>&& other)
-//  {
-//    using std::swap;
-//    swap(first,  other.first);
-//    swap(second, other.second);
-//    swap(third,  other.third);
-//    return *this;
-//  }
 };
 
 template<typename T1, typename T2, typename T3>
@@ -270,6 +242,17 @@ class rhh_log_holder {
 
 
 /// -------------- For I/O ---------------- ///
+
+void sync_files()
+{
+#if _BSD_SOURCE || _XOPEN_SOURCE >= 500
+  std::cout << "sync mmap: sync(2)" << std::endl;
+  sync();
+#else
+#warning sync(2) is not supported
+#endif
+}
+
 int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
 {
     int result = ::posix_memalign(actual_buffer, align_size, length);
@@ -495,6 +478,97 @@ class direct_file_reader
     ssize_t m_end_buf_pos;
     bool m_is_reached_eof;
 };
+
+
+/// --------- Boost Interprocess ------------ ///
+class interprocess_mmap_manager
+{
+ public:
+  using mapped_file_type     = boost::interprocess::managed_mapped_file;
+  using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+
+  interprocess_mmap_manager(const std::string segment_fname, const size_t capacity) :
+    m_fname(segment_fname),
+    m_mapped_file(boost::interprocess::create_only, segment_fname.c_str(), capacity)
+  {
+    fallocate(capacity);
+  }
+
+  ~interprocess_mmap_manager()
+  {
+    delete_mapping();
+  }
+
+  static void delete_file(const std::string& fname_segmentfile)
+  {
+    boost::interprocess::file_mapping::remove(fname_segmentfile.c_str());
+  }
+
+  segment_manager_type* get_segment_manager() const
+  {
+    return m_mapped_file.get_segment_manager();
+  }
+
+  double segment_size_gb() const
+  {
+    segment_manager_type* segment_manager = m_mapped_file.get_segment_manager();
+    const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+    return static_cast<double>(usages) / (1ULL << 30);
+  }
+
+ private:
+  void segment_zero_free_memory()
+  {
+      segment_manager_type* segment_manager = m_mapped_file.get_segment_manager();
+      std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
+      segment_manager->zero_free_memory();
+      std::cout << "Call mapped_file.flush()" << std::endl;
+      m_mapped_file.flush();
+      std::cout << "Call sync" << std::endl;
+      graphstore::utility::sync_files();
+  }
+
+  void fallocate(size_t size) const
+  {
+  #ifdef __linux__
+      std::cout << "Call fallocate()" << std::endl;
+      int fd  = open(m_fname, O_RDWR);
+      assert(fd != -1);
+      /// posix_fallocate dosen't work on XFS ?
+      /// (dosen't actually expand the file size ?)
+      int ret = fallocate(fd, 0, 0, size);
+      assert(ret == 0);
+      close(fd);
+      m_mapped_file.flush();
+  #else
+  #warning fallocate() is not supported
+  #endif
+  }
+
+  void flush(mapped_file_type& mapped_file)
+  {
+    std::cout << "flush mmap" << std::endl;
+    m_mapped_file.flush();
+  }
+
+  void mmap_dontneed()
+  {
+    assert(false); /// TODO: implementation
+//    std::cout << "Call advise_dontneed" << std::endl;
+//    boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+//    boost::interprocess::mapped_region mregion(m_mapped_file, boost::interprocess::read_write);
+//    mregion.advise(advise);
+  }
+
+  void delete_mapping()
+  {
+    boost::interprocess::file_mapping::remove(m_fname.c_str());
+  }
+
+  std::string m_fname;
+  mapped_file_type m_mapped_file;
+};
+
 
 
 //// ---------- System Status --------- ///

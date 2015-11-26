@@ -183,7 +183,7 @@ class rhh_container {
 
    public:
 
-    explicit WholeForwardIterator() :
+    WholeForwardIterator() :
       m_rhh_ptr(nullptr),
       m_pos(kKeyNotFound)
     { }

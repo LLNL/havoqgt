@@ -11,6 +11,7 @@
 
 namespace graphstore {
 
+
 template <typename vertex_type,
           typename vertex_property_type,
           typename edge_property_type,
@@ -139,6 +140,7 @@ class graphstore_baseline
   allocator_type m_allocator;
   map_table_type m_map_table;
 };
+
 
 }
 #endif // GRAPHSTORE_BASELINE_HPP

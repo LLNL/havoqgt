@@ -22,8 +22,8 @@ using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
 #else
-#include <havoqgt/graphstore/graphstore_rhhda.hpp>
-using graphstore_type       = graphstore::graphstore_rhhda<vertex_id_type,
+#include <havoqgt/graphstore/graphstore_degawarerhh.hpp>
+using graphstore_type       = graphstore::graphstore_degawarerhh<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;

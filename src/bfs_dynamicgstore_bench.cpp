@@ -22,99 +22,95 @@
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
 
-#include <havoqgt/graphstore/graphstore_rhhda.hpp>
+#include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-
-#include "dynamicgraphstore_bench.hpp"
+#include <havoqgt/graphstore/graphstore_baseline.hpp>
+#include <havoqgt/graphstore/degawarerhh/graphstore_degawarerhh.hpp>
 #include "bfs_bench.hpp"
 
-#define DEBUG_MODE 0
-#if DEBUG_MODE
- std::ofstream ofs_edges;
-#endif
-
-enum : size_t {
-  midle_high_degree_threshold = 2 // must be more or equal than 1
-};
 
 /// --- typenames --- ///
-using vertex_type           = uint64_t;
-using vertex_meta_data_type = bool;
-using edge_weight_type      = unsigned char;
-using graphstore_type       = graphstore::graphstore_rhhda<vertex_type,
-                                                           vertex_meta_data_type,
-                                                           edge_weight_type,
-                                                           segment_manager_type,
-                                                           midle_high_degree_threshold>;
+using vertex_id_type        = uint64_t;
+using edge_property_type    = unsigned char;
+using vertex_property_type  = bool;
+using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
+                                                             vertex_property_type,
+                                                             edge_property_type,
+                                                             segment_manager_type>;
 
-/// --- global variables --- ///
-vertex_type max_vertex_id_ = 0;
-size_t num_edges_ = 0;
+ enum : size_t {
+   middle_high_degree_threshold = 2 // must be more or equal than 1
+ };
+ using degawarerhh_type  = graphstore::graphstore_degawarerhh<vertex_id_type,
+                                                       vertex_property_type,
+                                                       edge_property_type,
+                                                       segment_manager_type,
+                                                       middle_high_degree_threshold>;
 
 
-template <typename Edges>
-void constract_graph(mapped_file_type& mapped_file,
-                     segment_manager_type *const segment_manager,
-                     graphstore_type& graph_store,
-                     Edges& edges, const size_t chunk_size)
+template <typename graphstore_type, typename edgelist_type>
+std::pair<vertex_id_type, size_t>
+constract_graph(graphstore_type& graph_store,
+                graphstore::utility::interprocess_mmap_manager& mmap_manager,
+                edgelist_type& edgelist,
+                const size_t chunk_size)
 {
   std::cout << "-- Disp status of before generation --" << std::endl;
-  std::cout << "segment size (GB); " << get_segment_size(segment_manager) << std::endl;
+  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
   print_system_mem_usages();
 
+
+  vertex_id_type max_vertex_id = 0;
+  size_t num_edges = 0;
 
   size_t count_inserted = 0;
   size_t loop_cnt = 0;
   double construction_time = 0;
 
-  auto edges_itr = edges.begin();
-  auto edges_itr_end = edges.end();
-  request_vector_type<vertex_type> update_request_vec = request_vector_type<vertex_type>();
+  auto edgelist_itr = edgelist.begin();
+  auto edgelist_itr_end = edgelist.end();
+  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
   update_request_vec.reserve(chunk_size);
 
   auto global_start = graphstore::utility::duration_time();
-  while (edges_itr != edges_itr_end) {
+  while (edgelist_itr != edgelist_itr_end) {
     std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
-    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
+    generate_update_requests(edgelist_itr, edgelist_itr_end, update_request_vec, chunk_size);
 
     unsigned char dummy_weight = 0;
     auto local_start = graphstore::utility::duration_time();
     for (auto request : update_request_vec) {
       auto edge = request.edge;
-      max_vertex_id_ = std::max(max_vertex_id_, edge.first);
-      max_vertex_id_ = std::max(max_vertex_id_, edge.second);
+      max_vertex_id = std::max(max_vertex_id, edge.first);
+      max_vertex_id = std::max(max_vertex_id, edge.second);
       count_inserted += graph_store.insert_edge(edge.first, edge.second, dummy_weight);
     }
-    std::cout << "shrink to fit low table" << std::endl;
-    graph_store.shrink_to_fit_low_table();
+    graphstore::utility::sync_files();
     double t = graphstore::utility::duration_time_sec(local_start);
     construction_time += t;
     std::cout << "progress (sec.): " << t << std::endl;
 
     ++loop_cnt;
   }
-  std::cout << "sync mmap" << std::endl;
-  flush_mmmap(mapped_file);
-  std::cout << "sync di-mmap" << std::endl;
-  sync_dimmap();
   const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
 
-  num_edges_ = count_inserted;
+  num_edges = count_inserted;
 
   std::cout << "\n-- All edge updations done --" << std::endl;
   std::cout << "inserted edges : " << count_inserted << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
-  std::cout << "segment size (GB); " << get_segment_size(segment_manager) << std::endl;
+  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
   print_system_mem_usages();
 
+  return std::make_pair(max_vertex_id, num_edges);
 }
 
 
 template <typename graphstore_type, typename vertex_type>
   static void run_bfs_sync (
-      graphstore_type& graph,
+      graphstore_type& graphstore,
       trv_inf<vertex_type>& inf,
       std::queue<vertex_type>& frontier_queue,
       std::queue<vertex_type>& next_queue,
@@ -128,13 +124,7 @@ template <typename graphstore_type, typename vertex_type>
     inf.is_visited[start_vrtx] = true;
 #else
     inf.init(false);
-    for (auto itr = graph.begin_low_edges(); !itr.is_end(); ++itr) {
-      itr->value.first = false;
-    }
-    for (auto itr = graph.begin_mid_high_edges(); !itr.is_end(); ++itr) {
-      itr->value.first = false;
-    }
-    graph.vertex_property_data(start_vrtx) = true;
+    graphstore.vertex_property_data(start_vrtx) = true;
 #endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
@@ -151,28 +141,12 @@ template <typename graphstore_type, typename vertex_type>
 
         size_t count_visited_edges = 0;
         /// push adjacent vertices to the next queue
-        for (auto edge = graph.find_low_edge(src); !edge.is_end(); ++edge) {
-          const vertex_type dst = edge->second;
+        for (auto edge = graphstore.adjacencylist(src), end = graphstore.adjacencylist_end(src); edge != end; ++edge) {
+          const vertex_type dst = edge->first;
 #if BFS_USE_BITMAP
           bool& is_visited = inf.is_visited[dst];
 #else
-          bool& is_visited = graph.vertex_property_data(dst);
-#endif
-          if (!is_visited) {
-            next_queue.push(dst);
-            is_visited = true;
-          }
-          ++count_visited_edges;
-        }
-        inf.count_visited_edges += count_visited_edges;
-        if (count_visited_edges > 0) continue;
-
-        for (auto edge = graph.find_mid_high_edge(src); !edge.is_end(); ++edge) {
-          const vertex_type dst = edge->key;
-#if BFS_USE_BITMAP
-          bool& is_visited = inf.is_visited[dst];
-#else
-          bool& is_visited = graph.vertex_property_data(dst);
+          bool& is_visited = graphstore.vertex_property_data(dst);
 #endif
           if (!is_visited) {
             next_queue.push(dst);
@@ -191,33 +165,50 @@ template <typename graphstore_type, typename vertex_type>
   }
 
 /// Avoid linker errors with template function
-template void run_bfs_sync<graphstore_type, vertex_type>(graphstore_type&,
-                                                         trv_inf<vertex_type>&,
-                                                         std::queue<vertex_type>&,
-                                                         std::queue<vertex_type>&,
-                                                         vertex_type&);
+template void run_bfs_sync<baseline_type, vertex_id_type>(baseline_type&,
+                                                           trv_inf<vertex_id_type>&,
+                                                           std::queue<vertex_id_type>&,
+                                                           std::queue<vertex_id_type>&,
+                                                           vertex_id_type&);
+
+template void run_bfs_sync<degawarerhh_type, vertex_id_type>(degawarerhh_type&,
+                                                         trv_inf<vertex_id_type>&,
+                                                         std::queue<vertex_id_type>&,
+                                                         std::queue<vertex_id_type>&,
+                                                         vertex_id_type&);
 
 
 
 /// --- option variables --- ///
 std::string fname_segmentfile_;
 std::vector<std::string> fname_edge_list_;
-size_t segment_size_log2_ = 30;
-std::vector<vertex_type> source_list_;
+size_t segmentfile_init_size_log2_ = 30;
+std::string graphstore_name_;
+std::vector<vertex_id_type> source_list_;
 
 void parse_options(int argc, char **argv)
 {
 
+  std::cout << "CMD line:";
+  for (int i=0; i<argc; ++i) {
+    std::cout << " " << argv[i];
+  }
+  std::cout << std::endl;
+
   char c;
 
-  while ((c = getopt (argc, argv, "S:o:E:r:")) != -1) {
+  while ((c = getopt (argc, argv, "S:o:E:r:g:")) != -1) {
     switch (c) {
       case 'S':
-        segment_size_log2_ = boost::lexical_cast<size_t>(optarg);
+        segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
         break;
 
       case 'o':
         fname_segmentfile_ = optarg;
+        break;
+
+      case 'g':
+        graphstore_name_ = optarg;
         break;
 
       case 'E':
@@ -246,69 +237,71 @@ void parse_options(int argc, char **argv)
     }
   }
 
-}
-
-
-int main(int argc, char** argv) {
-
-  std::cout << "CMD line:";
-  for (int i=0; i<argc; ++i) {
-    std::cout << " " << argv[i];
-  }
-  std::cout << std::endl;
-
-  parse_options(argc, argv);
-  std::cout << "Midle-high degree threshold = " << midle_high_degree_threshold << std::endl;
-  if (!fname_edge_list_.empty())
-    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-  for (auto itr : fname_edge_list_) {
+  std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
+  std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
+  for (const auto itr : fname_edge_list_) {
     std::cout << "Load edge list from " << itr << std::endl;
   }
 
+}
 
-  /// --- create a segument file --- ///
-  boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
-  std::cout << "\n<<Construct segment>>" << std::endl;
-  std::cout << "Create and map a segument file" << std::endl;
-  uint64_t graph_capacity = std::pow(2, segment_size_log2_);
-  mapped_file_type mapped_file = mapped_file_type(
-                                   boost::interprocess::create_only,
-                                   fname_segmentfile_.c_str(),
-                                   graph_capacity);
-  std::cout << "Call posix_fallocate\n";
-  fallocate(fname_segmentfile_.c_str(), graph_capacity, mapped_file);
+template<typename graphstore_type>
+std::pair<vertex_id_type, size_t>
+construct_graph(graphstore_type& graphstore,
+                graphstore::utility::interprocess_mmap_manager& mmap_manager,
+                havoqgt::parallel_edge_list_reader& edgelist)
+{
+    return constract_graph(graphstore,
+                           mmap_manager,
+                           edgelist,
+                           static_cast<size_t>(std::pow(10, 6)));
+}
 
-  /// --- Get a segument manager --- ///
-  std::cout << "\n<Get a segment manager>" << std::endl;
-  segment_manager_type* segment_manager = mapped_file.get_segment_manager();
+int main(int argc, char** argv) {
+
+  havoqgt::havoqgt_init(&argc, &argv);
+  {
+  havoqgt::get_environment();
+
+  parse_options(argc, argv);
+
+
+  /// --- init segment file --- ///
+  uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
+  graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
+  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
   print_system_mem_usages();
 
 
-  /// --- Allocate graphstore_rhhda --- ///
-  std::cout << "\n<Allocate graphstore_rhhda>" << std::endl;
-  graphstore_type graph_store(segment_manager);
+  havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
 
-  /// --- Graph Construction --- ////
-  std::cout << "\n<Construct graph>" << std::endl;
-  havoqgt::havoqgt_init(&argc, &argv);
-  {
-    havoqgt::get_environment();
+  if (graphstore_name_ == "Baseline") {
+    baseline_type graphstore(mmap_manager.get_segment_manager());
 
-    havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
-    constract_graph(
-          mapped_file,
-          segment_manager,
-          graph_store,
-          edgelist,
-          static_cast<uint64_t>(std::pow(10, 6)));
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, mmap_manager, edgelist);
+
+    std::cout << "\n<Run BFS>" << std::endl;
+    if (source_list_.empty())
+      generate_bfs_sources(4, ret.first, source_list_);
+    run_bfs(graphstore, ret.first, ret.second, source_list_);
+
+  } else if (graphstore_name_ == "DegAwareRHH") {
+    degawarerhh_type graphstore(mmap_manager.get_segment_manager());
+
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, mmap_manager, edgelist);
+
+    std::cout << "\n<Run BFS>" << std::endl;
+    if (source_list_.empty())
+      generate_bfs_sources(4, ret.first, source_list_);
+    run_bfs(graphstore, ret.first, ret.second, source_list_);
+
+  } else {
+    std::cout << "Wrong graphstore name : " << graphstore_name_ << std::endl;
+    exit(1);
   }
 
-
-  /// ---------- Graph Traversal --------------- ///
-  std::cout << "\n<Run BFS>" << std::endl;
-  if (source_list_.empty())
-    generate_bfs_sources(4, max_vertex_id_, source_list_);
-  run_bfs(graph_store, max_vertex_id_, num_edges_, source_list_);
+  }
+  havoqgt::havoqgt_finalize();
 
   return 0;
 }
