@@ -1,32 +1,29 @@
 #ifndef DEGAWARERHH_VERTEX_ITERATOR_HPP
 #define DEGAWARERHH_VERTEX_ITERATOR_HPP
 
-#include <havoqgt/graphstore/degawarerhh/graphstore_degawarerhh.hpp>
+#include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 
 namespace graphstore {
-
-template <typename garphstore_type>
-class vertex_iterator;
 
 template <typename vertex_type,
           typename vertex_property_data_type,
           typename edge_property_data_type,
           typename segment_manager_type,
           size_t middle_high_degree_threshold>
-class vertex_iterator <typename graphstore_degawarerhh<vertex_type,
-                                                       vertex_property_data_type,
-                                                       edge_property_data_type,
-                                                       segment_manager_type,
-                                                       middle_high_degree_threshold>>
+class degawarerhh<vertex_type,
+                  vertex_property_data_type,
+                  edge_property_data_type,
+                  segment_manager_type,
+                  middle_high_degree_threshold>::vertex_iterator
 {
 
  private:
-  using graphstore_type             = graphstore_degawarerhh<vertex_type,
-                                                            vertex_property_data_type,
-                                                            edge_property_data_type,
-                                                            segment_manager_type,
-                                                            middle_high_degree_threshold>;
-  using self_type                   = vertex_iterator<graphstore_type>;
+  using graphstore_type             = degawarerhh<vertex_type,
+                                                  vertex_property_data_type,
+                                                  edge_property_data_type,
+                                                  segment_manager_type,
+                                                  middle_high_degree_threshold>;
+  using self_type                   = graphstore_type::vertex_iterator;
   using low_deg_table_iterator_type = typename graphstore_type::low_deg_table_type::whole_iterator;
   using mh_deg_table_iterator_type  = typename graphstore_type::mh_deg_table_type::whole_iterator;
 
@@ -39,7 +36,7 @@ class vertex_iterator <typename graphstore_degawarerhh<vertex_type,
   { }
 
 
-  vertex_iterator (graphstore_type* gstore) :
+  vertex_iterator(graphstore_type* gstore) :
     m_low_itr(gstore->m_low_degree_table->begin()),
     m_mh_itr(gstore->m_mh_degree_table->begin())
   { }

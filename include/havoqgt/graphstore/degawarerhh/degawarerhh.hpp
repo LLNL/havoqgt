@@ -3,8 +3,8 @@
  * LLNL / TokyoTech
  */
 
-#ifndef GRAPHSTORE_DEGAWARERHH_HPP
-#define GRAPHSTORE_DEGAWARERHH_HPP
+#ifndef DEGAWARERHH_HPP
+#define DEGAWARERHH_HPP
 
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
@@ -13,20 +13,15 @@
 
 #include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/degawarerhh/degawarerhh_vertex_iterator.hpp>
 
 namespace graphstore {
-
-template <typename garphstore_type>
-class adjacent_edge_iterator;
-
 
 template <typename vertex_type,
           typename vertex_property_data_type,
           typename edge_property_data_type,
           typename segment_manager_type,
           size_t middle_high_degree_threshold = 2>
-class graphstore_degawarerhh
+class degawarerhh
 {
  private:
   using size_type                   = size_t;
@@ -36,21 +31,23 @@ class graphstore_degawarerhh
   using mh_edge_chunk_type          = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mh_deg_table_value_type     = utility::packed_pair<vertex_property_data_type, mh_edge_chunk_type*>;
   using mh_deg_table_type           = rhh_container<vertex_type, mh_deg_table_value_type, size_type, segment_manager_type>;
-  using graphstore_rhhda_selftype   = graphstore_degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
+  using graphstore_rhhda_selftype   = degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
                                                           segment_manager_type, middle_high_degree_threshold>;
 
 
  public:
 
   /// --- iterators --- ///
-  using vertex_iterator_type           = vertex_iterator<graphstore_rhhda_selftype>;
-  friend class vertex_iterator<graphstore_rhhda_selftype>;
+  class vertex_iterator;
+  class adjacent_edge_iterator;
+//  using vertex_iterator_type           = vertex_iterator<graphstore_rhhda_selftype>;
+//  friend class vertex_iterator<graphstore_rhhda_selftype>;
 
-  using adjacent_edge_iterator_type    = adjacent_edge_iterator<graphstore_rhhda_selftype>;
-  friend class adjacent_edge_iterator<graphstore_rhhda_selftype>;
+//  using adjacent_edge_iterator    = adjacent_edge_iterator<graphstore_rhhda_selftype>;
+//  friend class adjacent_edge_iterator<graphstore_rhhda_selftype>;
 
 
-  explicit graphstore_degawarerhh(segment_manager_type* segment_manager) {
+  explicit degawarerhh(segment_manager_type* segment_manager) {
     // -- init allocator -- //
     rhh::init_allocator<typename low_deg_table_type::allocator, segment_manager_type>(segment_manager);
     rhh::init_allocator<typename mh_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
@@ -72,7 +69,7 @@ class graphstore_degawarerhh
 #endif
   }
 
-  ~graphstore_degawarerhh() {
+  ~degawarerhh() {
     clear();
     low_deg_table_type::deallocate(m_low_degree_table);
     mh_deg_table_type::deallocate(m_mh_degree_table);
@@ -83,24 +80,24 @@ class graphstore_degawarerhh
 
 
   /// -------- Lookup -------- ///
-  vertex_iterator_type vertices_begin()
+  vertex_iterator vertices_begin()
   {
-    return vertex_iterator_type(this);
+    return vertex_iterator(this);
   }
 
-  static vertex_iterator_type vertices_end()
+  static vertex_iterator vertices_end()
   {
-    return vertex_iterator_type();
+    return vertex_iterator();
   }
 
-  adjacent_edge_iterator_type adjacent_edge_begin(const vertex_type& srt_vrtx)
+  adjacent_edge_iterator adjacent_edge_begin(const vertex_type& srt_vrtx)
   {
-    return adjacent_edge_iterator_type(this, srt_vrtx);
+    return adjacent_edge_iterator(this, srt_vrtx);
   }
 
-  static adjacent_edge_iterator_type adjacent_edge_end(const vertex_type&)
+  adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
   {
-    return adjacent_edge_iterator_type();
+    return adjacent_edge_iterator();
   }
 
 
@@ -423,135 +420,14 @@ class graphstore_degawarerhh
 
 };
 
-
-template <typename vertex_type,
-          typename vertex_property_data_type,
-          typename edge_property_data_type,
-          typename segment_manager_type,
-          size_t middle_high_degree_threshold>
-class adjacent_edge_iterator <graphstore_degawarerhh<vertex_type,
-                                               vertex_property_data_type,
-                                               edge_property_data_type,
-                                               segment_manager_type,
-                                               middle_high_degree_threshold>>
-{
-
- private:
-  using graphstore_type            = graphstore_degawarerhh<vertex_type,
-                                                            vertex_property_data_type,
-                                                            edge_property_data_type,
-                                                            segment_manager_type,
-                                                            middle_high_degree_threshold>;
-  using self_type                  = adjacent_edge_iterator<graphstore_type>;
-  using low_deg_edge_iterator_type = typename graphstore_type::low_deg_table_type::value_iterator;
-  using mh_deg_edge_iterator_type  = typename graphstore_type::mh_edge_chunk_type::whole_iterator;
-
-
- public:
-
-  adjacent_edge_iterator () :
-    m_low_itr(),
-    m_mh_itr()
-  { }
-
-
-  adjacent_edge_iterator (graphstore_type* gstore, const vertex_type& src_vrt) :
-    m_low_itr(gstore->m_low_degree_table->find(src_vrt)),
-    m_mh_itr(mh_adjacent_edge_begin(gstore, src_vrt))
-  { }
-
-
-  void swap(self_type &other) noexcept
-  {
-    using std::swap;
-    swap(m_low_itr, other.m_low_itr);
-    swap(m_mh_itr, other.m_mh_itr);
-  }
-
-  self_type &operator++ () // Pre-increment
-  {
-    find_next_value();
-    return *this;
-  }
-
-  self_type operator++ (int) // Post-increment
-  {
-    self_type tmp(*this);
-    find_next_value();
-    return tmp;
-  }
-
-  // two-way comparison: v.begin() == v.cbegin() and vice versa
-  bool operator == (const self_type &rhs) const
-  {
-    return is_equal(rhs);
-  }
-
-  bool operator != (const self_type &rhs) const
-  {
-    return !is_equal(rhs);
-  }
-
-  /// TODO: handle an error when m_mh_itr.is_end() == true
-  const vertex_type& target_vertex()
-  {
-    if (!m_low_itr.is_end()) {
-      return m_low_itr->second;
-    }
-    return m_mh_itr->key;
-  }
-
-  /// TODO: handle an error when m_mh_itr.is_end() == true
-  const edge_property_data_type& property_data()
-  {
-    if (!m_low_itr.is_end()) {
-      return m_low_itr->third;
-    }
-    return m_mh_itr->value;
-  }
-
-
- private:
-
-  inline static mh_deg_edge_iterator_type mh_adjacent_edge_begin (graphstore_type* graphstore, const vertex_type& src_vrt)
-  {
-    const auto itr_matrix = graphstore->m_mh_degree_table->find(src_vrt);
-    if (!itr_matrix.is_end()) {
-      typename graphstore_type::mh_edge_chunk_type* adj_list = itr_matrix->second;
-      return adj_list->begin();
-    } else {
-      return graphstore_type::mh_edge_chunk_type::end();
-    }
-  }
-
-  inline bool is_equal(const self_type &rhs) const
-  {
-    return (m_low_itr == rhs.m_low_itr) && (m_mh_itr == rhs.m_mh_itr);
-  }
-
-  inline void find_next_value()
-  {
-    if (!m_low_itr.is_end()) {
-      ++m_low_itr;
-    } else if (!m_mh_itr.is_end()) {
-      ++m_mh_itr;
-    }
-  }
-
-  low_deg_edge_iterator_type m_low_itr;
-  mh_deg_edge_iterator_type m_mh_itr;
-};
-
-
-
 ///
-/// \brief The graphstore_degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type, 1> class
+/// \brief The degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type, 1> class
 ///   partial speciallization class when middle_high_degree_threshold is 1
 template <typename vertex_type,
           typename vertex_property_data_type,
           typename edge_property_data_type,
           typename segment_manager_type>
-class graphstore_degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_type, segment_manager_type, 1>
+class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_type, segment_manager_type, 1>
 {
  private:
   using size_type = size_t;
@@ -564,7 +440,7 @@ class graphstore_degawarerhh <vertex_type, vertex_property_data_type, edge_prope
 
  public:
 
-  explicit graphstore_degawarerhh(segment_manager_type* segment_manager) {
+  explicit degawarerhh(segment_manager_type* segment_manager) {
     // -- init allocator -- //
     rhh::init_allocator<typename low_deg_table_type::allocator, segment_manager_type>(segment_manager);
     rhh::init_allocator<typename mh_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
@@ -580,7 +456,7 @@ class graphstore_degawarerhh <vertex_type, vertex_property_data_type, edge_prope
     std::cout << "middle_high_degree_threshold (using only m_h table) = " << 0 << std::endl;
   }
 
-  ~graphstore_degawarerhh() {
+  ~degawarerhh() {
     clear();
     low_deg_table_type::deallocate(m_low_degree_table);
     mh_deg_table_type::deallocate(m_mh_degree_table);
@@ -871,5 +747,9 @@ class graphstore_degawarerhh <vertex_type, vertex_property_data_type, edge_prope
 };
 
 }
-#endif // GRAPHSTORE_RHHDA_HPP
+
+#include <havoqgt/graphstore/degawarerhh/degawarerhh_vertex_iterator.hpp>
+#include <havoqgt/graphstore/degawarerhh/degawarerhh_adjacent_edge_iterator.hpp>
+
+#endif // DEGAWARERHH_HPP
 

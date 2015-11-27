@@ -24,8 +24,8 @@
 
 #include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
-#include <havoqgt/graphstore/degawarerhh/graphstore_degawarerhh.hpp>
+#include <havoqgt/graphstore/baseline.hpp>
+#include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 #include "bfs_bench.hpp"
 
 
@@ -41,7 +41,7 @@ using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
  enum : size_t {
    middle_high_degree_threshold = 2 // must be more or equal than 1
  };
- using degawarerhh_type  = graphstore::graphstore_degawarerhh<vertex_id_type,
+ using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                        vertex_property_type,
                                                        edge_property_type,
                                                        segment_manager_type,
@@ -141,8 +141,10 @@ template <typename graphstore_type, typename vertex_type>
 
         size_t count_visited_edges = 0;
         /// push adjacent vertices to the next queue
-        for (auto edge = graphstore.adjacencylist(src), end = graphstore.adjacencylist_end(src); edge != end; ++edge) {
-          const vertex_type dst = edge->first;
+        for (auto edge = graphstore.adjacent_edge_begin(src), end = graphstore.adjacent_edge_end(src);
+             edge != end;
+             ++edge) {
+          const vertex_type& dst = edge.target_vertex();
 #if BFS_USE_BITMAP
           bool& is_visited = inf.is_visited[dst];
 #else

@@ -17,8 +17,8 @@
 /// must include the files below with this order ??
 #include "dynamicgraphstore_bench.hpp"
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
-#include <havoqgt/graphstore/graphstore_degawarerhh.hpp>
+#include <havoqgt/graphstore/baseline.hpp>
+#include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 
 
 /// --- typenames --- ///
@@ -33,7 +33,7 @@ using baseline_type       = graphstore::graphstore_baseline<vertex_id_type,
 enum : size_t {
   middle_high_degree_threshold = 2 // must be more or equal than 1
 };
-using degawarerhh_type  = graphstore::graphstore_degawarerhh<vertex_id_type,
+using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                       vertex_property_type,
                                                       edge_property_type,
                                                       segment_manager_type,

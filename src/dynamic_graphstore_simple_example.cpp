@@ -16,14 +16,14 @@ using vertex_property_type  = int;
 
 
 #if 1
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
+#include <havoqgt/graphstore/baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
 #else
-#include <havoqgt/graphstore/graphstore_degawarerhh.hpp>
-using graphstore_type       = graphstore::graphstore_degawarerhh<vertex_id_type,
+#include <havoqgt/graphstore/degawarerhh.hpp>
+using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
@@ -183,10 +183,10 @@ int main(int argc, char** argv) {
   /// ------- iterator over an adjacencylist ------- ///
   {
     vertex_id_type src_vrtx = 0;
-    for (auto adj_edges = graphstore.adjacencylist(src_vrtx), end = graphstore.adjacencylist_end(src_vrtx);
+    for (auto adj_edges = graphstore.adjacent_edge_begin(src_vrtx), end = graphstore.adjacent_edge_end(src_vrtx);
          adj_edges != end;
          ++adj_edges) {
-      std::cout << "destination vertex: " << adj_edges->first << ", weight: " << adj_edges->second << std::endl;
+      std::cout << "destination vertex: " << adj_edges.target_vertex() << ", weight: " << adj_edges.property_data() << std::endl;
     }
   }
 
