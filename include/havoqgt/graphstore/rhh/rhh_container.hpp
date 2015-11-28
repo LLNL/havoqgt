@@ -30,6 +30,37 @@ inline bool has_key(rhh_type* const rhh, typename rhh_type::key_type& key)
 }
 
 
+template <typename rhh_type>
+inline static void resize(rhh_type** rhh, const typename rhh_type::size_type new_capacity)
+{
+  rhh_type* new_rhh = rhh_type::make_with_source_rhh(*rhh, new_capacity);
+  rhh_type::deallocate(*rhh);
+  *rhh = new_rhh;
+}
+
+template <typename rhh_type>
+inline static void grow(rhh_type** rhh)
+{
+#if 0
+  if ((*rhh)->table_mem_size() > 1024) {
+    chain(rhh);
+  } else {
+    resize(rhh, (*rhh)->capacity() * kCapacityGrowingFactor);
+  }
+#else
+  resize(rhh, (*rhh)->capacity() * kCapacityGrowingFactor);
+#endif
+}
+
+template <typename rhh_type>
+inline static void chain(rhh_type** rhh)
+{
+  rhh_type* const new_rhh = rhh_type::allocate((*rhh)->capacity());
+  new_rhh->assign_to_chained_rhh(*rhh);
+  *rhh = new_rhh;
+}
+
+
 ///
 /// \brief insert
 ///   insert a element with checking the capacity and a probde distance.
@@ -42,15 +73,13 @@ template <typename rhh_type, typename key_type, typename value_type>
 void insert(rhh_type** rhh, key_type key, value_type value)
 {
   /// --- check capacity --- ///
-  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
-    *rhh = rhh_type::grow(*rhh);
+  if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * kFullCapacitFactor)) {
+    grow(rhh);
   }
 
   /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
-    rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
-    new_rhh->assign_to_chained_rhh(*rhh);
-    *rhh = new_rhh;
+    chain(rhh);
   }
 }
 
@@ -66,13 +95,13 @@ template <typename rhh_type, typename key_type, typename value_type>
 void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
 {
   /// --- check capacity --- ///
-  if ((*rhh)->size() + 1 >= static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor) {
-    *rhh = rhh_type::resize(*rhh, (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+  if ((*rhh)->size() + 1 >= static_cast<double>((*rhh)->capacity()) * kFullCapacitFactor) {
+    grow(rhh);
   }
 
   /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
-    *rhh = rhh_type::resize(*rhh, (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+    grow(rhh);
   }
 }
 
@@ -84,20 +113,19 @@ bool shrink_to_fit(rhh_type** rhh, const double lazy_factor = 1.0)
   typename rhh_type::size_type cur_capacity = (*rhh)->capacity() * (*rhh)->depth();
 
 //  std::cout << cur_size << " " << cur_capacity << std::endl;
-  if (cur_size > static_cast<double>(cur_capacity / graphstore::rhh::kCapacityGrowingFactor / lazy_factor) * graphstore::rhh::kFullCapacitFactor) {
+  if (cur_size > static_cast<double>(cur_capacity / kCapacityGrowingFactor / lazy_factor) * kFullCapacitFactor) {
     /// --- current capacity is fit to current size, do nothing --- ///
     return false;
   }
 
   typename rhh_type::size_type new_capacity = 1;
-  while ( cur_size > static_cast<double>(new_capacity) * graphstore::rhh::kFullCapacitFactor ) {
-    new_capacity *= graphstore::rhh::kCapacityGrowingFactor;
+  while ( cur_size > static_cast<double>(new_capacity) * kFullCapacitFactor ) {
+    new_capacity *= kCapacityGrowingFactor;
   }
 
-  (*rhh) = rhh_type::resize((*rhh), new_capacity);
+  resize(rhh, new_capacity);
 
   return true;
-//  std::cout << cur_size << " " << cur_capacity << " " << (*rhh)->capacity() * (*rhh)->depth() << std::endl;
 }
 
 } /// namespace rhh
@@ -119,6 +147,9 @@ class rhh_container {
   using segment_manager_type = _segment_manager_type;
   using property_type        = typename property_program::property_type;
   using probedistance_type   = typename property_program::probedistance_type;
+  using rhh_contatiner_selftype = rhh_container<key_type, value_type, size_type,
+                                                segment_manager_type,
+                                                key_hash_func, property_program>;
 
   /// TODO: specializetion for no value case
   #pragma pack(1)
@@ -131,18 +162,14 @@ class rhh_container {
   using element_type = packed_element;
 
   enum : size_type {
-    kKeyNotFound = std::numeric_limits<size_type>::max(),
-    kElementSize = sizeof(element_type)
+    kKeyNotFound   = std::numeric_limits<size_type>::max(),
+    kElementSize   = sizeof(element_type),
+    kTableBaseSize = sizeof(size_type) + sizeof(size_type) + sizeof(void*)
   };
 
-  using rhh_contatiner_selftype = rhh_container<key_type, value_type, size_type, segment_manager_type, key_hash_func, property_program>;
-  using allocator               = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
-                                                                         kElementSize,
-                                                                         sizeof(size_type) + sizeof(size_type) + sizeof(void*)>;
-
-  enum : size_t {
-    kCapacityGrowingFactor = 2ULL
-  };
+  using allocator = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
+                                                           kElementSize,
+                                                           kTableBaseSize>;
 
   class whole_iterator;
   class value_iterator;
@@ -168,6 +195,10 @@ class rhh_container {
     return m_capacity;
   }
 
+  inline size_t table_mem_size() const
+  {
+    return kElementSize * capacity() + kTableBaseSize;
+  }
 
   /// --- Lookup --- ///
   inline value_iterator find(const key_type& key)
@@ -282,18 +313,6 @@ class rhh_container {
     }
   }
 
-  inline static rhh_contatiner_selftype* grow(rhh_contatiner_selftype* const rhh)
-  {
-    return resize(rhh, rhh->capacity() * graphstore::rhh::kCapacityGrowingFactor);
-  }
-
-  inline static rhh_contatiner_selftype* resize(rhh_contatiner_selftype* const old_rhh, const size_type new_capacity)
-  {
-    rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh, new_capacity);
-    deallocate(old_rhh);
-    return new_rhh;
-  }
-
   inline rhh_contatiner_selftype* chained_rhh() const
   {
     return m_next;
@@ -304,6 +323,45 @@ class rhh_container {
     m_num_elems = next->m_num_elems;
     m_capacity = next->m_capacity;
     m_next = next;
+  }
+
+  ///
+  /// \brief make_with_source_rhh
+  ///         allocate new rhh with new_capacity and move all elements from
+  ///         a source_rhh with handling long probe distance case
+  /// \param source_rhh
+  /// \param new_capacity
+  /// \return
+  ///         pointer to the new rhh
+  static rhh_contatiner_selftype* make_with_source_rhh(rhh_contatiner_selftype* source_rhh, const size_type new_capacity)
+  {
+    assert(source_rhh->size() <= new_capacity);
+
+    const size_type src_capacity = source_rhh->m_capacity;
+    key_type wk_key;
+    value_type wk_val;
+
+    rhh_contatiner_selftype* new_rhh = allocate(new_capacity);
+
+    while (source_rhh != nullptr) {
+      for (size_type i = 0; i < src_capacity; ++i) {
+        property_type property = source_rhh->m_body[i].property;
+        if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
+          bool is_successed = new_rhh->insert_into_body(std::move(source_rhh->m_body[i].key), std::move(source_rhh->m_body[i].value), wk_key, wk_val);
+          new_rhh->m_num_elems += is_successed;
+          while (!is_successed) {
+            rhh_contatiner_selftype* chained_rhh = new_rhh;
+            new_rhh = allocate(chained_rhh->m_capacity);
+            new_rhh->assign_to_chained_rhh(chained_rhh);
+            is_successed = new_rhh->insert_into_body(std::move(wk_key), std::move(wk_val), wk_key, wk_val);
+            new_rhh->m_num_elems += is_successed;
+          }
+        }
+      }
+      source_rhh = source_rhh->m_next;
+    }
+
+    return new_rhh;
   }
 
 
@@ -472,47 +530,6 @@ class rhh_container {
     return false;
   }
 
-
-  ///
-  /// \brief make_with_source_rhh
-  ///         allocate new rhh with new_capacity and move all elements from
-  ///         a source_rhh with handling long probe distance case
-  /// \param source_rhh
-  /// \param new_capacity
-  /// \return
-  ///         pointer to the new rhh
-  static rhh_contatiner_selftype* make_with_source_rhh(rhh_contatiner_selftype* source_rhh, size_type new_capacity)
-  {
-    assert(source_rhh->size() <= new_capacity);
-
-    const size_type src_capacity = source_rhh->m_capacity;
-    key_type wk_key;
-    value_type wk_val;
-
-    rhh_contatiner_selftype* new_rhh = allocate(new_capacity);
-
-    while (source_rhh != nullptr) {
-      for (size_type i = 0; i < src_capacity; ++i) {
-        property_type property = source_rhh->m_body[i].property;
-        if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
-          bool is_successed = new_rhh->insert_into_body(std::move(source_rhh->m_body[i].key), std::move(source_rhh->m_body[i].value), wk_key, wk_val);
-          new_rhh->m_num_elems += is_successed;
-          while (!is_successed) {
-            rhh_contatiner_selftype* chained_rhh = new_rhh;
-            new_rhh = allocate(chained_rhh->m_capacity);
-            new_rhh->assign_to_chained_rhh(chained_rhh);
-            is_successed = new_rhh->insert_into_body(std::move(wk_key), std::move(wk_val), wk_key, wk_val);
-            new_rhh->m_num_elems += is_successed;
-          }
-        }
-      }
-      source_rhh = source_rhh->m_next;
-    }
-
-    return new_rhh;
-  }
-
-
   void rehash_elements()
   {
     key_type wk_key;
@@ -532,6 +549,7 @@ class rhh_container {
 
     deallocate(tmp_rhh);
   }
+
 
   /// --- private valiable --- ///
   size_type m_num_elems; /// including chained rhhs
