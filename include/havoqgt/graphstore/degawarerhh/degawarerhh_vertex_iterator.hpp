@@ -29,16 +29,12 @@ class degawarerhh<vertex_type,
 
  public:
 
+  vertex_iterator() =delete;
 
-  vertex_iterator () :
-    m_low_itr(),
-    m_mh_itr()
-  { }
-
-
-  vertex_iterator(graphstore_type* gstore) :
-    m_low_itr(gstore->m_low_degree_table->begin()),
-    m_mh_itr(gstore->m_mh_degree_table->begin())
+  vertex_iterator (low_deg_table_iterator_type&& low_itr,
+                   mh_deg_table_iterator_type&& mh_itr) :
+    m_low_itr(low_itr),
+    m_mh_itr(mh_itr)
   { }
 
   void swap(self_type &other) noexcept
@@ -82,7 +78,7 @@ class degawarerhh<vertex_type,
   }
 
   /// TODO: handle an error when m_mh_itr.is_end() == true
-  const vertex_property_data_type& property_data()
+  vertex_property_data_type& property_data()
   {
     if (!m_low_itr.is_end()) {
       return m_low_itr->third;

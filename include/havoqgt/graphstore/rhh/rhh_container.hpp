@@ -13,7 +13,6 @@
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
-#include <havoqgt/graphstore/rhh/rhh_common.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_element_base.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
@@ -21,7 +20,6 @@
 /// #define RHH_DETAILED_ANALYSYS
 
 namespace graphstore {
-
 namespace rhh {
 
 /// ---- Utility functions ---- ///
@@ -41,18 +39,18 @@ inline bool has_key(rhh_type* const rhh, typename rhh_type::key_type& key)
 /// \param key
 /// \param value
 template <typename rhh_type, typename key_type, typename value_type>
-inline void insert(rhh_type** rhh, key_type key, value_type value)
+void insert(rhh_type** rhh, key_type key, value_type value)
 {
   /// --- check capacity --- ///
   if ((*rhh)->size() + 1 >= static_cast<size_t>(static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor)) {
-    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+    *rhh = rhh_type::grow(*rhh);
   }
 
   /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
     rhh_type* new_rhh = rhh_type::allocate((*rhh)->capacity());
-    new_rhh->assign_to_chained_rhh((*rhh));
-    (*rhh) = new_rhh;
+    new_rhh->assign_to_chained_rhh(*rhh);
+    *rhh = new_rhh;
   }
 }
 
@@ -65,48 +63,22 @@ inline void insert(rhh_type** rhh, key_type key, value_type value)
 /// \param key
 /// \param value
 template <typename rhh_type, typename key_type, typename value_type>
-inline void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
+void insert_sizeup(rhh_type** rhh, key_type key, value_type value)
 {
   /// --- check capacity --- ///
   if ((*rhh)->size() + 1 >= static_cast<double>((*rhh)->capacity()) * graphstore::rhh::kFullCapacitFactor) {
-    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+    *rhh = rhh_type::resize(*rhh, (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
 
   /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
-    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+    *rhh = rhh_type::resize(*rhh, (*rhh)->capacity() * graphstore::rhh::kCapacityGrowingFactor);
   }
 }
 
-///
-/// \brief erase
-///   insert a element with checking the capacity and a probde distance.
-///   if the probe distance exceed a threshold, allocate a chainged table
-///   Note: this function causes copy of a key and a value !!
-/// \param rhh
-/// \param key
-/// \param value
-//template <typename rhh_type, typename key_type>
-//inline size_t erase(rhh_type** rhh, const key_type& key)
-//{
-
-//  size_t num_erased = 0;
-//  for (auto itr = (*rhh)->find(key); !itr.is_end(); ++itr) {
-//    (*rhh)->erase(itr);
-//    ++num_erased;
-//  }
-
-//  /// --- check capacity --- ///
-//  if (num_erased > 0 && (*rhh)->size() < static_cast<double>((*rhh)->capacity()) / graphstore::rhh::kFullCapacitFactor) {
-//    (*rhh) = rhh_type::resize((*rhh), (*rhh)->capacity() / graphstore::rhh::kCapacityGrowingFactor);
-//  }
-
-//  return num_erased;
-//}
-
 
 template <typename rhh_type>
-inline bool shrink_to_fit(rhh_type** rhh, const double lazy_factor = 1.0)
+bool shrink_to_fit(rhh_type** rhh, const double lazy_factor = 1.0)
 {
   const typename rhh_type::size_type cur_size = (*rhh)->size();
   typename rhh_type::size_type cur_capacity = (*rhh)->capacity() * (*rhh)->depth();
@@ -172,236 +144,18 @@ class rhh_container {
     kCapacityGrowingFactor = 2ULL
   };
 
-
-  friend class WholeForwardIterator;
-  template <typename Type>
-  class WholeForwardIterator : public std::iterator<std::forward_iterator_tag, Type>
-  {
-    friend class rhh_container;
-    using whole_iterator_selftype = WholeForwardIterator<Type>;
-    using rhh_type = rhh_contatiner_selftype;
-
-   public:
-
-    WholeForwardIterator() :
-      m_rhh_ptr(nullptr),
-      m_pos(kKeyNotFound)
-    { }
-
-    explicit WholeForwardIterator(rhh_type* rhh) :
-      m_rhh_ptr(rhh),
-      m_pos(-1) /// Note: next_valid_element increment m_pos in the first line
-    {
-      next_valid_element();
-    }
-
-    void swap(WholeForwardIterator &other) noexcept
-    {
-      using std::swap;
-      swap(m_rhh_ptr, other.m_rhh_ptr);
-      swap(m_pos, other.m_pos);
-    }
-
-    WholeForwardIterator &operator++ () // Pre-increment
-    {
-      next_valid_element();
-      return *this;
-    }
-
-    WholeForwardIterator operator++ (int) // Post-increment
-    {
-      WholeForwardIterator tmp(*this);
-      next_valid_element();
-      return tmp;
-    }
-
-    // two-way comparison: v.begin() == v.cbegin() and vice versa
-    template<class OtherType>
-    bool operator == (const WholeForwardIterator<OtherType> &rhs) const
-    {
-      return is_equal(rhs);
-    }
-
-    template<class OtherType>
-    bool operator != (const WholeForwardIterator<OtherType> &rhs) const
-    {
-      return !is_equal(rhs);
-    }
-
-    Type& operator* () const
-    {
-      return m_rhh_ptr->m_body[m_pos];
-    }
-
-    Type* operator-> () const
-    {
-      return &(m_rhh_ptr->m_body[m_pos]);
-    }
-
-    // One way conversion: iterator -> const_iterator
-    operator WholeForwardIterator<const Type>() const
-    {
-      return WholeForwardIterator<const Type>(m_rhh_ptr, m_pos);
-    }
+  class whole_iterator;
+  class value_iterator;
 
 
-    /// --- performance optimized methods --- ///
-    inline bool is_end() const
-    {
-      return (m_pos == rhh_type::kKeyNotFound);
-    }
-
-   private:
-
-    void next_valid_element()
-    {
-      ++m_pos;
-      while(m_rhh_ptr) {
-        for (; m_pos < m_rhh_ptr->capacity(); ++m_pos) {
-          if (!property_program::is_empty(m_rhh_ptr->m_body[m_pos].property) && !property_program::is_scratched(m_rhh_ptr->m_body[m_pos].property))
-            return;
-        }
-        m_pos = 0;
-        m_rhh_ptr = m_rhh_ptr->chained_rhh();
-      }
-      m_pos = rhh_type::kKeyNotFound;
-    }
-
-    template<class OtherType>
-    inline bool is_equal(const WholeForwardIterator<OtherType> &rhs) const
-    {
-      return (m_rhh_ptr == rhs.m_rhh_ptr) && (m_pos == rhs.m_pos);
-    }
-
-    rhh_type* m_rhh_ptr;
-    rhh_type::size_type m_pos;
-  };
-  using whole_iterator = WholeForwardIterator<element_type>;
-  using const_whole_iterator = WholeForwardIterator<const element_type>;
-
-
-
-  friend class ValueForwardIterator;
-  template <typename Type>
-  class ValueForwardIterator : public std::iterator<std::forward_iterator_tag, Type>
-  {
-    friend class rhh_container;
-    using value_iterator_selftype = ValueForwardIterator<Type>;
-    using rhh_type                = rhh_contatiner_selftype;
-
-
-   public:
-
-    ValueForwardIterator() :
-    m_rhh_ptr(nullptr),
-    m_key(),
-    m_pos(kKeyNotFound),
-    m_prb_dist()
-    { }
-
-    ValueForwardIterator(rhh_type* rhh, const key_type& key) :
-      m_rhh_ptr(rhh),
-      m_key(key),
-      m_pos(0),
-      m_prb_dist(0)
-    {
-      internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
-    }
-
-    void swap(value_iterator_selftype &other) noexcept
-    {
-      using std::swap;
-      swap(m_rhh_ptr, other.m_rhh_ptr);
-      swap(m_pos, other.m_pos);
-      swap(m_prb_dist, other.m_prb_dist);
-    }
-
-    value_iterator_selftype &operator++ () // Pre-increment
-    {
-      find_next_value();
-      return *this;
-    }
-
-    value_iterator_selftype operator++ (int) // Post-increment
-    {
-      value_iterator_selftype tmp(*this);
-      find_next_value();
-      return tmp;
-    }
-
-    // two-way comparison: v.begin() == v.cbegin() and vice versa
-    template<class OtherType>
-    bool operator == (const ValueForwardIterator<OtherType> &rhs) const
-    {
-      return is_equal(rhs);
-    }
-
-    template<class OtherType>
-    bool operator != (const ValueForwardIterator<OtherType> &rhs) const
-    {
-      return !is_equal(rhs);
-    }
-
-    Type& operator* () const
-    {
-      return m_rhh_ptr->m_body[m_pos].value;
-    }
-
-    Type* operator-> () const
-    {
-      return &(m_rhh_ptr->m_body[m_pos].value);
-    }
-
-    // One way conversion: iterator -> const_iterator
-    operator ValueForwardIterator<const Type>() const
-    {
-      return ValueForwardIterator<const Type>(m_rhh_ptr, m_key, m_pos);
-    }
-
-
-    /// --- performance optimized methods --- ///
-    inline bool is_end() const
-    {
-      return ((m_rhh_ptr == nullptr) && (m_pos == rhh_type::kKeyNotFound));
-    }
-
-
-   private:
-
-    template<class OtherType>
-    inline bool is_equal(const ValueForwardIterator<OtherType> &rhs) const
-    {
-      return (m_rhh_ptr == rhs.m_rhh_ptr) && (m_pos == rhs.m_pos);
-    }
-
-    inline void find_next_value()
-    {
-      m_pos = (m_pos + 1) & (m_rhh_ptr->capacity() - 1);
-      ++m_prb_dist;
-      internal_locate_with_hint(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
-    }
-
-    rhh_type* m_rhh_ptr;
-    const key_type m_key;
-    rhh_type::size_type m_pos;
-    rhh_type::probedistance_type m_prb_dist;
-  };
-  using value_iterator       = ValueForwardIterator<value_type>;
-  using const_value_iterator = ValueForwardIterator<const value_type>;
-
-
-  /// --- Explicitly Delete -- ///
+  /// explicitly delete due to prevent unexpected behaivers
   rhh_container()  = delete;
   ~rhh_container() = delete;
-  /// rhh_container(const rhh_contatiner_selftype& src) = delete;
-  /// rhh_container& operator=(const rhh_container&) = delete;
-  /// rhh_container(const rhh_container&&) = delete;
-  /// rhh_container& operator=(rhh_container&& old_obj) = delete;
+  rhh_container(const rhh_contatiner_selftype& src) = delete;
+  rhh_container& operator=(const rhh_container&) = delete;
+  rhh_container(const rhh_container&&) = delete;
+  rhh_container& operator=(rhh_container&& old_obj) = delete;
 
-  /// --- operator ---- ///
-  //  inline element_type& operator[](size_type pos) {
-  //    return m_body[pos];
-  //  }
 
   /// --- Capacity ---- ///
   inline size_t size() const
@@ -423,13 +177,8 @@ class rhh_container {
 
   static inline value_iterator find_end()
   {
-    return value_iterator();
+    return value_iterator(nullptr, kKeyNotFound);
   }
-
-//  inline std::pair<value_iterator, value_iterator> equal_range(const key_type& key)
-//  {
-//    return std::make_pair(find(key), find_end(key));
-//  }
 
   inline whole_iterator begin()
   {
@@ -438,7 +187,7 @@ class rhh_container {
 
   static inline whole_iterator end()
   {
-    return whole_iterator();
+    return whole_iterator(nullptr, kKeyNotFound);
   }
 
 
@@ -450,7 +199,7 @@ class rhh_container {
     return is_success;
   }
 
-  inline void clear()
+  void clear()
   {
     const size_type cap = m_capacity;
     for (size_type i = 0; i < cap; ++i) {
@@ -486,7 +235,7 @@ class rhh_container {
   /// \brief load_factor
   /// \return
   ///     average probe distance
-  inline double load_factor() const
+  double load_factor() const
   {
     size_type total = 0;
     for (size_type pos = 0; pos < m_capacity; ++pos) {
@@ -510,7 +259,7 @@ class rhh_container {
 
 
   /// --- allocator & deallocator --- ///
-  inline static rhh_contatiner_selftype* allocate(const size_t capacity)
+  static rhh_contatiner_selftype* allocate(const size_t capacity)
   {
     rhh_contatiner_selftype* rhh = reinterpret_cast<rhh_contatiner_selftype*>(allocator::instance().allocate(capacity));
     rhh->m_num_elems = 0;
@@ -523,7 +272,7 @@ class rhh_container {
     return rhh;
   }
 
-  inline static void deallocate(rhh_contatiner_selftype* rhh)
+  static void deallocate(rhh_contatiner_selftype* rhh)
   {
     while (rhh != nullptr) {
       // std::cout << rhh->m_num_elems << " " << rhh->m_capacity << " " << rhh->m_next << std::endl;
@@ -533,9 +282,13 @@ class rhh_container {
     }
   }
 
-  inline static rhh_contatiner_selftype* resize(rhh_contatiner_selftype* rhh, size_type new_capacity)
+  inline static rhh_contatiner_selftype* grow(rhh_contatiner_selftype* const rhh)
   {
-    rhh_contatiner_selftype* old_rhh = rhh;
+    return resize(rhh, rhh->capacity() * graphstore::rhh::kCapacityGrowingFactor);
+  }
+
+  inline static rhh_contatiner_selftype* resize(rhh_contatiner_selftype* const old_rhh, const size_type new_capacity)
+  {
     rhh_contatiner_selftype* new_rhh = make_with_source_rhh(old_rhh, new_capacity);
     deallocate(old_rhh);
     return new_rhh;
@@ -789,4 +542,8 @@ class rhh_container {
 };
 
 } /// namespace graphstore
+
+#include <havoqgt/graphstore/rhh/rhh_whole_iterator.hpp>
+#include <havoqgt/graphstore/rhh/rhh_value_iterator.hpp>
+
 #endif /// RHH_HPP

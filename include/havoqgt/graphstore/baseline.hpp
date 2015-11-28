@@ -56,12 +56,12 @@ public:
   /// -------- Lookup -------- ///
   vertex_iterator vertices_begin()
   {
-    return vertex_iterator(this);
+    return vertex_iterator(m_map_table.begin());
   }
 
   static vertex_iterator vertices_end()
   {
-    return vertex_iterator();
+    return vertex_iterator(map_table_type::end());
   }
 
   adjacent_edge_iterator adjacent_edge_begin(const vertex_type& src_vrt)
@@ -190,14 +190,10 @@ class graphstore_baseline<vertex_type,
 
  public:
 
-  vertex_iterator () :
-    m_iterator(graphstore_type::map_table_type::end())
+  explicit vertex_iterator (table_vertex_iterator&& iterator) :
+    m_iterator(iterator)
   { }
 
-
-  vertex_iterator(graphstore_type* gstore) :
-    m_iterator(gstore->m_map_table.begin())
-  { }
 
   void swap(self_type &other) noexcept
   {
@@ -234,7 +230,7 @@ class graphstore_baseline<vertex_type,
     return m_iterator.first;
   }
 
-  const vertex_property_data_type& property_data()
+  vertex_property_data_type& property_data()
   {
     return m_iterator.second.first;
   }
@@ -275,9 +271,10 @@ class graphstore_baseline<vertex_type,
 
  public:
 
-  explicit adjacent_edge_iterator (edge_iterator_type iterator) :
+  explicit adjacent_edge_iterator (edge_iterator_type&& iterator) :
     m_iterator(iterator)
   { }
+
 
   void swap(self_type &other) noexcept
   {

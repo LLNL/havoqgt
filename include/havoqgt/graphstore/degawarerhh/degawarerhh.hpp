@@ -40,11 +40,6 @@ class degawarerhh
   /// --- iterators --- ///
   class vertex_iterator;
   class adjacent_edge_iterator;
-//  using vertex_iterator_type           = vertex_iterator<graphstore_rhhda_selftype>;
-//  friend class vertex_iterator<graphstore_rhhda_selftype>;
-
-//  using adjacent_edge_iterator    = adjacent_edge_iterator<graphstore_rhhda_selftype>;
-//  friend class adjacent_edge_iterator<graphstore_rhhda_selftype>;
 
 
   explicit degawarerhh(segment_manager_type* segment_manager) {
@@ -80,24 +75,24 @@ class degawarerhh
 
 
   /// -------- Lookup -------- ///
-  vertex_iterator vertices_begin()
+  inline vertex_iterator vertices_begin()
   {
-    return vertex_iterator(this);
+    return vertex_iterator(low_deg_vertices_begin(), mh_deg_vertices_begin());
   }
 
-  static vertex_iterator vertices_end()
+  inline static vertex_iterator vertices_end()
   {
-    return vertex_iterator();
+    return vertex_iterator(low_deg_vertices_end(), mh_deg_vertices_end());
   }
 
-  adjacent_edge_iterator adjacent_edge_begin(const vertex_type& srt_vrtx)
+  inline adjacent_edge_iterator adjacent_edge_begin(const vertex_type& src_vrtx)
   {
-    return adjacent_edge_iterator(this, srt_vrtx);
+    return adjacent_edge_iterator(low_deg_adjacent_edge_begin(src_vrtx), mh_deg_adjacent_edge_begin(src_vrtx));
   }
 
-  adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
+  inline static adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
   {
-    return adjacent_edge_iterator();
+    return adjacent_edge_iterator(low_deg_adjacent_edge_end(), mh_deg_adjacent_edge_end());
   }
 
 
@@ -415,10 +410,58 @@ class degawarerhh
 
  private:
 
+  inline typename low_deg_table_type::whole_iterator low_deg_vertices_begin()
+  {
+    return m_low_degree_table->begin();
+  }
+
+  inline typename mh_deg_table_type::whole_iterator mh_deg_vertices_begin()
+  {
+    return m_mh_degree_table->begin();
+  }
+
+  inline static typename low_deg_table_type::whole_iterator low_deg_vertices_end()
+  {
+    return low_deg_table_type::end();
+  }
+
+  inline static typename mh_deg_table_type::whole_iterator mh_deg_vertices_end()
+  {
+    return mh_deg_table_type::end();
+  }
+
+
+  inline typename low_deg_table_type::value_iterator low_deg_adjacent_edge_begin (const vertex_type& src_vrt)
+  {
+    return m_low_degree_table->find(src_vrt);
+  }
+
+  inline typename mh_edge_chunk_type::whole_iterator mh_deg_adjacent_edge_begin (const vertex_type& src_vrt)
+  {
+    const auto itr_matrix = m_mh_degree_table->find(src_vrt);
+    if (!itr_matrix.is_end()) {
+      mh_edge_chunk_type* adj_list = itr_matrix->second;
+      return adj_list->begin();
+    } else {
+      return mh_edge_chunk_type::end();
+    }
+  }
+
+  inline static typename low_deg_table_type::value_iterator low_deg_adjacent_edge_end ()
+  {
+    return low_deg_table_type::find_end();
+  }
+
+  inline static typename mh_edge_chunk_type::whole_iterator mh_deg_adjacent_edge_end ()
+  {
+    return mh_edge_chunk_type::end();
+  }
+
   low_deg_table_type* m_low_degree_table;
   mh_deg_table_type* m_mh_degree_table;
 
 };
+
 
 ///
 /// \brief The degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type, 1> class
@@ -595,41 +638,6 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
     }
   }
 
-  typename low_deg_table_type::whole_iterator begin_low_edges()
-  {
-    return low_deg_table_type::end();
-  }
-
-  typename mh_deg_table_type::whole_iterator begin_mh_edges()
-  {
-    return m_mh_degree_table->begin();
-  }
-
-  typename low_deg_table_type::value_iterator find_low_edge (const vertex_type& src_vrt)
-  {
-    return low_deg_table_type::find_end();
-  }
-
-  typename low_deg_table_type::const_value_iterator find_low_edge (const vertex_type& src_vrt) const
-  {
-    return m_low_degree_table->find(src_vrt);
-  }
-
-  typename mh_edge_chunk_type::whole_iterator find_mh_edge (const vertex_type& src_vrt)
-  {
-    const auto itr_matrix = m_mh_degree_table->find(src_vrt);
-    mh_edge_chunk_type* const adj_list = itr_matrix->second;
-    return adj_list->begin();
-  }
-
-  typename mh_edge_chunk_type::const_whole_iterator find_mh_edge (const vertex_type& src_vrt) const
-  {
-    const auto itr_matrix = m_mh_degree_table->find(src_vrt);
-    const mh_edge_chunk_type* const adj_list = itr_matrix->second;
-    return adj_list->cbegin();
-  }
-
-
   ///
   /// \brief print_status
   ///   Note: this function accesses entier data of the rhhda containers to compute statuses
@@ -742,6 +750,41 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 
 
  private:
+  inline typename low_deg_table_type::whole_iterator begin_low_edges()
+  {
+    return low_deg_table_type::end();
+  }
+
+  inline typename mh_deg_table_type::whole_iterator begin_mh_edges()
+  {
+    return m_mh_degree_table->begin();
+  }
+
+  inline typename low_deg_table_type::value_iterator find_low_edge (const vertex_type& src_vrt)
+  {
+    return low_deg_table_type::find_end();
+  }
+
+  inline typename low_deg_table_type::const_value_iterator find_low_edge (const vertex_type& src_vrt) const
+  {
+    return m_low_degree_table->find(src_vrt);
+  }
+
+  inline typename mh_edge_chunk_type::whole_iterator find_mh_edge (const vertex_type& src_vrt)
+  {
+    const auto itr_matrix = m_mh_degree_table->find(src_vrt);
+    mh_edge_chunk_type* const adj_list = itr_matrix->second;
+    return adj_list->begin();
+  }
+
+  inline typename mh_edge_chunk_type::const_whole_iterator find_mh_edge (const vertex_type& src_vrt) const
+  {
+    const auto itr_matrix = m_mh_degree_table->find(src_vrt);
+    const mh_edge_chunk_type* const adj_list = itr_matrix->second;
+    return adj_list->cbegin();
+  }
+
+
   low_deg_table_type* m_low_degree_table;
   mh_deg_table_type* m_mh_degree_table;
 };

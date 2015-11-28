@@ -19,10 +19,10 @@ class degawarerhh<vertex_type,
 
  private:
   using graphstore_type            = degawarerhh<vertex_type,
-                                                            vertex_property_data_type,
-                                                            edge_property_data_type,
-                                                            segment_manager_type,
-                                                            middle_high_degree_threshold>;
+                                                 vertex_property_data_type,
+                                                 edge_property_data_type,
+                                                 segment_manager_type,
+                                                 middle_high_degree_threshold>;
   using self_type                  = graphstore_type::adjacent_edge_iterator;
   using low_deg_edge_iterator_type = typename graphstore_type::low_deg_table_type::value_iterator;
   using mh_deg_edge_iterator_type  = typename graphstore_type::mh_edge_chunk_type::whole_iterator;
@@ -30,15 +30,12 @@ class degawarerhh<vertex_type,
 
  public:
 
-  adjacent_edge_iterator () :
-    m_low_itr(),
-    m_mh_itr()
-  { }
+  adjacent_edge_iterator() =delete;
 
-
-  adjacent_edge_iterator (graphstore_type* gstore, const vertex_type& src_vrt) :
-    m_low_itr(gstore->m_low_degree_table->find(src_vrt)),
-    m_mh_itr(mh_adjacent_edge_begin(gstore, src_vrt))
+  adjacent_edge_iterator(low_deg_edge_iterator_type&& low_itr,
+                         mh_deg_edge_iterator_type&& mh_itr) :
+    m_low_itr(low_itr),
+    m_mh_itr(mh_itr)
   { }
 
 
@@ -93,17 +90,6 @@ class degawarerhh<vertex_type,
 
 
  private:
-
-  inline static mh_deg_edge_iterator_type mh_adjacent_edge_begin (graphstore_type* graphstore, const vertex_type& src_vrt)
-  {
-    const auto itr_matrix = graphstore->m_mh_degree_table->find(src_vrt);
-    if (!itr_matrix.is_end()) {
-      typename graphstore_type::mh_edge_chunk_type* adj_list = itr_matrix->second;
-      return adj_list->begin();
-    } else {
-      return graphstore_type::mh_edge_chunk_type::end();
-    }
-  }
 
   inline bool is_equal(const self_type &rhs) const
   {
