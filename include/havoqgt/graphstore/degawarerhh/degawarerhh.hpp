@@ -11,7 +11,6 @@
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
-#include <havoqgt/graphstore/graphstore_common.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 namespace graphstore {

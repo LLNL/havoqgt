@@ -25,7 +25,6 @@
 #include <havoqgt/parallel_edge_list_reader.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/graphstore_common.hpp>
 
 #define VERBOSE 1
 
