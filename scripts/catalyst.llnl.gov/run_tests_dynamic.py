@@ -14,7 +14,7 @@ SEG_FILE_DIR="/l/ssd"
 SEG_FILE_NAME="out.graph"
 SEG_FILE_DIR_DIMMAP="/dimmap"
 
-NO_RUN=True
+NO_RUN=False
 
 def parse_args():
 	global args
@@ -22,7 +22,7 @@ def parse_args():
 	parser = argparse.ArgumentParser()
 
 
-	parser.add_argument("gstore_name", help="graphstore name")
+    parser.add_argument("gstore_name", help="graphstore name [DegAwareRHH/Baseline]")
 
 	# options for srun
 	parser.add_argument("--num_procs", "-n", type=int,
