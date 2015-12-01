@@ -528,7 +528,7 @@ class interprocess_mmap_manager
       graphstore::utility::sync_files();
   }
 
-  void fallocate(size_t size) const
+  void fallocate(size_t size)
   {
   #ifdef __linux__
       std::cout << "Call fallocate()" << std::endl;
