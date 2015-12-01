@@ -247,7 +247,7 @@ void sync_files()
 {
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500
   std::cout << "sync mmap: sync(2)" << std::endl;
-  sync();
+  ::sync();
 #else
 #warning sync(2) is not supported
 #endif
@@ -532,13 +532,13 @@ class interprocess_mmap_manager
   {
   #ifdef __linux__
       std::cout << "Call fallocate()" << std::endl;
-      int fd  = open(m_fname, O_RDWR);
+      int fd  = ::open(m_fname.c_str(), O_RDWR);
       assert(fd != -1);
       /// posix_fallocate dosen't work on XFS ?
       /// (dosen't actually expand the file size ?)
-      int ret = fallocate(fd, 0, 0, size);
+      int ret = ::fallocate(fd, 0, 0, size);
       assert(ret == 0);
-      close(fd);
+      ::close(fd);
       m_mapped_file.flush();
   #else
   #warning fallocate() is not supported

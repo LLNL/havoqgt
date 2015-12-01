@@ -340,7 +340,7 @@ class degawarerhh
                                         static_cast<double>(utility::array_length(histgram_size) - 1));
         ++histgram_size[sz_log2];
 
-        /// --- average probe distance (laod factor) ---- ///
+        /// --- average probe distance (load factor) ---- ///
         assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
         ++histgram_ave_prbdist[static_cast<size_t>(adj_list->load_factor())];
 
@@ -362,11 +362,14 @@ class degawarerhh
                 << "\n rate: " << (double)(size_sum) / capacity_sum
                 << "\n capacity*element_size(GB): " << (double)capacity_sum * mh_deg_edge_chunk_type::kElementSize  / (1ULL<<30) << std::endl;
 
+      double global_ave_prbdist = 0;
       std::cout << "average probedistance: ";
       for (int i = 0; i < utility::array_length(histgram_ave_prbdist); ++i) {
         std::cout << histgram_ave_prbdist[i] << " ";
+        global_ave_prbdist += histgram_ave_prbdist[i] * i;
       }
       std::cout << std::endl;
+      std::cout << "global average probedistance: " << global_ave_prbdist / m_mh_degree_table->size() << std::endl;
 
       std::cout << "capacity (log2): ";
       for (int i = 0; i < utility::array_length(histgram_cap); ++i) {
