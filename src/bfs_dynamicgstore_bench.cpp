@@ -124,6 +124,11 @@ template <typename graphstore_type, typename vertex_type>
     inf.is_visited[start_vrtx] = true;
 #else
     inf.init(false);
+    for (auto vert_itr = graphstore.vertices_begin(), end = graphstore.vertices_end();
+         vert_itr != end;
+         ++vert_itr) {
+      vert_itr.property_data() = false;
+    }
     graphstore.vertex_property_data(start_vrtx) = true;
 #endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;

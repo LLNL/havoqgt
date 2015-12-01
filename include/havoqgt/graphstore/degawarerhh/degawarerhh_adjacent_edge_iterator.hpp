@@ -25,12 +25,13 @@ class degawarerhh<vertex_type,
                                                  middle_high_degree_threshold>;
   using self_type                  = graphstore_type::adjacent_edge_iterator;
   using low_deg_edge_iterator_type = typename graphstore_type::low_deg_table_type::value_iterator;
-  using mh_deg_edge_iterator_type  = typename graphstore_type::mh_edge_chunk_type::whole_iterator;
+  using mh_deg_edge_iterator_type  = typename graphstore_type::mh_deg_edge_chunk_type::whole_iterator;
 
 
  public:
 
   adjacent_edge_iterator() =delete;
+
 
   adjacent_edge_iterator(low_deg_edge_iterator_type&& low_itr,
                          mh_deg_edge_iterator_type&& mh_itr) :

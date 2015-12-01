@@ -81,7 +81,7 @@ class degawarerhh<vertex_type,
   vertex_property_data_type& property_data()
   {
     if (!m_low_itr.is_end()) {
-      return m_low_itr->third;
+      return m_low_itr->value.first;
     }
     return m_mh_itr->value.first;
   }

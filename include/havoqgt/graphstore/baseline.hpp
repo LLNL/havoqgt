@@ -59,9 +59,9 @@ public:
     return vertex_iterator(m_map_table.begin());
   }
 
-  static vertex_iterator vertices_end()
+  vertex_iterator vertices_end()
   {
-    return vertex_iterator(map_table_type::end());
+    return vertex_iterator(m_map_table.end());
   }
 
   adjacent_edge_iterator adjacent_edge_begin(const vertex_type& src_vrt)
@@ -132,39 +132,17 @@ public:
     return m_map_table.find(vertex)->second.first;
   }
 
-//  typename edge_vec_type::iterator adjacencylist(const vertex_type& src)
-//  {
-//    const auto itr = m_map_table.find(src);
-//    edge_vec_type& edge_vec = itr->second.second;
-//    return edge_vec.begin();
-//  }
-
-//  typename edge_vec_type::iterator adjacencylist_end(const vertex_type& src)
-//  {
-//    const auto itr = m_map_table.find(src);
-//    edge_vec_type& edge_vec = itr->second.second;
-//    return edge_vec.end();
-//  }
-
-
   void opt()
-  {
-
-  }
+  { }
 
   void clear()
-  {
-
-  }
+  { }
 
   void print_status(const int level) const
-  {
-
-  }
+  { }
 
   void fprint_all_elements(std::ofstream& of)
-  {
-  }
+  { }
 
   allocator_type m_allocator;
   map_table_type m_map_table;
@@ -227,12 +205,12 @@ class graphstore_baseline<vertex_type,
 
   const vertex_type& source_vertex()
   {
-    return m_iterator.first;
+    return m_iterator->first;
   }
 
   vertex_property_data_type& property_data()
   {
-    return m_iterator.second.first;
+    return m_iterator->second.first;
   }
 
 
