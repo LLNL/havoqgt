@@ -26,6 +26,13 @@ class rhh_container<_key_type, _value_type, _size_type,
 
  public:
 
+  value_iterator() :
+    m_rhh_ptr(nullptr),
+    m_key(),
+    m_pos(rhh_type::kKeyNotFound),
+    m_prb_dist()
+  { }
+
   value_iterator(rhh_type* const rhh, const key_type& key) :
     m_rhh_ptr(rhh),
     m_key(key),
@@ -34,13 +41,6 @@ class rhh_container<_key_type, _value_type, _size_type,
   {
     internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
   }
-
-  value_iterator(rhh_type* const rhh, const typename rhh_type::size_type pos) :
-    m_rhh_ptr(rhh),
-    m_key(),
-    m_pos(pos),
-    m_prb_dist()
-  { }
 
   void swap(value_iterator &other) noexcept
   {

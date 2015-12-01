@@ -7,12 +7,13 @@ import os.path
 import datetime
 import argparse
 
-LOG_DIR="./log"
-EXEC_DIR="./src"
-EXEC_NAME="dynamic_construct_bench"
-SEG_FILE_DIR="/l/ssd"
-SEG_FILE_NAME="out.graph"
-SEG_FILE_DIR_DIMMAP="/dimmap"
+PWD									= os.getcwd()
+LOG_DIR							=	pwd + "/log"
+EXEC_DIR						=	pwd + "/src"
+EXEC_NAME						=	"graphconst_dynamicgstore_bench"
+SEG_FILE_DIR				=	"/l/ssd"
+SEG_FILE_NAME				=	"out.graph"
+SEG_FILE_DIR_DIMMAP	="/dimmap"
 
 NO_RUN=False
 
@@ -22,7 +23,7 @@ def parse_args():
 	parser = argparse.ArgumentParser()
 
 
-    parser.add_argument("gstore_name", help="graphstore name [DegAwareRHH/Baseline]")
+		parser.add_argument("gstore_name", help="graphstore name : DegAwareRHH or Baseline")
 
 	# options for srun
 	parser.add_argument("--num_procs", "-n", type=int,
@@ -67,7 +68,7 @@ def parse_args():
 	                                                            help="motivation")
 	parser.add_argument("--log_dir", "-l", default=LOG_DIR,
 							help="path log directory")
-	parser.add_argument("--global_log_file", default="./tests_dynamic_global_log.log",
+	parser.add_argument("--global_log_file", default=pwd + "tests_dynamic_global_log.log",
 							help="monitor I/O statistics using iostat")
 
 	# options for this program
@@ -172,11 +173,11 @@ def generate_batch_file(exec_cmd):
 	# - -- slurm options --- #
 	slurm_options = " --clear-ssd "
 	if args.dimmap > 0 and not args.dimmap_tune:
-		slurm_options += " --dimmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
 	elif args.dimmap > 0 and args.dimmap_tune:
-		slurm_options += " --dimmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
+		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
 	else:
-		slurm_options += " --dimmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
+		slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
 
 	if args.ppdebug:
 		slurm_options += " -ppdebug "
@@ -238,7 +239,7 @@ def generate_batch_file(exec_cmd):
 		add_dsc_cmd("ls -lsth " + SEG_FILE_DIR_DIMMAP)
 
 	if args.dimmap > 0 and not args.dimmap_tune:
-		add_dsc_cmd("cat /proc/dimmap-runtimeA-stats")
+		add_dsc_cmd("cat /proc/di-mmap-runtimeA-stats")
 
 	if args.verbose:
 		add_dsc_cmd("dmesg | tail -n 500")
@@ -253,7 +254,7 @@ def generate_batch_file(exec_cmd):
 def execute_shell_file():
 	global job_id
 
-	cmd = ['sh ', batch_file]
+	cmd = ['sh', batch_file]
 	job_id = subprocess.check_output(cmd)
 
 	log_dsc("job_id", job_id)
@@ -297,9 +298,9 @@ if __name__ == '__main__':
 	init_test_files()
     
 	if args.dimmap > 0 and not args.dimmap_tune:
-		graph_path = SEG_FILE_DIR_DIMMAP + SEG_FILE_NAME
+		graph_path = SEG_FILE_DIR_DIMMAP + "/" + SEG_FILE_NAME
 	else:
-		graph_path = SEG_FILE_DIR + SEG_FILE_NAME
+		graph_path = SEG_FILE_DIR + "/" + SEG_FILE_NAME
 
 	exec_cmd = ""
 	

@@ -208,7 +208,7 @@ class rhh_container {
 
   static inline value_iterator find_end()
   {
-    return value_iterator(nullptr, kKeyNotFound);
+    return value_iterator();
   }
 
   inline whole_iterator begin()
