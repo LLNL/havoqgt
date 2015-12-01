@@ -7,15 +7,15 @@ import os.path
 import datetime
 import argparse
 
-PWD									= os.getcwd()
-LOG_DIR							=	pwd + "/log"
-EXEC_DIR						=	pwd + "/src"
-EXEC_NAME						=	"graphconst_dynamicgstore_bench"
-SEG_FILE_DIR				=	"/l/ssd"
-SEG_FILE_NAME				=	"out.graph"
-SEG_FILE_DIR_DIMMAP	="/dimmap"
+PWD = os.getcwd()
+LOG_DIR = PWD + "/log"
+EXEC_DIR = PWD + "/src"
+EXEC_NAME = "graphconst_dynamicgstore_bench"
+SEG_FILE_DIR = "/l/ssd"
+SEG_FILE_NAME = "out.graph"
+SEG_FILE_DIR_DIMMAP = "/dimmap"
 
-NO_RUN=False
+NO_RUN = False
 
 def parse_args():
 	global args
@@ -23,7 +23,7 @@ def parse_args():
 	parser = argparse.ArgumentParser()
 
 
-		parser.add_argument("gstore_name", help="graphstore name : DegAwareRHH or Baseline")
+	parser.add_argument("gstore_name", help="graphstore name : DegAwareRHH or Baseline")
 
 	# options for srun
 	parser.add_argument("--num_procs", "-n", type=int,
@@ -68,7 +68,7 @@ def parse_args():
 	                                                            help="motivation")
 	parser.add_argument("--log_dir", "-l", default=LOG_DIR,
 							help="path log directory")
-	parser.add_argument("--global_log_file", default=pwd + "tests_dynamic_global_log.log",
+	parser.add_argument("--global_log_file", default=PWD + "tests_dynamic_global_log.log",
 							help="monitor I/O statistics using iostat")
 
 	# options for this program
