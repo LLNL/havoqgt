@@ -186,6 +186,34 @@ public:
     }
   }
 
+
+  // For dynamic graph traversal: this currently does one edge at a time per
+  // process.
+  void init_dynamic_traversal() {
+    bool got_edge = false;
+
+    do {
+      do {
+        auto status_edge = m_ptr_graph->get_next_edge();
+        got_edge = std::get<0>(status_edge);
+        if (got_edge) {
+          visitor_type::add_edge(std::get<1>(status_edge), this);
+        }
+
+        process_pending_controllers();
+        while(!empty()) {
+          process_pending_controllers();
+          visitor_type this_visitor = pop_top();
+          do_visit(this_visitor);
+          m_termination_detection.inc_completed();
+        }
+        m_mailbox.flush_buffers_if_idle();
+      } while(got_edge || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+
+
   void init_visitor_traversal() {
     typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
     for(; citr != m_ptr_graph->controller_end(); ++citr) {
