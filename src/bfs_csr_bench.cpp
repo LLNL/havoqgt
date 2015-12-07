@@ -9,7 +9,6 @@
 #include <chrono>
 
 #include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/interprocess/segment_manager.hpp>
 
 #include <boost/interprocess/managed_mapped_file.hpp>
 
@@ -113,6 +112,12 @@ std::vector<vertex_type> source_list_;
 void parse_options(int argc, char **argv)
 {
 
+  std::cout << "CMD line:";
+  for (int i=0; i<argc; ++i) {
+    std::cout << " " << argv[i];
+  }
+  std::cout << std::endl;
+
   char c;
 
   while ((c = getopt (argc, argv, "g:S:o:E:v:m:r:")) != -1) {
@@ -158,60 +163,34 @@ void parse_options(int argc, char **argv)
     }
   }
 
-}
-
-
-int main(int argc, char* argv[])
-{
-  std::cout << "CMD line:";
-  for (int i=0; i<argc; ++i) {
-    std::cout << " " << argv[i];
-  }
-  std::cout << std::endl;
-
-  parse_options(argc, argv);
   if (!fname_edge_list_.empty())
     std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
   for (auto itr : fname_edge_list_) {
     std::cout << "Load edge list from " << itr << std::endl;
   }
 
-  std::cout << "Delete segment file: " << fname_segmentfile_ << std::endl;
-  boost::interprocess::file_mapping::remove(fname_segmentfile_.c_str());
-  std::cout << "Create and map a segument file" << std::endl;
-  mapped_file_type mapped_file = mapped_file_type(
-                                   boost::interprocess::create_only,
-                                   fname_segmentfile_.c_str(),
-                                   std::pow(2, segment_size_log2_));
-  segment_manager_type* segment_manager = mapped_file.get_segment_manager();
-  std::cout << "Call posix_fallocate\n";
-  fallocate(fname_segmentfile_.c_str(), std::pow(2, segment_size_log2_), mapped_file);
+}
 
+
+int main(int argc, char* argv[])
+{
+
+  parse_options(argc, argv);
 
   graphstore_type* graph;
-  if (!fname_graph_.empty()) {
-    std::cout << "--- Constructing a graph from file ---" << std::endl;
-    assert(false);
-    //    graph = new graph_type(fname_graph_, segment_manager);
-    //    max_vertex_id_ = graph->num_vertices() - 1;
-    //    num_edges_ = graph->num_edges();
-
-  } else {
-    std::cout << "\n--- Initializing edgelist ---" << std::endl;
-    graphstore::utility::print_time();
-    havoqgt::havoqgt_init(&argc, &argv);
-    {
-      int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-      havoqgt::get_environment();
-      if (mpi_rank == 0) {
-        havoqgt::parallel_edge_list_reader edge_list(fname_edge_list_);
-        std::cout << "\n--- Constructing csr graph ---" << std::endl;
-        graphstore::utility::print_time();
-        graph = new graphstore_type(max_vertex_id_ + 1, num_edges_);
-        graph->construct(edge_list);
-      }
+  std::cout << "\n--- Initializing edgelist ---" << std::endl;
+  graphstore::utility::print_time();
+  havoqgt::havoqgt_init(&argc, &argv);
+  {
+    int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+    havoqgt::get_environment();
+    if (mpi_rank == 0) {
+      havoqgt::parallel_edge_list_reader edge_list(fname_edge_list_);
+      std::cout << "\n--- Constructing csr graph ---" << std::endl;
+      graphstore::utility::print_time();
+      graph = new graphstore_type(max_vertex_id_ + 1, num_edges_);
+      graph->construct(edge_list);
     }
-
   }
 
   /// ---------- Graph Traversal --------------- ///
@@ -221,5 +200,4 @@ int main(int argc, char* argv[])
   run_bfs(*graph, max_vertex_id_, max_vertex_id_, source_list_);
 
   delete graph;
-//  delete segment_manager;
 }

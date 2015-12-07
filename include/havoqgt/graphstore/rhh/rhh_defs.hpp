@@ -20,6 +20,7 @@ enum {
 
 void disp_configuration(void)
 {
+  DISP_LOG_VAR(kFullCapacitFactor);
   DISP_LOG_VAR(kNodeAllocatorChunkSize);
 }
 

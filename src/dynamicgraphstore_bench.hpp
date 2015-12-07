@@ -25,7 +25,6 @@
 #include <havoqgt/parallel_edge_list_reader.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/graphstore_common.hpp>
 
 #define VERBOSE 1
 
@@ -162,6 +161,20 @@ void print_system_mem_usages()
 }
 
 
+
+void sync_mmap()
+{
+#if _BSD_SOURCE || _XOPEN_SOURCE >= 500
+  std::cout << "sync mmap: sync(2)" << std::endl;
+  sync();
+#else
+#warning sync(2) is not supported
+#endif
+}
+
+
+/// --------------------------- utilities for interprocess ----------------------------------- ///
+
 void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 {
 #ifdef __linux__
@@ -185,18 +198,6 @@ void flush_mmmap(mapped_file_type& mapped_file)
   mapped_file.flush();
 }
 
-void sync_mmap()
-{
-#if _BSD_SOURCE || _XOPEN_SOURCE >= 500
-  std::cout << "sync mmap: sync(2)" << std::endl;
-  sync();
-#else
-#warning sync(2) is not supported
-#endif
-}
-
-
-/// --------------------------- utilities for interprocess ----------------------------------- ///
 double get_segment_size(segment_manager_type *const segment_manager)
 {
   const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();

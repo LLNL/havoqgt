@@ -14,7 +14,6 @@
 #include <boost/interprocess/allocators/node_allocator.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
-#include <havoqgt/graphstore/rhh/rhh_common.hpp>
 
 namespace graphstore {
 namespace rhh {
@@ -246,7 +245,6 @@ class allocator_holder_sglt
   {
     m_raw_allocator = new raw_allocator_type(segment_manager);
     m_node_allocators = new node_allocators_type(segment_manager);
-//    instance();
   }
 
   void destory()
