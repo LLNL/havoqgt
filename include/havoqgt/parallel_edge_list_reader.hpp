@@ -95,7 +95,9 @@
       , m_count(count){
         if(m_count == 0) {
           get_next();
-          m_count = 0; //reset to zero
+          if (m_count != m_ptr_reader->m_local_edge_count) {
+            m_count = 0; //reset to zero
+          }
         }
     }
 

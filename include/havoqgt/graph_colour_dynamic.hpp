@@ -64,21 +64,25 @@ namespace havoqgt { namespace mpi {
 enum visit_t { BAD, INI, ADD, CHK, DEL };
 
 
-template<typename Graph>
+template<typename Graph, typename prop_t>
 class gc_dynamic {
  public:
   typedef typename Graph::vertex_locator vertex_locator;
-  // Default constructor.
+  // Default constructor. Needs to be defined, but should not be used.
   gc_dynamic() :
       vertex(), caller(), vis_type(BAD) {  }
 
-  // Baseline constructor.
+  // Baseline constructor. Needs to be defined, but should not be used.
   explicit gc_dynamic(vertex_locator _vertex) :
-      vertex(_vertex), caller(_vertex), vis_type(INI) {  }
+      vertex(_vertex), caller(_vertex), colour(0), vis_type(INI) {  }
 
   // Who I am, who notified me, and what type of visit it is.
-  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, visit_t _vistype) :
-      vertex(_vertex), caller(_caller), vis_type(_vistype){  }
+  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, visit_t type) :
+      vertex(_vertex), caller(_caller), colour(0), vis_type(type) {  }
+
+  // Who I am, who notified me, the incoming colour, and what visit type it is.
+  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, prop_t _colour, visit_t type) :
+      vertex(_vertex), caller(_caller), colour(_colour), vis_type(type) {  }
 
 
   // TODO
@@ -87,11 +91,13 @@ class gc_dynamic {
     switch(vis_type) {
       case ADD:
         graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-        /*
+
         if (vertex.id() <= 50) {
           std::cout << havoqgt::havoqgt_env()->world_comm().rank() << ":" << vertex.id() << "," << caller.id() << " ";
         }
-        */
+
+        break;
+      case CHK:
         break;
       default:
         std::cerr << "ERROR:  Bad visit type." << std::endl; exit(-1);
@@ -102,10 +108,20 @@ class gc_dynamic {
   }
 
 
-  // TODO
+  // A visit will send the colour of the vertex to its neighbours.
   template<typename VisitorQueueHandle>
-  bool visit(const Graph& graph, VisitorQueueHandle vis_queue) const {
+  bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
+    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    // Send to all nbrs our current colour.
+    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
+              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+      vertex_locator vl_nbr = vertex_locator(nbr.target_vertex());
 
+      // Send the neighbour a visitor with our colour.
+      gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    //
     return false;
   }
 
@@ -147,18 +163,19 @@ class gc_dynamic {
   // Instance variables.
   vertex_locator vertex;
   vertex_locator caller;
+  prop_t         colour;
   visit_t        vis_type;
 } __attribute__((packed));
 
 
 
 // Launch point for graph colouring.
-template <typename TGraph>
+template <typename TGraph, typename prop_t>
 void graph_colour_dynamic(TGraph* graph) {
   double time_start = MPI_Wtime();
 
   {
-    typedef gc_dynamic<TGraph> colourer_t;
+    typedef gc_dynamic<TGraph, prop_t> colourer_t;
     colourer_t::set_graph_ref(graph);
 
     typedef visitor_queue<colourer_t, havoqgt::detail::visitor_priority_queue,
