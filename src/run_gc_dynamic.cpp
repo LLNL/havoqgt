@@ -13,9 +13,9 @@ using segment_manager_type = boost::interprocess::managed_mapped_file::segment_m
 
 using vertex_id_type        = uint64_t;
 using edge_property_type    = int;
-using vertex_property_type  = int;
+using vertex_property_type  = uint32_t;
 
-#include <havoqgt/graphstore/graphstore_baseline.hpp>
+#include <havoqgt/graphstore/baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
   graphstore_type graphstore(segment_manager, &edgelist);
 
   // Run algorithm.
-  havoqgt::mpi::graph_colour_dynamic<graphstore_type>(&graphstore);
+  havoqgt::mpi::graph_colour_dynamic<graphstore_type, vertex_property_type>(&graphstore);
 
 /*
   /// ------- delete edges and update vertices' property data ------- ///

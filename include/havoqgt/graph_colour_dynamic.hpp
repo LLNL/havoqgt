@@ -56,6 +56,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <boost/container/deque.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <boost/dynamic_bitset.hpp>
 
 
 namespace havoqgt { namespace mpi {
@@ -64,35 +65,94 @@ namespace havoqgt { namespace mpi {
 enum visit_t { BAD, INI, ADD, CHK, DEL };
 
 
-template<typename Graph>
+template<typename Graph, typename prop_t>
 class gc_dynamic {
  public:
   typedef typename Graph::vertex_locator vertex_locator;
-  // Default constructor.
+  // Default constructor. Needs to be defined, but should not be used.
   gc_dynamic() :
       vertex(), caller(), vis_type(BAD) {  }
 
-  // Baseline constructor.
+  // Baseline constructor. Needs to be defined, but should not be used.
   explicit gc_dynamic(vertex_locator _vertex) :
-      vertex(_vertex), caller(_vertex), vis_type(INI) {  }
+      vertex(_vertex), caller(_vertex), caller_colour(0), vis_type(INI) {  }
 
   // Who I am, who notified me, and what type of visit it is.
-  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, visit_t _vistype) :
-      vertex(_vertex), caller(_caller), vis_type(_vistype){  }
+  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, visit_t type) :
+      vertex(_vertex), caller(_caller), caller_colour(0), vis_type(type) {  }
+
+  // Who I am, who notified me, the incoming colour, and what visit type it is.
+  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, prop_t _colour, visit_t type) :
+      vertex(_vertex), caller(_caller), caller_colour(_colour), vis_type(type) {  }
 
 
-  // TODO
+  // Recolours our vertex based on knowledge of our neighbours/edges colours.
+  void recolour() const {
+    boost::dynamic_bitset<> bitmap;
+    bitmap.resize(graph_ref()->degree(vertex.id()) + 1);  // 0 Colour offset.
+
+    // Collect neighbour colours.
+    for (auto nbr  = graph_ref()->adjacent_edge_begin(vertex.id());
+              nbr != graph_ref()->adjacent_edge_end(vertex.id()); nbr++) {
+      auto nbr_col = nbr.property_data();
+      if (nbr_col < bitmap.size() && nbr_col != 0) {
+        bitmap.set(nbr_col - 1); // 0 Colour offset.
+      }
+    }
+
+    // Find first unused out of neighbour colours.
+    prop_t colour = 1;
+    if (bitmap.size() != 0) {  // TODO(Scott): double check this logic.
+      bitmap.flip();
+      colour = (bitmap.find_first() + 1); // 0 Colour offset.
+    }
+
+    // Set colour.
+    graph_ref()->vertex_property_data(vertex.id()) = colour;
+  }
+
+
   bool pre_visit() const {
     // Perform an action dependant on the visit type.
     switch(vis_type) {
       case ADD:
         graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-        /*
-        if (vertex.id() <= 50) {
+
+        /*if (vertex.id() <= 50) {
           std::cout << havoqgt::havoqgt_env()->world_comm().rank() << ":" << vertex.id() << "," << caller.id() << " ";
+        }*/
+
+        // If we are uncoloured, colour us (the first colour).
+        if (graph_ref()->vertex_property_data(vertex.id()) == 0) {
+          graph_ref()->vertex_property_data(vertex.id()) = 1;
         }
-        */
+
+        // TODO(Scott): Only needs to be to new vertex, doesn't need to be all.
+        return true;
+
         break;
+
+      case CHK:
+        // Set associated edge (vertex -> caller) with the caller's colour.
+        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
+
+        // Check whether or not we conflict.
+        if (graph_ref()->vertex_property_data(vertex.id()) == caller_colour) {
+          // Conflict: check if their are a higher priority than us.
+          if (vertex_locator::lesser_hash_priority(vertex, caller)) {
+            // Yes: we need to recolour.
+            recolour();
+            return true;  // Need to send colour to all neighbours.
+          }
+
+        }
+        // No conflict, we can remain as-is.
+        break;
+
+      case DEL:
+        //TODO
+        break;
+
       default:
         std::cerr << "ERROR:  Bad visit type." << std::endl; exit(-1);
         break;
@@ -102,10 +162,19 @@ class gc_dynamic {
   }
 
 
-  // TODO
+  // A visit will send the colour of the vertex to its neighbours.
   template<typename VisitorQueueHandle>
-  bool visit(const Graph& graph, VisitorQueueHandle vis_queue) const {
+  bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
+    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    // Send to all nbrs our current colour.
+    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
+              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+      vertex_locator vl_nbr = vertex_locator(nbr.target_vertex());
 
+      // Send the neighbour a visitor with our colour.
+      gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
+      vis_queue->queue_visitor(new_visitor);
+    }
     return false;
   }
 
@@ -147,18 +216,19 @@ class gc_dynamic {
   // Instance variables.
   vertex_locator vertex;
   vertex_locator caller;
+  prop_t         caller_colour;
   visit_t        vis_type;
 } __attribute__((packed));
 
 
 
 // Launch point for graph colouring.
-template <typename TGraph>
+template <typename TGraph, typename prop_t>
 void graph_colour_dynamic(TGraph* graph) {
   double time_start = MPI_Wtime();
 
   {
-    typedef gc_dynamic<TGraph> colourer_t;
+    typedef gc_dynamic<TGraph, prop_t> colourer_t;
     colourer_t::set_graph_ref(graph);
 
     typedef visitor_queue<colourer_t, havoqgt::detail::visitor_priority_queue,
