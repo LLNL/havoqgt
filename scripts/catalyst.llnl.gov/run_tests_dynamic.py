@@ -10,7 +10,7 @@ import argparse
 PWD = os.getcwd()
 LOG_DIR = PWD + "/log"
 EXEC_DIR = PWD + "/src"
-EXEC_NAME = "graphconst_dynamicgstore_bench"
+EXEC_NAME = "dist_bench"
 SEG_FILE_DIR = "/l/ssd"
 SEG_FILE_NAME = "out.graph"
 SEG_FILE_DIR_DIMMAP = "/dimmap"

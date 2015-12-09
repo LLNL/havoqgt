@@ -175,7 +175,7 @@ public:
       m_termination_detection.inc_queued(m_mailbox.comm_size());
     }
   }
-  
+
   void do_init_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
     bool ret = this_visitor.init_visit(*m_ptr_graph, this);
@@ -184,6 +184,21 @@ public:
       m_mailbox.bcast(v, visitor_queue_inserter(this));
       m_termination_detection.inc_queued(m_mailbox.comm_size());
     }
+  }
+
+  void insert_edges() {
+    do {
+      do {
+        process_pending_controllers();
+        while(!empty()) {
+          process_pending_controllers();
+          visitor_type this_visitor = pop_top();
+          do_visit(this_visitor);
+          m_termination_detection.inc_completed();
+        }
+        m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
   }
 
   void init_visitor_traversal() {
@@ -216,7 +231,7 @@ public:
       } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }
-  
+
   void init_visitor_traversal_new() {
     auto citr = m_ptr_graph->controller_begin();
     auto vitr = m_ptr_graph->vertices_begin();
@@ -241,7 +256,7 @@ public:
           m_termination_detection.inc_completed();
         }
         m_mailbox.flush_buffers_if_idle();
-      } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
+      } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end()
               || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }

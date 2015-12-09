@@ -40,12 +40,12 @@ private:
                                                      boost::hash<vertex_type>,
                                                      std::equal_to<vertex_type>,
                                                      map_allocator_type>;
+
+public:
   /// iterator
   class vertex_iterator;
   class adjacent_edge_iterator;
 
-
-public:
 
   explicit graphstore_baseline(segment_manager_type* segment_manager) :
     m_allocator(segment_manager),

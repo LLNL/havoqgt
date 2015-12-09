@@ -73,7 +73,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            Container& edges, uint64_t max_vertex,
                            uint64_t delegate_degree_threshold,
                            uint64_t _node_partitions,
-                           uint64_t _chunk_size,  
+                           uint64_t _chunk_size,
                            ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
@@ -94,7 +94,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
-  
+
   processes_per_node = havoqgt_env()->node_local_comm().size();
   node_partitions = std::min(_node_partitions,uint64_t(processes_per_node));
   edge_chunk_size = _chunk_size;
@@ -445,7 +445,7 @@ send_vertex_info(uint64_t& high_vertex_count, uint64_t delegate_degree_threshold
       //to_send[to_send_pos++] = uint64_t(triple.first);
       //to_send[to_send_pos++] = triple.second.first;
       //to_send[to_send_pos++] = triple.second.second;
-      
+
       to_send.push_back(uint64_t(triple.first));
       to_send.push_back(triple.second.first);
       to_send.push_back(triple.second.second);
@@ -1670,7 +1670,7 @@ is_label_delegate(uint64_t label) const {
 
 /**
  * @todo remove; make like vertex_data
- */ 
+ */
 template <typename SegmentManager>
 template <typename T, typename SegManagerOther>
 typename delegate_partitioned_graph<SegmentManager>::template edge_data<T, SegManagerOther>*
@@ -1793,14 +1793,10 @@ print_graph_statistics() {
       << "\tNode Partition = " << node_partitions << std::endl
       << "\tEdge Chunk Size = " << edge_chunk_size << std::endl
       << "\tProcesses_per_node = " << processes_per_node << std::endl
-<<<<<<< HEAD:include/havoqgt/delegate_partitioned_graph/delegate_partitioned_graph.ipp
-      //<< "\tDebuging = " << IS_DEBUGING << std::endl
-=======
       << "\tDebuging = " << IS_DEBUGING << std::endl
       << "========================================================" << std::endl
       << "End Graph Statistics" << std::endl
       << "========================================================" << std::endl
->>>>>>> origin/master:include/havoqgt/impl/delegate_partitioned_graph.ipp
       << std::flush;
   }
 }
