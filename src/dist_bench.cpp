@@ -120,6 +120,9 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
       visitor_type<gstore_type> vistor(vl_src, vl_dst, visitor_type<gstore_type>::ADD);
 
       dg_visitor_queue.queue_visitor(vistor);
+#if DEBUG_MODE
+        ofs_edges << src << " " << dst << " 0" << "\n";
+#endif
     }
     const double time_local_end = MPI_Wtime();
 
@@ -129,11 +132,6 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     /// --- sync --- ///
     if (mpi_rank == 0) graphstore::utility::sync_files();
     const double time_sync_end = MPI_Wtime();
-
-    /// this is a temp implementation
-    //    if (loop_cnt % 10 == 0) {
-    //      graph_store.opt();
-    //    }
 
     /// --- print a progress report --- ///
     const double time_end = MPI_Wtime();
@@ -280,11 +278,8 @@ void parse_options(int argc, char **argv)
 
 #if DEBUG_MODE
     {
-    if (mpi_size > 1) {
-        assert(false);
-      }
       std::stringstream fname;
-      fname << fname_segmentfile_ << ".debug_edges_raw";
+      fname << fname_segmentfile_ << ".debug_edges_raw_" << mpi_rank;
       ofs_edges.open(fname.str());
     }
 #endif
@@ -324,6 +319,18 @@ void run_benchmark_edgefile(dg_visitor_queue_type<gstore_type>& dg_visitor_queue
 }
 
 
+template <typename gstore_type>
+void dump_all_edges(gstore_type& gstore)
+{
+  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+
+  std::cout << "dumping all elements for debug" << std::endl;
+  std::stringstream ofname;
+  ofname << graphstore_name_ << ".debug_edges_graph_" << mpi_rank;
+  std::ofstream of(ofname.str());
+  gstore.fprint_all_elements(of);
+  std::cout << "done" << std::endl;
+}
 
 int main(int argc, char** argv) {
 
@@ -349,8 +356,8 @@ int main(int argc, char** argv) {
     /// --- allocate a graphstore and start a benchmark --- ///
     if (graphstore_name_ == "Baseline") {
 
-      baseline_type graph_store(mmap_manager.get_segment_manager());
-      dist_gstore_type<baseline_type> dist_graph(&graph_store);
+      baseline_type gstore(mmap_manager.get_segment_manager());
+      dist_gstore_type<baseline_type> dist_graph(&gstore);
       visitor_type<baseline_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<baseline_type> dg_visitor_queue(&dist_graph);
 
@@ -367,10 +374,13 @@ int main(int argc, char** argv) {
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
       }
+#if DEBUG_MODE
+      dump_all_edges(gstore);
+#endif
     } else if (graphstore_name_ == "DegAwareRHH") {
 
-      degawarerhh_type graph_store(mmap_manager.get_segment_manager());
-      dist_gstore_type<degawarerhh_type> dist_graph(&graph_store);
+      degawarerhh_type gstore(mmap_manager.get_segment_manager());
+      dist_gstore_type<degawarerhh_type> dist_graph(&gstore);
       visitor_type<degawarerhh_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<degawarerhh_type> dg_visitor_queue(&dist_graph);
 
@@ -387,6 +397,9 @@ int main(int argc, char** argv) {
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
       }
+#if DEBUG_MODE
+      dump_all_edges(gstore);
+#endif
     } else {
       std::cout << "Wrong graphstore name : " << graphstore_name_ << std::endl;
       exit(1);

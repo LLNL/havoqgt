@@ -272,6 +272,18 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
   }
+
+#if DEBUG_MODE
+    {
+      std::cout << "dumping all elements for debug" << std::endl;
+      std::stringstream ofname;
+      ofname << graphstore_name_ << ".debug_edges_graph";
+      std::ofstream of(ofname.str());
+      graph_store.fprint_all_elements(of);
+      std::cout << "done" << std::endl;
+    }
+#endif
+
 }
 
 
@@ -376,15 +388,6 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-#if DEBUG_MODE
-    {
-      std::cout << "dumping all elements for debug" << std::endl;
-      std::stringstream ofname;
-      ofname << fname_output << ".debug_edges_graph";
-      std::ofstream  of(ofname.str());
-      std::cout << "done" << std::endl;
-    }
-#endif
 
     if (is_delete_segmentfile_on_exit_) {
       interprocess_delete_segmentfile(fname_local_segmentfile.str().c_str());
