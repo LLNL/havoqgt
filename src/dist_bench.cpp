@@ -66,29 +66,48 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
 template <typename gstore_type, typename edgelist_type>
 void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                 graphstore::utility::interprocess_mmap_manager& mmap_manager,
-                edgelist_type& edgelist,
+                edgelist_type& edges,
                 const size_t chunk_size)
 {
-  std::cout << "-- Disp status of before generation --" << std::endl;
-  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
-  print_system_mem_usages();
+  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  havoqgt::havoqgt_env()->world_comm().barrier();
 
+  if (mpi_rank == 0) std::cout << "-- statuses of before generation --" << std::endl;
+  if (mpi_rank == 0) print_system_mem_usages();
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] segment size (GB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
+    }
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
 
-  size_t loop_cnt = 0;
-  double construction_time = 0;
+  /// --- variables for analysys --- //
+  uint64_t loop_cnt = 0;
+  bool global_is_finished = false;
 
-  auto edgelist_itr = edgelist.begin();
-  auto edgelist_itr_end = edgelist.end();
-  request_vector_type<vertex_id_type> update_request_vec = request_vector_type<vertex_id_type>();
+  /// --- iterator and array for edgelist --- ///
+  auto edges_itr = edges.begin();
+  auto edges_itr_end = edges.end();
+  request_vector_type<vertex_id_type> update_request_vec;
   update_request_vec.reserve(chunk_size);
 
-  auto global_start = graphstore::utility::duration_time();
-  while (edgelist_itr != edgelist_itr_end) {
-    std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
-    generate_update_requests(edgelist_itr, edgelist_itr_end, update_request_vec, chunk_size);
+  const double whole_start = MPI_Wtime();
+  while (!global_is_finished) {
+    if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
 
-    auto local_start = graphstore::utility::duration_time();
+    /// --- generate edges --- ///
+    /// \brief generate_update_requests
+    if (mpi_rank == 0) std::cout << "-- generate requests --" << std::endl;
+    generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    if (mpi_rank == 0) std::cout << "\n-- process requests --" << std::endl;
+    double time_start = MPI_Wtime();
+
+    /// --- queue requests; local construction --- ///
     for (auto request : update_request_vec) {
       auto edge = request.edge;
 
@@ -102,23 +121,63 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 
       dg_visitor_queue.queue_visitor(vistor);
     }
-    double tp = graphstore::utility::duration_time_sec(local_start);
-    std::cout << "start global construction (sec.): " << tp << std::endl;
+    const double time_local_end = MPI_Wtime();
+
+    /// --- global construction --- ///
     dg_visitor_queue.insert_edges();
-    graphstore::utility::sync_files();
-    double t = graphstore::utility::duration_time_sec(local_start);
-    construction_time += t;
-    std::cout << "progress (sec.): " << t << std::endl;
+
+    /// --- sync --- ///
+    if (mpi_rank == 0) graphstore::utility::sync_files();
+    const double time_sync_end = MPI_Wtime();
+
+    /// this is a temp implementation
+    //    if (loop_cnt % 10 == 0) {
+    //      graph_store.opt();
+    //    }
+
+    /// --- print a progress report --- ///
+    const double time_end = MPI_Wtime();
+    havoqgt::havoqgt_env()->world_comm().barrier();
+    if (mpi_rank == 0) {
+      std::cout << "\n-- results --" << std::endl;
+      std::cout <<" exec_time (local, sync),\t segment_size(GB)" << std::endl;
+    }
+    for (int i = 0; i < mpi_size; ++i) {
+      if (i == mpi_rank) {
+        std::cout << "prg [" << mpi_rank << "] "
+                  << (time_end - time_start) << " ( "
+                  << (time_local_end - time_start) << " , "
+                  << (time_sync_end  - time_local_end) << " ),\t"
+                  << mmap_manager.segment_size_gb() << std::endl;
+      }
+      havoqgt::havoqgt_env()->world_comm().barrier();
+    }
+    if (mpi_rank == 0) print_system_mem_usages();
 
     ++loop_cnt;
-  }
-  const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
 
-  std::cout << "\n-- All edge updations done --" << std::endl;
-  std::cout << "construction time (insertion only) : " << construction_time << std::endl;
-  std::cout << "whole construction time : " << whole_construction_time << std::endl;
-  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
-  print_system_mem_usages();
+    /// --- Has everyone finished ? --- ///
+    const bool local_is_finished = (edges_itr == edges_itr_end);
+    MPI_Allreduce(&local_is_finished, &global_is_finished, 1, MPI_C_BOOL, MPI_LAND, MPI_COMM_WORLD);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  const double whole_end = MPI_Wtime();
+
+  if (mpi_rank == 0) {
+    std::cout << "\n-- All edge updations done --" << std::endl;
+    std::cout << "whole construction time : " << (whole_end - whole_start) << std::endl;
+    print_system_mem_usages();
+  }
+  havoqgt::havoqgt_env()->world_comm().barrier();
+
+  /// --- print summary information --- ///
+  for (int i = 0; i < mpi_size; ++i) {
+    if (i == mpi_rank) {
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
+    }
+    havoqgt::havoqgt_env()->world_comm().barrier();
+  }
 
 }
 
