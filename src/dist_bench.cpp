@@ -63,11 +63,110 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
                                                           dist_gstore_type<gstore_type>>;
 
 
+
+
+
+ /// --- option variables --- ///
+ uint64_t vertex_scale_               = 18;
+ uint64_t edge_factor_                = 16;
+ uint64_t segmentfile_init_size_log2_ = 30;
+ bool     is_delete_segmentfile_on_exit_ = false;
+ uint64_t chunk_size_log10_           = 6;
+ std::string fname_segmentfile_;
+ std::string graphstore_name_;
+ std::vector<std::string> fname_edge_list_;
+
+
+ void parse_options(int argc, char **argv)
+ {
+
+   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+
+   if (mpi_rank == 0) {
+     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
+     std::cout << "CMD line:";
+     for (int i=0; i<argc; ++i) {
+       std::cout << " " << argv[i];
+     }
+     std::cout << std::endl;
+   }
+
+   char c;
+   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:")) != -1) {
+     switch (c) {
+       case 's':
+         vertex_scale_ = boost::lexical_cast<size_t>(optarg);
+         break;
+
+       case 'e':
+         edge_factor_ = boost::lexical_cast<size_t>(optarg);
+         break;
+
+       case 'o':
+       {
+         fname_segmentfile_ = optarg;
+         break;
+       }
+
+       case 'S':
+         segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
+         break;
+
+       case 'g':
+         graphstore_name_ = optarg;
+         break;
+
+       case 'c':
+         chunk_size_log10_ = boost::lexical_cast<size_t>(optarg);
+         break;
+
+       case 'd':
+         is_delete_segmentfile_on_exit_ = true;
+         break;
+
+       case 'E':
+       {
+         std::string fname(optarg);
+         std::ifstream fin(fname);
+         std::string line;
+         if (!fin.is_open()) {
+           std::cerr << fname << std::endl;
+           HAVOQGT_ERROR_MSG("Unable to open a file");
+         }
+         while (std::getline(fin, line)) {
+           /// Note: parallel_edge_list_reader will assign files to multiple process
+           fname_edge_list_.push_back(line);
+         }
+         break;
+       }
+
+     }
+   }
+
+   if (mpi_rank == 0) {
+     std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
+     std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
+     std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
+     std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
+     if (fname_edge_list_.empty()) {
+       std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
+       std::cout << "Building RMAT graph Edge factor: " << edge_factor_ << std::endl;
+     } else {
+       for (const auto itr : fname_edge_list_)
+         std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
+     }
+   }
+
+ }
+
+
 template <typename gstore_type, typename edgelist_type>
 void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
-                graphstore::utility::interprocess_mmap_manager& mmap_manager,
-                edgelist_type& edges,
-                const size_t chunk_size)
+                     gstore_type& gstore,
+                     graphstore::utility::interprocess_mmap_manager& mmap_manager,
+                     edgelist_type& edges,
+                     const size_t chunk_size)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
@@ -92,6 +191,12 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   auto edges_itr_end = edges.end();
   request_vector_type<vertex_id_type> update_request_vec;
   update_request_vec.reserve(chunk_size);
+
+#if DEBUG_MODE
+  std::stringstream fname;
+  fname << fname_segmentfile_ << ".debug_edges_raw_" << mpi_rank;
+  ofs_edges.open(fname.str());
+#endif
 
 
   const double whole_start = MPI_Wtime();
@@ -152,6 +257,17 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     }
     if (mpi_rank == 0) print_system_mem_usages();
 
+#if VERBOSE
+    if (mpi_rank == 0) std::cout << "\n-- graph store's status --" << std::endl;
+    for (int i = 0; i < mpi_size; ++i) {
+      if (i == mpi_rank) {
+        std::cout << "[" << mpi_rank << "]" << std::endl;
+        gstore.print_status(0);
+      }
+      havoqgt::havoqgt_env()->world_comm().barrier();
+    }
+#endif
+
     ++loop_cnt;
 
     /// --- Has everyone finished ? --- ///
@@ -180,116 +296,9 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 }
 
 
-
-/// --- option variables --- ///
-uint64_t vertex_scale_               = 18;
-uint64_t edge_factor_                = 16;
-uint64_t segmentfile_init_size_log2_ = 30;
-bool     is_delete_segmentfile_on_exit_ = false;
-uint64_t chunk_size_log10_           = 6;
-int edges_delete_ratio_              = 0;
-std::string fname_segmentfile_;
-std::string graphstore_name_;
-std::vector<std::string> fname_edge_list_;
-
-
-void parse_options(int argc, char **argv)
-{
-
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
-
-  if (mpi_rank == 0) {
-    std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    std::cout << "CMD line:";
-    for (int i=0; i<argc; ++i) {
-      std::cout << " " << argv[i];
-    }
-    std::cout << std::endl;
-  }
-
-  char c;
-  while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:")) != -1) {
-    switch (c) {
-      case 's':
-        vertex_scale_ = boost::lexical_cast<size_t>(optarg);
-        break;
-
-      case 'e':
-        edge_factor_ = boost::lexical_cast<size_t>(optarg);
-        break;
-
-      case 'o':
-      {
-        std::stringstream fname_local_segmentfile;
-        fname_local_segmentfile << optarg << "_" << mpi_rank;
-        fname_segmentfile_ = fname_local_segmentfile.str();
-        break;
-      }
-
-      case 'S':
-        segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
-        break;
-
-      case 'g':
-        graphstore_name_ = optarg;
-        break;
-
-      case 'c':
-        chunk_size_log10_ = boost::lexical_cast<size_t>(optarg);
-        break;
-
-      case 'd':
-        is_delete_segmentfile_on_exit_ = true;
-        break;
-
-      case 'E':
-      {
-        std::string fname(optarg);
-        std::ifstream fin(fname);
-        std::string line;
-        if (!fin.is_open()) {
-          std::cerr << fname << std::endl;
-          HAVOQGT_ERROR_MSG("Unable to open a file");
-        }
-        while (std::getline(fin, line)) {
-          /// Note: parallel_edge_list_reader will assign files to multiple process
-          fname_edge_list_.push_back(line);
-        }
-        break;
-      }
-
-    }
-  }
-
-  if (mpi_rank == 0) {
-    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-    std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
-    std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
-    std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
-    std::cout << "Edges Delete Ratio = " << edges_delete_ratio_ << std::endl;
-    if (fname_edge_list_.empty()) {
-      std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
-      std::cout << "Building RMAT graph Edge factor: " << edge_factor_ << std::endl;
-    } else {
-      for (const auto itr : fname_edge_list_)
-        std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
-    }
-
-#if DEBUG_MODE
-    {
-      std::stringstream fname;
-      fname << fname_segmentfile_ << ".debug_edges_raw_" << mpi_rank;
-      ofs_edges.open(fname.str());
-    }
-#endif
-  }
-
-}
-
-
 template <typename gstore_type>
 void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
+                        gstore_type& gstore,
                         graphstore::utility::interprocess_mmap_manager& mmap_manager,
                         size_t vertex_scale,
                         size_t num_edges,
@@ -303,19 +312,20 @@ void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     vertex_scale, num_edges_per_rank,
     0.57, 0.19, 0.19, 0.05, true, false);
 
-  constract_graph(dg_visitor_queue, mmap_manager, rmat, chunk_size);
+  constract_graph(dg_visitor_queue, gstore, mmap_manager, rmat, chunk_size);
 }
 
 
 template <typename gstore_type>
 void run_benchmark_edgefile(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
+                            gstore_type& gstore,
                             graphstore::utility::interprocess_mmap_manager& mmap_manager,
                             std::vector<std::string>& fname_edge_list,
                             size_t chunk_size)
 {
   havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
 
-  constract_graph(dg_visitor_queue, mmap_manager, edgelist, chunk_size);
+  constract_graph(dg_visitor_queue, gstore, mmap_manager, edgelist, chunk_size);
 }
 
 
@@ -323,12 +333,12 @@ template <typename gstore_type>
 void dump_all_edges(gstore_type& gstore)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-
   std::cout << "dumping all elements for debug" << std::endl;
   std::stringstream ofname;
-  ofname << graphstore_name_ << ".debug_edges_graph_" << mpi_rank;
+  ofname << fname_segmentfile_ << ".debug_edges_graph_" << mpi_rank;
   std::ofstream of(ofname.str());
   gstore.fprint_all_elements(of);
+  of.close();
   std::cout << "done" << std::endl;
 }
 
@@ -337,7 +347,6 @@ int main(int argc, char** argv) {
   havoqgt::havoqgt_init(&argc, &argv);
   {
     int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
     havoqgt::get_environment();
     havoqgt::havoqgt_env()->world_comm().barrier();
 
@@ -348,8 +357,10 @@ int main(int argc, char** argv) {
 
     /// --- init segment file --- ///
     uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
-    graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
-    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
+    std::stringstream fname_local_segmentfile;
+    fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
+    graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
+    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
     print_system_mem_usages();
 
 
@@ -364,12 +375,14 @@ int main(int argc, char** argv) {
 
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,
+                           gstore,
                            mmap_manager,
                            vertex_scale_,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(dg_visitor_queue,
+                               gstore,
                                mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
@@ -387,12 +400,14 @@ int main(int argc, char** argv) {
 
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,
+                           gstore,
                            mmap_manager,
                            vertex_scale_,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(dg_visitor_queue,
+                               gstore,
                                mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
@@ -404,7 +419,6 @@ int main(int argc, char** argv) {
       std::cout << "Wrong graphstore name : " << graphstore_name_ << std::endl;
       exit(1);
     }
-
   }
   havoqgt::havoqgt_finalize();
 

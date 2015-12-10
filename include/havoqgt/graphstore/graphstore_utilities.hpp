@@ -487,16 +487,19 @@ class interprocess_mmap_manager
   using mapped_file_type     = boost::interprocess::managed_mapped_file;
   using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
-  interprocess_mmap_manager(const std::string segment_fname, const size_t capacity) :
+  interprocess_mmap_manager(const std::string segment_fname, const size_t capacity, const bool is_delete_file = false) :
     m_fname(segment_fname),
-    m_mapped_file(boost::interprocess::create_only, segment_fname.c_str(), capacity)
+    m_mapped_file(boost::interprocess::create_only, segment_fname.c_str(), capacity),
+    m_is_delete_file_on_exit(is_delete_file)
   {
     fallocate(capacity);
   }
 
   ~interprocess_mmap_manager()
   {
-    delete_mapping();
+    if (m_is_delete_file_on_exit) {
+      delete_mapping();
+    }
   }
 
   static void delete_file(const std::string& fname_segmentfile)
@@ -567,6 +570,7 @@ class interprocess_mmap_manager
 
   std::string m_fname;
   mapped_file_type m_mapped_file;
+  bool m_is_delete_file_on_exit;
 };
 
 

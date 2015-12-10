@@ -72,7 +72,7 @@ int main() {
 
 #if 1
 for ( const std::pair<int64_t, int64_t>& x: table ) {
-  cout << x.first << "\t" << x.second << std::endl;
+  cout << x.first << " " << x.second << std::endl;
 }
 #else
 //  itr_t itr = mlmap.begin();

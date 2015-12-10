@@ -28,7 +28,7 @@
 
 #define VERBOSE 1
 
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 #if DEBUG_MODE
 std::ofstream ofs_edges;
 #endif
