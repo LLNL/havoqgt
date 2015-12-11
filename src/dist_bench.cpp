@@ -351,17 +351,18 @@ int main(int argc, char** argv) {
     havoqgt::havoqgt_env()->world_comm().barrier();
 
     parse_options(argc, argv);
-    uint64_t num_vertices = (1ULL << vertex_scale_);
     havoqgt::havoqgt_env()->world_comm().barrier();
+    uint64_t num_vertices = (1ULL << vertex_scale_);
 
 
     /// --- init segment file --- ///
-    uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
+    size_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
     std::stringstream fname_local_segmentfile;
     fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
     graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
     graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
-    print_system_mem_usages();
+    havoqgt::havoqgt_env()->world_comm().barrier();
+    if (mpi_rank == 0) print_system_mem_usages();
 
 
     /// --- allocate a graphstore and start a benchmark --- ///

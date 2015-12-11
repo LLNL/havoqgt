@@ -613,6 +613,22 @@ bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* co
   return is_succeed;
 }
 
+bool get_stat_page_faults(size_t* minflt, size_t* majflt)
+{
+  bool is_succeed = false;
+#ifdef __linux__
+  const char* stat_path = "/proc/self/stat";
+  FILE *f = fopen(stat_path, "r");
+  if (f) {
+    if (13 == fscanf(f,"%*d %*s %*c %*d %*d %*d %*d %*d %*u %lu %*lu %lu", minflt, majflt)) {
+      is_succeed = true;
+    }
+  }
+  fclose(f);
+#endif
+  return is_succeed;
+}
+
 ///
 /// \brief get_meminfo
 /// \param key
