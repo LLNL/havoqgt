@@ -22,10 +22,11 @@ using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               segment_manager_type>;
 
 
+
 void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 {
 #ifdef __linux__
-    std::cout << "Call fallocate()" << std::endl;
+    // std::cout << "Call fallocate()" << std::endl;
     int fd  = open(fname, O_RDWR);
     assert(fd != -1);
     /// posix_fallocate dosen't work on XFS ?
@@ -101,6 +102,7 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<
 
 
 int main(int argc, char** argv) {
+  const int SCALE = 32;
   int mpi_rank(0), mpi_size(0);
 
   havoqgt::havoqgt_init(&argc, &argv);
@@ -127,7 +129,7 @@ int main(int argc, char** argv) {
   std::stringstream fname_local;
   fname_local << graph_file << "_" << mpi_rank;
   boost::interprocess::file_mapping::remove(fname_local.str().c_str());
-  uint64_t graphfile_init_size = std::pow(2, 30) / mpi_size;
+  uint64_t graphfile_init_size = std::pow(2, SCALE) / mpi_size;
   mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local.str().c_str(), graphfile_init_size);
 
   /// --- Call fallocate --- ///
@@ -145,34 +147,60 @@ int main(int argc, char** argv) {
   // Run algorithm.
   havoqgt::mpi::graph_colour_dynamic<graphstore_type, vertex_property_type>(&graphstore);
 
-/*
-  /// ------- delete edges and update vertices' property data ------- ///
-  {
-    for (int i = 0; i < 10; ++i) {
-      vertex_id_type src = i % 2;
-      vertex_id_type dst = i;
+  if (mpi_rank == 0) {
+    std::cout << "Collecting stats...\n";
+  }
 
-      vertex_property_type v_prop = graphstore.vertex_property_data(src);  // get a vertex property data or
-      graphstore.vertex_property_data(src) = v_prop;                       // update a vertex property data.
-                                                                           // Note that vertex_property_data() return a reference
+  // Collect stats.
+  uint64_t visited_total = 0;
+  bool finished = false;
+  uint32_t num_colours = 0;
+  const int AGGR_SIZE = 100;
 
-      size_t erased_edges = graphstore.erase_edge(src, dst);               // erase edges
+  std::vector<uint32_t> colour_counts = *(new std::vector<uint32_t>());
+
+  // Agregates 100 colours per all reduce.
+  for (uint32_t colour = 0; finished != true; colour += AGGR_SIZE) {
+    std::vector<uint64_t> local_count = *(new std::vector<uint64_t>());
+    local_count.resize(AGGR_SIZE, 0);
+    std::vector<uint64_t> global_count = *(new std::vector<uint64_t>());
+    global_count.resize(AGGR_SIZE, 0);
+    colour_counts.resize(colour_counts.size() + AGGR_SIZE, 0);
+
+    for (auto v = graphstore.vertices_begin(); v != graphstore.vertices_end(); v++) {
+      auto v_col = v.property_data();
+      if (v_col >= colour && v_col < (colour + AGGR_SIZE)) {
+        local_count[v_col % AGGR_SIZE]++;
+      }
+    }
+    havoqgt::mpi::mpi_all_reduce(local_count, global_count,
+                                 std::plus<uint64_t>(), MPI_COMM_WORLD);
+
+    for (uint32_t i = 0; i < AGGR_SIZE; i++) {
+      // Note: colour 0 (colour = 0, i = 0) will have 0 count.
+      if (global_count[i] != 0 || (colour == 0 && i == 0)) {
+        colour_counts[colour + i] = global_count[i];
+        visited_total += global_count[i];
+
+        // Print out per-colour count if desired.
+        if (true && mpi_rank == 0) {
+          std::cout << "Colour " << colour + i << ": " << global_count[i]
+                    << std::endl;
+        }
+      } else {
+        num_colours = colour + i - 1;  // One offset since 0 is not a colour.
+        finished = true;
+        break;
+      }
     }
   }
 
-
-  /// ------- iterator over an adjacencylist ------- ///
-  {
-    vertex_id_type src_vrtx = 0;
-    for (auto adj_edges = graphstore.adjacencylist(src_vrtx), end = graphstore.adjacencylist_end(src_vrtx);
-         adj_edges != end;
-         ++adj_edges) {
-      std::cout << "destination vertex: " << adj_edges->first << ", weight: " << adj_edges->second << std::endl;
-    }
+  if (mpi_rank == 0 && visited_total > 1) {
+    std::cout << "Number of Colours = " << num_colours <<  std::endl
+              << "Visited total = " << visited_total << std::endl
+              ;  // << "GC Time = " << time_end - time_start << std::endl;
   }
-*/
 
-  std::cout << "END" << std::endl;
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 

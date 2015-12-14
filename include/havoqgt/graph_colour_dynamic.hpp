@@ -62,7 +62,7 @@
 namespace havoqgt { namespace mpi {
 
 
-enum visit_t { BAD, INI, ADD, CHK, DEL };
+enum visit_t { BAD, INI, ADD, CHK, DEL, SINGLE };
 
 
 template<typename Graph, typename prop_t>
@@ -96,7 +96,7 @@ class gc_dynamic {
               nbr != graph_ref()->adjacent_edge_end(vertex.id()); nbr++) {
       auto nbr_col = nbr.property_data();
       if (nbr_col < bitmap.size() && nbr_col != 0) {
-        bitmap.set(nbr_col - 1); // 0 Colour offset.
+        bitmap.set(nbr_col - 1);  // 0 Colour offset.
       }
     }
 
@@ -104,7 +104,7 @@ class gc_dynamic {
     prop_t colour = 1;
     if (bitmap.size() != 0) {  // TODO(Scott): double check this logic.
       bitmap.flip();
-      colour = (bitmap.find_first() + 1); // 0 Colour offset.
+      colour = (bitmap.find_first() + 1);  // 0 Colour offset.
     }
 
     // Set colour.
@@ -112,27 +112,29 @@ class gc_dynamic {
   }
 
 
-  bool pre_visit() const {
+  bool pre_visit() {
     // Perform an action dependant on the visit type.
-    switch(vis_type) {
-      case ADD:
+    switch (vis_type) {
+      case ADD: {
         graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
 
-        /*if (vertex.id() <= 50) {
-          std::cout << havoqgt::havoqgt_env()->world_comm().rank() << ":" << vertex.id() << "," << caller.id() << " ";
-        }*/
-
+        auto our_colour = graph_ref()->vertex_property_data(vertex.id());
         // If we are uncoloured, colour us (the first colour).
-        if (graph_ref()->vertex_property_data(vertex.id()) == 0) {
+        if (our_colour == 0) {
           graph_ref()->vertex_property_data(vertex.id()) = 1;
+          our_colour = 1;
         }
 
-        // TODO(Scott): Only needs to be to new vertex, doesn't need to be all.
+        // Only needs to be to new vertex, doesn't need to be all.
+        vis_type = SINGLE;
+        caller_colour = our_colour;
         return true;
 
         break;
 
-      case CHK:
+      } case CHK: {
+        //std::cout << vertex.id() << ":" << caller.id() << ":" << caller_colour << " ";
+        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
         // Set associated edge (vertex -> caller) with the caller's colour.
         graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
 
@@ -144,18 +146,17 @@ class gc_dynamic {
             recolour();
             return true;  // Need to send colour to all neighbours.
           }
-
         }
         // No conflict, we can remain as-is.
         break;
 
-      case DEL:
+      } case DEL: {
         //TODO
         break;
 
-      default:
+      } default: {
         std::cerr << "ERROR:  Bad visit type." << std::endl; exit(-1);
-        break;
+      }
     }
 
     return false;
@@ -165,18 +166,27 @@ class gc_dynamic {
   // A visit will send the colour of the vertex to its neighbours.
   template<typename VisitorQueueHandle>
   bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
-    const prop_t mycolour = graph.vertex_property_data(vertex.id());
-    // Send to all nbrs our current colour.
-    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
-              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
-      vertex_locator vl_nbr = vertex_locator(nbr.target_vertex());
+    switch (vis_type) {
+      case SINGLE: {
+        gc_dynamic new_visitor(caller, vertex, caller_colour, CHK);
+        vis_queue->queue_visitor(new_visitor);
+        break;
+      } default: {
+        const prop_t mycolour = graph.vertex_property_data(vertex.id());
+        // Send to all nbrs our current colour.
+        for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
+                  nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+          vertex_locator vl_nbr = vertex_locator(nbr.target_vertex());
 
-      // Send the neighbour a visitor with our colour.
-      gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
-      vis_queue->queue_visitor(new_visitor);
+          // Send the neighbour a visitor with our colour.
+          gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
+          vis_queue->queue_visitor(new_visitor);
+        }
+      }
     }
     return false;
   }
+
 
   // TODO
   friend inline bool operator > (const gc_dynamic& v1,

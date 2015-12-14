@@ -113,7 +113,7 @@ public:
       return *this;
     }
 
-    bool intercept(const visitor_type& __value) {
+    bool intercept(visitor_type& __value) {
       assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
       bool ret = __value.pre_visit();
       if(!ret) {
@@ -187,19 +187,28 @@ public:
   }
 
 
+
   // For dynamic graph traversal: this currently does one edge at a time per
   // process.
   void init_dynamic_traversal() {
     bool got_edge = false;
+    bool done_edges = false;
+    // static uint64_t edge_count;
 
     do {
       do {
-        auto status_edge = m_ptr_graph->get_next_edge();
-        got_edge = std::get<0>(status_edge);
-        if (got_edge) {
-          visitor_type::add_edge(std::get<1>(status_edge), this);
+        if (!(done_edges)) {
+          auto status_edge = m_ptr_graph->get_next_edge();
+          got_edge = std::get<0>(status_edge);
+          if (got_edge) {
+            visitor_type::add_edge(std::get<1>(status_edge), this);
+            // edge_count++;
+            // std::cout << std::get<0>(std::get<1>(status_edge)) << ":" << std::get<1>(std::get<1>(status_edge)) << "\n";
+          } else {
+            done_edges = true;
+            // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "EDGES:" << edge_count << " ";
+          }
         }
-
         process_pending_controllers();
         while(!empty()) {
           process_pending_controllers();
@@ -208,8 +217,9 @@ public:
           m_termination_detection.inc_completed();
         }
         m_mailbox.flush_buffers_if_idle();
-      } while(got_edge || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
+    // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
 
 
@@ -341,7 +351,7 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
 
-  void queue_visitor(const visitor_type& v) {
+  void queue_visitor(visitor_type& v) {
     if(v.vertex.is_delegate()) {
       local_delegate_visit(v);
     } else {
@@ -361,7 +371,7 @@ public:
 
 private:
   // This occurs when the local process first encounters a delegate
-  void local_delegate_visit(const visitor_type& v) {
+  void local_delegate_visit(visitor_type& v) {
     if(v.pre_visit()) {
       if(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank())) {
         //delegate_bcast(v);

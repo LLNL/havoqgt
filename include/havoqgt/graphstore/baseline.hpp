@@ -154,11 +154,16 @@ public:
     auto value = m_map_table.find(src);
     edge_vec_type& edge_vec = value->second.second;
 
-    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
+    if (value == m_map_table.end()) {
+      std::cout << "Bad edge! ";  exit(-1);
+    }
+
+    for (auto itr = edge_vec.begin(); itr != edge_vec.end(); itr++) {
       if (itr->first == trg) {
         return itr->second;
       }
     }
+    std::cout << "Bad edge. ";  exit(-1);
     return edge_vec.end()->second;
   }
 
