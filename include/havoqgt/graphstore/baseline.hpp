@@ -155,7 +155,8 @@ public:
     edge_vec_type& edge_vec = value->second.second;
 
     if (value == m_map_table.end()) {
-      std::cout << "Bad edge! ";  exit(-1);
+      std::cout << src << ":" << trg;
+      std::cout << " Bad edge: vertex lookup failed. ";  exit(-1);
     }
 
     for (auto itr = edge_vec.begin(); itr != edge_vec.end(); itr++) {
@@ -163,7 +164,8 @@ public:
         return itr->second;
       }
     }
-    std::cout << "Bad edge. ";  exit(-1);
+    std::cout << src << ":" << trg;
+    std::cout << " Bad edge: could not find destination. ";  exit(-1);
     return edge_vec.end()->second;
   }
 
@@ -183,7 +185,7 @@ public:
   // TODO(Scott): necessity?
   uint32_t master(const vertex_locator& locator) const {
     // return locator.m_local_id % m_mpi_size;
-    return 0;
+    return locator.owner();
   }
 
 

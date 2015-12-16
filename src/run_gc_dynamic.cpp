@@ -32,7 +32,7 @@ void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
     /// posix_fallocate dosen't work on XFS ?
     /// (dosen't actually expand the file size ?)
     int ret = fallocate(fd, 0, 0, size);
-    assert(ret == 0);
+    // assert(ret == 0);
     close(fd);
     asdf.flush();
 #else

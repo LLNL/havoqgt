@@ -62,7 +62,7 @@
 namespace havoqgt { namespace mpi {
 
 
-enum visit_t { BAD, INI, ADD, CHK, DEL, SINGLE };
+enum visit_t { BAD, ADD, REVERSEADD, CHK, DEL };
 
 
 template<typename Graph, typename prop_t>
@@ -75,11 +75,7 @@ class gc_dynamic {
 
   // Baseline constructor. Needs to be defined, but should not be used.
   explicit gc_dynamic(vertex_locator _vertex) :
-      vertex(_vertex), caller(_vertex), caller_colour(0), vis_type(INI) {  }
-
-  // Who I am, who notified me, and what type of visit it is.
-  gc_dynamic(vertex_locator _vertex, vertex_locator _caller, visit_t type) :
-      vertex(_vertex), caller(_caller), caller_colour(0), vis_type(type) {  }
+      vertex(_vertex), caller(_vertex), caller_colour(0), vis_type(BAD) {  }
 
   // Who I am, who notified me, the incoming colour, and what visit type it is.
   gc_dynamic(vertex_locator _vertex, vertex_locator _caller, prop_t _colour, visit_t type) :
@@ -87,7 +83,7 @@ class gc_dynamic {
 
 
   // Recolours our vertex based on knowledge of our neighbours/edges colours.
-  void recolour() const {
+  prop_t recolour() const {
     boost::dynamic_bitset<> bitmap;
     bitmap.resize(graph_ref()->degree(vertex.id()) + 1);  // 0 Colour offset.
 
@@ -109,53 +105,29 @@ class gc_dynamic {
 
     // Set colour.
     graph_ref()->vertex_property_data(vertex.id()) = colour;
+    return colour;
   }
 
 
   bool pre_visit() {
-    // Perform an action dependant on the visit type.
+    // Perform an action depending on the visit type.
     switch (vis_type) {
       case ADD: {
-        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-
-        auto our_colour = graph_ref()->vertex_property_data(vertex.id());
-        // If we are uncoloured, colour us (the first colour).
-        if (our_colour == 0) {
-          graph_ref()->vertex_property_data(vertex.id()) = 1;
-          our_colour = 1;
-        }
-
-        // Only needs to be to new vertex, doesn't need to be all.
-        vis_type = SINGLE;
-        caller_colour = our_colour;
         return true;
 
-        break;
+      } case REVERSEADD: {
+        return true;
 
       } case CHK: {
-        //std::cout << vertex.id() << ":" << caller.id() << ":" << caller_colour << " ";
-        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-        // Set associated edge (vertex -> caller) with the caller's colour.
-        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
-
-        // Check whether or not we conflict.
-        if (graph_ref()->vertex_property_data(vertex.id()) == caller_colour) {
-          // Conflict: check if their are a higher priority than us.
-          if (vertex_locator::lesser_hash_priority(vertex, caller)) {
-            // Yes: we need to recolour.
-            recolour();
-            return true;  // Need to send colour to all neighbours.
-          }
-        }
-        // No conflict, we can remain as-is.
-        break;
+        return true;
 
       } case DEL: {
         //TODO
+        std::cerr << "ERROR: Bad visit type (DEL IN PRE)." << std::endl; exit(-1);
         break;
 
       } default: {
-        std::cerr << "ERROR:  Bad visit type." << std::endl; exit(-1);
+        std::cerr << "ERROR: Bad visit type (DEFAULT IN PRE)." << std::endl; exit(-1);
       }
     }
 
@@ -167,30 +139,101 @@ class gc_dynamic {
   template<typename VisitorQueueHandle>
   bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
     switch (vis_type) {
-      case SINGLE: {
-        gc_dynamic new_visitor(caller, vertex, caller_colour, CHK);
-        vis_queue->queue_visitor(new_visitor);
-        break;
-      } default: {
-        const prop_t mycolour = graph.vertex_property_data(vertex.id());
-        // Send to all nbrs our current colour.
-        for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
-                  nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
-          vertex_locator vl_nbr = vertex_locator(nbr.target_vertex());
+      case ADD: {
+        assert(vertex_locator::lesser_hash_priority(vertex, caller) == false);
+        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
+        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex.id()));
 
-          // Send the neighbour a visitor with our colour.
-          gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
-          vis_queue->queue_visitor(new_visitor);
+        // If we are uncoloured (new), colour us (the first colour).
+        if (*our_colour == 0) {
+          *our_colour = 1;
         }
+
+        // Note: visit only needs to be to new vertex, doesn't need to be all.
+        gc_dynamic new_visitor(caller, vertex, *our_colour, REVERSEADD);
+        vis_queue->queue_visitor(new_visitor);
+        return false;
+
+      } case REVERSEADD: {
+        assert(vertex_locator::lesser_hash_priority(vertex, caller) == true);
+        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
+        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex.id()));
+        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
+
+        // If we are uncoloured (new), colour us.
+        if (*our_colour == 0) {
+          if (caller_colour == 1) {
+            *our_colour = 2;
+          } else {
+            *our_colour = 1;
+          }
+
+          // Note: visit only needs to be to new vertex, doesn't need to be all.
+          gc_dynamic new_visitor(caller, vertex, *our_colour, CHK);
+          vis_queue->queue_visitor(new_visitor);
+          return false;
+        // Not a new vertex.
+        } else {
+          // Check whether or not we conflict.
+          if (*our_colour == caller_colour) {
+            // Reverse add is always lower priority: we need to recolour.
+            recolour();
+            // Need to send our new colour to all neighbours.
+            visitAllNbrs(graph, vis_queue);
+            return false;
+          }
+          // No conflict, we can remain as-is.
+        }
+        return false;
+
+      } case CHK: {
+        // Set associated edge (vertex -> caller) with the caller's colour.
+        assert(caller_colour != 0);
+        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
+
+        // Check whether or not we conflict.
+        if (graph_ref()->vertex_property_data(vertex.id()) == caller_colour) {
+          // Conflict: check if their are a higher priority than us.
+          if (vertex_locator::lesser_hash_priority(vertex, caller)) {
+            // Yes: we need to recolour.
+            recolour();
+            visitAllNbrs(graph, vis_queue);  // Need to send colour to all neighbours.
+            return false;
+          }
+        }
+        // No conflict, we can remain as-is.
+        return false;
+
+      } default: {
+        std::cerr << "ERROR: Bad visit type (DEFAULT IN VISIT)." << std::endl; exit(-1);
       }
     }
     return false;
   }
 
 
-  // TODO
+  template<typename VisitorQueueHandle>
+  inline void visitAllNbrs(Graph& graph, VisitorQueueHandle vis_queue) const {
+    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    // Send to all nbrs our current colour.
+    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
+              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+      auto edge = nbr.target_vertex();
+      vertex_locator vl_nbr = vertex_locator(edge);
+
+      // Send the neighbour a visitor with our colour.
+      gc_dynamic new_visitor(vl_nbr, vertex, mycolour, CHK);
+      vis_queue->queue_visitor(new_visitor);
+    }
+  }
+
+
   friend inline bool operator > (const gc_dynamic& v1,
                                  const gc_dynamic& v2) {
+    // Have to do adds first, for some reason that is completely unknown.
+    if (v2.vis_type == ADD || v2.vis_type == REVERSEADD) {
+      return true;
+    }
     return false;
   }
 
@@ -204,12 +247,16 @@ class gc_dynamic {
     vertex_locator vl_src(src);
     vertex_locator vl_dst(dst);
 
-    // Make one src to dst, and another the opposite.
-    gc_dynamic srcdst(vl_src, vl_dst, ADD);
-    vis_queue->queue_visitor(srcdst);
-
-    gc_dynamic dstsrc(vl_dst, vl_src, ADD);
-    vis_queue->queue_visitor(dstsrc);
+    // Start the add -> reverse add process with the higher priority vertex.
+    if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
+      // Make one src to dst.
+      gc_dynamic srcdst(vl_src, vl_dst, 0, ADD);
+      vis_queue->queue_visitor(srcdst);
+    } else {
+      // Make one dst to src.
+      gc_dynamic dstsrc(vl_dst, vl_src, 0, ADD);
+      vis_queue->queue_visitor(dstsrc);
+    }
   }
 
 
