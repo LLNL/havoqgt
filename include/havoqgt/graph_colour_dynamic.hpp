@@ -110,6 +110,9 @@ class gc_dynamic {
 
 
   bool pre_visit() {
+    // TODO(Scott): Consider self edges instead of just dropping them.
+    if (vertex.id() == caller.id()) return false;
+
     // Perform an action depending on the visit type.
     switch (vis_type) {
       case ADD: {
@@ -124,7 +127,6 @@ class gc_dynamic {
       } case DEL: {
         //TODO
         std::cerr << "ERROR: Bad visit type (DEL IN PRE)." << std::endl; exit(-1);
-        break;
 
       } default: {
         std::cerr << "ERROR: Bad visit type (DEFAULT IN PRE)." << std::endl; exit(-1);
@@ -135,7 +137,8 @@ class gc_dynamic {
   }
 
 
-  // A visit will send the colour of the vertex to its neighbours.
+  // A visit will send the colour of the vertex to one or all of its neighbours.
+  // Performs a specific action depending on the visit type.
   template<typename VisitorQueueHandle>
   bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
     switch (vis_type) {
@@ -198,6 +201,11 @@ class gc_dynamic {
             // Yes: we need to recolour.
             recolour();
             visitAllNbrs(graph, vis_queue);  // Need to send colour to all neighbours.
+            return false;
+          } else {
+            // TODO(Scott): This should not be necessary!?!?!??!?! wat
+            gc_dynamic new_visitor(caller, vertex, graph_ref()->vertex_property_data(vertex.id()), CHK);
+            vis_queue->queue_visitor(new_visitor);
             return false;
           }
         }
@@ -279,9 +287,89 @@ class gc_dynamic {
 
 
 
+template<typename Graph, typename prop_t>
+class gc_dynamic_tester {
+ public:
+  typedef typename Graph::vertex_locator vertex_locator;
+  // Default constructor.
+  gc_dynamic_tester() :
+      vertex(), caller(), vis_type(BAD) {  }
+
+  // Baseline constructor.
+  explicit gc_dynamic_tester(vertex_locator _vertex) :
+      vertex(_vertex), caller(_vertex), caller_colour(0), vis_type(BAD) {  }
+
+  // Who I am, who notified me, the incoming colour, and what visit type it is.
+  gc_dynamic_tester(vertex_locator _vertex, vertex_locator _caller, prop_t _colour, visit_t type) :
+      vertex(_vertex), caller(_caller), caller_colour(_colour), vis_type(type) {  }
+
+
+  bool pre_visit() {
+    if (vis_type == CHK) {
+      if (vertex.id() == caller.id()) return false;
+      if (caller_colour == graph_ref()->vertex_property_data(vertex.id())) {
+        std::cout << "Bad colouring! Failure from: \n";
+        std::cout << vertex.id() << ":" << caller.id() << " with colour " << caller_colour << "\n";
+        exit(0);
+      }
+      if (graph_ref()->vertex_property_data(vertex.id()) == 0) {
+        std::cout << "Bad colouring! Uncoloured vertex: \n";
+        std::cout << vertex.id() << "\n";
+        exit(0);
+      }
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+
+  // A visit will send the colour of the vertex to its neighbours.
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
+    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    // Send to all nbrs our current colour.
+    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
+              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+      auto edge = nbr.target_vertex();
+      vertex_locator vl_nbr = vertex_locator(edge);
+
+      // Send the neighbour a visitor with our colour.
+      gc_dynamic_tester new_visitor(vl_nbr, vertex, mycolour, CHK);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    return false;
+  }
+
+
+  friend inline bool operator > (const gc_dynamic_tester& v1,
+                                 const gc_dynamic_tester& v2) {
+    return false;
+  }
+
+
+  // Static graph reference.
+  static void set_graph_ref(Graph* _graph_ref) {
+    graph_ref() = _graph_ref;
+  }
+  static Graph*& graph_ref() {
+    static Graph* _graph_ref;
+    return _graph_ref;
+  }
+
+
+  // Instance variables.
+  vertex_locator vertex;
+  vertex_locator caller;
+  prop_t         caller_colour;
+  visit_t        vis_type;
+} __attribute__((packed));
+
+
+
 // Launch point for graph colouring.
 template <typename TGraph, typename prop_t>
-void graph_colour_dynamic(TGraph* graph) {
+void graph_colour_dynamic(TGraph* graph, bool test_result) {
   double time_start = MPI_Wtime();
 
   {
@@ -302,6 +390,21 @@ void graph_colour_dynamic(TGraph* graph) {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   if (mpi_rank == 0) {
     std::cout << "Colour time = " << time_end - time_start << std::endl;
+  }
+
+  // Finished colouring: test.
+  if (test_result) {
+    if (mpi_rank == 0) {  std::cout << "Verifying...\n";  }
+    typedef gc_dynamic_tester<TGraph, prop_t> tester_t;
+    tester_t::set_graph_ref(graph);
+
+    typedef visitor_queue<tester_t, havoqgt::detail::visitor_priority_queue,
+                          TGraph> tester_queue_t;
+    tester_queue_t tester(graph);
+
+    // Begin traversal.
+    tester.init_dynamic_test_traversal();
+    if (mpi_rank == 0) {  std::cout << "Valid colouring.\n";  }
   }
 }
 

@@ -44,13 +44,17 @@ void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 void usage()  {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
+         << " -c            - Prints out count of each colour.\n"
+         << " -v            - Verifies correctness of result.\n"
          << " -g <string>   - output graph base filename (required)\n"
          << " -e <string>   - filename that has a list of edgelist files (required)\n"
          << " -h            - print help and exit\n\n";
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<std::string>& edgelist_files) {
+void parse_cmd_line(int argc, char** argv, std::string& graph_file,
+                    std::vector<std::string>& edgelist_files,
+                    bool* verify, bool* col_count) {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -64,8 +68,14 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "g:e:h")) != -1) {
+  while ((c = getopt(argc, argv, "cvg:e:h")) != -1) {
      switch (c) {
+       case 'c':
+         *col_count = true;
+         break;
+       case 'v':
+         *verify = true;
+         break;
        case 'h':
          prn_help = true;
          break;
@@ -104,6 +114,8 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<
 int main(int argc, char** argv) {
   const int SCALE = 32;
   int mpi_rank(0), mpi_size(0);
+  bool col_count = false;
+  bool verify = false;
 
   havoqgt::havoqgt_init(&argc, &argv);
   {
@@ -121,7 +133,7 @@ int main(int argc, char** argv) {
   /// --- parse argments ---- ///
   std::string graph_file;
   std::vector<std::string> edgelist_files;
-  parse_cmd_line(argc, argv, graph_file, edgelist_files);
+  parse_cmd_line(argc, argv, graph_file, edgelist_files, &verify, &col_count);
   MPI_Barrier(MPI_COMM_WORLD);
 
 
@@ -145,7 +157,7 @@ int main(int argc, char** argv) {
   graphstore_type graphstore(segment_manager, &edgelist);
 
   // Run algorithm.
-  havoqgt::mpi::graph_colour_dynamic<graphstore_type, vertex_property_type>(&graphstore);
+  havoqgt::mpi::graph_colour_dynamic<graphstore_type, vertex_property_type>(&graphstore, verify);
 
   if (mpi_rank == 0) {
     std::cout << "Collecting stats...\n";
@@ -183,7 +195,7 @@ int main(int argc, char** argv) {
         visited_total += global_count[i];
 
         // Print out per-colour count if desired.
-        if (true && mpi_rank == 0) {
+        if (col_count && mpi_rank == 0) {
           std::cout << "Colour " << colour + i << ": " << global_count[i]
                     << std::endl;
         }
