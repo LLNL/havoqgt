@@ -76,6 +76,18 @@ public:
     return adjacent_edge_iterator(m_map_table.find(src_vrt)->second.second.end());
   }
 
+  // Returns the degree of a vertex.
+  size_type degree(const vertex_type& vertex)
+  {
+    const auto value = m_map_table.find(vertex);
+
+    if (value == m_map_table.end()) {
+      return 0;
+    } else {
+      edge_vec_type& edge_vec = value->second.second;
+      return edge_vec.size();
+    }
+  }
 
   /// -------- Modifiers ------- ////
   bool insert_edge(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& edge_property)
@@ -130,6 +142,21 @@ public:
   inline vertex_property_data_type& vertex_property_data(const vertex_type& vertex)
   {
     return m_map_table.find(vertex)->second.first;
+  }
+
+  edge_property_data_type& edge_property_data(const vertex_type& src,
+                                              const vertex_type& trg)
+  {
+
+    auto value = m_map_table.find(src);
+    edge_vec_type& edge_vec = value->second.second;
+
+    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
+      if (itr->first ==  trg) {
+        return itr->second;
+      }
+    }
+    return edge_vec.end();
   }
 
   void opt()

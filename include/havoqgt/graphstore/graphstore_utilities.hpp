@@ -177,23 +177,23 @@ size_t binary_search(array_type& array, size_t len, key_type& key)
 
 
 /// --------- For Debug --------------- ///
-void print_time() {
+static void print_time() {
   std::time_t result = std::time(nullptr);
   std::cout << std::asctime(std::localtime(&result)); /// don't need std::endl
 }
 
-std::chrono::high_resolution_clock::time_point duration_time()
+static std::chrono::high_resolution_clock::time_point duration_time()
 {
   return std::chrono::high_resolution_clock::now();
 }
 
-uint64_t duration_time_usec(const std::chrono::high_resolution_clock::time_point& tic)
+static uint64_t duration_time_usec(const std::chrono::high_resolution_clock::time_point& tic)
 {
   auto duration_time = std::chrono::high_resolution_clock::now() - tic;
   return std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count();
 }
 
-double duration_time_sec(const std::chrono::high_resolution_clock::time_point& tic)
+static double duration_time_sec(const std::chrono::high_resolution_clock::time_point& tic)
 {
   auto duration_time = std::chrono::high_resolution_clock::now() - tic;
   return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);
@@ -243,7 +243,7 @@ class rhh_log_holder {
 
 /// -------------- For I/O ---------------- ///
 
-void sync_files()
+static void sync_files()
 {
 #if _BSD_SOURCE || _XOPEN_SOURCE >= 500
   std::cout << "sync mmap: sync(2)" << std::endl;
@@ -253,7 +253,7 @@ void sync_files()
 #endif
 }
 
-int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
+static int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
 {
     int result = ::posix_memalign(actual_buffer, align_size, length);
     if (result != 0) {
@@ -267,7 +267,7 @@ int aligned_alloc(void** actual_buffer, size_t align_size, size_t length)
     return result;
 }
 
-void aligned_free(void* ptr)
+static void aligned_free(void* ptr)
 {
     ::free(ptr);
 }
@@ -576,7 +576,7 @@ class interprocess_mmap_manager
 
 
 //// ---------- System Status --------- ///
-bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, size_t* const freeram, size_t* const usedram,
+static bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, size_t* const freeram, size_t* const usedram,
                                size_t* const bufferram, size_t* const totalswap, size_t* const freeswap )
 {
   bool is_succeed = false;
@@ -596,7 +596,7 @@ bool get_system_memory_usages( size_t* const mem_unit, size_t* const totalram, s
   return is_succeed;
 }
 
-bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* const share,
+static bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* const share,
                           size_t* const text, size_t* const lib, size_t* const data, size_t* const dt)
 {
   bool is_succeed = false;
@@ -613,7 +613,7 @@ bool get_my_memory_usages(size_t* const size, size_t* const resident, size_t* co
   return is_succeed;
 }
 
-bool get_stat_page_faults(size_t* minflt, size_t* majflt)
+static bool get_stat_page_faults(size_t* minflt, size_t* majflt)
 {
   bool is_succeed = false;
 #ifdef __linux__
@@ -635,7 +635,7 @@ bool get_stat_page_faults(size_t* minflt, size_t* majflt)
 ///   exmample "MemTotal:"
 /// \return
 ///
-bool get_meminfo(std::string key, size_t& val) {
+static bool get_meminfo(std::string key, size_t& val) {
 
   key += ":";
 

@@ -232,6 +232,20 @@ class degawarerhh
     return itr_matrix->first;
   }
 
+  inline edge_property_data_type& edge_property_data(const vertex_type& src, const vertex_type& trg)
+  {
+    for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
+      if ((*itr).second == trg) {
+        return (*itr).third;
+      }
+    }
+
+    auto itr_matrix = m_mh_degree_table->find(src);
+    mh_deg_edge_chunk_type* adj_list = itr_matrix->second;
+    for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
+      return (*itr).second;
+    }
+  }
 
   inline size_type degree(const vertex_type& vertex)
   {

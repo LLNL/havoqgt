@@ -31,6 +31,7 @@ class dist_dynamic_graphstore
     return vertex_locator(label);
   }
 
+  /// insert a edge uniquely
   inline bool insert_edge(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
   {
     return m_graphstore->insert_edge(src.m_id, trg.m_id, weight);
@@ -44,17 +45,16 @@ class dist_dynamic_graphstore
   /// Returns the degree of a vertex
   inline uint64_t degree(vertex_locator locator) const
   {
-    m_graphstore->degree(locator.m_id);
+    return m_graphstore->degree(locator.m_id);
   }
 
   inline edge_property_data_type& edge_property_data(const vertex_locator& src, const vertex_locator& trg)
   {
-    return vertex_property_data.edge_property_data(src.m_id, trg.m_id);
+    return m_graphstore->edge_property_data(src, trg);
   }
 
   uint32_t master(const vertex_locator& locator) const {
-    assert(false);
-    return 0;
+    return locator.owner();
   }
 
  private:

@@ -179,8 +179,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     if (i == mpi_rank) {
       std::cout << "[" << mpi_rank << "] segment size (GB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
     }
+    havoqgt::havoqgt_env()->world_comm().barrier();
   }
-  havoqgt::havoqgt_env()->world_comm().barrier();
 
   /// --- variables for analysys --- //
   uint64_t loop_cnt = 0;
