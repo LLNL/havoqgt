@@ -85,11 +85,11 @@ class gc_dynamic {
   // Recolours our vertex based on knowledge of our neighbours/edges colours.
   prop_t recolour() const {
     boost::dynamic_bitset<> bitmap;
-    bitmap.resize(graph_ref()->degree(vertex.id()) + 1);  // 0 Colour offset.
+    bitmap.resize(graph_ref()->degree(vertex) + 1);  // 0 Colour offset.
 
     // Collect neighbour colours.
-    for (auto nbr  = graph_ref()->adjacent_edge_begin(vertex.id());
-              nbr != graph_ref()->adjacent_edge_end(vertex.id()); nbr++) {
+    for (auto nbr  = graph_ref()->adjacent_edge_begin(vertex);
+              nbr != graph_ref()->adjacent_edge_end(vertex); nbr++) {
       auto nbr_col = nbr.property_data();
       if (nbr_col < bitmap.size() && nbr_col != 0) {
         bitmap.set(nbr_col - 1);  // 0 Colour offset.
@@ -104,7 +104,7 @@ class gc_dynamic {
     }
 
     // Set colour.
-    graph_ref()->vertex_property_data(vertex.id()) = colour;
+    graph_ref()->vertex_property_data(vertex) = colour;
     return colour;
   }
 
@@ -144,8 +144,8 @@ class gc_dynamic {
     switch (vis_type) {
       case ADD: {
         assert(vertex_locator::lesser_hash_priority(vertex, caller) == false);
-        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex.id()));
+        graph_ref()->insert_edge(vertex, caller, 0);
+        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex));
 
         // If we are uncoloured (new), colour us (the first colour).
         if (*our_colour == 0) {
@@ -159,9 +159,9 @@ class gc_dynamic {
 
       } case REVERSEADD: {
         assert(vertex_locator::lesser_hash_priority(vertex, caller) == true);
-        graph_ref()->insert_edge(vertex.id(), caller.id(), 0);
-        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex.id()));
-        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
+        graph_ref()->insert_edge(vertex, caller, 0);
+        prop_t* our_colour = &(graph_ref()->vertex_property_data(vertex));
+        graph_ref()->edge_property_data(vertex, caller) = caller_colour;
 
         // If we are uncoloured (new), colour us.
         if (*our_colour == 0) {
@@ -192,10 +192,10 @@ class gc_dynamic {
       } case CHK: {
         // Set associated edge (vertex -> caller) with the caller's colour.
         assert(caller_colour != 0);
-        graph_ref()->edge_property_data(vertex.id(), caller.id()) = caller_colour;
+        graph_ref()->edge_property_data(vertex, caller) = caller_colour;
 
         // Check whether or not we conflict.
-        if (graph_ref()->vertex_property_data(vertex.id()) == caller_colour) {
+        if (graph_ref()->vertex_property_data(vertex) == caller_colour) {
           // Conflict: check if their are a higher priority than us.
           if (vertex_locator::lesser_hash_priority(vertex, caller)) {
             // Yes: we need to recolour.
@@ -204,7 +204,7 @@ class gc_dynamic {
             return false;
           } else {
             // TODO(Scott): This should not be necessary!?!?!??!?! wat
-            gc_dynamic new_visitor(caller, vertex, graph_ref()->vertex_property_data(vertex.id()), CHK);
+            gc_dynamic new_visitor(caller, vertex, graph_ref()->vertex_property_data(vertex), CHK);
             vis_queue->queue_visitor(new_visitor);
             return false;
           }
@@ -222,10 +222,10 @@ class gc_dynamic {
 
   template<typename VisitorQueueHandle>
   inline void visitAllNbrs(Graph& graph, VisitorQueueHandle vis_queue) const {
-    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    const prop_t mycolour = graph.vertex_property_data(vertex);
     // Send to all nbrs our current colour.
-    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
-              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+    for (auto nbr  = graph.adjacent_edge_begin(vertex);
+              nbr != graph.adjacent_edge_end(vertex); nbr++) {
       auto edge = nbr.target_vertex();
       vertex_locator vl_nbr = vertex_locator(edge);
 
@@ -307,12 +307,12 @@ class gc_dynamic_tester {
   bool pre_visit() {
     if (vis_type == CHK) {
       if (vertex.id() == caller.id()) return false;
-      if (caller_colour == graph_ref()->vertex_property_data(vertex.id())) {
+      if (caller_colour == graph_ref()->vertex_property_data(vertex)) {
         std::cout << "Bad colouring! Failure from: \n";
         std::cout << vertex.id() << ":" << caller.id() << " with colour " << caller_colour << "\n";
         exit(0);
       }
-      if (graph_ref()->vertex_property_data(vertex.id()) == 0) {
+      if (graph_ref()->vertex_property_data(vertex) == 0) {
         std::cout << "Bad colouring! Uncoloured vertex: \n";
         std::cout << vertex.id() << "\n";
         exit(0);
@@ -327,10 +327,10 @@ class gc_dynamic_tester {
   // A visit will send the colour of the vertex to its neighbours.
   template<typename VisitorQueueHandle>
   bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
-    const prop_t mycolour = graph.vertex_property_data(vertex.id());
+    const prop_t mycolour = graph.vertex_property_data(vertex);
     // Send to all nbrs our current colour.
-    for (auto nbr  = graph.adjacent_edge_begin(vertex.id());
-              nbr != graph.adjacent_edge_end(vertex.id()); nbr++) {
+    for (auto nbr  = graph.adjacent_edge_begin(vertex);
+              nbr != graph.adjacent_edge_end(vertex); nbr++) {
       auto edge = nbr.target_vertex();
       vertex_locator vl_nbr = vertex_locator(edge);
 

@@ -12,14 +12,23 @@
 namespace graphstore {
 
 
-template <typename vertex_type,
-          typename vertex_property_data_type,
-          typename edge_property_data_type,
-          typename segment_manager_type>
+template <typename _vertex_type,
+          typename _vertex_property_data_type,
+          typename _edge_property_data_type,
+          typename _segment_manager_type>
 class graphstore_baseline
 {
-private:
+public:
+  using vertex_type                 = _vertex_type;
+  using vertex_property_data_type   = _vertex_property_data_type;
+  using edge_property_data_type     = _edge_property_data_type;
+  using segment_manager_type        = _segment_manager_type;
 
+  /// iterator
+  class vertex_iterator;
+  class adjacent_edge_iterator;
+
+private:
   using size_type             = size_t;
   template <typename t1, typename t2>
   using pair_type             = graphstore::utility::packed_pair<t1, t2>;
@@ -42,10 +51,6 @@ private:
                                                      map_allocator_type>;
 
 public:
-  /// iterator
-  class vertex_iterator;
-  class adjacent_edge_iterator;
-
 
   explicit graphstore_baseline(segment_manager_type* segment_manager) :
     m_allocator(segment_manager),

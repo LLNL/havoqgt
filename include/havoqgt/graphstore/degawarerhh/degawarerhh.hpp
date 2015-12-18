@@ -17,13 +17,23 @@
 
 namespace graphstore {
 
-template <typename vertex_type,
-          typename vertex_property_data_type,
-          typename edge_property_data_type,
-          typename segment_manager_type,
+template <typename _vertex_type,
+          typename _vertex_property_data_type,
+          typename _edge_property_data_type,
+          typename _segment_manager_type,
           size_t middle_high_degree_threshold = 2>
 class degawarerhh
 {
+ public:
+  using vertex_type                 = _vertex_type;
+  using vertex_property_data_type   = _vertex_property_data_type;
+  using edge_property_data_type     = _edge_property_data_type;
+  using segment_manager_type        = _segment_manager_type;
+
+  /// --- iterators --- ///
+  class vertex_iterator;
+  class adjacent_edge_iterator;
+
  private:
   using size_type                   = size_t;
   using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type>;
@@ -37,11 +47,6 @@ class degawarerhh
 
 
  public:
-
-  /// --- iterators --- ///
-  class vertex_iterator;
-  class adjacent_edge_iterator;
-
 
   explicit degawarerhh(segment_manager_type* segment_manager) {
     static_assert(middle_high_degree_threshold > 1, "middle high degree threshold is must be larger than 1");
