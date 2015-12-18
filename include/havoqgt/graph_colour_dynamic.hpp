@@ -82,11 +82,16 @@ class gc_dynamic {
       vertex(_vertex), caller(_caller), caller_colour(_colour), vis_type(type) {  }
 
 
-  // Keita
-  // Because enum visit_t is not able to seen from outside of this file, specifically visitor_queue class,
-  // this function return a obbject with visit_t::ADD
-  static gc_dynamic<Graph, prop_t> creat_visitor_add_type(vertex_locator _vertex, vertex_locator _caller, prop_t _colour) {
-    return gc_dynamic(_vertex, _caller, _colour, ADD);
+  static gc_dynamic<Graph, prop_t> create_visitor_add_type(vertex_locator vl_dst, vertex_locator vl_src) {
+
+    // Start the add -> reverse add process with the higher priority vertex.
+    if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
+      // Make one src to dst.
+      return gc_dynamic(vl_src, vl_dst, 0, ADD);
+    } else {
+      // Make one dst to src.
+      return gc_dynamic(vl_dst, vl_src, 0, ADD);
+    }
   }
 
   // Recolours our vertex based on knowledge of our neighbours/edges colours.

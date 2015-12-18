@@ -192,31 +192,18 @@ public:
   void init_dynamic_traversal(edgelist_t* edgelist) {
     auto edge = edgelist->begin();
     const auto edge_end = edgelist->end();
-    // bool got_edge = false;
-    // bool done_edges = false;
-    // static uint64_t edge_count;
+    bool done_edges = (edge == edge_end);
 
     do {
       do {
-
-        auto src = std::get<0>(*edge);
-        auto dst = std::get<1>(*edge);
-
-        vertex_locator vl_src(src);
-        vertex_locator vl_dst(dst);
-
-        // Start the add -> reverse add process with the higher priority vertex.
-        if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
-          // Make one src to dst.
-          visitor_type srcdst = visitor_type::creat_visitor_add_type(vl_src, vl_dst, 0);
-          queue_visitor(srcdst);
-        } else {
-          // Make one dst to src.
-          visitor_type dstsrc =  visitor_type::creat_visitor_add_type(vl_dst, vl_src, 0);
-          queue_visitor(dstsrc);
+        if (!done_edges) {
+          vertex_locator vl_src(std::get<0>(*edge));
+          vertex_locator vl_dst(std::get<1>(*edge));
+          visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
+          queue_visitor(visitor);
+          ++edge;
+          done_edges = (edge == edge_end);
         }
-        ++edge;
-
         process_pending_controllers();
         while(!empty()) {
           process_pending_controllers();
@@ -225,7 +212,7 @@ public:
           m_termination_detection.inc_completed();
         }
         m_mailbox.flush_buffers_if_idle();
-      } while(edge != edge_end || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
     // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
