@@ -232,7 +232,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     const double time_local_end = MPI_Wtime();
 
     /// --- global construction --- ///
-    dg_visitor_queue.init_dynamic_traversal();
+    // dg_visitor_queue.init_dynamic_traversal();
 
     /// --- sync --- ///
     if (mpi_rank == 0) graphstore::utility::sync_files();

@@ -82,6 +82,13 @@ class gc_dynamic {
       vertex(_vertex), caller(_caller), caller_colour(_colour), vis_type(type) {  }
 
 
+  // Keita
+  // Because enum visit_t is not able to seen from outside of this file, specifically visitor_queue class,
+  // this function return a obbject with visit_t::ADD
+  static gc_dynamic<Graph, prop_t> creat_visitor_add_type(vertex_locator _vertex, vertex_locator _caller, prop_t _colour) {
+    return gc_dynamic(_vertex, _caller, _colour, ADD);
+  }
+
   // Recolours our vertex based on knowledge of our neighbours/edges colours.
   prop_t recolour() const {
     boost::dynamic_bitset<> bitmap;
@@ -380,40 +387,7 @@ void graph_colour_dynamic(TGraph* graph, edgelist_t* edgelist, bool test_result)
                           TGraph> colourer_queue_t;
     colourer_queue_t colourer(graph);
 
-    typedef typename TGraph::vertex_locator vertex_locator;
-
-    // -- inserting edges begin --- //
-    size_t count_edges = 0;
-    for (auto edge = edgelist->begin(), end = edgelist->end(); edge != end; ++edge) {
-      auto src = std::get<0>(*edge);
-      auto dst = std::get<1>(*edge);
-
-      vertex_locator vl_src(src);
-      vertex_locator vl_dst(dst);
-
-      // Start the add -> reverse add process with the higher priority vertex.
-      if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
-        // Make one src to dst.
-        colourer_t srcdst(vl_src, vl_dst, 0, ADD);
-        colourer.queue_visitor(srcdst);
-      } else {
-        // Make one dst to src.
-        colourer_t dstsrc(vl_dst, vl_src, 0, ADD);
-        colourer.queue_visitor(dstsrc);
-      }
-      ++count_edges;
-
-      if (count_edges % 1000 == 0) { /// periodically actually insert edges
-        // start inserting edges to remote node
-        colourer.init_dynamic_traversal();
-        count_edges = 0;
-      }
-    }
-    if (count_edges > 0) {
-      colourer.init_dynamic_traversal();
-    }
-    // -- inserting edges done -- ///
-
+    colourer.init_dynamic_traversal(edgelist);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
