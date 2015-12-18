@@ -78,6 +78,23 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     return (m_local_id != conv.m_local_id || m_owner_dest != conv.m_owner_dest);
   }
 
+  // Computes the hash of a vertex based off of local ID and partition owner.
+  inline uint64_t hash() const {
+    std::hash<uint64_t> hasher;
+    return (hasher(local_id()) + hasher(owner()));
+  }
+
+  // With hash id, determine if vertex A has lesser priority over vertex B.
+  static inline bool lesser_hash_priority(const vertex_locator& a,
+                                          const vertex_locator& b) {
+    size_t a_hash = a.hash();
+    size_t b_hash = b.hash();
+    if ((a_hash < b_hash) || (a_hash == b_hash && (a < b))) {
+      return true;
+    }
+    return false;
+  }
+
   bool is_delegate() const { return m_is_delegate == 1;}
   uint32_t owner() const { return m_owner_dest; }
   void set_dest(uint32_t dest) { m_owner_dest = dest; assert(m_owner_dest == dest);}
@@ -104,6 +121,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
       return x.m_is_delegate < y.m_is_delegate;
     }
   }
+  friend bool operator > (const vertex_locator& x,
+                          const vertex_locator& y) {  return !(x < y);  }
 
 
   friend bool operator!=(const vertex_locator& x,

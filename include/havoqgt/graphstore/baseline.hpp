@@ -80,7 +80,6 @@ public:
   size_type degree(const vertex_type& vertex)
   {
     const auto value = m_map_table.find(vertex);
-
     if (value == m_map_table.end()) {
       return 0;
     } else {
@@ -144,20 +143,26 @@ public:
     return m_map_table.find(vertex)->second.first;
   }
 
-  edge_property_data_type& edge_property_data(const vertex_type& src,
-                                              const vertex_type& trg)
-  {
-
+  // Returns the associated edge data given a source and the sources edge.
+  edge_property_data_type& edge_property_data(const vertex_type& src, const vertex_type& trg) {
     auto value = m_map_table.find(src);
     edge_vec_type& edge_vec = value->second.second;
 
-    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
-      if (itr->first ==  trg) {
+    if (value == m_map_table.end()) {
+      std::cout << src << ":" << trg;
+      std::cout << " Bad edge: vertex lookup failed. ";  exit(-1);
+    }
+
+    for (auto itr = edge_vec.begin(); itr != edge_vec.end(); itr++) {
+      if (itr->first == trg) {
         return itr->second;
       }
     }
-    return edge_vec.end();
+    std::cout << src << ":" << trg;
+    std::cout << " Bad edge: could not find destination. ";  exit(-1);
+    return edge_vec.end()->second;
   }
+
 
   void opt()
   { }
@@ -171,8 +176,42 @@ public:
   void fprint_all_elements(std::ofstream& of)
   { }
 
+
+  // TODO(Scott): necessity?
+//  uint32_t master(const vertex_locator& locator) const {
+//    // return locator.m_local_id % m_mpi_size;
+//    return locator.owner();
+//  }
+
+
+//  // Returns a pointer to a new edge if there is one, NULL if not.
+//  // Actually no, you can't do that, so have a pair of status and edge ref.
+//  std::pair<bool, const havoqgt::parallel_edge_list_reader::edge_type> get_next_edge() {
+//    // Check if iterater is at end.
+//    if (m_input_iter == m_pelr->end()) {
+//      // This is why I prefer using pointers over references...
+//      havoqgt::parallel_edge_list_reader::edge_type stupid;
+//      return std::make_pair(false, stupid);
+//    }
+//    // Return new edge.
+//    auto edge = *m_input_iter;
+//    m_input_iter++;
+
+//    // TODO(Scott): Find the source of these broken 0->0 edges.
+//    // Done I think? Still need this check?
+//    if (std::get<0>(edge) == 0 && std::get<1>(edge) == 0) {
+//      std::cout << "ZERO ";
+//      return get_next_edge();
+//    }
+
+//    return std::make_pair(true, edge);
+//  }
+
+
   allocator_type m_allocator;
   map_table_type m_map_table;
+//  havoqgt::parallel_edge_list_reader* m_pelr;
+//  havoqgt::parallel_edge_list_reader::input_iterator_type m_input_iter;
 };
 
 
@@ -336,6 +375,88 @@ private:
 
   edge_iterator_type m_iterator;
 };
+
+
+// Vertex Locator for baseline graphstore.
+//template <typename vertex_type, typename vertex_property_type, typename edge_property_type, typename segment_manager_type>
+//class graphstore_baseline<vertex_type, vertex_property_type, edge_property_type, segment_manager_type>::vertex_locator {
+//public:
+//  vertex_locator() {
+//    m_is_bcast     = 0;
+//    m_is_intercept = 0;
+//    m_id           = std::numeric_limits<uint64_t>::max();
+//  }
+
+//  explicit vertex_locator(vertex_type src) {
+//    m_is_bcast     = 0;
+//    m_is_intercept = 0;
+//    m_id           = src;
+//  }
+
+//  bool is_valid() const {
+//    uint64_t _m_local_id = std::numeric_limits<uint64_t>::max();
+//    return (m_id != _m_local_id);
+//  }
+
+//  // Computes the hash of a vertex based off of ID.
+//  inline uint64_t hash() const {
+//    std::hash<vertex_type> hasher;
+//    return hasher(id());
+//  }
+
+//  // With hash id, determine if vertex A has lesser priority over vertex B.
+//  static inline bool lesser_hash_priority(const vertex_locator& a,
+//                                          const vertex_locator& b) {
+//    size_t a_hash = a.hash();
+//    size_t b_hash = b.hash();
+//    if ((a_hash < b_hash) || (a_hash == b_hash && (a < b))) {
+//      return true;
+//    }
+//    return false;
+//  }
+
+//  bool is_delegate() const {  return false;  }
+
+//  uint64_t id() const {  return m_id;  }
+
+//  uint32_t owner() const {
+//    return hash() % havoqgt::havoqgt_env()->world_comm().size();
+//  }
+
+//  void set_dest(uint32_t dest) {
+//    std::cerr << "ERROR:  Tried to set dest in dynamic." << std::endl; exit(-1);
+//  }
+
+//  bool is_equal(const vertex_locator x) const {
+//    return m_is_bcast     == x.m_is_bcast
+//        && m_is_intercept == x.m_is_intercept
+//        && m_id           == x.m_id;
+//  }
+
+//  uint32_t get_bcast() const {  return m_is_bcast;  }
+//  void set_bcast(uint32_t bcast) {  m_is_bcast = bcast;  }
+
+//  bool is_intercept() const {  return m_is_intercept == 1;  }
+//  void set_intercept(bool intercept) {  m_is_intercept = intercept;  }
+
+
+//  friend bool operator == (const vertex_locator& x,
+//                           const vertex_locator& y) { return x.is_equal(y); }
+//  friend bool operator < (const vertex_locator& x,
+//                          const vertex_locator& y) {
+//    return x.m_id < y.m_id;
+//  }
+//  friend bool operator >= (const vertex_locator& x,
+//                           const vertex_locator& y) { return !(x < y); }
+//  friend bool operator != (const vertex_locator& x,
+//                           const vertex_locator& y) { return !(x.is_equal(y)); }
+
+// private:
+//  friend class graphstore_baseline;
+//  unsigned int m_is_bcast     : 1;
+//  unsigned int m_is_intercept : 1;
+//  uint64_t     m_id           : 61;
+//} __attribute__ ((packed));
 
 }
 #endif // GRAPHSTORE_BASELINE_HPP

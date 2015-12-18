@@ -113,8 +113,8 @@ public:
       return *this;
     }
 
-    bool intercept(const visitor_type& __value) {
-      /// assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
+    bool intercept(visitor_type& __value) {
+      // assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
       bool ret = __value.pre_visit();
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
@@ -186,7 +186,9 @@ public:
     }
   }
 
-  void insert_edges() {
+  // For dynamic graph traversal: this currently does one edge at a time per
+  // process.
+  void init_dynamic_traversal() {
     do {
       do {
         process_pending_controllers();
@@ -199,7 +201,34 @@ public:
         m_mailbox.flush_buffers_if_idle();
       } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
+    // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
+
+
+  // Note: similar to below, but uses graphstore iterator and no delegates.
+  void init_dynamic_test_traversal() {
+    for(auto vitr = m_ptr_graph->vertices_begin(); vitr != m_ptr_graph->vertices_end(); vitr++) {
+      vertex_locator vl(vitr.source_vertex());
+      visitor_type v(vl);
+      if(v.pre_visit()) {
+        do_visit( v );
+        check_mailbox();
+      }
+    }
+    do {
+      do {
+      process_pending_controllers();
+      while(!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+        m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
 
   void init_visitor_traversal() {
     typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
@@ -261,7 +290,74 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
 
-  void queue_visitor(const visitor_type& v) {
+  void init_visitor_traversal_new_alt() {
+    auto citr = m_ptr_graph->controller_begin();
+    auto vitr = m_ptr_graph->vertices_begin();
+
+    do {
+      do {
+        do {
+          if(citr != m_ptr_graph->controller_end()) {
+            visitor_type v(*citr);
+            if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+              do_visit( v );
+              check_mailbox();
+            }
+            ++citr;
+          }
+          if(vitr != m_ptr_graph->vertices_end()) {
+            visitor_type v(*vitr);
+            if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+              do_visit( v );
+              check_mailbox();
+            }
+            ++vitr;
+          }
+          process_pending_controllers();
+          while(!empty()) {
+            process_pending_controllers();
+            visitor_type this_visitor = pop_top();
+            do_visit(this_visitor);
+            m_termination_detection.inc_completed();
+          }
+        } while( citr != m_ptr_graph->controller_end() ||  vitr != m_ptr_graph->vertices_end() );
+        m_mailbox.flush_buffers_if_idle();
+      } while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+  void init_visitor_traversal_local_first() {
+    typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
+    for(; citr != m_ptr_graph->controller_end(); ++citr) {
+      visitor_type v(*citr);
+      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+        do_visit( v );
+        // check_mailbox();
+      }
+    }
+    typename TGraph::vertex_iterator vitr = m_ptr_graph->vertices_begin();
+    for(; vitr != m_ptr_graph->vertices_end(); ++vitr) {
+      visitor_type v(*vitr);
+      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+        do_visit( v );
+        // check_mailbox();
+      }
+    }
+    do {
+      do {
+      process_pending_controllers();
+      while(!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+        m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+  void queue_visitor(visitor_type& v) {
     if(v.vertex.is_delegate()) {
       local_delegate_visit(v);
     } else {
@@ -281,7 +377,7 @@ public:
 
 private:
   // This occurs when the local process first encounters a delegate
-  void local_delegate_visit(const visitor_type& v) {
+  void local_delegate_visit(visitor_type& v) {
     if(v.pre_visit()) {
       if(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank())) {
         //delegate_bcast(v);

@@ -4,11 +4,15 @@
 #include <havoqgt/mpi.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
-template <typename graphstore_type>
+class no_delegate_vertex_locator;
+
+namespace graphstore {
+
+template <typename graphstore_type, typename vertex_locator_type = no_delegate_vertex_locator>
 class dist_dynamic_graphstore
 {
  public:
-  class vertex_locator;
+  using vertex_locator  = vertex_locator_type;
   using vertex_iterator = typename graphstore_type::vertex_iterator;
 
   using vertex_property_data_type = unsigned char;
@@ -22,7 +26,7 @@ class dist_dynamic_graphstore
   /// Converts a vertex_locator to the vertex label
   uint64_t locator_to_label(vertex_locator locator) const
   {
-    return locator.m_id;
+    return locator.id();
   }
 
   /// Converts a vertex label to a vertex_locator
@@ -34,18 +38,18 @@ class dist_dynamic_graphstore
   /// insert a edge uniquely
   inline bool insert_edge(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
   {
-    return m_graphstore->insert_edge(src.m_id, trg.m_id, weight);
+    return m_graphstore->insert_edge(src.id(), trg.id(), weight);
   }
 
   inline vertex_property_data_type& vertex_property_data(const vertex_locator& vertex)
   {
-    return m_graphstore->vertex_property_data(vertex.m_id);
+    return m_graphstore->vertex_property_data(vertex.id());
   }
 
   /// Returns the degree of a vertex
   inline uint64_t degree(vertex_locator locator) const
   {
-    return m_graphstore->degree(locator.m_id);
+    return m_graphstore->degree(locator.id());
   }
 
   inline edge_property_data_type& edge_property_data(const vertex_locator& src, const vertex_locator& trg)
@@ -53,7 +57,8 @@ class dist_dynamic_graphstore
     return m_graphstore->edge_property_data(src, trg);
   }
 
-  uint32_t master(const vertex_locator& locator) const {
+  uint32_t master(const vertex_locator& locator) const
+  {
     return locator.owner();
   }
 
@@ -61,22 +66,21 @@ class dist_dynamic_graphstore
   graphstore_type* m_graphstore;
 };
 
+}
 
 
-template <typename graphstore_type>
-class dist_dynamic_graphstore<graphstore_type>::vertex_locator {
+class no_delegate_vertex_locator {
   using vertex_type = uint64_t;
-
-  friend dist_dynamic_graphstore;
+  using self_type   = no_delegate_vertex_locator;
 
  public:
-  vertex_locator() {
+  no_delegate_vertex_locator() {
     m_is_bcast     = 0;
     m_is_intercept = 0;
     m_id           = std::numeric_limits<vertex_type>::max();
   }
 
-  explicit vertex_locator(vertex_type src) {
+  explicit no_delegate_vertex_locator(vertex_type src) {
     m_is_bcast     = 0;
     m_is_intercept = 0;
     m_id           = src;
@@ -94,8 +98,8 @@ class dist_dynamic_graphstore<graphstore_type>::vertex_locator {
   }
 
   // With hash id, determine if vertex A has lesser priority over vertex B.
-  static inline bool lesser_hash_priority(const vertex_locator& a,
-                                          const vertex_locator& b) {
+  static inline bool lesser_hash_priority(const self_type& a,
+                                          const self_type& b) {
     size_t a_hash = a.hash();
     size_t b_hash = b.hash();
     if ((a_hash < b_hash) || (a_hash == b_hash && (a < b))) {
@@ -116,7 +120,7 @@ class dist_dynamic_graphstore<graphstore_type>::vertex_locator {
     std::cerr << "ERROR:  Tried to set dest in dynamic." << std::endl; exit(-1);
   }
 
-  bool is_equal(const vertex_locator x) const {
+  bool is_equal(const self_type x) const {
     return m_is_bcast     == x.m_is_bcast
         && m_is_intercept == x.m_is_intercept
         && m_id           == x.m_id;
@@ -129,16 +133,16 @@ class dist_dynamic_graphstore<graphstore_type>::vertex_locator {
   void set_intercept(bool intercept) {  m_is_intercept = intercept;  }
 
 
-  friend bool operator == (const vertex_locator& x,
-                           const vertex_locator& y) { return x.is_equal(y); }
-  friend bool operator < (const vertex_locator& x,
-                          const vertex_locator& y) {
+  friend bool operator == (const self_type& x,
+                           const self_type& y) { return x.is_equal(y); }
+  friend bool operator < (const self_type& x,
+                          const self_type& y) {
     return x.m_id < y.m_id;
   }
-  friend bool operator >= (const vertex_locator& x,
-                           const vertex_locator& y) { return !(x < y); }
-  friend bool operator != (const vertex_locator& x,
-                           const vertex_locator& y) { return !(x.is_equal(y)); }
+  friend bool operator >= (const self_type& x,
+                           const self_type& y) { return !(x < y); }
+  friend bool operator != (const self_type& x,
+                           const self_type& y) { return !(x.is_equal(y)); }
 
  private:
   unsigned int m_is_bcast     : 1;
@@ -147,7 +151,7 @@ class dist_dynamic_graphstore<graphstore_type>::vertex_locator {
 } __attribute__ ((packed)) ;
 
 
-
+/// --- example of simple visitor class to construct a graph --- ///
 template <typename graphstore_type>
 class dg_visitor {
  public:
@@ -171,12 +175,7 @@ class dg_visitor {
     // Perform an action dependant on the visit type.
     switch(vis_type) {
       case ADD:
-        graph_ref()->insert_edge(vertex, caller, 0);
-        /*
-        if (vertex.id() <= 50) {
-          std::cout << havoqgt::havoqgt_env()->world_comm().rank() << ":" << vertex.id() << "," << caller.id() << " ";
-        }
-        */
+        return true;
         break;
       default:
         std::cerr << "ERROR:  Bad visit type." << std::endl; exit(-1);
@@ -190,8 +189,12 @@ class dg_visitor {
   // TODO
   template<typename VisitorQueueHandle>
   bool visit(const graphstore_type& graph, VisitorQueueHandle vis_queue) const {
-
-    return false;
+    switch (vis_type) {
+      case ADD: {
+        graph_ref()->insert_edge(vertex, caller, 0);
+        return false;
+      }
+    }
   }
 
   // TODO
@@ -216,7 +219,6 @@ class dg_visitor {
   vertex_locator caller;
   visit_t        vis_type;
 } __attribute__((packed));
-
 
 #endif // dist_dynamic_graphstore_HPP
 

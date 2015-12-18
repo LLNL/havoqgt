@@ -79,9 +79,22 @@ void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
          << " -s <int>    - RMAT graph Scale (default 17)\n"
+         << " -t <int>    - RMAT type:\n"
+         << "                 0: Graph500 (.57, .19, .19, .05) [DEFAULT]\n"
+         << "                 1: RMAT-ER  (.25, .25, .25, .25)\n"
+         << "                 2: RMAT-G   (.45, .15, .15, .25)\n"
+         << "                 3: RMAT-B   (.55, .15, .15, .15)\n"
+         << "                 4:          (.35  .30  .30  .05)\n"
+         << "                 5:          (.45  .25  .25  .05)\n"
+         << "                 6:          (.55  .20  .20  .05)\n"
+         << "                 7:          (.65  .15  .15  .05)\n"
+         << "                 8:          (.75  .10  .10  .05)\n"
          << " -d <int>    - delegate threshold (Default is 1048576)\n"
          << " -o <string> - output graph base filename\n"
-         << " -b <string>   - backup graph base filename \n"
+         << " -b <string> - backup graph base filename \n"
+         << " -e          - Writes the edgelist as string src dst pairs, one\n"
+         << "               file per rank, in the output location.\n"
+         << "               (Currently only works without delegates.)"
          << " -p <int>    - number of Low & High partition passes (Default is 1)\n"
          << " -f <float>  - Gigabytes reserved per rank (Default is 0.25)\n"
          << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
@@ -92,7 +105,8 @@ void usage()  {
 
 void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, 
                     std::string& output_filename, std::string& backup_filename, double& gbyte_per_rank, 
-                    uint64_t& partition_passes, uint64_t& chunk_size) {
+                    uint64_t& partition_passes, uint64_t& chunk_size,
+                    bool* dump_edges, int* rmat_type) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -110,13 +124,16 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:d:o:b:p:f:c:h ")) != -1) {
+  while ((c = getopt(argc, argv, "s:t:d:o:b:p:f:c:eh ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
          break;
       case 's':
          scale = atoll(optarg);
+         break;
+      case 't':
+         *rmat_type = atoi(optarg);
          break;
       case 'd':
          delegate_threshold = atoll(optarg);
@@ -137,6 +154,9 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
       case 'c':
          chunk_size = atoll(optarg);
          break;
+      case 'e':
+        *dump_edges = true;
+        break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
          prn_help = true;
@@ -179,9 +199,13 @@ int main(int argc, char** argv) {
     uint64_t      partition_passes;
     double        gbyte_per_rank;
     uint64_t      chunk_size;
-        
-    parse_cmd_line(argc, argv, vert_scale, hub_threshold, output_filename, backup_filename, 
-                   gbyte_per_rank, partition_passes, chunk_size);
+    bool          dump_edges = false;
+    int           rmat_type = 0;
+
+
+    parse_cmd_line(argc, argv, vert_scale, hub_threshold, output_filename,
+                   backup_filename, gbyte_per_rank, partition_passes,
+                   chunk_size, &dump_edges, &rmat_type);
 
     num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
@@ -198,11 +222,47 @@ int main(int argc, char** argv) {
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
+    // Set up RMAT values. (Remember: must sum up to 1.)
+    float r_val[4];
+    switch (rmat_type) {
+    case 0:  // Graph 500
+      r_val[0] = 0.57;  r_val[1] = 0.19;  r_val[2] = 0.19;  r_val[3] = 0.05;
+      break;
+    case 1:  // RMAT-ER
+      r_val[0] = 0.25;  r_val[1] = 0.25;  r_val[2] = 0.25;  r_val[3] = 0.25;
+      break;
+    case 2:  // RMAT-G
+      r_val[0] = 0.45;  r_val[1] = 0.15;  r_val[2] = 0.15;  r_val[3] = 0.25;
+      break;
+    case 3:  // RMAT-B
+      r_val[0] = 0.55;  r_val[1] = 0.15;  r_val[2] = 0.15;  r_val[3] = 0.15;
+      break;
+    case 4:
+      r_val[0] = 0.35;  r_val[1] = 0.30;  r_val[2] = 0.30;  r_val[3] = 0.05;
+      break;
+    case 5:
+      r_val[0] = 0.45;  r_val[1] = 0.25;  r_val[2] = 0.25;  r_val[3] = 0.05;
+      break;
+    case 6:
+      r_val[0] = 0.55;  r_val[1] = 0.20;  r_val[2] = 0.20;  r_val[3] = 0.05;
+      break;
+    case 7:
+      r_val[0] = 0.65;  r_val[1] = 0.15;  r_val[2] = 0.15;  r_val[3] = 0.05;
+      break;
+    case 8:
+      r_val[0] = 0.75;  r_val[1] = 0.10;  r_val[2] = 0.10;  r_val[3] = 0.05;
+      break;
+    default:
+      std::cerr << "Bad RMAT type!" << std::endl;
+      exit(-1);
+    }
+
     //Generate RMAT graph
     uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
     havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
                                       vert_scale, num_edges_per_rank,
-                                      0.57, 0.19, 0.19, 0.05, true, true);
+                                      r_val[0], r_val[1], r_val[2], r_val[3],
+                                      true, true);
 
 
     if (mpi_rank == 0) {
@@ -248,6 +308,24 @@ int main(int argc, char** argv) {
       std::cout << "Max Degree = " << global_max_degree << std::endl;
     }
 
+    // TODO(Scott): Add delegate support.
+    // If requested, dump edgelist to a file.
+    if (dump_edges) {
+      std::ofstream myfile;
+      std::stringstream ss;
+      ss << output_filename.c_str() << "_el" << mpi_rank;
+      myfile.open(ss.str());
+
+      for (auto v = graph->vertices_begin(); v != graph->vertices_end(); v++) {
+        uint64_t src = graph->locator_to_label(*v);
+        for (auto e = graph->edges_begin(*v); e != graph->edges_end(*v); e++) {
+          uint64_t dst = graph->locator_to_label(e.target());
+          myfile << src << " " << dst << "\n";
+        }
+      }
+      myfile.close();
+    }
+
     havoqgt_env()->world_comm().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
@@ -258,6 +336,7 @@ int main(int argc, char** argv) {
       sync();
     }
     havoqgt_env()->world_comm().barrier();
+
   } //END Main MPI
   havoqgt_finalize();
   return 0;

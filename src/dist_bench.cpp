@@ -52,7 +52,7 @@ using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
 
 
 template <typename gstore_type>
-using dist_gstore_type = dist_dynamic_graphstore<gstore_type>;
+using dist_gstore_type = graphstore::dist_dynamic_graphstore<gstore_type>;
 
 template <typename gstore_type>
 using visitor_type = dg_visitor<dist_gstore_type<gstore_type>>;
@@ -232,7 +232,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     const double time_local_end = MPI_Wtime();
 
     /// --- global construction --- ///
-    dg_visitor_queue.insert_edges();
+    dg_visitor_queue.init_dynamic_traversal();
 
     /// --- sync --- ///
     if (mpi_rank == 0) graphstore::utility::sync_files();
