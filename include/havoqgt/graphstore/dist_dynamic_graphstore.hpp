@@ -12,12 +12,14 @@ template <typename graphstore_type, typename vertex_locator_type = no_delegate_v
 class dist_dynamic_graphstore
 {
  public:
-  using vertex_locator  = vertex_locator_type;
-  using vertex_iterator = typename graphstore_type::vertex_iterator;
+  using vertex_locator            = vertex_locator_type;
 
-  using vertex_property_data_type = unsigned char;
-  using edge_property_data_type   = unsigned char;
+  using vertex_property_data_type = graphstore_type::vertex_property_data_type;
+  using edge_property_data_type   = graphstore_type::edge_property_data_type;
 
+  /// --- iterators --- ///
+  class vertex_iterator;
+  class adjacent_edge_iterator;
 
   dist_dynamic_graphstore(graphstore_type* graphstore) :
   m_graphstore(graphstore)
@@ -64,6 +66,82 @@ class dist_dynamic_graphstore
 
  private:
   graphstore_type* m_graphstore;
+};
+
+template <typename graphstore_type, typename vertex_locator_type = no_delegate_vertex_locator>
+class dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_iterator
+{
+private:
+ using self_type                = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_iterator;
+ using vertex_locator_type      = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_locator;
+ using internal_vertex_iterator = typename graphstore_type::vertex_iterator;
+
+public:
+
+ explicit vertex_iterator (internal_vertex_iterator&& iterator) :
+   m_iterator(iterator)
+ { }
+
+
+ void swap(self_type &other) noexcept
+ {
+   using std::swap;
+   swap(m_iterator, other.m_iterator);
+ }
+
+ self_type &operator++ () // Pre-increment
+ {
+   find_next_value();
+   return *this;
+ }
+
+ self_type operator++ (int) // Post-increment
+ {
+   self_type tmp(*this);
+   find_next_value();
+   return tmp;
+ }
+
+ // two-way comparison: v.begin() == v.cbegin() and vice versa
+ bool operator == (const self_type &rhs) const
+ {
+   return is_equal(rhs);
+ }
+
+ bool operator != (const self_type &rhs) const
+ {
+   return !is_equal(rhs);
+ }
+
+ const vertex_type& source_vertex()
+ {
+   return m_iterator->first;
+ }
+
+ vertex_property_data_type& property_data()
+ {
+   return m_iterator->second.first;
+ }
+
+
+private:
+
+ inline bool is_equal(const self_type &rhs) const
+ {
+   return (m_iterator == rhs.m_iterator);
+ }
+
+ inline void find_next_value()
+ {
+   ++m_iterator;
+ }
+
+ table_vertex_iterator m_iterator;
+};
+
+template <typename graphstore_type, typename vertex_locator_type = no_delegate_vertex_locator>
+class dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::adjacent_edge_iterator
+{
 };
 
 }
