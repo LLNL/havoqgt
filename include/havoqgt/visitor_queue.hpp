@@ -219,8 +219,8 @@ public:
 
   // Note: similar to below, but uses graphstore iterator and no delegates.
   void init_dynamic_test_traversal() {
-    for(auto vitr = m_ptr_graph->vertices_begin(); vitr != m_ptr_graph->vertices_end(); vitr++) {
-      vertex_locator vl(vitr.source_vertex());
+    for(auto vitr = m_ptr_graph->vertices_begin(), end = m_ptr_graph->vertices_end(); vitr != end; vitr++) {
+      vertex_locator vl = vitr.source_vertex();
       visitor_type v(vl);
       if(v.pre_visit()) {
         do_visit( v );

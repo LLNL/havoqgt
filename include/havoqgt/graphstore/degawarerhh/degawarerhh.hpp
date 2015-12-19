@@ -245,11 +245,10 @@ class degawarerhh
       }
     }
 
-    auto itr_matrix = m_mh_degree_table->find(src);
-    mh_deg_edge_chunk_type* adj_list = itr_matrix->second;
-    for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
-      return (*itr).second;
-    }
+    auto itr_adjlist = m_mh_degree_table->find(src);
+    mh_deg_edge_chunk_type* adj_list = itr_adjlist->second;
+    auto edge_weight = adj_list->find(trg);
+    return *edge_weight;
   }
 
   inline size_type degree(const vertex_type& vertex)
@@ -498,7 +497,7 @@ class degawarerhh
   size_type count_degree_low_table(const vertex_type& vertex)
   {
     size_type degree = 0;
-    for (const auto itr = m_low_degree_table->find(vertex); !itr.is_end(); ++itr) {
+    for (auto itr = m_low_degree_table->find(vertex); !itr.is_end(); ++itr) {
       ++degree;
     }
     return degree;

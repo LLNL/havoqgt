@@ -35,7 +35,7 @@ using degawarerhh_type      = graphstore::degawarerhh<vertex_id_type,
 
 /// --- chooes graphstore type ---- ///
 /// you don't need to change any code other than here to change the graphstore model, Baseline or DegAwareRHH.
-using graphstore_type       = baseline_type; // or degawarerhh_type
+using graphstore_type       = degawarerhh_type; // baseline_type or degawarerhh_type
 
 /// --- wrapper class to easy fit into the visitor program --- ///
 using dist_graphstore_type  = graphstore::dist_dynamic_graphstore<graphstore_type>;
