@@ -211,7 +211,9 @@ public:
           do_visit(this_visitor);
           m_termination_detection.inc_completed();
         }
-        m_mailbox.flush_buffers_if_idle();
+        if (done_edges) {
+          m_mailbox.flush_buffers_if_idle();
+        }
       } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
     // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
