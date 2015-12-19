@@ -65,6 +65,42 @@ namespace havoqgt { namespace mpi {
 enum visit_t { BAD, ADD, REVERSEADD, CHK, DEL };
 
 
+
+template <typename Visitor>
+class fifo_queue {
+ protected:
+  boost::container::deque<Visitor> m_data;
+ public:
+  fifo_queue() { }
+
+  bool push(Visitor const & task) {
+    m_data.push_back(task);
+    return true;
+  }
+
+  void pop() {
+    m_data.pop_front();
+  }
+
+  Visitor const & top() {
+    return m_data.front();
+  }
+
+  size_t size() const {
+    return m_data.size();;
+  }
+
+  bool empty() const {
+    return m_data.empty();
+  }
+
+  void clear() {
+    m_data.clear();
+  }
+};
+
+
+
 template<typename Graph, typename prop_t>
 class gc_dynamic {
  public:
@@ -216,8 +252,8 @@ class gc_dynamic {
             return false;
           } else {
             // TODO(Scott): This should not be necessary!?!?!??!?! wat
-            gc_dynamic new_visitor(caller, vertex, graph_ref()->vertex_property_data(vertex), CHK);
-            vis_queue->queue_visitor(new_visitor);
+            // gc_dynamic new_visitor(caller, vertex, graph_ref()->vertex_property_data(vertex), CHK);
+            // vis_queue->queue_visitor(new_visitor);
             return false;
           }
         }
@@ -251,9 +287,9 @@ class gc_dynamic {
   friend inline bool operator > (const gc_dynamic& v1,
                                  const gc_dynamic& v2) {
     // Have to do adds first, for some reason that is completely unknown.
-    if (v2.vis_type == ADD || v2.vis_type == REVERSEADD) {
-      return true;
-    }
+    //if (v2.vis_type == ADD || v2.vis_type == REVERSEADD) {
+    //  return true;
+    //}
     return false;
   }
 
@@ -388,7 +424,7 @@ void graph_colour_dynamic(TGraph* graph, edgelist_t* edgelist, bool test_result)
     typedef gc_dynamic<TGraph, prop_t> colourer_t;
     colourer_t::set_graph_ref(graph);
 
-    typedef visitor_queue<colourer_t, havoqgt::detail::visitor_priority_queue,
+    typedef visitor_queue<colourer_t, fifo_queue,
                           TGraph> colourer_queue_t;
     colourer_queue_t colourer(graph);
 
