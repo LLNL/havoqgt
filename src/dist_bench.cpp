@@ -213,26 +213,27 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     double time_start = MPI_Wtime();
 
     /// --- queue requests; local construction --- ///
-    for (auto request : update_request_vec) {
-      auto edge = request.edge;
+//    for (auto request : update_request_vec) {
+//      auto edge = request.edge;
 
-      auto src = std::get<0>(edge);
-      auto dst = std::get<1>(edge);
+//      auto src = std::get<0>(edge);
+//      auto dst = std::get<1>(edge);
 
-      typename visitor_type<gstore_type>::vertex_locator vl_src(src);
-      typename visitor_type<gstore_type>::vertex_locator vl_dst(dst);
+//      typename visitor_type<gstore_type>::vertex_locator vl_src(src);
+//      typename visitor_type<gstore_type>::vertex_locator vl_dst(dst);
 
-      visitor_type<gstore_type> vistor(vl_src, vl_dst, visitor_type<gstore_type>::ADD);
+//      visitor_type<gstore_type> vistor(vl_src, vl_dst, visitor_type<gstore_type>::ADD);
 
-      dg_visitor_queue.queue_visitor(vistor);
-#if DEBUG_MODE
-        ofs_edges << src << " " << dst << " 0" << "\n";
-#endif
-    }
-    const double time_local_end = MPI_Wtime();
+//      dg_visitor_queue.queue_visitor(vistor);
+//#if DEBUG_MODE
+//        ofs_edges << src << " " << dst << " 0" << "\n";
+//#endif
+//    }
+//    const double time_local_end = MPI_Wtime();
 
     /// --- global construction --- ///
-    // dg_visitor_queue.init_dynamic_traversal();
+    dg_visitor_queue.dynamic_graphconst(&update_request_vec);
+    const double time_update_end = MPI_Wtime();
 
     /// --- sync --- ///
     if (mpi_rank == 0) graphstore::utility::sync_files();
@@ -249,8 +250,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
       if (i == mpi_rank) {
         std::cout << "prg [" << mpi_rank << "] "
                   << (time_end - time_start) << " ( "
-                  << (time_local_end - time_start) << " , "
-                  << (time_sync_end  - time_local_end) << " ),\t"
+                  << (time_update_end - time_start) << " , "
+                  << (time_sync_end  - time_update_end) << " ),\t"
                   << mmap_manager.segment_size_gb() << std::endl;
       }
       havoqgt::havoqgt_env()->world_comm().barrier();

@@ -320,7 +320,7 @@ class no_delegate_vertex_locator {
 template <typename graphstore_type>
 class dg_visitor {
  public:
-  enum visit_t { BAD, INI, ADD, CHK, DEL };
+  enum visit_type { BAD, INI, ADD, CHK, DEL };
   using vertex_locator = typename graphstore_type::vertex_locator;
 
   // Default constructor.
@@ -332,7 +332,7 @@ class dg_visitor {
       vertex(_vertex), caller(_vertex), vis_type(INI) {  }
 
   // Who I am, who notified me, and what type of visit it is.
-  dg_visitor(vertex_locator _vertex, vertex_locator _caller, visit_t _vistype) :
+  dg_visitor(vertex_locator _vertex, vertex_locator _caller, visit_type _vistype) :
       vertex(_vertex), caller(_caller), vis_type(_vistype){  }
 
 
@@ -382,7 +382,7 @@ class dg_visitor {
   // Instance variables.
   vertex_locator vertex;
   vertex_locator caller;
-  visit_t        vis_type;
+  visit_type        vis_type;
 } __attribute__((packed));
 
 #endif // dist_dynamic_graphstore_HPP
