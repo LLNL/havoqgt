@@ -26,7 +26,7 @@
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 #define DEBUG_MODE 0
 #if DEBUG_MODE

@@ -42,10 +42,10 @@ def parse_args():
 	# options for dynamic
 	parser.add_argument("--scale", "-s", type=int,
 							default=18,
-							help="time limit in min.")
+							help="scale")
 	parser.add_argument("--edge_factor", "-e", type=int,
 							default=16,
-							help="time limit in min.")
+							help="edge factor")
 	parser.add_argument("--segment_size", "-S", type=int,
 							default=39,
 							help="segment_size in GB")
@@ -88,12 +88,12 @@ def parse_args():
 
 
 def init_test_files():
- 	global log_file_base
+	global log_dir
+	global log_file_base
  	global log_file_name
  	global batch_file
  	global executable
  	global io_monitoring_report_file
-	global motivation
 
 	# init log directory
 	log_dir = args.log_dir
@@ -259,21 +259,6 @@ def execute_shell_file():
 
 	log_dsc("job_id", job_id)
 
-#def create_command(nodes, processes, cmd):
-
-#    with open(log_file_name, 'w') as f:
- #       temp = "Test number: %d\n" %(test_count)
-  #      f.write(temp)
-   #     temp = "SRun Args: %s\n" %(" ".join(cmd))
-    #    f.write(temp)
-     #   temp = "Nodes: %d\n" %(nodes)
-      #  f.write(temp)
-       # temp = "Processes: %d\n" %(processes)
-        #f.write(temp)
-        #f.write("\n")
-
-    #command_strings.append([nodes, processes, " ".join(cmd)])
-
 	
 def log_global():
 	with open(args.global_log_file, 'a') as f:
@@ -281,10 +266,10 @@ def log_global():
 			f.write("Job ID: " + job_id + "\n")
 		f.write("Log dir: " + log_dir + "\n")
 		f.write("Log base: " + log_file_base + "\n")
-		f.write("graph_dir: " + graph_dir + "\n")
-		f.write("nodes " + args.num_nodes + "\n")
-		f.write("procs " + args.num_procs + "\n")
-		f.write("motivation: " + motivation + "\n")
+		f.write("graph_path: " + graph_path + "\n")
+		f.write("nodes " + str(args.num_nodes) + "\n")
+		f.write("procs " + str(args.num_procs) + "\n")
+		f.write("motivation: " + args.motivation + "\n")
 		f.write("production mode: " + str(args.product_mode) + ", ")
 		f.write("dimmap: " + str(args.dimmap) + ", ")
 		f.write("dimmap_tune: " + str(args.dimmap_tune) + ", ")
@@ -293,7 +278,8 @@ def log_global():
 		f.close()
 
 if __name__ == '__main__':
-	
+	global graph_path
+
 	parse_args()
 	init_test_files()
     
@@ -329,41 +315,4 @@ if __name__ == '__main__':
 	if args.product_mode:
 		log_global()
 
-#EDGES_FILELIST="./work/file_list_rmat_s24"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_s24_64bit"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_rnd_1d_fine"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-# -------------------------------------------- #
-#EDGES_FILELIST="./work/file_list_srt_1d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_srt_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_srt_rnd"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_bfs_1d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_bfs_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_bfs_rnd"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_rnd_1d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_rnd_2d"
-#create_commands(27, 1, 27, delete_ratio_list)
-
-#EDGES_FILELIST="./work/file_list_rnd_rnd"
-#create_commands(27, 1, 27, delete_ratio_list)
-# --------------------------------------------- #
 
