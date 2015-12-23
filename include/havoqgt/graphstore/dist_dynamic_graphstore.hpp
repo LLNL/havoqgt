@@ -37,10 +37,35 @@ class dist_dynamic_graphstore
     return vertex_locator(label);
   }
 
+  inline uint32_t master(const vertex_locator& locator) const
+  {
+    return locator.owner();
+  }
+
+
+  /// -------- Modifiers ------- ////
   /// insert a edge uniquely
   inline bool insert_edge(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
   {
     return m_graphstore->insert_edge(src.id(), trg.id(), weight);
+  }
+
+  /// insert a edge
+  inline bool insert_edge_dup(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
+  {
+    return m_graphstore->insert_edge_dup(src.id(), trg.id(), weight);
+  }
+
+  /// erase a edge
+  inline bool erase_edge(const vertex_locator& src, const vertex_locator& trg)
+  {
+    return m_graphstore->erase_edge(src.id(), trg.id());
+  }
+
+  /// erase edges
+  inline bool erase_edge_dup(const vertex_locator& src, const vertex_locator& trg)
+  {
+    return m_graphstore->erase_edge_dup(src.id(), trg.id());
   }
 
   inline vertex_property_data_type& vertex_property_data(const vertex_locator& vertex)
@@ -48,17 +73,13 @@ class dist_dynamic_graphstore
     return m_graphstore->vertex_property_data(vertex.id());
   }
 
-  /// Returns the degree of a vertex
-  inline uint64_t degree(vertex_locator locator) const
-  {
-    return m_graphstore->degree(locator.id());
-  }
-
   inline edge_property_data_type& edge_property_data(const vertex_locator& src, const vertex_locator& trg)
   {
     return m_graphstore->edge_property_data(src.id(), trg.id());
   }
 
+
+  /// -------- Lookup -------- ///
   inline vertex_iterator vertices_begin()
   {
     return vertex_iterator(m_graphstore->vertices_begin());
@@ -79,10 +100,12 @@ class dist_dynamic_graphstore
     return adjacent_edge_iterator(m_graphstore->adjacent_edge_end(src.id()));
   }
 
-  inline uint32_t master(const vertex_locator& locator) const
+  /// Returns the degree of a vertex
+  inline uint64_t degree(vertex_locator locator) const
   {
-    return locator.owner();
+    return m_graphstore->degree(locator.id());
   }
+
 
  private:
   graphstore_type* m_graphstore;

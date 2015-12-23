@@ -182,9 +182,11 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     havoqgt::havoqgt_env()->world_comm().barrier();
   }
 
+
   /// --- variables for analysys --- //
   uint64_t loop_cnt = 0;
   bool global_is_finished = false;
+
 
   /// --- iterator and array for edgelist --- ///
   auto edges_itr = edges.begin();
@@ -211,32 +213,11 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 
     if (mpi_rank == 0) std::cout << "\n-- process requests --" << std::endl;
     double time_start = MPI_Wtime();
-
-    /// --- queue requests; local construction --- ///
-//    for (auto request : update_request_vec) {
-//      auto edge = request.edge;
-
-//      auto src = std::get<0>(edge);
-//      auto dst = std::get<1>(edge);
-
-//      typename visitor_type<gstore_type>::vertex_locator vl_src(src);
-//      typename visitor_type<gstore_type>::vertex_locator vl_dst(dst);
-
-//      visitor_type<gstore_type> vistor(vl_src, vl_dst, visitor_type<gstore_type>::ADD);
-
-//      dg_visitor_queue.queue_visitor(vistor);
-//#if DEBUG_MODE
-//        ofs_edges << src << " " << dst << " 0" << "\n";
-//#endif
-//    }
-//    const double time_local_end = MPI_Wtime();
-
-    /// --- global construction --- ///
     dg_visitor_queue.dynamic_graphconst(&update_request_vec);
     const double time_update_end = MPI_Wtime();
 
     /// --- sync --- ///
-    if (mpi_rank == 0) graphstore::utility::sync_files();
+    graphstore::utility::sync_files();
     const double time_sync_end = MPI_Wtime();
 
     /// --- print a progress report --- ///
@@ -344,6 +325,8 @@ void dump_all_edges(gstore_type& gstore)
 }
 
 int main(int argc, char** argv) {
+
+  std::cout << "program start" << std::endl;
 
   havoqgt::havoqgt_init(&argc, &argv);
   {

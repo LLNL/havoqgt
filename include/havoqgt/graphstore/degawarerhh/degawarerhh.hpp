@@ -176,6 +176,99 @@ class degawarerhh
     return true;
   }
 
+  /// allows duplicated insertion
+  bool insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
+  {
+
+    /// -- count the degree of the source vertex in the low degree table -- ///
+    const size_type count_in_single = count_degree_low_table(src);
+
+    if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
+      if (count_in_single + 1 < middle_high_degree_threshold) {
+        /// --- insert into the low table --- ///
+        low_deg_table_value_type value(vertex_property_data_type(), trg, weight);
+        rhh::insert(&m_low_degree_table, src, value);
+      } else {
+
+        /// --- move the elements from low table to high-mid table --- ///
+        mh_deg_edge_chunk_type* adj_list = mh_deg_edge_chunk_type::allocate(middle_high_degree_threshold * 2);
+        auto itr_single = m_low_degree_table->find(src);
+        mh_deg_table_value_type value((*itr_single).first, nullptr);
+        for (; !itr_single.is_end(); ++itr_single) {
+          rhh::insert(&adj_list, (*itr_single).second, (*itr_single).third);
+          m_low_degree_table->erase(itr_single);
+        }
+        rhh::insert(&adj_list, trg, weight);
+        value.second = adj_list;
+        rhh::insert(&m_mh_degree_table, src, value);
+      }
+
+    } else {
+      auto itr_src = m_mh_degree_table->find(src);
+      if (itr_src.is_end()) {
+        /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
+        low_deg_table_value_type value(vertex_property_data_type(), trg, weight);
+        rhh::insert(&m_low_degree_table, src, value);
+      } else {
+        /// --- the high-mid table has source vertex --- ///
+        mh_deg_edge_chunk_type* adj_list = itr_src->second;
+        /// --- insert the edge without check duplication --- ///
+        rhh::insert(&adj_list, trg, weight);
+        itr_src->second = adj_list;
+      }
+
+    }
+
+    /// TODO: insert the target vertex into the source vertex list
+    return true;
+  }
+
+  ///
+  /// \brief erase_edge
+  ///         erase a edge
+  /// \param src
+  /// \param trg
+  /// \return
+  ///         the number of edges erased
+  bool erase_edge(const vertex_type& src, const vertex_type& trg)
+  {
+    size_type count = 0;
+    for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
+      if ((*itr).second == trg) {
+        m_low_degree_table->erase(itr);
+        rhh::shrink_to_fit(&m_low_degree_table, 2.0);
+        return true;
+      }
+    }
+
+    auto itr_matrix = m_mh_degree_table->find(src);
+    /// has source vertex ?
+    if (itr_matrix.is_end()) return false;
+    mh_deg_edge_chunk_type* adj_list = itr_matrix->second;
+    /// has the target edge ?
+    auto itr = adj_list->find(trg);
+    if (itr.is_end()) return false;
+
+    /// delete the edge
+    adj_list->erase(itr);
+
+    if (adj_list->size() < middle_high_degree_threshold) {
+      const vertex_property_data_type& property_data = itr_matrix->first;
+      for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
+        low_deg_table_value_type value(property_data, itr->key, itr->value);
+        rhh::insert(&m_low_degree_table, src, value);
+        adj_list->erase(itr);
+      }
+      mh_deg_edge_chunk_type::deallocate(adj_list);
+      m_mh_degree_table->erase(itr_matrix);
+      rhh::shrink_to_fit(&m_mh_degree_table);
+    } else {
+      rhh::shrink_to_fit(&adj_list);
+      itr_matrix->second = adj_list;
+    }
+
+    return true;
+  }
 
   ///
   /// \brief erase_edge
@@ -184,7 +277,7 @@ class degawarerhh
   /// \param trg
   /// \return
   ///         the number of edges erased
-  size_type erase_edge(const vertex_type& src, const vertex_type& trg)
+  size_type erase_edge_dup(const vertex_type& src, const vertex_type& trg)
   {
     size_type count = 0;
     for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
