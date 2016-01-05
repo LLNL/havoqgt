@@ -54,7 +54,8 @@ public:
 
   explicit graphstore_baseline(segment_manager_type* segment_manager) :
     m_allocator(segment_manager),
-    m_map_table(m_allocator)
+    m_map_table(m_allocator),
+    m_num_edges(0)
   {}
 
 
@@ -117,6 +118,7 @@ public:
       edge_vec.push_back(edge_vec_element_type(trg, edge_property));
     }
 
+    ++m_num_edges;
     return true;
   }
 
@@ -136,6 +138,7 @@ public:
       edge_vec.push_back(edge_vec_element_type(trg, edge_property));
     }
 
+    ++m_num_edges;
     return true;
   }
 
@@ -153,6 +156,7 @@ public:
         if (edge_vec.size() == 0) {
           m_map_table.erase(value);
         }
+        --m_num_edges;
         return true;
       }
     }
@@ -181,6 +185,7 @@ public:
       m_map_table.erase(value);
     }
 
+    m_num_edges -= count;
     return count;
   }
 
@@ -213,6 +218,11 @@ public:
   void opt()
   { }
 
+  inline size_type num_edges() const
+  {
+    return m_num_edges;
+  }
+
   void clear()
   { }
 
@@ -222,42 +232,9 @@ public:
   void fprint_all_elements(std::ofstream& of)
   { }
 
-
-  // TODO(Scott): necessity?
-//  uint32_t master(const vertex_locator& locator) const {
-//    // return locator.m_local_id % m_mpi_size;
-//    return locator.owner();
-//  }
-
-
-//  // Returns a pointer to a new edge if there is one, NULL if not.
-//  // Actually no, you can't do that, so have a pair of status and edge ref.
-//  std::pair<bool, const havoqgt::parallel_edge_list_reader::edge_type> get_next_edge() {
-//    // Check if iterater is at end.
-//    if (m_input_iter == m_pelr->end()) {
-//      // This is why I prefer using pointers over references...
-//      havoqgt::parallel_edge_list_reader::edge_type stupid;
-//      return std::make_pair(false, stupid);
-//    }
-//    // Return new edge.
-//    auto edge = *m_input_iter;
-//    m_input_iter++;
-
-//    // TODO(Scott): Find the source of these broken 0->0 edges.
-//    // Done I think? Still need this check?
-//    if (std::get<0>(edge) == 0 && std::get<1>(edge) == 0) {
-//      std::cout << "ZERO ";
-//      return get_next_edge();
-//    }
-
-//    return std::make_pair(true, edge);
-//  }
-
-
   allocator_type m_allocator;
   map_table_type m_map_table;
-//  havoqgt::parallel_edge_list_reader* m_pelr;
-//  havoqgt::parallel_edge_list_reader::input_iterator_type m_input_iter;
+  size_type m_num_edges;
 };
 
 

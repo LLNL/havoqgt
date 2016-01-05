@@ -48,7 +48,11 @@ class degawarerhh
 
  public:
 
-  explicit degawarerhh(segment_manager_type* segment_manager) {
+  explicit degawarerhh(segment_manager_type* segment_manager) :
+    m_low_degree_table(nullptr),
+    m_mh_degree_table(nullptr),
+    m_num_edges(0)
+  {
     static_assert(middle_high_degree_threshold > 1, "middle high degree threshold is must be larger than 1");
 
     // -- init allocator -- //
@@ -72,7 +76,8 @@ class degawarerhh
 #endif
   }
 
-  ~degawarerhh() {
+  ~degawarerhh()
+  {
     clear();
     low_deg_table_type::deallocate(m_low_degree_table);
     mh_deg_table_type::deallocate(m_mh_degree_table);
@@ -173,6 +178,7 @@ class degawarerhh
     }
 
     /// TODO: insert the target vertex into the source vertex list
+    ++m_num_edges;
     return true;
   }
 
@@ -220,6 +226,7 @@ class degawarerhh
     }
 
     /// TODO: insert the target vertex into the source vertex list
+    ++m_num_edges;
     return true;
   }
 
@@ -229,7 +236,7 @@ class degawarerhh
   /// \param src
   /// \param trg
   /// \return
-  ///         the number of edges erased
+  ///         whether edge is erased
   bool erase_edge(const vertex_type& src, const vertex_type& trg)
   {
     size_type count = 0;
@@ -237,6 +244,7 @@ class degawarerhh
       if ((*itr).second == trg) {
         m_low_degree_table->erase(itr);
         rhh::shrink_to_fit(&m_low_degree_table, 2.0);
+        --m_num_edges;
         return true;
       }
     }
@@ -267,6 +275,7 @@ class degawarerhh
       itr_matrix->second = adj_list;
     }
 
+    --m_num_edges;
     return true;
   }
 
@@ -288,6 +297,7 @@ class degawarerhh
     }
     if (count > 0) {
       rhh::shrink_to_fit(&m_low_degree_table, 2.0);
+      m_num_edges -= count;
       return count;
     }
 
@@ -317,6 +327,7 @@ class degawarerhh
       }
     }
 
+    m_num_edges -= count;
     return count;
   }
 
@@ -352,6 +363,11 @@ class degawarerhh
     }
 
     return degree;
+  }
+
+  inline size_type num_edges() const
+  {
+    return m_num_edges;
   }
 
   void clear()
@@ -609,7 +625,7 @@ class degawarerhh
 
   low_deg_table_type* m_low_degree_table;
   mh_deg_table_type* m_mh_degree_table;
-
+  size_type m_num_edges;
 };
 
 
@@ -633,7 +649,11 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 
  public:
 
-  explicit degawarerhh(segment_manager_type* segment_manager) {
+  explicit degawarerhh(segment_manager_type* segment_manager) :
+    m_low_degree_table(nullptr),
+    m_mh_degree_table(nullptr),
+    m_num_edges(0)
+  {
     // -- init allocator -- //
     rhh::init_allocator<typename low_deg_table_type::allocator, segment_manager_type>(segment_manager);
     rhh::init_allocator<typename mh_deg_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
@@ -649,7 +669,8 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
     std::cout << "middle_high_degree_threshold (using only m_h table) = " << 0 << std::endl;
   }
 
-  ~degawarerhh() {
+  ~degawarerhh()
+  {
     clear();
     low_deg_table_type::deallocate(m_low_degree_table);
     mh_deg_table_type::deallocate(m_mh_degree_table);
@@ -720,6 +741,7 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 
     }
 
+    ++m_num_edges;
     return true;
   }
 
@@ -765,6 +787,7 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
       }
     }
 
+    m_num_edges -= count;
     return count;
   }
 
@@ -777,6 +800,11 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
   {
     auto itr_matrix = m_mh_degree_table->find(vertex);
     return itr_matrix->first;
+  }
+
+  inline size_type num_edges() const
+  {
+    return m_num_edges;
   }
 
   void clear()
@@ -937,6 +965,7 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 
   low_deg_table_type* m_low_degree_table;
   mh_deg_table_type* m_mh_degree_table;
+  size_type m_num_edges;
 };
 
 }

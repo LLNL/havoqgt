@@ -106,6 +106,10 @@ class dist_dynamic_graphstore
     return m_graphstore->degree(locator.id());
   }
 
+  inline size_t num_edges() const
+  {
+    return m_graphstore->num_edges();
+  }
 
  private:
   graphstore_type* m_graphstore;
