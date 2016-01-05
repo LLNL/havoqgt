@@ -139,7 +139,7 @@ public:
     return true;
   }
 
-  bool erase_edge(vertex_type& src, vertex_type& trg)
+  bool erase_edge(const vertex_type& src, const vertex_type& trg)
   {
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) {
@@ -161,7 +161,7 @@ public:
   }
 
   /// this fuction deletes duplicated edges
-  size_type erase_edge_dup(vertex_type& src, vertex_type& trg)
+  size_type erase_edge_dup(const vertex_type& src, const vertex_type& trg)
   {
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) {

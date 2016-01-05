@@ -632,7 +632,7 @@ static bool get_stat_page_faults(size_t* minflt, size_t* majflt)
 ///
 /// \brief get_meminfo
 /// \param key
-///   exmample "MemTotal:"
+///   exmample "MemTotal"
 /// \return
 ///
 static bool get_meminfo(std::string key, size_t& val) {

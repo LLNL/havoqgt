@@ -362,6 +362,7 @@ class dg_visitor {
     // Perform an action dependant on the visit type.
     switch(vis_type) {
       case ADD:
+      case DEL:
         return true;
         break;
       default:
@@ -379,6 +380,10 @@ class dg_visitor {
     switch (vis_type) {
       case ADD: {
         graph_ref()->insert_edge(vertex, caller, 0);
+        return false;
+      }
+      case DEL: {
+        graph_ref()->erase_edge(vertex, caller);
         return false;
       }
     }

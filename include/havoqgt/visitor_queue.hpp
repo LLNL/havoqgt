@@ -232,7 +232,8 @@ public:
           auto edge = request->edge;
           vertex_locator vl_src(std::get<0>(edge));
           vertex_locator vl_dst(std::get<1>(edge));
-          visitor_type visitor(vl_src, vl_dst, visitor_type::visit_type::ADD);
+          const typename visitor_type::visit_type v_type = (request->is_delete) ? visitor_type::visit_type::DEL : visitor_type::visit_type::ADD;
+          visitor_type visitor(vl_src, vl_dst, v_type);
           queue_visitor(visitor);
           ++request;
           done_edges = (request == request_end);
