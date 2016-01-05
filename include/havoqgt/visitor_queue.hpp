@@ -188,9 +188,22 @@ public:
 
   // For dynamic graph traversal: this currently does one edge at a time per
   // process.
-  void init_dynamic_traversal() {
+  template <typename edgelist_t>
+  void init_dynamic_traversal(edgelist_t* edgelist) {
+    auto edge = edgelist->begin();
+    const auto edge_end = edgelist->end();
+    bool done_edges = (edge == edge_end);
+
     do {
       do {
+        if (!done_edges) {
+          vertex_locator vl_src(std::get<0>(*edge));
+          vertex_locator vl_dst(std::get<1>(*edge));
+          visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
+          queue_visitor(visitor);
+          ++edge;
+          done_edges = (edge == edge_end);
+        }
         process_pending_controllers();
         while(!empty()) {
           process_pending_controllers();
@@ -198,17 +211,51 @@ public:
           do_visit(this_visitor);
           m_termination_detection.inc_completed();
         }
-        m_mailbox.flush_buffers_if_idle();
-      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+        if (done_edges) {
+          m_mailbox.flush_buffers_if_idle();
+        }
+      } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
     // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
 
+  // For dynamic graph construction
+  template <typename request_list_t>
+  void dynamic_graphconst(request_list_t* edgelist) {
+    auto request = edgelist->begin();
+    const auto request_end = edgelist->end();
+    bool done_edges = (request == request_end);
+
+    do {
+      do {
+        if (!done_edges) {
+          auto edge = request->edge;
+          vertex_locator vl_src(std::get<0>(edge));
+          vertex_locator vl_dst(std::get<1>(edge));
+          visitor_type visitor(vl_src, vl_dst, visitor_type::visit_type::ADD);
+          queue_visitor(visitor);
+          ++request;
+          done_edges = (request == request_end);
+        }
+        process_pending_controllers();
+        while(!empty()) {
+          process_pending_controllers();
+          visitor_type this_visitor = pop_top();
+          do_visit(this_visitor);
+          m_termination_detection.inc_completed();
+        }
+        if (done_edges) {
+          m_mailbox.flush_buffers_if_idle();
+        }
+      } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+    // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
+  }
 
   // Note: similar to below, but uses graphstore iterator and no delegates.
   void init_dynamic_test_traversal() {
-    for(auto vitr = m_ptr_graph->vertices_begin(); vitr != m_ptr_graph->vertices_end(); vitr++) {
-      vertex_locator vl(vitr.source_vertex());
+    for(auto vitr = m_ptr_graph->vertices_begin(), end = m_ptr_graph->vertices_end(); vitr != end; vitr++) {
+      vertex_locator vl = vitr.source_vertex();
       visitor_type v(vl);
       if(v.pre_visit()) {
         do_visit( v );

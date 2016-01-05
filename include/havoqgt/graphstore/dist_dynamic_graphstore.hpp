@@ -14,8 +14,8 @@ class dist_dynamic_graphstore
  public:
   using vertex_locator            = vertex_locator_type;
 
-  using vertex_property_data_type = graphstore_type::vertex_property_data_type;
-  using edge_property_data_type   = graphstore_type::edge_property_data_type;
+  using vertex_property_data_type = typename graphstore_type::vertex_property_data_type;
+  using edge_property_data_type   = typename graphstore_type::edge_property_data_type;
 
   /// --- iterators --- ///
   class vertex_iterator;
@@ -37,15 +37,67 @@ class dist_dynamic_graphstore
     return vertex_locator(label);
   }
 
+  inline uint32_t master(const vertex_locator& locator) const
+  {
+    return locator.owner();
+  }
+
+
+  /// -------- Modifiers ------- ////
   /// insert a edge uniquely
   inline bool insert_edge(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
   {
     return m_graphstore->insert_edge(src.id(), trg.id(), weight);
   }
 
+  /// insert a edge
+  inline bool insert_edge_dup(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
+  {
+    return m_graphstore->insert_edge_dup(src.id(), trg.id(), weight);
+  }
+
+  /// erase a edge
+  inline bool erase_edge(const vertex_locator& src, const vertex_locator& trg)
+  {
+    return m_graphstore->erase_edge(src.id(), trg.id());
+  }
+
+  /// erase edges
+  inline bool erase_edge_dup(const vertex_locator& src, const vertex_locator& trg)
+  {
+    return m_graphstore->erase_edge_dup(src.id(), trg.id());
+  }
+
   inline vertex_property_data_type& vertex_property_data(const vertex_locator& vertex)
   {
     return m_graphstore->vertex_property_data(vertex.id());
+  }
+
+  inline edge_property_data_type& edge_property_data(const vertex_locator& src, const vertex_locator& trg)
+  {
+    return m_graphstore->edge_property_data(src.id(), trg.id());
+  }
+
+
+  /// -------- Lookup -------- ///
+  inline vertex_iterator vertices_begin()
+  {
+    return vertex_iterator(m_graphstore->vertices_begin());
+  }
+
+  inline vertex_iterator vertices_end()
+  {
+    return vertex_iterator(m_graphstore->vertices_end());
+  }
+
+  inline adjacent_edge_iterator adjacent_edge_begin(const vertex_locator& src)
+  {
+    return adjacent_edge_iterator(m_graphstore->adjacent_edge_begin(src.id()));
+  }
+
+  inline adjacent_edge_iterator adjacent_edge_end(const vertex_locator& src)
+  {
+    return adjacent_edge_iterator(m_graphstore->adjacent_edge_end(src.id()));
   }
 
   /// Returns the degree of a vertex
@@ -54,34 +106,25 @@ class dist_dynamic_graphstore
     return m_graphstore->degree(locator.id());
   }
 
-  inline edge_property_data_type& edge_property_data(const vertex_locator& src, const vertex_locator& trg)
-  {
-    return m_graphstore->edge_property_data(src, trg);
-  }
-
-  uint32_t master(const vertex_locator& locator) const
-  {
-    return locator.owner();
-  }
 
  private:
   graphstore_type* m_graphstore;
 };
 
-template <typename graphstore_type, typename vertex_locator_type = no_delegate_vertex_locator>
+template <typename graphstore_type, typename vertex_locator_type>
 class dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_iterator
 {
 private:
- using self_type                = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_iterator;
- using vertex_locator_type      = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_locator;
- using internal_vertex_iterator = typename graphstore_type::vertex_iterator;
+ using self_type                 = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::vertex_iterator;
+ using internal_vertex_iterator  = typename graphstore_type::vertex_iterator;
 
 public:
+ using vertex_locator            = vertex_locator_type;
+ using vertex_property_data_type = typename graphstore_type::vertex_property_data_type;
 
  explicit vertex_iterator (internal_vertex_iterator&& iterator) :
    m_iterator(iterator)
  { }
-
 
  void swap(self_type &other) noexcept
  {
@@ -113,14 +156,14 @@ public:
    return !is_equal(rhs);
  }
 
- const vertex_type& source_vertex()
+ vertex_locator_type source_vertex()
  {
-   return m_iterator->first;
+   return vertex_locator_type(m_iterator.source_vertex());
  }
 
  vertex_property_data_type& property_data()
  {
-   return m_iterator->second.first;
+   return m_iterator.property_data();
  }
 
 
@@ -136,12 +179,78 @@ private:
    ++m_iterator;
  }
 
- table_vertex_iterator m_iterator;
+ internal_vertex_iterator m_iterator;
 };
 
-template <typename graphstore_type, typename vertex_locator_type = no_delegate_vertex_locator>
+template <typename graphstore_type, typename vertex_locator_type>
 class dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::adjacent_edge_iterator
 {
+private:
+ using self_type                        = dist_dynamic_graphstore<graphstore_type, vertex_locator_type>::adjacent_edge_iterator;
+ using internal_adjacent_edge_iterator  = typename graphstore_type::adjacent_edge_iterator;
+
+public:
+ using vertex_locator                   = vertex_locator_type;
+ using edge_property_data_type          = typename graphstore_type::edge_property_data_type;
+
+ explicit adjacent_edge_iterator (internal_adjacent_edge_iterator&& iterator) :
+   m_iterator(iterator)
+ { }
+
+
+ void swap(self_type &other) noexcept
+ {
+   using std::swap;
+   swap(m_iterator, other.m_iterator);
+ }
+
+ self_type &operator++ () // Pre-increment
+ {
+   find_next_value();
+   return *this;
+ }
+
+ self_type operator++ (int) // Post-increment
+ {
+   self_type tmp(*this);
+   find_next_value();
+   return tmp;
+ }
+
+ bool operator == (const self_type &rhs) const
+ {
+   return is_equal(rhs);
+ }
+
+ bool operator != (const self_type &rhs) const
+ {
+   return !is_equal(rhs);
+ }
+
+ vertex_locator target_vertex()
+ {
+   return vertex_locator_type(m_iterator.target_vertex());
+ }
+
+ const edge_property_data_type& property_data()
+ {
+   return m_iterator.property_data();
+ }
+
+
+private:
+
+ inline bool is_equal(const self_type &rhs) const
+ {
+   return (m_iterator == rhs.m_iterator);
+ }
+
+ inline void find_next_value()
+ {
+   ++m_iterator;
+ }
+
+ internal_adjacent_edge_iterator m_iterator;
 };
 
 }
@@ -233,7 +342,7 @@ class no_delegate_vertex_locator {
 template <typename graphstore_type>
 class dg_visitor {
  public:
-  enum visit_t { BAD, INI, ADD, CHK, DEL };
+  enum visit_type { BAD, INI, ADD, CHK, DEL };
   using vertex_locator = typename graphstore_type::vertex_locator;
 
   // Default constructor.
@@ -245,7 +354,7 @@ class dg_visitor {
       vertex(_vertex), caller(_vertex), vis_type(INI) {  }
 
   // Who I am, who notified me, and what type of visit it is.
-  dg_visitor(vertex_locator _vertex, vertex_locator _caller, visit_t _vistype) :
+  dg_visitor(vertex_locator _vertex, vertex_locator _caller, visit_type _vistype) :
       vertex(_vertex), caller(_caller), vis_type(_vistype){  }
 
 
@@ -295,7 +404,7 @@ class dg_visitor {
   // Instance variables.
   vertex_locator vertex;
   vertex_locator caller;
-  visit_t        vis_type;
+  visit_type        vis_type;
 } __attribute__((packed));
 
 #endif // dist_dynamic_graphstore_HPP

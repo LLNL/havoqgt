@@ -120,7 +120,48 @@ public:
     return true;
   }
 
-  size_type erase_edge(vertex_type& src, vertex_type& trg)
+  /// allows duplicated insertion
+  bool insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& edge_property)
+  {
+
+    auto value = m_map_table.find(src);
+    if (value == m_map_table.end()) { // new vertex
+      const vertex_property_data_type dummy_vp = false;
+      map_value_type map_value(dummy_vp,
+                               edge_vec_type(1, edge_vec_element_type(trg, edge_property), m_allocator));
+      m_map_table.insert(map_element_type(src, map_value));
+    } else {
+      edge_vec_type& edge_vec = value->second.second;
+      /// --- just simply add it at end --- ///
+      edge_vec.push_back(edge_vec_element_type(trg, edge_property));
+    }
+
+    return true;
+  }
+
+  bool erase_edge(vertex_type& src, vertex_type& trg)
+  {
+    auto value = m_map_table.find(src);
+    if (value == m_map_table.end()) {
+      return false;
+    }
+
+    edge_vec_type& edge_vec = value->second.second;
+    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
+      if (itr->first ==  trg) {
+        edge_vec.erase(itr, itr+1);
+        if (edge_vec.size() == 0) {
+          m_map_table.erase(value);
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// this fuction deletes duplicated edges
+  size_type erase_edge_dup(vertex_type& src, vertex_type& trg)
   {
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) {

@@ -95,7 +95,7 @@ void parse_options(int argc, char **argv)
         break;
 
       case 'd':
-        is_delete_segmentfile_on_exit_ = true;
+        is_delete_segmentfile_on_exit_ = true; /// TODO: this option is not working
         break;
 
       case 'E':
@@ -147,8 +147,8 @@ void parse_options(int argc, char **argv)
 
 
 template <typename vertex_id_type, typename graphstore_type, typename edgelist_type>
-void apply_edge_update_requests(mapped_file_type& mapped_file,
-                                graphstore_type& graph_store,
+void apply_edge_update_requests(graphstore_type& graph_store,
+                                graphstore::utility::interprocess_mmap_manager& mmap_manager,
                                 edgelist_type& edges,
                                 const uint64_t chunk_size)
 {
@@ -161,7 +161,7 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   havoqgt::havoqgt_env()->world_comm().barrier();
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] segment size (GiB) =\t"<< get_segment_size(mapped_file.get_segment_manager()) << std::endl;
+      std::cout << "[" << mpi_rank << "] segment size (GiB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
     }
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
@@ -209,8 +209,8 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     }
     /// --- sync --- ///
     const double time_start_sync = MPI_Wtime();
-    if (mpi_rank == 0) sync_mmap();
-    havoqgt::havoqgt_env()->world_comm().barrier();
+    graphstore::utility::sync_files();
+    const double time_end_sync = MPI_Wtime();
 
     /// this is a temp implementation
     if (loop_cnt % 10 == 0) {
@@ -230,10 +230,10 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
     for (int i = 0; i < mpi_size; ++i) {
       if (i == mpi_rank) {
         std::cout << "prg [" << mpi_rank << "] "
-                  << count_insert_req        << " ( " << count_inserted               << " ),\t"
-                  << count_delete_req        << " ( " << count_deleted                << " ),\t"
-                  << (time_end - time_start) << " ( " << (time_end - time_start_sync) << " ),\t"
-                  << get_segment_size(mapped_file.get_segment_manager()) << std::endl;
+                  << count_insert_req        << " ( " << count_inserted                    << " ),\t"
+                  << count_delete_req        << " ( " << count_deleted                     << " ),\t"
+                  << (time_end - time_start) << " ( " << (time_end_sync - time_start_sync) << " ),\t"
+                  << mmap_manager.segment_size_gb() << std::endl;
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
     }
@@ -268,7 +268,7 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
   /// --- print summary information --- ///
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< get_segment_size(mapped_file.get_segment_manager()) << std::endl;
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
   }
@@ -289,7 +289,7 @@ void apply_edge_update_requests(mapped_file_type& mapped_file,
 
 template<typename graphstore_type>
 void run_benchmark_rmat(graphstore_type& graph_store,
-                        mapped_file_type& mapped_file,
+                        graphstore::utility::interprocess_mmap_manager& mmap_manager,
                         size_t num_edges,
                         size_t chunk_size)
 {
@@ -300,21 +300,21 @@ void run_benchmark_rmat(graphstore_type& graph_store,
   havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
     vertex_scale_, num_edges_per_rank,
     0.57, 0.19, 0.19, 0.05, true, false);
-  apply_edge_update_requests<vertex_id_type>(mapped_file,
-                                             graph_store,
+  apply_edge_update_requests<vertex_id_type>(graph_store,
+                                             mmap_manager,
                                              rmat,
                                              chunk_size);
 }
 
 template<typename graphstore_type>
 void run_benchmark_edgefile(graphstore_type& graph_store,
-                            mapped_file_type& mapped_file,
+                            graphstore::utility::interprocess_mmap_manager& mmap_manager,
                             std::vector<std::string>& fname_edge_list,
                             size_t chunk_size)
 {
   havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
-  apply_edge_update_requests<vertex_id_type>(mapped_file,
-                                             graph_store,
+  apply_edge_update_requests<vertex_id_type>(graph_store,
+                                             mmap_manager,
                                              edgelist,
                                              chunk_size);
 }
@@ -335,62 +335,43 @@ int main(int argc, char** argv)
     havoqgt::havoqgt_env()->world_comm().barrier();
 
 
-    /// --- create a segument file --- ///
-    std::stringstream fname_local_segmentfile;
-    fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
-    boost::interprocess::file_mapping::remove(fname_local_segmentfile.str().c_str());
-    if (mpi_rank == 0) {
-      std::cout << "\n<<Construct segment>>" << std::endl;
-      std::cout << "Create and map a segument file" << std::endl;
-    }
-    uint64_t segmentfile_init_size = std::pow(2, segmentfile_init_size_log2_) / mpi_size;
-    mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local_segmentfile.str().c_str(), segmentfile_init_size);
-
-    /// --- Call fallocate --- ///
-    fallocate(fname_local_segmentfile.str().c_str(), segmentfile_init_size, mapped_file);
-    havoqgt::havoqgt_env()->world_comm().barrier();
-
-
-    /// --- create a segument --- ///
-    segment_manager_type* segment_manager = mapped_file.get_segment_manager();
-    havoqgt::havoqgt_env()->world_comm().barrier();
+    /// --- init segment file --- ///
+    uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
+    graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
+    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
+    print_system_mem_usages();
 
 
     /// --- allocate a graphstore and start a benchmark --- ///
     if (graphstore_name_ == "Baseline") {
-      baseline_type graph_store(segment_manager);
+      baseline_type graph_store(mmap_manager.get_segment_manager());
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(graph_store,
-                           mapped_file,
+                           mmap_manager,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(graph_store,
-                               mapped_file,
+                               mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
       }
     } else if (graphstore_name_ == "DegAwareRHH") {
-      degawarerhh_type graph_store(segment_manager);
+      degawarerhh_type graph_store(mmap_manager.get_segment_manager());
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(graph_store,
-                           mapped_file,
+                           mmap_manager,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(graph_store,
-                               mapped_file,
+                               mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_));
       }
     } else {
       std::cout << "Wrong graphstore name : " << graphstore_name_ << std::endl;
       exit(1);
-    }
-
-
-    if (is_delete_segmentfile_on_exit_) {
-      interprocess_delete_segmentfile(fname_local_segmentfile.str().c_str());
     }
 
     havoqgt::havoqgt_env()->world_comm().barrier();
