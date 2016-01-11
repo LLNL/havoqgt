@@ -11,6 +11,7 @@
 
 namespace graphstore {
 
+#define ERASE_WITH_SWAP 0
 
 template <typename _vertex_type,
           typename _vertex_property_data_type,
@@ -152,7 +153,13 @@ public:
     edge_vec_type& edge_vec = value->second.second;
     for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
       if (itr->first ==  trg) {
+#if ERASE_WITH_SWAP
+        using std::swap;
+        swap(*itr, *(end-1));
+        edge_vec.erase(end-1, end);
+#else
         edge_vec.erase(itr, itr+1);
+#endif
         if (edge_vec.size() == 0) {
           m_map_table.erase(value);
         }
@@ -174,11 +181,17 @@ public:
 
     size_t count = 0;
     edge_vec_type& edge_vec = value->second.second;
-    for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
-      if (itr->first ==  trg) {
-        edge_vec.erase(itr, itr+1);
-        ++count;
+    while (true) {
+      bool erased_edge = false;
+      for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
+        if (itr->first ==  trg) {
+          edge_vec.erase(itr, itr+1);
+          erased_edge = true;
+          ++count;
+          break;
+        }
       }
+      if (!erased_edge) break;
     }
 
     if (edge_vec.size() == 0) {

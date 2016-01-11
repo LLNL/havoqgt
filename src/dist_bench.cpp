@@ -272,6 +272,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
       std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
+      std::cout << "num edges =\t" << gstore.num_edges() << std::endl;
+      gstore.print_status(0);
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
   }

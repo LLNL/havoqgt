@@ -19,6 +19,8 @@
 
 /// #define RHH_DETAILED_ANALYSYS
 
+#define GROW_WHEN_LONG_PROBE_DISTANCE 0
+
 namespace graphstore {
 namespace rhh {
 
@@ -79,7 +81,11 @@ void insert(rhh_type** rhh, key_type key, value_type value)
 
   /// --- Consider long probe distance --- ///
   while (!(*rhh)->insert(key, value, key, value)) {
+#if GROW_WHEN_LONG_PROBE_DISTANCE
+    grow(rhh);
+#else
     chain(rhh);
+#endif
   }
 }
 
@@ -350,9 +356,15 @@ class rhh_container {
           bool is_successed = new_rhh->insert_into_body(std::move(source_rhh->m_body[i].key), std::move(source_rhh->m_body[i].value), wk_key, wk_val);
           new_rhh->m_num_elems += is_successed;
           while (!is_successed) {
+#if GROW_WHEN_LONG_PROBE_DISTANCE
+            rhh_contatiner_selftype* old_rhh = new_rhh;
+            new_rhh = make_with_source_rhh(old_rhh, new_capacity * rhh::kCapacityGrowingFactor);
+            deallocate(old_rhh);
+#else
             rhh_contatiner_selftype* chained_rhh = new_rhh;
             new_rhh = allocate(chained_rhh->m_capacity);
             new_rhh->assign_to_chained_rhh(chained_rhh);
+#endif
             is_successed = new_rhh->insert_into_body(std::move(wk_key), std::move(wk_val), wk_key, wk_val);
             new_rhh->m_num_elems += is_successed;
           }
