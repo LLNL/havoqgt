@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <map>
 #include <unordered_set>
+#include <unordered_set>
+#include <cassert>
 
 using namespace std;
 
@@ -17,71 +19,71 @@ namespace std {
   };
 }
 
-int main() {
 #if 1
+int main() {
   unordered_set<std::pair<int64_t, int64_t>> table;
-#else
-  typedef multimap<int64_t,int64_t>::iterator itr_t;
-  multimap<int64_t,int64_t> mlmap;
-#endif
 
   while(1) {
     int64_t s;
     int64_t t;
     int64_t is_delete;
-#if 1
+
     cin >> s >> t >> is_delete;
-#else
-    cin >> s >> t; 
-    is_delete = false;
-#endif
-#if 1
+
     if (is_delete) {
       table.erase(std::pair<int64_t, int64_t>(s, t));
     } else {
       table.insert(std::pair<int64_t, int64_t>(s, t));
     }
 
-#else
-    if (is_delete) { // Delete operation
-      itr_t itr = mlmap.find(s);
-      for (itr_t end = mlmap.end(); itr != end; ++itr) {
-       if (itr->first != s) break;
-       if (itr->second == t) {
-         mlmap.erase(itr);
-       }
-      }
-    } else {  // Inserte operation
-      bool is_unique = true;
-      itr_t itr = mlmap.find(s);
-      for (itr_t end = mlmap.end(); itr != end; ++itr) {
-        if (itr->first != s) break;
-        if (itr->second == t) {
-          is_unique = false;
-          break;
-        }
-      }
-      if (is_unique)
-        mlmap.insert(std::pair<int64_t, int64_t>(s, t));
-    }
-#endif
-
-    //cout << s << "\t" << t << "\t" << is_delete << "\t" << endl;
     if ( cin.eof() ) { break; }
   }
 
-#if 1
-for ( const std::pair<int64_t, int64_t>& x: table ) {
-  cout << x.first << " " << x.second << std::endl;
+  for ( const std::pair<int64_t, int64_t>& x: table ) {
+    cout << x.first << " " << x.second << std::endl;
+  }
+  return 0;
 }
-#else
-//  itr_t itr = mlmap.begin();
-//  for (itr_t end = mlmap.end(); itr != end; ++itr) {
-//    cout << itr->first << "\t" << itr->second << std::endl;
-//  }
-#endif
 
+#else
+
+int main() {
+  unordered_set<std::pair<int64_t, int64_t>> table;
+
+  int64_t c_s = -1;
+
+  while(1) {
+    int64_t s;
+    int64_t t;
+    int64_t is_delete;
+
+    cin >> s >> t >> is_delete;
+
+    if (s != c_s) {
+      s = c_s;
+
+      for ( const std::pair<int64_t, int64_t>& x: table ) {
+        cout << x.first << " " << x.second << std::endl;
+      }
+      table.clear();
+
+      assert(!is_delete);
+    }
+
+    if (is_delete) {
+      table.erase(std::pair<int64_t, int64_t>(s, t));
+    } else {
+      table.insert(std::pair<int64_t, int64_t>(s, t));
+    }
+
+    if ( cin.eof() ) { break; }
+  }
+
+  for ( const std::pair<int64_t, int64_t>& x: table ) {
+    cout << x.first << " " << x.second << std::endl;
+  }
 
   return 0;
 }
 
+#endif
