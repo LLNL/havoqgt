@@ -168,8 +168,9 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                      edgelist_type& edges,
                      const size_t chunk_size)
 {
-  int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  const int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+  const int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  const int lc_rank  = havoqgt::havoqgt_env()->node_local_comm().rank();
   havoqgt::havoqgt_env()->world_comm().barrier();
 
   if (mpi_rank == 0) std::cout << "-- statuses of before generation --" << std::endl;
@@ -217,12 +218,12 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     const double time_update_end = MPI_Wtime();
 
     /// --- sync --- ///
-    graphstore::utility::sync_files();
+    if (lc_rank == 0) graphstore::utility::sync_files();
     const double time_sync_end = MPI_Wtime();
 
     /// --- print a progress report --- ///
-    const double time_end = MPI_Wtime();
     havoqgt::havoqgt_env()->world_comm().barrier();
+    const double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
       std::cout << "\n-- results --" << std::endl;
       std::cout <<" exec_time (local, sync),\t segment_size(GB)" << std::endl;
@@ -235,9 +236,9 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                   << (time_sync_end  - time_update_end) << " ),\t"
                   << mmap_manager.segment_size_gb() << std::endl;
       }
+      if (lc_rank == 0)  print_system_mem_usages();
       havoqgt::havoqgt_env()->world_comm().barrier();
     }
-    if (mpi_rank == 0) print_system_mem_usages();
 
 #if VERBOSE
     if (mpi_rank == 0) std::cout << "\n-- graph store's status --" << std::endl;
@@ -328,8 +329,6 @@ void dump_all_edges(gstore_type& gstore)
 }
 
 int main(int argc, char** argv) {
-
-  std::cout << "program start" << std::endl;
 
   havoqgt::havoqgt_init(&argc, &argv);
   {
