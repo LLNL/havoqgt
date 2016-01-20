@@ -235,8 +235,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                   << (time_update_end - time_start) << " , "
                   << (time_sync_end  - time_update_end) << " ),\t"
                   << mmap_manager.segment_size_gb() << std::endl;
+        if (lc_rank == 0)  print_system_mem_usages();
       }
-      if (lc_rank == 0)  print_system_mem_usages();
       havoqgt::havoqgt_env()->world_comm().barrier();
     }
 

@@ -68,7 +68,7 @@ def parse_args():
 	                                                            help="motivation")
 	parser.add_argument("--log_dir", "-l", default=LOG_DIR,
 							help="path log directory")
-	parser.add_argument("--global_log_file", default=PWD + "tests_dynamic_global_log.log",
+        parser.add_argument("--global_log_file", default=PWD + "/tests_dynamic_global_log.log",
 							help="monitor I/O statistics using iostat")
 
 	# options for this program
@@ -127,7 +127,7 @@ def init_test_files():
 		io_monitoring_report_file = log_file_base + "_iostat.log"
 
 	# log
-	log_dsc("log_file_base", log_file_base)
+        log_dsc("log_file_name", log_file_name)
 
 	log_dsc("nodes", str(args.num_nodes))
 	
