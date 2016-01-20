@@ -239,7 +239,6 @@ class degawarerhh
   ///         whether edge is erased
   bool erase_edge(const vertex_type& src, const vertex_type& trg)
   {
-    size_type count = 0;
     for (auto itr = m_low_degree_table->find(src); !itr.is_end(); ++itr) {
       if ((*itr).second == trg) {
         m_low_degree_table->erase(itr);

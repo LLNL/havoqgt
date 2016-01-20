@@ -116,7 +116,7 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
   if (mpi_rank == 0) std::cout << "generated edges into DRAM (sec.) =\t" << MPI_Wtime() - time_start << std::endl;
   havoqgt::havoqgt_env()->world_comm().barrier();
 
-  std::cout << "[" << mpi_rank << "] # of generated insetion requests =\t"<< requests.size() << std::endl;
+//  std::cout << "[" << mpi_rank << "] # of generated insetion requests =\t"<< requests.size() << std::endl;
 
 #if SORT_BY_CHUNK
   const double elapsed_time = sort_requests(requests);
@@ -154,9 +154,10 @@ void print_system_mem_usages()
 //    std::cout << "----------------------------" << std::endl;
 //  }
 
-  size_t dirty;
-  if (graphstore::utility::get_meminfo("Dirty", dirty)) {
-    std::cout << "Usage: Dirty(KB):\t" << dirty << "\n";
+  size_t minflt = 0;
+  size_t majflt = 0;
+  if (graphstore::utility::get_stat_page_faults(&minflt, &majflt)) {
+    std::cout << "minflt, majflt:\t" << minflt << " " << majflt << std::endl;
   }
 }
 

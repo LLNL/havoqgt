@@ -11,7 +11,7 @@
 
 namespace graphstore {
 
-#define ERASE_WITH_SWAP 0
+#define ERASE_WITH_SWAP 1
 
 template <typename _vertex_type,
           typename _vertex_property_data_type,
@@ -185,7 +185,13 @@ public:
       bool erased_edge = false;
       for (auto itr = edge_vec.begin(), end = edge_vec.end(); itr != end; ++itr) {
         if (itr->first ==  trg) {
-          edge_vec.erase(itr, itr+1);
+#if ERASE_WITH_SWAP
+        using std::swap;
+        swap(*itr, *(end-1));
+        edge_vec.erase(end-1, end);
+#else
+        edge_vec.erase(itr, itr+1);
+#endif
           erased_edge = true;
           ++count;
           break;

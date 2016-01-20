@@ -19,7 +19,7 @@
 
 /// #define RHH_DETAILED_ANALYSYS
 
-#define GROW_WHEN_LONG_PROBE_DISTANCE 0
+#define GROW_WHEN_LONG_PROBE_DISTANCE 1
 
 namespace graphstore {
 namespace rhh {

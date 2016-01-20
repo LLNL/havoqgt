@@ -21,7 +21,7 @@ class rhh_property_program_base {
   using probedistance_type = _property_type;
 
   enum : probedistance_type {
-    kLongProbedistanceThreshold = std::numeric_limits<probedistance_type>::max() / static_cast<property_type>(4) - 1
+    kLongProbedistanceThreshold = std::numeric_limits<probedistance_type>::max() / static_cast<property_type>(2) - 1
   };
 
   /// --- Explicitly Deleted Functions -- ///
