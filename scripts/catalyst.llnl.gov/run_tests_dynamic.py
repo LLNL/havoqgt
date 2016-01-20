@@ -173,11 +173,11 @@ def generate_batch_file(exec_cmd):
 	# - -- slurm options --- #
 	slurm_options = " --clear-ssd "
 	if args.dimmap > 0 and not args.dimmap_tune:
-		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 --enable-hyperthreads "
+                slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0,vm_tune=1 --enable-hyperthreads "
 	elif args.dimmap > 0 and args.dimmap_tune:
-		slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0 "
+                slurm_options += " --di-mmap=npages=" + str(args.dimmap) + ",ver=1.1.21d,ra_tune=0,vm_tune=1 --enable-hyperthreads "
 	else:
-		slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0 "
+                slurm_options += " --di-mmap=npages=" + str(1024*256*2) + ",ver=none,ra_tune=0,vm_tune=1 --enable-hyperthreads "
 
 	if args.ppdebug:
 		slurm_options += " -ppdebug "
