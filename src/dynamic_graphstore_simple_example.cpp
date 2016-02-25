@@ -15,14 +15,14 @@ using edge_property_type    = int;
 using vertex_property_type  = int;
 
 
-#if 1
+#if 0
 #include <havoqgt/graphstore/baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
 #else
-#include <havoqgt/graphstore/degawarerhh.hpp>
+#include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
@@ -57,7 +57,7 @@ void usage()  {
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<std::string>& edgelist_files) {
+void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::vector<std::string>& edgelist_files) {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -66,19 +66,19 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<
     std::cout << std::endl;
   }
 
-  bool found_graph_filename_ = false;
+  bool found_segmentfile_name_ = false;
   bool found_edgelist_filename = false;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "g:e:h")) != -1) {
+  while ((c = getopt(argc, argv, "s:e:h")) != -1) {
      switch (c) {
        case 'h':
          prn_help = true;
          break;
-       case 'g':
-         found_graph_filename_ = true;
-         graph_file = optarg;
+       case 's':
+         found_segmentfile_name_ = true;
+         segmentfile_name = optarg;
          break;
        case 'e':
        {
@@ -101,7 +101,7 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file, std::vector<
          break;
      }
    }
-   if (prn_help || !found_graph_filename_ || !found_edgelist_filename) {
+   if (prn_help || !found_segmentfile_name_ || !found_edgelist_filename) {
      usage();
      exit(-1);
    }
@@ -125,33 +125,27 @@ int main(int argc, char** argv) {
 
 
   /// --- parse argments ---- ///
-  std::string graph_file;
+  std::string segmentfile_name;
   std::vector<std::string> edgelist_files;
-  parse_cmd_line(argc, argv, graph_file, edgelist_files);
+  parse_cmd_line(argc, argv, segmentfile_name, edgelist_files);
   MPI_Barrier(MPI_COMM_WORLD);
 
 
   /// --- create a segument file --- ///
-  std::stringstream fname_local;
-  fname_local << graph_file << "_" << mpi_rank;
-  boost::interprocess::file_mapping::remove(fname_local.str().c_str());
-  uint64_t graphfile_init_size = std::pow(2, 30) / mpi_size;
-  mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local.str().c_str(), graphfile_init_size);
-
-  /// --- Call fallocate --- ///
-  fallocate(fname_local.str().c_str(), graphfile_init_size, mapped_file);
-
-  /// --- get a segment_manager --- ///
-  segment_manager_type* segment_manager = mapped_file.get_segment_manager();
+  size_t graph_capacity = std::pow(2, 30);
+  std::stringstream fname_local_segmentfile;
+  fname_local_segmentfile << segmentfile_name << "_" << mpi_rank;
+  graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
+  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
 
   /// --- allocate a graphstore --- ///
-  graphstore_type graphstore(segment_manager);
+  graphstore_type graphstore(mmap_manager.get_segment_manager());
 
 
 
   /// ------- insert edges using parallel_edge_list_reader() ------- ///
   {
-    /// --- setup a paraller edgelist reader --- ///
+    /// --- setup a parallel edgelist reader --- ///
     havoqgt::parallel_edge_list_reader edgelist(edgelist_files);
 
     for (const auto edge : edgelist) {

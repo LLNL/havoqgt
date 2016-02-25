@@ -13,17 +13,17 @@ using vertex_type = uint64_t;
 
 int main(int argc, char** argv)
 {
-  size_t num_verticess;
+  size_t num_vertices;
   size_t num_min_degree;
   std::string edgefile_name;
 
   if (argc < 4) {
-    std::cerr << "usage: <num_verticess> <num_min_degree> <edgefile_name>"
+    std::cerr << "usage: <num_vertices> <num_min_degree> <edgefile_name>"
     << " (argc:" << argc << " )." << std::endl;
     exit(-1);
   } else {
     int pos = 1;
-    num_verticess  = boost::lexical_cast<uint64_t>(argv[pos++]);
+    num_vertices  = boost::lexical_cast<uint64_t>(argv[pos++]);
     num_min_degree = boost::lexical_cast<uint64_t>(argv[pos++]);
     edgefile_name  = argv[pos++];
   }
@@ -41,9 +41,10 @@ int main(int argc, char** argv)
   /// --- generate init graph (aomplete graph) --- ///
   /// k + 1 vertices are requred
   /// so that each vertex has at least k edges
-  const size_t num_min_vertex = num_min_degree + 1;
-  for (uint64_t v1 = 0; v1 < num_min_vertex; ++v1) {
-    for (uint64_t v2 = 0; v2 < num_min_vertex; ++v2) {
+  const size_t num_min_vertices = num_min_degree + 1;
+  assert(num_vertices > num_min_vertices);
+  for (uint64_t v1 = 0; v1 < num_min_vertices; ++v1) {
+    for (uint64_t v2 = 0; v2 < num_min_vertices; ++v2) {
       if (v1 == v2) continue;
       edge_vec.push_back(std::make_pair(v1, v2));
 #if GENERATE_EDGE_BOTH_DIRECTION
@@ -54,11 +55,10 @@ int main(int argc, char** argv)
 
 
   /// --- generate edges --- ///
-  /// \brief dis_2
 #if !GENERATE_EDGE_BOTH_DIRECTION
   std::uniform_int_distribution<int> dis_2(0, 1);
 #endif
-  for (uint64_t v = num_min_vertex; v < num_verticess; ++v) {
+  for (uint64_t v = num_min_vertices; v < num_vertices; ++v) {
     for (uint64_t i = 0; i < num_min_degree; ++i) {
       std::uniform_int_distribution<vertex_type> dis(0, (edge_vec.size() - 1));
       vertex_type edge_no = dis(gen);
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 
   /// --- count degree and make ---- ///
 #if COUNT_DEGREE_TABLE
-  std::vector<size_t> deg_vec(num_verticess, 0);
+  std::vector<size_t> deg_vec(num_vertices, 0);
   for_each(edge_vec.begin(), edge_vec.end(),
                   [&deg_vec](std::pair<vertex_type, vertex_type> edge){
                     ++deg_vec[edge.first];

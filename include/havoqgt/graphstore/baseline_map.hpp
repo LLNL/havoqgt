@@ -1,0 +1,5 @@
+#ifndef BASELINE_MAP_HPP
+#define BASELINE_MAP_HPP
+
+#endif // BASELINE_MAP_HPP
+
