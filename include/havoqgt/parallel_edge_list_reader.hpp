@@ -142,11 +142,17 @@ public:
     edge_type m_current;
     bool m_make_undirected;
   };
+  parallel_edge_list_reader() {
 
+  }
 
   /// @todo Add undirected flag
   parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected )
-    : m_undirected(undirected) {
+  : m_undirected(undirected) {
+    initialize( filenames, undirected);
+  }
+
+  void initialize( const std::vector<std::string>& filenames, bool undirected){
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
@@ -204,12 +210,18 @@ public:
 
 protected:
   
+  virtual void populate_edge_data(std::string& line, edge_type& edge) = 0;
+
+  /*{
+    std::stringstream ssline(line);
+    ssline >> edge.first >> edge.second;
+    }*/
+  
   bool try_read_edge(edge_type& edge) {
     std::string line;
     while(!m_ptr_ifstreams.empty()) {
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
-        std::stringstream ssline(line);
-        ssline >> edge.first >> edge.second;
+	populate_edge_data(line, edge);
         return true;
       } else { //No remaining lines, close file.
         delete m_ptr_ifstreams.front();

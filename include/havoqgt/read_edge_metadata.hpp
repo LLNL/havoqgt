@@ -270,6 +270,20 @@ void read_edge_metadata(TGraph *g,
   count = edge_metadata_visitor<TGraph, EdgeData, flow>::count;
 }
 
+  template<typename TGraph, typename EdgeData, typename metadata_itr_t, typename metadata_t>
+  void generic_read_edge_metadata( TGraph *g, EdgeData* edge_data, metadata_itr_t metadata_itr_begin
+				   , metadata_itr_t metadata_itr_end, int& count ) {
+    typedef edge_metadata_visitor<TGraph, EdgeData, metadata_t> visitor_type;
+    visitor_type::set_edge_data( edge_data);
+    
+    typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph> visitor_queue_type;
+    
+    visitor_queue_type vq(g);
+    vq.template init_visitor_traversal_metadata<metadata_itr_t, metadata_t>( metadata_itr_begin, metadata_itr_end );
+
+    count = edge_metadata_visitor<TGraph, EdgeData, metadata_t>::count;
+  }
+
 }} //end namespace havoqgt::mpi
 
 #endif   //  _EDGE_METADATA_VISITOR_HPP_INCLUDED

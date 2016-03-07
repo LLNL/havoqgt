@@ -352,6 +352,34 @@ public:
 
     } while(!m_termination_detection.test_for_termination());
   }
+  
+  template<typename metadata_itr_type, typename metadata_t>
+  void init_visitor_traversal_metadata( const metadata_itr_type& itr_begin, const metadata_itr_type& itr_end ) {
+    metadata_itr_type metadata_itr = itr_begin;
+    do{
+      do{
+	do{
+	  if( metadata_itr != itr_end ) {
+	    const metadata_t metadata = *metadata_itr;
+	    auto src_locator = m_ptr_graph->label_to_locator( metadata.get_src_label() );
+	    auto dest_locator = m_ptr_graph->label_to_locator( metadata.get_dest_label() );
+	    visitor_type v(src_locator, dest_locator, metadata );
+	    queue_visitor(v);
+	    ++metadata_itr;
+	  }
+	  process_pending_controllers();
+	  while( !empty() ) {
+	    process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();
+	  }
+	}while(metadata_itr != itr_end || !m_local_controller_queue.empty () );
+	m_mailbox.flush_buffers_if_idle();
+      }while(!empty() || !m_mailbox.is_idle());
+    }while(!m_termination_detection.test_for_termination());
+  }
+
 
   void init_visitor_traversal_flow(const flow_iterator &flow_itr_begin, const flow_iterator &flow_itr_end) {
     flow_iterator flow_itr = flow_itr_begin;
