@@ -19,8 +19,6 @@
 
 /// #define RHH_DETAILED_ANALYSYS
 
-#define ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE 1
-
 namespace graphstore {
 namespace rhh {
 
@@ -61,8 +59,8 @@ inline static void chain(rhh_type** rhh)
 template <typename rhh_type>
 inline static void grow(rhh_type** rhh)
 {
-#if 0
-  if ((*rhh)->table_mem_size() > 1024) {
+#if RHH_CHAIN_AT_LARGE_TABLE_SIZE
+  if ((*rhh)->table_mem_size() > 4096) {
     chain(rhh);
   } else {
     resize(rhh, (*rhh)->capacity() * kCapacityGrowingFactor);
@@ -90,7 +88,7 @@ void insert(rhh_type** rhh, key_type key, value_type value)
 
   /// --- dealing with a long probe distance problem --- ///
   if (!(*rhh)->insert(key, value, key, value)) {
-#if ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
+#if RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
     grow(rhh);
 #else
     chain(rhh);
@@ -348,7 +346,7 @@ class rhh_container {
         if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
           bool is_successed = new_rhh->insert_into_body(std::move(source_rhh->m_body[i].key), std::move(source_rhh->m_body[i].value), wk_key, wk_val);
           if (!is_successed) {
-#if ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
+#if RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
             rhh::resize(&new_rhh, new_capacity * rhh::kCapacityGrowingFactor);
 #else
             rhh::chain(&new_rhh);
