@@ -20,19 +20,33 @@ namespace havoqgt { namespace mpi {
     struct random_number_generator {
     public:
       std::mt19937 en;
-      random_number_generator(){ 
-	std::random_device r;
-	en.seed(r());
-      }
       
+      static random_number_generator& get() {
+	if(val == 0) {
+	  _rng = random_number_generator();
+	  val = 1;
+	}
+	return _rng;
+      }
+
       template<typename distribution>
       typename distribution::result_type operator()(distribution& dist){
 	return dist(en);
       }
+
+    private:
+      static random_number_generator _rng;
+      static int val;
+      random_number_generator(){ 
+	std::random_device r;
+	en.seed(r());
+      }
+
     };
 
     typedef random_number_generator rng;
-
+    rng rng::_rng;
+    int rng::val = 0;
 
     /**********************************************************************
     Random Walker
@@ -68,7 +82,7 @@ namespace havoqgt { namespace mpi {
 	: id(_id), start_from(_start_from), cost(_cost), cur_time(_cur_time), started_at(_started_at),steps(_steps), target(_target) { }
 
       bool is_complete(vertex_locator vertex) const {
-	return vertex == target || steps >= 100;
+	return vertex == target || steps >= random_walker::max_steps;
       }
 
       void set_target(vertex_locator vertex) {
@@ -82,13 +96,13 @@ namespace havoqgt { namespace mpi {
 
 	std::vector<vertex_locator> adjacents;
 	std::vector<uint32_t> cost_vec;
-
+	
 	for(eitr_type itr = g.edges_begin(cur_vertex); itr != g.edges_end(cur_vertex); ++itr ) {
 	  metadata_type& metadata = (*edges_metadata)[itr];
 	  if( metadata.start_time() <= cur_time && (metadata.end_time().time_since_epoch() == std::chrono::seconds(0) ||
 						    metadata.end_time() >= cur_time )) {
 	    adjacents.push_back(itr.target());
-	    cost_vec.push_back(metadata.redirect?0:1);
+	    cost_vec.push_back(metadata.redirect ? 0 : 1);
 	  }
 	}
 	if( adjacents.size() == 0 ) return std::make_tuple( false, vertex_locator(),  random_walker() );
@@ -97,10 +111,9 @@ namespace havoqgt { namespace mpi {
 	// for memory -- uniform_dist(0, adjacents.size() + memory.size() - 1 );
 	std::size_t index;
 	{
-	  rng _rng;
-	  index = _rng(uniform_dist);
+	  index = (rng::get())(uniform_dist);
 	}
-	random_walker next_rw(id, start_from, cost + cost_vec[index], cur_time + std::chrono::seconds(3600), started_at, steps + 1, target);
+	random_walker next_rw(id, start_from, cost + cost_vec[index], cur_time + std::chrono::seconds(0), started_at, steps + 1, target);
 	return std::make_tuple( true , adjacents[index], next_rw );
       }
 
@@ -118,7 +131,11 @@ namespace havoqgt { namespace mpi {
       time_point_t cur_time;
       time_point_t started_at;
       memory<0> no_memory;
+      static uint64_t max_steps;
     };
+
+    template<typename Graph, typename EdgeMetaData>
+    uint64_t random_walker<Graph, EdgeMetaData>::max_steps = 0;
 
     /**********************************************************************
     Random Walker Visitor
@@ -157,7 +174,7 @@ namespace havoqgt { namespace mpi {
 
       bool pre_visit() const {
 	bool is_complete = rwalker.is_complete(vertex);
-	if( rwalker.steps != 0) { //not for the first time
+	if( rwalker.steps != 0) { //not the first time
 	  (*vertex_data())[vertex].at(rwalker.id).sum += rwalker.cost;
 	  (*vertex_data())[vertex].at(rwalker.id).min = std::min( (*vertex_data())[vertex].at(rwalker.id).min, rwalker.cost );
 	  (*vertex_data())[vertex].at(rwalker.id).max = std::max( (*vertex_data())[vertex].at(rwalker.id).max, rwalker.cost );
@@ -209,7 +226,7 @@ namespace havoqgt { namespace mpi {
 
       vertex_locator vertex;
       random_walker_t rwalker;
-    } __attribute__ ((packed));
+    };// __attribute__ ((packed));
     
     template< typename TGraph, typename EdgeMetaData, typename VertexData>
     void temporal_random_walk_simulation( TGraph* g,
@@ -218,11 +235,13 @@ namespace havoqgt { namespace mpi {
 					  typename TGraph::vertex_locator source,
 					  typename TGraph::vertex_locator target,
 					  uint64_t num_of_walkers,
-					  std::vector<time_point_t>* start_times) {
+					  std::vector<time_point_t>* start_times,
+					  uint64_t max_steps) {
       typedef temporal_random_walk_simulation_visitor< TGraph, EdgeMetaData, VertexData> visitor_type;
       visitor_type::set_edge_metadata( edge_metadata);
       visitor_type::set_vertex_data( vertex_data );
       visitor_type::set_start_time_steps( start_times );
+      visitor_type::random_walker_t::max_steps = max_steps;
 
       typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph> visitor_queue_type;
       visitor_queue_type vq(g);

@@ -15,6 +15,11 @@
 #include <unordered_map>
 #include <unistd.h>
 
+#define TIMER_START() std::chrono::high_resolution_clock::now()
+#define TIMER_END()   std::chrono::high_resolution_clock::now()
+#define TIME_DURATION_SECS() (end - start)
+
+
 using namespace havoqgt;
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
@@ -22,6 +27,8 @@ using namespace havoqgt::mpi;
 typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 typedef graph_type::edge_data<wiki_link_metadata, segment_manager_t> edge_data_type;
+
+std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
 
 template<typename A, typename B>
 std::ostream& operator<<(std::ostream& o, const std::pair< A, B>& out) {
@@ -53,10 +60,18 @@ struct _random_walker_vertex_data {
     return map[time];
   }
 
+  uint64_t traversal_passed_through() {
+    uint64_t count = 0;
+    for( auto map_itr = map.begin(); map_itr != map.end(); ++map_itr) {
+      count += map_itr->second.count;
+    }
+    return count;
+  }
+
   friend std::ostream& operator<<(std::ostream& o, const _random_walker_vertex_data& rw_vertex_data) {
       std::copy( rw_vertex_data.map.cbegin()
 		 , rw_vertex_data.map.cend()
-		 , std::ostream_iterator<std::pair<uint64_t, value>>( o, "\n"));
+		 , std::ostream_iterator<std::pair<uint64_t, value>>( o, " | "));
       return o;
     }
 };
@@ -66,7 +81,8 @@ typedef struct _random_walker_vertex_data random_walk_vertex_data;
 //using time_point_t = std::chrono::time_point(clock_t);
 
 void parse_cmd_line(int argc, char** argv, std::string& input_graph_filename, std::string& input_metadata_filename
-		    , uint64_t& time_start, uint64_t& time_end, uint64_t& time_offset , uint64_t& num_of_walkers) {
+		    , uint64_t& time_start, uint64_t& time_end, uint64_t& time_offset , uint64_t& num_of_walkers
+		    , uint64_t& max_steps, std::string& vertex_data_out_filename ) {
 
   if( havoqgt_env()->world_comm().rank() == 0 ) {
     std::cout <<  "CMD line:";
@@ -80,7 +96,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_graph_filename, st
   bool found_input_metadata_filename = false;
 
   char c;
-  while( (c = getopt(argc, argv, "i:s:e:o:m:n:h " )) != -1 ) {
+  while( (c = getopt(argc, argv, "i:s:e:o:m:n:c:r:h " )) != -1 ) {
     if( havoqgt_env()->world_comm().rank() == 0) {
       std::cout << "Processing " << c << " , Value : " << optarg << std::endl;
     }
@@ -104,6 +120,12 @@ void parse_cmd_line(int argc, char** argv, std::string& input_graph_filename, st
     case 'n':
       num_of_walkers = atoll(optarg);
       break;
+    case 'c':
+      max_steps = atoll(optarg);
+      break;
+    case 'r':
+      vertex_data_out_filename = optarg;
+      break;
     default:
       std::cout << "Unrecognized option: " <<  c <<", ignore. " << std::endl;
       break;
@@ -124,10 +146,12 @@ int main(int argc, char** argv) {
   {
     std::string input_graph_filename;
     std::string input_metadata_filename;
+    std::string vertex_data_out_filename;
     uint64_t time_start = 0;
     uint64_t time_end = 0;
     uint64_t time_offset = 0;
     uint64_t num_of_walkers = 0;
+    uint64_t max_steps = 0;
     havoqgt::get_environment();
     
     {
@@ -137,7 +161,7 @@ int main(int argc, char** argv) {
       havoqgt_env()->world_comm().barrier();
 
       parse_cmd_line(argc, argv, input_graph_filename, input_metadata_filename, time_start, time_end, time_offset 
-		     , num_of_walkers );
+		     , num_of_walkers, max_steps, vertex_data_out_filename );
 
       std::vector<hmpi::time_point_t> start_time_steps;
       for(uint64_t time = time_start; time <= time_end; time += time_offset) {
@@ -161,32 +185,59 @@ int main(int argc, char** argv) {
 
       graph_type::vertex_data<random_walk_vertex_data, std::allocator<random_walk_vertex_data>> rw_vertex_data(*graph);
       rw_vertex_data.reset(random_walk_vertex_data());
-      havoqgt_env()->world_comm().barrier();
 
       graph_type::vertex_locator source, target;
 
-      temporal_random_walk_simulation(graph, edge_data, &rw_vertex_data, source, target, num_of_walkers, &start_time_steps);
       havoqgt_env()->world_comm().barrier();
+      start=TIMER_START();
+      temporal_random_walk_simulation(graph, edge_data, &rw_vertex_data, source, target, num_of_walkers, &start_time_steps, max_steps);
+      havoqgt_env()->world_comm().barrier();
+      end=TIMER_END();
       
-
-      /*
-      std::stringstream output_filename("/l/ssd/next_output_");
-      output_filename << mpi_rank << "of" << mpi_size;
-      std::ofstream out_file( output_filename.str(), std::ofstream::out );
-      out_file << "Results goes here" << std::flush;
+      std::string output_filename(vertex_data_out_filename);
       MASTER_DO(
-		std::cout << "Started writing now " << std::endl;
+		for(int i = 0; i < mpi_size; i++) {
+		  std::stringstream ss;
+		  ss << output_filename << i << "of" << mpi_size;
+		  std::ofstream out_file( ss.str().c_str(), std::ofstream::trunc);
+		  out_file << "Results" << std::endl;
+		  out_file.flush();
+		  out_file.close();
+		}
 		);
-      std::size_t i = 1;
+      havoqgt_env()->world_comm().barrier();
+      std::stringstream ss;
+      ss << output_filename << mpi_rank << "of" << mpi_size;
+      std::ofstream out_file( ss.str().c_str(), std::ofstream::app );
+
+      MASTER_DO(
+		std::cout << "Started writing now. :) " << std::endl;
+		);
+      uint64_t total_steps_rank = 0;
+      uint64_t ver_count = 0;
       for( auto itr = graph->vertices_begin(); itr != graph->vertices_end(); ++itr) {
-	out_file << i << " : " << rw_vertex_data[*itr] << "\n";
-	i++;
+	if( itr->owner() == mpi_rank && rw_vertex_data[*itr].map.size() > 0 ) {
+	  out_file << graph->locator_to_label(*itr) << " : " << rw_vertex_data[*itr] << "\n";
+	  total_steps_rank += rw_vertex_data[*itr].traversal_passed_through();
+	}
+	ver_count++;
       }
       out_file.flush();
       out_file.close();
       havoqgt_env()->world_comm().barrier();
-      */
-
+      uint64_t total_count = mpi_all_reduce( total_steps_rank, std::plus<uint64_t>(), havoqgt_env()->world_comm().comm());
+      uint64_t total_ver_count = mpi_all_reduce( ver_count, std::plus<uint64_t>(), havoqgt_env()->world_comm().comm());
+      havoqgt_env()->world_comm().barrier();
+      MASTER_DO(
+		//REPORT
+		std::chrono::duration<double> processing_time = TIME_DURATION_SECS();
+		std::cout << "Total edges required: " << total_ver_count * 10000 << std::endl;
+		std::cout << "Total edges traversals: " << total_count << " in " 
+		<< processing_time.count() <<"secs. Ratio = " << ((double)total_count)/((double)total_ver_count * 10000) 
+		<< std::endl;
+		std::cout << "Edges per seconds: " << ( ((double) total_count )/ ((double) processing_time.count()) ) << std::endl;
+		);
+      havoqgt_env()->world_comm().barrier();
    }
   }
   havoqgt::havoqgt_finalize();
