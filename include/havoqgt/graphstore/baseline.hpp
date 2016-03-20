@@ -397,7 +397,7 @@ class graphstore_baseline<vertex_type,
     return m_iterator->first;
   }
 
-  const edge_property_data_type& property_data()
+  edge_property_data_type& property_data()
   {
     return m_iterator->second;
   }

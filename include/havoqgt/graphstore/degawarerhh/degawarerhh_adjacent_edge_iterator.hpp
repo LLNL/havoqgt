@@ -81,7 +81,7 @@ class degawarerhh<vertex_type,
   }
 
   /// TODO: handle an error when m_mh_itr.is_end() == true
-  const edge_property_data_type& property_data()
+  edge_property_data_type& property_data()
   {
     if (!m_low_itr.is_end()) {
       return m_low_itr->third;

@@ -168,8 +168,8 @@ int main(int argc, char** argv) {
       vertex_property_type v_prop = graphstore.vertex_property_data(src);  // get a vertex property data or
       graphstore.vertex_property_data(src) = v_prop;                       // update a vertex property data.
                                                                            // Note that vertex_property_data() return a reference
-
-      size_t erased_edges = graphstore.erase_edge(src, dst);               // erase edges
+      if (i%2)
+        size_t erased_edges = graphstore.erase_edge(src, dst);             // erase edges
     }
   }
 
@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
     for (auto adj_edges = graphstore.adjacent_edge_begin(src_vrtx), end = graphstore.adjacent_edge_end(src_vrtx);
          adj_edges != end;
          ++adj_edges) {
+      adj_edges.property_data() = 1; // update edge weight
       std::cout << "destination vertex: " << adj_edges.target_vertex() << ", weight: " << adj_edges.property_data() << std::endl;
     }
   }
