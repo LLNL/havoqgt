@@ -17,8 +17,6 @@
 #include <havoqgt/graphstore/rhh/rhh_element_base.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
-/// #define RHH_DETAILED_ANALYSYS
-
 namespace graphstore {
 namespace rhh {
 
@@ -172,7 +170,13 @@ class rhh_container {
   class value_iterator;
 
 
-  /// explicitly delete due to prevent unexpected behaivers
+#if RHH_DETAILED_ANALYSYS
+  size_t total_probed_distance;
+  size_t max_probed_distance;
+  size_t total_num_insert_into_body_called;
+#endif
+
+  /// explicitly delete to prevent unexpected behaivers
   rhh_container()  = delete;
   ~rhh_container() = delete;
   rhh_container(const rhh_contatiner_selftype& src) = delete;
@@ -398,6 +402,22 @@ class rhh_container {
     }
   }
 
+#if RHH_DETAILED_ANALYSYS
+  void init_detailed_analysis()
+  {
+    total_probed_distance = 0;
+    max_probed_distance   = 0;
+    total_probed_distance = 0;
+  }
+
+  void print_detailed_analysis()
+  {
+    std::cout << "total_probed_distance: " << total_probed_distance;
+    std::cout << "max_probed_distance: " << max_probed_distance;
+    std::cout << "average probed distance: " << (double)total_probed_distance / total_num_insert_into_body_called;
+    std::cout << "total_num_insert_into_body_called: " << total_num_insert_into_body_called;
+  }
+#endif
 
  /// ---------------------------------------------------------- ///
  ///                         private
@@ -480,6 +500,11 @@ class rhh_container {
   bool insert_into_body(key_type&& key, value_type&& value,
                         key_type& key_long_prbdst, value_type& val_long_prbdst)
   {
+#if RHH_DETAILED_ANALYSYS
+      ++total_num_insert_into_body_called;
+    size_t num_probe = 0;
+#endif
+
     probedistance_type prb_dist = 0;
     const size_type hash = key_hash_func::hash(key);
     size_type pos = cal_desired_position(hash);
@@ -491,6 +516,9 @@ class rhh_container {
 
       if(property_program::is_empty(exist_property))
       {
+#if RHH_DETAILED_ANALYSYS
+          max_probed_distance = std::max(max_probed_distance, num_probe);
+#endif
         if (property_program::is_long_probedistance(prb_dist)) {
           key_long_prbdst = std::move(key);
           val_long_prbdst = std::move(value);
@@ -507,11 +535,17 @@ class rhh_container {
         if (property_program::is_long_probedistance(prb_dist)) {
           key_long_prbdst = std::move(key);
           val_long_prbdst = std::move(value);
+#if RHH_DETAILED_ANALYSYS
+          max_probed_distance = std::max(max_probed_distance, num_probe);
+#endif
           return false;
         }
         if(property_program::is_scratched(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
+#if RHH_DETAILED_ANALYSYS
+          max_probed_distance = std::max(max_probed_distance, num_probe);
+#endif
           return true;
         }
         m_body[pos].property = prb_dist;
@@ -523,8 +557,9 @@ class rhh_container {
       pos = (pos+1) & mask;
       ++prb_dist;
 
-#ifdef RHH_DETAILED_ANALYSYS
-      ++(rhh::rhh_log_holder::instance().max_distance_to_moved);
+#if RHH_DETAILED_ANALYSYS
+      ++total_probed_distance;
+      ++num_probe;
 #endif
     }
 
@@ -554,8 +589,8 @@ class rhh_container {
 
 
   /// --- private valiable --- ///
-  size_type m_num_elems; /// including chained rhhs
-  size_type m_capacity;
+  size_type m_num_elems; /// including chaining rhh tables
+  size_type m_capacity;  /// this table's size
   rhh_contatiner_selftype* m_next;
   packed_element m_body[0];
 

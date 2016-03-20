@@ -64,15 +64,13 @@ class degawarerhh
     m_mh_degree_table = mh_deg_table_type::allocate(2);
 
     std::cout << "Middle-high degree threshold = " << middle_high_degree_threshold << std::endl;
-
     std::cout << "Element size: \n"
               << " low_degree_table = " << low_deg_table_type::kElementSize << "\n"
               << " mh_edge_chunk = " << mh_deg_edge_chunk_type::kElementSize << "\n"
               << " mh_degree_table = " << mh_deg_table_type::kElementSize << std::endl;
-    std::cout << "middle_high_degree_threshold = " << middle_high_degree_threshold << std::endl;
 
-#ifdef RHH_DETAILED_ANALYSYS
-    graphstore::utility::rhh_log_holder::instance().init();
+#if RHH_DETAILED_ANALYSYS
+    m_low_degree_table->init_detailed_analysis();
 #endif
   }
 
@@ -445,12 +443,18 @@ class degawarerhh
         std::cout << histgram_prbdist[i] << " ";
       }
       std::cout << std::endl;
+#if RHH_DETAILED_ANALYSYS
+      m_low_degree_table->print_detailed_analysis();
+#endif
     }
 
     std::cout << "<high-middle degree table>:"
               << "\n average probedistance: " << m_mh_degree_table->load_factor()
               << std::endl;
     {
+#if RHH_DETAILED_ANALYSYS
+      m_mh_degree_table->print_detailed_analysis();
+#endif
       size_type histgram_ave_prbdist[mh_deg_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_type histgram_cap[50] = {0};
       size_type histgram_size[50] = {0};
@@ -482,7 +486,7 @@ class degawarerhh
         ++histgram_dept[depth];
       }
 
-      std::cout << "<high-middle edge chunks>: "
+      std::cout << "<high-middle edge-list>: "
                 << "\n size: " << size_sum
                 << "\n capacity: " << capacity_sum
                 << "\n rate: " << (double)(size_sum) / capacity_sum

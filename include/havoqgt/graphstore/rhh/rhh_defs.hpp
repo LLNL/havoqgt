@@ -13,6 +13,7 @@ namespace rhh {
 
 #define RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE 1
 #define RHH_CHAIN_AT_LARGE_TABLE_SIZE 0
+#define RHH_DETAILED_ANALYSYS 0
 
 static constexpr double kFullCapacitFactor  = 0.9;
 
@@ -23,8 +24,9 @@ enum {
 
 void disp_configuration(void)
 {
-  DISP_LOG_VAR(ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE);
+  DISP_LOG_VAR(RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE);
   DISP_LOG_VAR(RHH_CHAIN_AT_LARGE_TABLE_SIZE);
+  DISP_LOG_VAR(RHH_DETAILED_ANALYSYS);
   DISP_LOG_VAR(kFullCapacitFactor);
   DISP_LOG_VAR(kNodeAllocatorChunkSize);
 }
