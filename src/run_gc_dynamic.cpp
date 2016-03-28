@@ -16,7 +16,7 @@ using edge_property_type    = int;
 using vertex_property_type  = uint32_t;
 
 /// --- Baseline model --- ///
-#include <havoqgt/graphstore/baseline.hpp>
+#include <havoqgt/graphstore/baseline/baseline.hpp>
 using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,

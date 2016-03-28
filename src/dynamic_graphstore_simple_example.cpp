@@ -16,7 +16,7 @@ using vertex_property_type  = int;
 
 
 #if 0
-#include <havoqgt/graphstore/baseline.hpp>
+#include <havoqgt/graphstore/baseline/baseline.hpp>
 using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,

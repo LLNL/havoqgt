@@ -342,7 +342,7 @@ class no_delegate_vertex_locator {
 } __attribute__ ((packed)) ;
 
 
-/// --- example of simple visitor class to construct a graph --- ///
+/// --- example of a simple visitor class to construct a graph --- ///
 template <typename graphstore_type>
 class dg_visitor {
  public:

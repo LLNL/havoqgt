@@ -53,7 +53,7 @@ class degawarerhh
     m_mh_degree_table(nullptr),
     m_num_edges(0)
   {
-    static_assert(middle_high_degree_threshold > 1, "middle high degree threshold is must be larger than 1");
+    static_assert(middle_high_degree_threshold > 1, "middle-high degree threshold is must be larger than 1");
 
     // -- init allocator -- //
     rhh::init_allocator<typename low_deg_table_type::allocator, segment_manager_type>(segment_manager);

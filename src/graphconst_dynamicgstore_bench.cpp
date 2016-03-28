@@ -17,7 +17,7 @@
 /// must include the files below with this order ??
 #include "dynamicgraphstore_bench.hpp"
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <havoqgt/graphstore/baseline.hpp>
+#include <havoqgt/graphstore/baseline/baseline.hpp>
 #include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 
 
