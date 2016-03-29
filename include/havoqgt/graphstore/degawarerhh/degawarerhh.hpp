@@ -422,6 +422,9 @@ class degawarerhh
               << "\n chaine depth: " << m_low_degree_table->depth()
               << "\n capacity*element_size(GB): "
               << (double)m_low_degree_table->capacity() * m_low_degree_table->depth() * low_deg_table_type::kElementSize / (1ULL<<30) << std::endl;
+#if RHH_DETAILED_ANALYSYS
+      m_low_degree_table->print_detailed_analysis();
+#endif
 
     std::cout << "<high-middle degree table>: "
               << "\n size, capacity, rate: " << m_mh_degree_table->size()
@@ -430,7 +433,11 @@ class degawarerhh
               << "\n chaine depth : " << m_mh_degree_table->depth()
               << "\n capacity*element_size(GB): "
               << (double)m_mh_degree_table->capacity() * m_mh_degree_table->depth() * mh_deg_table_type::kElementSize  / (1ULL<<30) << std::endl;
+#if RHH_DETAILED_ANALYSYS
+      m_mh_degree_table->print_detailed_analysis();
+#endif
     if (level == 0) return;
+
 
     std::cout << "<low degree table>:"
               << "\n average probedistance: " << m_low_degree_table->load_factor()
@@ -443,18 +450,12 @@ class degawarerhh
         std::cout << histgram_prbdist[i] << " ";
       }
       std::cout << std::endl;
-#if RHH_DETAILED_ANALYSYS
-      m_low_degree_table->print_detailed_analysis();
-#endif
     }
 
     std::cout << "<high-middle degree table>:"
               << "\n average probedistance: " << m_mh_degree_table->load_factor()
               << std::endl;
     {
-#if RHH_DETAILED_ANALYSYS
-      m_mh_degree_table->print_detailed_analysis();
-#endif
       size_type histgram_ave_prbdist[mh_deg_table_type::property_program::kLongProbedistanceThreshold] = {0};
       size_type histgram_cap[50] = {0};
       size_type histgram_size[50] = {0};

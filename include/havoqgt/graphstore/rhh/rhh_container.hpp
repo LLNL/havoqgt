@@ -159,7 +159,11 @@ class rhh_container {
   enum : size_type {
     kKeyNotFound   = std::numeric_limits<size_type>::max(),
     kElementSize   = sizeof(element_type),
+#if RHH_DETAILED_ANALYSYS
+    kTableBaseSize = sizeof(size_type) + sizeof(size_type) + sizeof(void*) + sizeof(size_t) * 3
+#else
     kTableBaseSize = sizeof(size_type) + sizeof(size_type) + sizeof(void*)
+#endif
   };
 
   using allocator = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
@@ -412,10 +416,10 @@ class rhh_container {
 
   void print_detailed_analysis()
   {
-    std::cout << "total_probed_distance: " << total_probed_distance;
-    std::cout << "max_probed_distance: " << max_probed_distance;
-    std::cout << "average probed distance: " << (double)total_probed_distance / total_num_insert_into_body_called;
-    std::cout << "total_num_insert_into_body_called: " << total_num_insert_into_body_called;
+    std::cout << "total_probed_distance: " << total_probed_distance << std::endl;
+    std::cout << "max_probed_distance: " << max_probed_distance << std::endl;
+    std::cout << "total_num_insert_into_body_called: " << total_num_insert_into_body_called << std::endl;
+    std::cout << "average probed distance: " << (double)total_probed_distance / total_num_insert_into_body_called << std::endl;
   }
 #endif
 
