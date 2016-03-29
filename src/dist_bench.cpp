@@ -72,8 +72,8 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
  uint64_t segmentfile_init_size_log2_ = 30;
  bool     is_delete_segmentfile_on_exit_ = false;
  uint64_t chunk_size_log10_           = 6;
- std::string fname_segmentfile_;
- std::string graphstore_name_;
+ std::string fname_segmentfile_       = "/dev/shm/segment_file";
+ std::string graphstore_name_         = "DegAwareRHH";
  std::vector<std::string> fname_edge_list_;
 
 

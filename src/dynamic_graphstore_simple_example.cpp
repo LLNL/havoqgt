@@ -142,7 +142,6 @@ int main(int argc, char** argv) {
   graphstore_type graphstore(mmap_manager.get_segment_manager());
 
 
-
   /// ------- insert edges using parallel_edge_list_reader() ------- ///
   {
     /// --- setup a parallel edgelist reader --- ///
@@ -174,7 +173,7 @@ int main(int argc, char** argv) {
   }
 
 
-  /// ------- iterator over an adjacencylist ------- ///
+  /// ------- iterator over an adjacent-list ------- ///
   {
     vertex_id_type src_vrtx = 0;
     for (auto adj_edges = graphstore.adjacent_edge_begin(src_vrtx), end = graphstore.adjacent_edge_end(src_vrtx);
