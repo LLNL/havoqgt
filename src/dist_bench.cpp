@@ -28,6 +28,7 @@
 #include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/baseline/baseline.hpp>
+#include <havoqgt/graphstore/baseline/baseline_map.hpp>
 #include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 #include <havoqgt/graphstore/dist_dynamic_graphstore.hpp>
 
@@ -40,6 +41,11 @@ using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
                                                              vertex_property_type,
                                                              edge_property_type,
                                                              segment_manager_type>;
+
+using baselinemap_type      = graphstore::graphstore_baseline_map<vertex_id_type,
+                                                                  vertex_property_type,
+                                                                  edge_property_type,
+                                                                  segment_manager_type>;
 
  enum : size_t {
    middle_high_degree_threshold = 2 // must be more or equal than 1
@@ -358,6 +364,31 @@ int main(int argc, char** argv) {
       dist_gstore_type<baseline_type> dist_graph(&gstore);
       visitor_type<baseline_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<baseline_type> dg_visitor_queue(&dist_graph);
+
+
+      if (fname_edge_list_.empty()) {
+        run_benchmark_rmat(dg_visitor_queue,
+                           gstore,
+                           mmap_manager,
+                           vertex_scale_,
+                           num_vertices * edge_factor_,
+                           std::pow(10, chunk_size_log10_));
+      } else {
+        run_benchmark_edgefile(dg_visitor_queue,
+                               gstore,
+                               mmap_manager,
+                               fname_edge_list_,
+                               std::pow(10, chunk_size_log10_));
+      }
+#if DEBUG_MODE
+      dump_all_edges(gstore);
+#endif
+    } else if (graphstore_name_ == "BaselineMap") {
+
+      baselinemap_type gstore(mmap_manager.get_segment_manager());
+      dist_gstore_type<baselinemap_type> dist_graph(&gstore);
+      visitor_type<baselinemap_type>::set_graph_ref(&dist_graph);
+      dg_visitor_queue_type<baselinemap_type> dg_visitor_queue(&dist_graph);
 
 
       if (fname_edge_list_.empty()) {

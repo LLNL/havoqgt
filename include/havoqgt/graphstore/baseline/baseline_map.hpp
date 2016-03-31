@@ -35,7 +35,7 @@ private:
 
 
   /// adjacency list
-  using edge_map_value_type     = vertex_type;
+  using edge_map_value_type     = edge_property_data_type;
   using edge_map_element_type   = std::pair<const vertex_type, edge_map_value_type>;
   using edge_map_allocator_type = boost::interprocess::allocator<edge_map_element_type, segment_manager_type>;
   using edge_map_table_type     = boost::unordered_multimap<vertex_type,
@@ -221,7 +221,20 @@ public:
   { }
 
   void print_status(const int level) const
-  { }
+  {
+    size_t cnt = 0;
+    double ave_num_buckets = 0;
+    for (auto vmp_itr = m_map_table.begin(), end = m_map_table.end(); vmp_itr != end; ++vmp_itr)
+    {
+      const edge_map_table_type& edge_map = std::get<edg_map>(std::get<vmp_val>(*vmp_itr));
+      ave_num_buckets += edge_map.bucket_count();
+      ++cnt;
+    }
+    std::cout << "edge-maps' average num buckets: " << ave_num_buckets / cnt << std::endl;
+
+    std::cout << "vertex-map's num buckets: " << m_map_table.bucket_count() << std::endl;
+    std::cout << "vertex-map's size: " << m_map_table.size() << std::endl;
+  }
 
   void fprint_all_elements(std::ofstream& of)
   { }
