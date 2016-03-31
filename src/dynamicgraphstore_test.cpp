@@ -11,8 +11,8 @@ using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
 using vertex_id_type        = uint64_t;
-using edge_property_type    = int;
-using vertex_property_type  = int;
+using edge_property_type    = uint64_t;
+using vertex_property_type  = uint64_t;
 
 enum : size_t {
   middle_high_degree_threshold = 10 // must be more or equal than 1
@@ -24,6 +24,12 @@ using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
+#elif 1
+#include <havoqgt/graphstore/baseline/baseline_map.hpp>
+using graphstore_type       = graphstore::graphstore_baseline_map<vertex_id_type,
+                                                                  vertex_property_type,
+                                                                  edge_property_type,
+                                                                  segment_manager_type>;
 #else
 #include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
@@ -105,7 +111,7 @@ void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::v
          break;
      }
    }
-   if (prn_help || !found_segmentfile_name_ || !found_edgelist_filename_) {
+   if (prn_help || !found_segmentfile_name_ /*|| !found_edgelist_filename_*/) {
      usage();
      exit(-1);
    }
