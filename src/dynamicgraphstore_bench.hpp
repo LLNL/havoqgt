@@ -57,17 +57,27 @@ struct edge_update_request
 };
 
 template<typename vertex_id_type>
-edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair)
+edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair, const bool is_reverse)
 {
-  return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
-                                           false);
+  if (is_reverse) {
+    return edge_update_request<vertex_id_type>(std::make_pair(std::get<1>(pair), std::get<0>(pair)),
+                                               false);
+  } else {
+    return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+                                               false);
+  }
 }
 
 template<typename vertex_id_type>
-edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair)
+edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair, const bool is_reverse)
 {
-  return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
-                                           std::get<2>(pair));
+  if (is_reverse) {
+    return edge_update_request<vertex_id_type>(std::make_pair(std::get<1>(pair), std::get<0>(pair)),
+                                               std::get<2>(pair));
+  } else {
+    return edge_update_request<vertex_id_type>(std::make_pair(std::get<0>(pair), std::get<1>(pair)),
+                                               std::get<2>(pair));
+  }
 }
 
 
@@ -102,7 +112,7 @@ std::pair<vertex_id_type, size_t> generate_update_requests(edgelist_itr_type& ed
   const double time_start = MPI_Wtime();
   requests.clear();
   while (edgelist_itr != edgelist_itr_last) {
-    requests.push_back(make_update_request(*edgelist_itr));
+    requests.push_back(make_update_request(*edgelist_itr, false));
     max_vertex_id = std::max(max_vertex_id, std::get<0>(*edgelist_itr));
     max_vertex_id = std::max(max_vertex_id, std::get<1>(*edgelist_itr));
     ++edgelist_itr;
