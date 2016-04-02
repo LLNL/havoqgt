@@ -111,10 +111,9 @@ public:
       edge_map_table_type& edge_map = std::get<edg_map>(std::get<vmp_val>(*vmp_itr));
 
       /// --- find duplicated edge --- ///
-      for (const auto edge : edge_map) {
-        if (std::get<edg_vrt>(edge) ==  trg) {
-          return false; /// found duplicated edge
-        }
+      auto emp_itr = edge_map.find(trg);
+      if (emp_itr != edge_map.end()) {
+        return false; /// found duplicated edge
       }
 
       /// --- since there is no empty spase, add it at end --- ///
