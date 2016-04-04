@@ -51,9 +51,9 @@ class dist_dynamic_graphstore
   }
 
   /// insert a edge
-  inline bool insert_edge_dup(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
+  inline void insert_edge_dup(const vertex_locator& src, const vertex_locator& trg, const edge_property_data_type& weight)
   {
-    return m_graphstore->insert_edge_dup(src.id(), trg.id(), weight);
+    m_graphstore->insert_edge_dup(src.id(), trg.id(), weight);
   }
 
   /// erase a edge

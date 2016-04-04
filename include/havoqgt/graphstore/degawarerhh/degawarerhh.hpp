@@ -181,7 +181,7 @@ class degawarerhh
   }
 
   /// allows duplicated insertion
-  bool insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
+  void insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
   {
 
     /// -- count the degree of the source vertex in the low degree table -- ///
@@ -225,7 +225,6 @@ class degawarerhh
 
     /// TODO: insert the target vertex into the source vertex list
     ++m_num_edges;
-    return true;
   }
 
   ///

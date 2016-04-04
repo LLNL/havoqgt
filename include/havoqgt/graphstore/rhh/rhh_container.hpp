@@ -92,9 +92,10 @@ void insert(rhh_type** rhh, key_type key, value_type value)
     chain(rhh);
 #endif
     if (!(*rhh)->insert(key, value, key, value)) {
-      /// this program enter this point when the long probe distance problem is occurred
-      /// due to the elements whoes hash value are same because growing capacity strategy can't solve the problem.
-      /// thus, allocate a chained table.
+      /// This program enter this point when a long probe distance problem is occurred
+      /// and growing capacity strategy can't solve the problem.
+      /// When there are a lot of element whoes key is exactoly same,
+      /// chaining operation is the only strategy that can slove the problem.
       chain(rhh);
       assert((*rhh)->insert(key, value, key, value));
     }

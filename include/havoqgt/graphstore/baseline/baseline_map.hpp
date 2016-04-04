@@ -125,7 +125,7 @@ public:
   }
 
   /// allows duplicated insertion
-  bool insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& edge_property)
+  void insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& edge_property)
   {
 
     auto vmp_itr = m_map_table.find(src);
@@ -137,7 +137,6 @@ public:
     }
 
     ++m_num_edges;
-    return true;
   }
 
   bool erase_edge(const vertex_type& src, const vertex_type& trg)
@@ -190,19 +189,19 @@ public:
 
   edge_property_data_type& edge_property_data(const vertex_type& src, const vertex_type& trg) {
     auto vmp_itr = m_map_table.find(src);
-    if (vmp_itr == m_map_table.end()) {
-      std::cout << src << ":" << trg;
-      std::cout << " Bad edge: vertex lookup failed. ";
-      ::exit(1);
-    }
+//    if (vmp_itr == m_map_table.end()) {
+//      std::cout << src << ":" << trg;
+//      std::cout << " Bad edge: vertex lookup failed. ";
+//      ::exit(1);
+//    }
 
     edge_map_table_type& edge_map = std::get<edg_map>(std::get<vmp_val>(*vmp_itr));
     auto edg_itr = edge_map.find(trg);
-    if (edg_itr == edge_map.end()) {
-      std::cout << src << ":" << trg;
-      std::cout << " Bad edge: could not find destination. ";
-      ::exit(1);
-    }
+//    if (edg_itr == edge_map.end()) {
+//      std::cout << src << ":" << trg;
+//      std::cout << " Bad edge: could not find destination. ";
+//      ::exit(1);
+//    }
 
     return std::get<edg_prp>(*edg_itr);
   }
