@@ -1,11 +1,14 @@
 
 #include <iostream>
 #include <fstream>
+#include <random>
+#include <unordered_set>
+
 #include <boost/interprocess/managed_mapped_file.hpp>
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
-
+#include <havoqgt/rmat_edge_generator.hpp>
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
@@ -24,7 +27,7 @@ using graphstore_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
-#elif 1
+#elif 0
 #include <havoqgt/graphstore/baseline/baseline_map.hpp>
 using graphstore_type       = graphstore::graphstore_baseline_map<vertex_id_type,
                                                                   vertex_property_type,
@@ -61,8 +64,8 @@ void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
 void usage()  {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
-         << " -g <string>   - output graph base filename (required)\n"
-         << " -e <string>   - filename that has a list of edgelist files (required)\n"
+         << " -s <string>   - output graph base filename (default is /dev/shm/segment_file)\n"
+//         << " -e <string>   - filename that has a list of edgelist files\n"
          << " -h            - print help and exit\n\n";
   }
 }
@@ -76,8 +79,10 @@ void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::v
     std::cout << std::endl;
   }
 
-  bool found_segmentfile_name_ = false;
-  bool found_edgelist_filename_ = false;
+  segmentfile_name = "/dev/shm/segment_file";
+
+  bool found_segmentfile_name_ = true;
+  bool found_edgelist_filename_ = true;
 
   char c;
   bool prn_help = false;
@@ -111,16 +116,125 @@ void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::v
          break;
      }
    }
-   if (prn_help || !found_segmentfile_name_ /*|| !found_edgelist_filename_*/) {
+   if (prn_help || !found_segmentfile_name_ || !found_edgelist_filename_) {
      usage();
      exit(-1);
    }
 }
 
 
+namespace std {
+  template <> struct hash<std::pair<vertex_id_type, vertex_id_type>>
+  {
+    size_t operator()(const std::pair<vertex_id_type, vertex_id_type> & x) const
+    {
+        std::size_t h1 = std::hash<vertex_id_type>()(x.first);
+        std::size_t h2 = std::hash<vertex_id_type>()(x.second);
+        return h1 ^ (h2 << 1);
+    }
+  };
+}
+
+
+void test4(graphstore_type& graphstore, size_t vertex_scale, size_t edge_factor, int delete_ratio)
+{
+  const size_t num_edges = (1ULL << vertex_scale) * edge_factor;
+  havoqgt::rmat_edge_generator rmat(uint64_t(5489), vertex_scale, num_edges,
+    0.57, 0.19, 0.19, 0.05, true, true);
+
+  std::random_device rnd;
+  std::mt19937_64 mt(rnd());
+  std::uniform_int_distribution<> rand100(1, 100);
+
+  std::unordered_multiset<std::pair<vertex_id_type, vertex_id_type>> table;
+
+  for (auto edge = rmat.begin(), end = rmat.end();
+       edge != end;
+       ++edge) {
+    const vertex_id_type& src = std::get<0>(*edge);
+    const vertex_id_type& trg = std::get<1>(*edge);
+
+    const bool is_delete = (rand100(mt) <= delete_ratio);
+
+    if (is_delete) {
+      const size_t num_deleted = table.erase(std::make_pair(src, trg));
+      assert(graphstore.erase_edge_dup(src, trg) == num_deleted);
+
+    } else {
+      table.insert(std::make_pair(src, trg));
+      graphstore.insert_edge_dup(src, trg, 1);
+    }
+  }
+
+
+}
+
+
+void test3(graphstore_type& graphstore, size_t vertex_scale, size_t edge_factor, int delete_ratio)
+{
+  const size_t num_edges = (1ULL << vertex_scale) * edge_factor;
+  havoqgt::rmat_edge_generator rmat(uint64_t(5489), vertex_scale, num_edges,
+    0.57, 0.19, 0.19, 0.05, true, true);
+
+  std::random_device rnd;
+  std::mt19937_64 mt(rnd());
+  std::uniform_int_distribution<> rand100(1, 100);
+
+  std::unordered_set<std::pair<vertex_id_type, vertex_id_type>> table;
+
+  for (auto edge = rmat.begin(), end = rmat.end();
+       edge != end;
+       ++edge) {
+    const vertex_id_type& src = std::get<0>(*edge);
+    const vertex_id_type& trg = std::get<1>(*edge);
+
+    const bool is_delete = (rand100(mt) <= delete_ratio);
+
+    if (is_delete) {
+      const bool is_deleted = table.erase(std::make_pair(src, trg));
+      assert(graphstore.erase_edge(src, trg) == is_deleted);
+
+    } else {
+      const auto ret = table.insert(std::make_pair(src, trg));
+      const bool is_inserted = ret.second;
+      assert(graphstore.insert_edge(src, trg, 1) == is_inserted);
+    }
+  }
+
+
+  /// check all elements
+  /// can iterate all elements?
+  {
+    std::unordered_set<std::pair<vertex_id_type, vertex_id_type>> tmp_table(table);
+    for (auto v_itr = graphstore.vertices_begin(), v_end = graphstore.vertices_end();
+         v_itr != v_end;
+         ++v_itr) {
+      const vertex_id_type& src = v_itr.source_vertex();
+      for (auto e_itr = graphstore.adjacent_edge_begin(src), e_end = graphstore.adjacent_edge_end(src);
+           e_itr != e_end;
+           ++e_itr) {
+        const vertex_id_type& trg = e_itr.target_vertex();
+        assert(tmp_table.erase(std::make_pair(src, trg)));
+      }
+    }
+    assert(tmp_table.size() == 0);
+  }
+
+
+  /// check all elements from an another direction
+  {
+    for (const auto& edge : table) {
+      assert(graphstore.erase_edge(edge.first, edge.second));
+    }
+    assert(graphstore.num_edges() == 0);
+  }
+
+}
+
+
+
 /// duplicated insertion test cases
-template <size_t num_vertices, size_t num_edges, size_t fact_dup>
-void test2(graphstore_type& graphstore)
+void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, size_t fact_dup)
 {
   /// insertion and deletion
   {
@@ -128,7 +242,7 @@ void test2(graphstore_type& graphstore)
     for (size_t d = 0; d < fact_dup; ++d) {
       for (uint64_t j = 0; j < num_edges; ++j) {
         for (uint64_t i = 0; i < num_vertices; ++i) {
-          assert(graphstore.insert_edge_dup(i, j, i+2));
+          graphstore.insert_edge_dup(i, j, i+2);
         }
       }
     }
@@ -154,17 +268,17 @@ void test2(graphstore_type& graphstore)
     for (size_t d = 0; d < fact_dup; ++d) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
         for (uint64_t j = 0; j < num_edges; ++j) {
-          assert(graphstore.insert_edge_dup(i, j, i+2));
+          graphstore.insert_edge_dup(i, j, i+2);
         }
       }
     }
 
     {
-      bool flags[num_vertices] = {false};
+      std::vector<bool> flags(num_vertices, false);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         flags[itr.source_vertex()] = true;
       }
-      for (auto flg : flags) assert(flg);
+      for (const auto flg : flags) assert(flg);
     }
 
     /// update vertex property
@@ -174,12 +288,12 @@ void test2(graphstore_type& graphstore)
 
     /// check vertex property
     {
-      bool flags[num_vertices] = {false};
+      std::vector<bool> flags(num_vertices, false);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         assert(itr.property_data() == itr.source_vertex() + 2);
         flags[itr.property_data() - 2] = true;
       }
-      for (auto flg : flags) assert(flg);
+      for (const auto flg : flags) assert(flg);
     }
 
     /// delete all edges
@@ -198,7 +312,7 @@ void test2(graphstore_type& graphstore)
     for (size_t d = 0; d < fact_dup; ++d) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
         for (uint64_t j = 0; j < num_edges; ++j) {
-          assert(graphstore.insert_edge_dup(i, j, j+2));
+          graphstore.insert_edge_dup(i, j, j+2);
         }
       }
     }
@@ -206,8 +320,8 @@ void test2(graphstore_type& graphstore)
     /// adjacent edge iterator
     {
       for (uint64_t i = 0; i < num_vertices; ++i) {
-        size_t cnts1[num_edges] = {0};
-        size_t cnts2[num_edges] = {0};
+        std::vector<size_t> cnts1(num_edges, 0);
+        std::vector<size_t> cnts2(num_edges, 0);
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
@@ -241,8 +355,7 @@ void test2(graphstore_type& graphstore)
 
 
 /// basic test cases
-template <size_t num_vertices, size_t num_edges>
-void test1(graphstore_type& graphstore)
+void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 {
 
   /// unique insertion and deletion
@@ -286,11 +399,11 @@ void test1(graphstore_type& graphstore)
     }
 
     {
-      bool flags[num_vertices] = {false};
+      std::vector<bool> flags(num_vertices, false);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         flags[itr.source_vertex()] = true;
       }
-      for (auto flg : flags) assert(flg);
+      for (const auto flg : flags) assert(flg);
     }
 
     /// update vertex property
@@ -300,12 +413,12 @@ void test1(graphstore_type& graphstore)
 
     /// check vertex property
     {
-      bool flags[num_vertices] = {false};
+      std::vector<bool> flags(num_vertices, false);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         assert(itr.property_data() == itr.source_vertex() + 2);
         flags[itr.property_data() - 2] = true;
       }
-      for (auto flg : flags) assert(flg);
+      for (const auto flg : flags) assert(flg);
     }
 
     /// delete all edges
@@ -330,8 +443,8 @@ void test1(graphstore_type& graphstore)
     /// adjacent edge iterator
     {
       for (uint64_t i = 0; i < num_vertices; ++i) {
-        bool flags1[num_edges] = {false};
-        bool flags2[num_edges] = {false};
+        std::vector<bool> flags1(num_edges, false);
+        std::vector<bool> flags2(num_edges, false);
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
@@ -340,8 +453,8 @@ void test1(graphstore_type& graphstore)
           flags2[adj_edge.property_data() - 2] = true;
           ++adj_edge.property_data(); /// set new value via adjacent iterator
         }
-        for (auto flg : flags1) assert(flg);
-        for (auto flg : flags2) assert(flg);
+        for (const auto flg : flags1) assert(flg);
+        for (const auto flg : flags2) assert(flg);
       }
 
       for (uint64_t i = 0; i < num_vertices; ++i) {
@@ -408,14 +521,17 @@ int main(int argc, char** argv) {
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(mmap_manager.get_segment_manager());
 
-  run_time("can handle basic operations on a low degree graph?", (test1<1024, 2>(graphstore)));
-  run_time("can handle long probe distances on the graph?", (test2<1024, 1, middle_high_degree_threshold>(graphstore)));
+  run_time("can handle basic operations on a low degree graph?", test1(graphstore, 1024, 2));
+  run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, 1, middle_high_degree_threshold));
 
-  run_time("can handle basic operations on a middle-high degree graph?", (test1<1024, middle_high_degree_threshold * 2>(graphstore))); // There is a possibility of long probedistances
-  run_time("can handle long probe distances on the graph?", (test2<1024, middle_high_degree_threshold * 2, 64>(graphstore)));
+  run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 1024, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
+  run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, middle_high_degree_threshold * 2, 64));
 
- // run_time("can handle basic operations on a large graph?", (test1<1<<22ULL, 128>(graphstore)));
- // run_time("can handle long probe distances on the graph?", (test2<1<<22ULL, 128, 64>(graphstore)));
+//  run_time("can handle basic operations on a large graph?", test1(graphstore, 1<<22ULL, 128));
+//  run_time("can handle long probe distances on the graph?", test2(graphstore, 1<<22ULL, 128, 64));
+
+  run_time("can handle basic operations on a rmat graph?", test3(graphstore, 17, 4, 10));
+  run_time("can handle duplicate operations on the graph?", test4(graphstore, 17, 4, 10));
 
   std::cout << "All tests completed!!!" << std::endl;
   }  // END Main MPI
