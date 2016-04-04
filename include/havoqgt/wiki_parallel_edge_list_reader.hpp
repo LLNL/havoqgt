@@ -61,7 +61,7 @@ public:
   wiki_parallel_edge_list_reader(const std::vector<std::string>& filenames, bool undirected
 				 , std::unordered_map<sha1key, uint64_t, sha1hasher>& _pagekeymap):
     parallel_edge_list_reader(), pagekeymap(_pagekeymap){
-    initialize(filenames, undirected);
+    initialize(filenames, false);
   }
 
   static void read_pagekeymap( std::string filename, std::unordered_map<sha1key, uint64_t, sha1hasher>& pagekeymap) {
@@ -72,7 +72,8 @@ public:
       try{
 	pagekeymap.insert( std::make_pair( sha1key(line), id++) );
       }catch( std::exception& e) {
-	std::cout<< line << std::endl;
+	std::cout<< filename << " : " << line << std::endl;
+	std::cout<< e.what() << std::endl;
 	exit(1);
       }
     }
@@ -84,9 +85,13 @@ protected:
     int i = 0;
     std::string token;
     std::stringstream line_ss(line);
-    while( std::getline( line_ss, token, ' ' ) ) {
-      if( i == 0 ) edge.first = pagekeymap.find(sha1key(token))->second;
-      else if( i == 1 ) { edge.second = pagekeymap.find(sha1key(token))->second; break; }
+    while( std::getline( line_ss, token, ' ') ) {
+      if( i == 0) {
+	edge.first = std::atol(token.c_str()) - 1;
+      } else  if(i == 1) {
+	edge.second = std::atol(token.c_str()) - 1;
+        break;
+      }
       i++;
     }
   }

@@ -129,7 +129,7 @@ void parse_cmd_line(int argc, char **argv, std::string& output_filename, std::st
 }
 
 template <typename Graph, typename EdgeData, typename MetaData>
-int edge_metadata_visitor<Graph, EdgeData, MetaData>::count = 0;
+uint64_t edge_metadata_visitor<Graph, EdgeData, MetaData>::count = 0;
 
 #ifdef WIKIPEDIA
 std::unordered_map<sha1key, uint64_t, havoqgt::sha1hasher> wiki_link_metadata::sha1_label_map = std::unordered_map<sha1key, uint64_t, havoqgt::sha1hasher>();
@@ -178,8 +178,14 @@ int main(int argc, char** argv) {
 
       
 #ifdef WIKIPEDIA
-      edge_list_reader::read_pagekeymap( pagekeymap_filename, metadata_t::sha1_label_map );
-      edge_list_reader pelr(input_filenames, undirected, metadata_t::sha1_label_map);
+      //edge_list_reader::read_pagekeymap( pagekeymap_filename, metadata_t::sha1_label_map );
+      MASTER_DO(
+		std::cout << "Reader initiating." << std::endl;
+		);
+      edge_list_reader pelr(input_filenames, false, metadata_t::sha1_label_map);
+      MASTER_DO(
+		std::cout << "Reader initialized. " << std::endl;
+		);
 #endif
       MASTER_MSG("Generating new graph.");
       MASTER_DO(
@@ -199,21 +205,21 @@ int main(int argc, char** argv) {
       havoqgt::distributed_db metadata_ddb(havoqgt::db_create(), metadata_output_filename.c_str(), gbyte_per_rank);
       segment_manager_t* metadata_segment_manager = metadata_ddb.get_segment_manager();
 
-      //typedef graph_type::edge_data<flow, segment_manager_t> edge_data_type;
       edge_data_type *edge_metadata = metadata_segment_manager->construct<edge_data_type>("edge_data")(graph->num_owned_targets(), graph->num_delegate_targets(), metadata_segment_manager);
 
       ingest_metadata_list<metadata_t> ifel(input_filenames);
+      
       havoqgt_env()->world_comm().barrier();
       graph->print_graph_statistics();
       havoqgt_env()->world_comm().barrier();
-      int count = 0;
+      uint64_t count = 0;
       hmpi::generic_read_edge_metadata< graph_type, edge_data_type, ingest_metadata_list<metadata_t>::metadata_iterator_type, metadata_t>(graph, edge_metadata, ifel.begin(), ifel.end(), count);
       havoqgt_env()->world_comm().barrier();
       MASTER_MSG("Reading of metadata completed.");
 
-      int total_count = mpi_all_reduce(count, std::plus<int>(), havoqgt_env()->world_comm().comm());
+      uint64_t total_count = mpi_all_reduce(count, std::plus<uint64_t>(), havoqgt_env()->world_comm().comm());
       MASTER_DO(
-		std::cout << "Total Number of vertices : " << total_count << std::endl;
+		std::cout << "Total Number of edge metadata ingested : " << total_count << std::endl;
 		);
 		
     }

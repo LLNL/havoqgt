@@ -53,6 +53,7 @@
 #ifndef HAVOQGT_MPI_IMPL_EDGE_ITERATOR_HPP_
 #define HAVOQGT_MPI_IMPL_EDGE_ITERATOR_HPP_
 
+#include <iostream>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
@@ -97,6 +98,10 @@ class delegate_partitioned_graph<SegementManager>::edge_iterator {
       return x.m_edge_offset - y.m_edge_offset;
    }
   
+  friend std::ostream& operator<<(std::ostream& out, const edge_iterator& itr) {
+    out << itr.m_ptr_graph->locator_to_label(itr.target());
+    return out;
+  }
  protected:
   friend class delegate_partitioned_graph;
   template <typename T1, typename T2> friend class edge_data;

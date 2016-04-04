@@ -2,6 +2,7 @@
 #define WIKI_LINK_METADATA_INCLUDED
 
 #include <havoqgt/wiki_parallel_edge_list_reader.hpp>
+#include <havoqgt/detail/hash.hpp>
 #include <iostream>
 #include <chrono>
 
@@ -16,12 +17,15 @@ namespace havoqgt {
 
   class wiki_link_metadata {
   public:
-    sha1key link_from;
-    sha1key link_to;
-    time_point_t added_at;
-    time_point_t deleted_at;
+    uint64_t link_from;
+    uint64_t link_to;
+
+    uint64_t added_at;
+    uint64_t deleted_at;
+
     sha1key added_by;
     sha1key deleted_by;
+
     int type;
     bool redirect;
     int ns;
@@ -31,22 +35,33 @@ namespace havoqgt {
     wiki_link_metadata() : type(0) {} //required due to templatization
     
     void initialize(std::string line) {
+      try {
       std::stringstream ss(line);
       std::string token;
       std::vector<std::string> tokens;
       while( std::getline( ss, token, ' ') ) {
 	tokens.push_back( token );
       }
+      if( tokens.size() != 9 ) {
+	std::cout << "Bad line in the file. Line: " << line << std::endl;
+	return;
+      }
+      link_from  = std::atol( get(tokens, 0).c_str()) - 1;
+      link_to    = std::atol( get(tokens, 1).c_str()) - 1;
 
-      link_from  = sha1key( get(tokens, 0) );
-      link_to    = sha1key( get(tokens, 1) );
-      added_at   = time_point_t(parse_as_seconds( get(tokens, 2) ));
-      deleted_at = time_point_t(parse_as_seconds( get(tokens, 3) ));
+      added_at   = std::atol( get(tokens, 2).c_str());
+      deleted_at = std::atol( get(tokens, 3).c_str());
+
       added_by   = sha1key( get(tokens, 4) );
       deleted_by = sha1key( get(tokens, 5) );
+
       type       = -(std::atoi( get(tokens, 6).c_str() ));
       redirect   = std::atoi( get(tokens, 7).c_str() );
       ns         = std::atoi( get(tokens, 8).c_str() );
+
+      } catch( std::exception& e) {
+	std::cout << "exception caught in wiki_link_metadata : " << e.what() << std::endl;
+      }
     }
     
     bool is_recorded() {
@@ -57,22 +72,17 @@ namespace havoqgt {
       type = -type;
     }
 
-    uint64_t get_src_label() const { return wiki_link_metadata::sha1_label_map.find( link_from )->second; }
-    uint64_t get_dest_label() const { return wiki_link_metadata::sha1_label_map.find( link_to )->second; }
-    time_point_t start_time() const { return added_at; }
-    time_point_t end_time() const  { return deleted_at; }
-    /*    template<typename T>
-    static void preprocess(T args) {
-      std::string str = static_cast<std::string>(args);
-      wiki_parallel_edge_list_reader.read_pagekeyset(str, sha1_label_map); 
-      }*/
+    uint64_t get_src_label() const { return link_from; }
+    uint64_t get_dest_label() const { return link_to; }
+
+    uint64_t start_time() const { return added_at; }
+    uint64_t end_time() const { return deleted_at; }
 
   private:
     std::chrono::seconds parse_as_seconds( std::string& sec) {
       return std::chrono::seconds( static_cast<uint64_t>( std::atol( sec.c_str() ) ) );
    }
-  } __attribute__ ((packed)) ;
-
+  }__attribute__ ((packed)) ;
 
 };
 

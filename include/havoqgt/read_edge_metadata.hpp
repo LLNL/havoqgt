@@ -2,7 +2,7 @@
 #define _EDGE_METADATA_VISITOR_HPP_INCLUDED
 
 #include <havoqgt/visitor_queue.hpp>
-#include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <havoqgt/detail/fifo_queue.hpp>
 #include <boost/range/algorithm/lower_bound.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
@@ -252,10 +252,11 @@ public:
   vertex_locator vertex;
   vertex_locator target;
   MetaData meta_data;
-  static int count;
+  static uint64_t count;
   //static edge_to_eitr_map_type* edge_to_eitr_map;
 } __attribute__ ((packed));
 
+    /*
 template <typename TGraph, typename EdgeData>
 void read_edge_metadata(TGraph *g,
 			EdgeData* edge_data, ingest_flow_edge_list::flow_input_iterator flow_itr_begin, ingest_flow_edge_list::flow_input_iterator flow_itr_end, int& count) {
@@ -268,15 +269,15 @@ void read_edge_metadata(TGraph *g,
   vq.init_visitor_traversal_flow(flow_itr_begin, flow_itr_end);
 
   count = edge_metadata_visitor<TGraph, EdgeData, flow>::count;
-}
+  }*/
 
   template<typename TGraph, typename EdgeData, typename metadata_itr_t, typename metadata_t>
   void generic_read_edge_metadata( TGraph *g, EdgeData* edge_data, metadata_itr_t metadata_itr_begin
-				   , metadata_itr_t metadata_itr_end, int& count ) {
+				   , metadata_itr_t metadata_itr_end, uint64_t& count ) {
     typedef edge_metadata_visitor<TGraph, EdgeData, metadata_t> visitor_type;
     visitor_type::set_edge_data( edge_data);
     
-    typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph> visitor_queue_type;
+    typedef visitor_queue< visitor_type, detail::fifo_queue, TGraph> visitor_queue_type;
     
     visitor_queue_type vq(g);
     vq.template init_visitor_traversal_metadata<metadata_itr_t, metadata_t>( metadata_itr_begin, metadata_itr_end );

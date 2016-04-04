@@ -98,6 +98,10 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     boost::hash_combine(seed, _vertex.is_intercept());
     return seed;
   }
+
+  std::size_t hash() const{
+    return hash_value(*this);
+  }
   
   friend bool operator==(const vertex_locator& x,
                          const vertex_locator& y) {return x.is_equal(y); }

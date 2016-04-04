@@ -10,6 +10,8 @@ function(add_exe source)
   endif( MPI_FOUND AND Boost_FOUND )
 endfunction()
 
+add_exe( run_semi_supervised_learning )
+add_exe( degree_distribution )
 add_exe( run_backup )
 add_exe( run_random_walk )
 add_exe( run_modified_bfs )

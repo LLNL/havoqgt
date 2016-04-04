@@ -149,26 +149,40 @@ public:
   }
 
   void init_visitor_traversal(std::vector<visitor_type> visitor_list) {
-    for( auto visitor_list_itr = visitor_list.begin();
+    /*    for( auto visitor_list_itr = visitor_list.begin();
 	 visitor_list_itr != visitor_list.end();
 	 ++visitor_list_itr ) {
       visitor_type visitor = *visitor_list_itr;
       if( visitor.vertex.owner() == m_mailbox.comm_rank() )
 	queue_visitor( visitor );
-    }
-
+	}*/
+    auto visitor_list_itr = visitor_list.begin();
+    uint64_t BATCH_SIZE = 1000, count = 0;
     do{
       do{
-	process_pending_controllers();
-	while(!empty()) {
+	do{
+	  //count = 0;
+	  //	  while( visitor_list_itr != visitor_list.end()) {
+	    if( visitor_list_itr != visitor_list.end()) {
+	      visitor_type visitor = *visitor_list_itr;
+	      //verify
+	      if(visitor.vertex.owner() == m_mailbox.comm_rank() )
+		queue_visitor(visitor);
+	      ++visitor_list_itr;
+	    }
+	    //count++;
+	    //}
 	  process_pending_controllers();
-	  visitor_type this_visitor = pop_top();
-	  do_visit(this_visitor);
-	  m_termination_detection.inc_completed();	  
-	}
+	  while(!empty()) {
+	    process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();	  
+	  }
+	} while(visitor_list_itr != visitor_list.end());
 	m_mailbox.flush_buffers_if_idle();
-      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
-      sched_yield();
+      } while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      //      sched_yield();
     } while( !m_termination_detection.test_for_termination());
   }
   
@@ -248,33 +262,43 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
   
-  void init_visitor_traversal_new() {
+  void init_visitor_traversal_new(uint64_t repeat = 1) {
     auto citr = m_ptr_graph->controller_begin();
     auto vitr = m_ptr_graph->vertices_begin();
-
+    uint64_t count = 0;
     do {
       do {
-        if(citr != m_ptr_graph->controller_end()) {
-          visitor_type v(*citr);
-          do_init_visit(v);
-          ++citr;
-        }
-        if(vitr != m_ptr_graph->vertices_end()) {
-          visitor_type v(*vitr);
-          do_init_visit(v);
-          ++vitr;
-        }
-        process_pending_controllers();
-        while(!empty()) {
-          process_pending_controllers();
-          visitor_type this_visitor = pop_top();
-          do_visit(this_visitor);
-          m_termination_detection.inc_completed();
-        }
-        m_mailbox.flush_buffers_if_idle();
-      } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
-              || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
-    } while(!m_termination_detection.test_for_termination());
+	do{
+	do{
+	  if(citr != m_ptr_graph->controller_end()) {
+	    visitor_type v(*citr);
+	    do_init_visit(v);
+	    ++citr;
+	  }
+	  if(vitr != m_ptr_graph->vertices_end()) {
+	    visitor_type v(*vitr);
+	    do_init_visit(v);
+	    ++vitr;
+	  }
+	  process_pending_controllers();
+	  while(!empty()) {
+	    process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();
+	  }
+	} while( citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() ); 
+
+	if( count < repeat ) count++;  
+	if( count < repeat ) {
+	  citr = m_ptr_graph->controller_begin();
+	  vitr = m_ptr_graph->vertices_begin();
+	  m_mailbox.flush_buffers_if_idle();
+	  }
+	} while( count < repeat );
+	  m_mailbox.flush_buffers_if_idle();
+	} while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      } while(!m_termination_detection.test_for_termination());
   }
 
   template<typename value_type>

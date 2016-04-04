@@ -159,7 +159,8 @@ public:
     int node_size = havoqgt_env()->node_offset_comm().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
-    
+    m_undirected = undirected;
+
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
       //if(i % mpi_size == mpi_rank) {
