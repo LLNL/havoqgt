@@ -117,9 +117,8 @@ class gc_dynamic {
   gc_dynamic(vertex_locator _vertex, vertex_locator _caller, prop_t _colour, visit_t type) :
       vertex(_vertex), caller(_caller), caller_colour(_colour), vis_type(type) {  }
 
-
+  // Creates an ADD visitor, based on the priority of the given vertices.
   static gc_dynamic<Graph, prop_t> create_visitor_add_type(vertex_locator vl_dst, vertex_locator vl_src) {
-
     // Start the add -> reverse add process with the higher priority vertex.
     if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
       // Make one src to dst.
@@ -128,6 +127,11 @@ class gc_dynamic {
       // Make one dst to src.
       return gc_dynamic(vl_dst, vl_src, 0, ADD);
     }
+  }
+
+  // Creates a DELETE visitor. TODO(Scott): Confirm it does not need priority.
+  static gc_dynamic<Graph, prop_t> create_visitor_del_type(vertex_locator vl_dst, vertex_locator vl_src) {
+    return gc_dynamic(vl_dst, vl_src, 0, DEL);
   }
 
   // Recolours our vertex based on knowledge of our neighbours/edges colours.
@@ -173,8 +177,7 @@ class gc_dynamic {
         return true;
 
       } case DEL: {
-        //TODO
-        std::cerr << "ERROR: Bad visit type (DEL IN PRE)." << std::endl; exit(-1);
+        return true;
 
       } default: {
         std::cerr << "ERROR: Bad visit type (DEFAULT IN PRE)." << std::endl; exit(-1);
@@ -260,6 +263,26 @@ class gc_dynamic {
         // No conflict, we can remain as-is.
         return false;
 
+      } case DEL: {
+        // TODO(Scott): Might want to check that the edge actually exists, first.
+        //              In case the graph is buggy.
+        // Find what colour we will no longer be connected to, first.
+        auto deleted_colour = graph_ref()->edge_property_data(vertex, caller);
+        // Remove the edge as instructed.
+        graph_ref()->erase_edge(vertex, caller);
+        // Short circuit if we wouldn't want to take the colour anyway (it's a higher colour).
+        auto our_colour = &(graph_ref()->vertex_property_data(vertex));
+        if (deleted_colour > *our_colour) {  return false;  }
+
+        for (auto nbr  = graph_ref()->adjacent_edge_begin(vertex);
+                  nbr != graph_ref()->adjacent_edge_end(vertex); nbr++) {
+          auto nbr_col = nbr.property_data();
+          if (nbr_col == deleted_colour) {  return false;  } // Can't do anything: a nbr has the colour.
+        }  // Check passed: no neighbours have the colour we want to take.
+        *our_colour = deleted_colour;
+        visitAllNbrs(graph, vis_queue);  // Need to send check colour to all neighbours.
+        return false;
+
       } default: {
         std::cerr << "ERROR: Bad visit type (DEFAULT IN VISIT)." << std::endl; exit(-1);
       }
@@ -268,6 +291,7 @@ class gc_dynamic {
   }
 
 
+  // This "Checks" all neighbours, with our colour.
   template<typename VisitorQueueHandle>
   inline void visitAllNbrs(Graph& graph, VisitorQueueHandle vis_queue) const {
     const prop_t mycolour = graph.vertex_property_data(vertex);
