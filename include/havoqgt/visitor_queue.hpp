@@ -197,23 +197,17 @@ public:
     do {
       do {
         if (!done_edges) {
+          vertex_locator vl_src(std::get<0>(*edge));
+          vertex_locator vl_dst(std::get<1>(*edge));
           if (true) {  // TODO(Whomever): This should catch the "add" event.
-            vertex_locator vl_src(std::get<0>(*edge));
-            vertex_locator vl_dst(std::get<1>(*edge));
             visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
             queue_visitor(visitor);
-            ++edge;
-            done_edges = (edge == edge_end);
           } else if (false) {  // TODO(Whomever): This should catch the "delete" event.
-            vertex_locator vl_src(std::get<0>(*edge));
-            vertex_locator vl_dst(std::get<1>(*edge));
             visitor_type visitor(visitor_type::create_visitor_del_type(vl_src, vl_dst));
-            visitor_type reverse(visitor_type::create_visitor_del_type(vl_dst, vl_src));
             queue_visitor(visitor);
-            queue_visitor(reverse);
-            ++edge;
-            done_edges = (edge == edge_end);
           }
+          edge++;
+          done_edges = (edge == edge_end);
         }
         process_pending_controllers();
         while(!empty()) {

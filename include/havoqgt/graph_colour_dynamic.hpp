@@ -129,9 +129,16 @@ class gc_dynamic {
     }
   }
 
-  // Creates a DELETE visitor. TODO(Scott): Confirm it does not need priority.
+  // Creates a DELETE visitor, based on the priority of the given vertices.
   static gc_dynamic<Graph, prop_t> create_visitor_del_type(vertex_locator vl_dst, vertex_locator vl_src) {
-    return gc_dynamic(vl_dst, vl_src, 0, DEL);
+    // Start the del -> reverse del process with the higher priority vertex.
+    if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
+      // Make one src to dst.
+      return gc_dynamic(vl_src, vl_dst, 0, DEL);
+    } else {
+      // Make one dst to src.
+      return gc_dynamic(vl_dst, vl_src, 0, DEL);
+    }
   }
 
   // Recolours our vertex based on knowledge of our neighbours/edges colours.
@@ -281,6 +288,11 @@ class gc_dynamic {
         }  // Check passed: no neighbours have the colour we want to take.
         *our_colour = deleted_colour;
         visitAllNbrs(graph, vis_queue);  // Need to send check colour to all neighbours.
+        // Issue Reverse delete (calls same DEL case) if we are higher priority.
+        if (vertex_locator::lesser_hash_priority(caller, vertex)) {
+          gc_dynamic new_visitor(caller, vertex, *our_colour, DEL);
+          vis_queue->queue_visitor(new_visitor);
+        }
         return false;
 
       } default: {
