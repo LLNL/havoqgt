@@ -445,11 +445,11 @@ class gc_visitor {
 
   friend inline bool operator > (const gc_visitor& v1, const gc_visitor& v2) {
     // No movement.
-    // return false;
+    return false;
     // By ID.
     // return !(v1.vertex < v2.vertex);
     // By degree.
-    return (*graph_ref()).degree(v1.vertex) > (*graph_ref()).degree(v2.vertex);
+    // return (*graph_ref()).degree(v1.vertex) > (*graph_ref()).degree(v2.vertex);
   }
 
 

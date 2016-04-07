@@ -199,9 +199,14 @@ public:
         if (!done_edges) {
           vertex_locator vl_src(std::get<0>(*edge));
           vertex_locator vl_dst(std::get<1>(*edge));
-          visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
-          queue_visitor(visitor);
-          ++edge;
+          if (true) {  // TODO(Whomever): This should catch the "add" event.
+            visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
+            queue_visitor(visitor);
+          } else if (false) {  // TODO(Whomever): This should catch the "delete" event.
+            visitor_type visitor(visitor_type::create_visitor_del_type(vl_src, vl_dst));
+            queue_visitor(visitor);
+          }
+          edge++;
           done_edges = (edge == edge_end);
         }
         process_pending_controllers();
@@ -216,7 +221,6 @@ public:
         }
       } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
-    // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
 
   // For dynamic graph construction
