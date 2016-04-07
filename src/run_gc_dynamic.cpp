@@ -177,7 +177,6 @@ int main(int argc, char** argv) {
 
   // Run algorithm.
   havoqgt::mpi::graph_colour_dynamic<dist_graphstore_type, havoqgt::parallel_edge_list_reader, vertex_property_type>(&dist_graphstore, &edgelist, verify);
-
   if (mpi_rank == 0) {
     std::cout << "Collecting stats...\n";
   }
@@ -230,6 +229,16 @@ int main(int argc, char** argv) {
     std::cout << "Number of Colours = " << num_colours <<  std::endl
               << "Visited total = " << visited_total << std::endl
               ;  // << "GC Time = " << time_end - time_start << std::endl;
+  }
+
+  // Print graph size
+  if (mpi_rank == 0) std::cout << "Graph size (GB)" << std::endl;
+  for (int i = 0; i < mpi_size; ++i) {
+    if (mpi_rank == i) {
+      const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+      std::cout << " rank " << mpi_rank << " : " << static_cast<double>(usages) / (1ULL << 30) << std::endl;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
   }
 
   }  // END Main MPI
