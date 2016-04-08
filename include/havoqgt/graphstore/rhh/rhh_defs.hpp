@@ -22,7 +22,7 @@ enum {
     kCapacityGrowingFactor = 2
 };
 
-void disp_configuration(void)
+static void disp_configuration(void)
 {
   DISP_LOG_VAR(RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE);
   DISP_LOG_VAR(RHH_CHAIN_AT_LARGE_TABLE_SIZE);

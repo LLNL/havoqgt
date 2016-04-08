@@ -214,7 +214,7 @@ class rhh_container {
 
   static inline value_iterator find_end()
   {
-    return value_iterator();
+    return value_iterator::end();
   }
 
   inline whole_iterator begin()
@@ -224,7 +224,7 @@ class rhh_container {
 
   static inline whole_iterator end()
   {
-    return whole_iterator(nullptr, kKeyNotFound);
+    return whole_iterator::end();
   }
 
 

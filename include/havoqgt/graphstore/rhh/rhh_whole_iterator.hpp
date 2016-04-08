@@ -9,8 +9,8 @@ template<typename _key_type,
          typename _value_type,
          typename _size_type,
          typename _segment_manager_type,
-         typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
-         typename _property_program = rhh::rhh_property_program_base<unsigned char>>
+         typename _key_hash_func,
+         typename _property_program>
 class rhh_container<_key_type, _value_type, _size_type,
                     _segment_manager_type,
                     _key_hash_func,
@@ -25,7 +25,11 @@ private:
 
 public:
 
-  whole_iterator() = delete;
+  /// initialize to 'end iterator' just in case
+  whole_iterator() :
+    m_rhh_ptr(nullptr),
+    m_pos(kKeyNotFound)
+  { }
 
   explicit whole_iterator(rhh_type* rhh) :
     m_rhh_ptr(rhh),
@@ -34,11 +38,29 @@ public:
     next_valid_element();
   }
 
-  whole_iterator(rhh_type* rhh, const typename rhh_type::size_type pos) :
-    m_rhh_ptr(rhh),
-    m_pos(pos)
+  /// Copy constructor
+  whole_iterator(const whole_iterator& other) :
+    m_rhh_ptr(other.m_rhh_ptr),
+    m_pos(other.m_pos)
   { }
 
+  /// Move constructor
+  whole_iterator (whole_iterator&& other) :
+    m_rhh_ptr(std::move(other.m_rhh_ptr)),
+    m_pos(std::move(other.m_pos))
+  { }
+
+  /// Copy assignment operators
+  whole_iterator& operator=(whole_iterator other)
+  {
+    swap(other);
+  }
+
+  /// Move assignment operators
+  whole_iterator& operator=(whole_iterator&& other)
+  {
+    swap(other);
+  }
 
   void swap(whole_iterator &other) noexcept
   {
@@ -80,6 +102,10 @@ public:
     return &(m_rhh_ptr->m_body[m_pos]);
   }
 
+  static whole_iterator end()
+  {
+    return whole_iterator(nullptr, kKeyNotFound);
+  }
 
   /// --- performance optimized methods --- ///
   inline bool is_end() const
@@ -88,6 +114,11 @@ public:
   }
 
  private:
+
+  whole_iterator(rhh_type* rhh_ptr, typename rhh_type::size_type pos) :
+    m_rhh_ptr(rhh_ptr),
+    m_pos(pos)
+  { }
 
   void next_valid_element()
   {

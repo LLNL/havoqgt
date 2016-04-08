@@ -9,8 +9,8 @@ template<typename _key_type,
          typename _value_type,
          typename _size_type,
          typename _segment_manager_type,
-         typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
-         typename _property_program = rhh::rhh_property_program_base<unsigned char>>
+         typename _key_hash_func,
+         typename _property_program>
 class rhh_container<_key_type, _value_type, _size_type,
                     _segment_manager_type,
                     _key_hash_func,
@@ -26,6 +26,7 @@ class rhh_container<_key_type, _value_type, _size_type,
 
  public:
 
+  /// initialize to 'end iterator' just in case
   value_iterator() :
     m_rhh_ptr(nullptr),
     m_key(),
@@ -42,21 +43,44 @@ class rhh_container<_key_type, _value_type, _size_type,
     internal_locate(m_key, const_cast<const rhh_type**>(&m_rhh_ptr), m_pos, m_prb_dist);
   }
 
-  void swap(value_iterator &other) noexcept
-  {
-    using std::swap;
-    swap(m_rhh_ptr, other.m_rhh_ptr);
-    swap(m_pos, other.m_pos);
-    swap(m_prb_dist, other.m_prb_dist);
-  }
+  /// Copy constructor
+  value_iterator(const value_iterator& other) :
+    m_rhh_ptr(other.m_rhh_ptr),
+    m_key(other.m_key),
+    m_pos(other.m_pos),
+    m_prb_dist(other.m_prb_dist)
+  { }
 
-  value_iterator &operator++ () // Pre-increment
+  /// Move constructor
+  value_iterator (value_iterator&& other) :
+    m_rhh_ptr(std::move(other.m_rhh_ptr)),
+    m_key(std::move(other.m_key)),
+    m_pos(std::move(other.m_pos)),
+    m_prb_dist(std::move(other.m_prb_dist))
+  { }
+
+  /// Assignment operators
+  value_iterator& operator=(value_iterator&) = delete;
+  value_iterator& operator=(value_iterator&&) = delete;
+
+
+//  void swap(value_iterator &other) noexcept
+//  {
+//    using std::swap;
+//    swap(m_rhh_ptr, other.m_rhh_ptr);
+//    swap(m_pos, other.m_pos);
+//    swap(m_prb_dist, other.m_prb_dist);
+//  }
+
+  // Pre-increment
+  value_iterator &operator++ ()
   {
     find_next_value();
     return *this;
   }
 
-  value_iterator operator++ (int) // Post-increment
+  // Post-increment
+  value_iterator operator++ (int)
   {
     value_iterator tmp(*this);
     find_next_value();
@@ -83,6 +107,11 @@ class rhh_container<_key_type, _value_type, _size_type,
     return &(m_rhh_ptr->m_body[m_pos].value);
   }
 
+  static value_iterator end()
+  {
+    return value_iterator(nullptr, kKeyNotFound);
+  }
+
   /// --- performance optimized methods --- ///
   inline bool is_end() const
   {
@@ -91,6 +120,13 @@ class rhh_container<_key_type, _value_type, _size_type,
 
 
  private:
+
+  value_iterator(rhh_type* rhh_ptr, typename rhh_type::size_type pos) :
+    m_rhh_ptr(rhh_ptr),
+    m_key(),
+    m_pos(pos),
+    m_prb_dist()
+  { }
 
   inline bool is_equal(const value_iterator &rhs) const
   {
