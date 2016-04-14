@@ -26,7 +26,7 @@ class rhh_container<_key_type, _value_type, _size_type,
 
  public:
 
-  /// initialize to 'end iterator' just in case
+  /// initialize to 'end iterator'
   value_iterator() :
     m_rhh_ptr(nullptr),
     m_key(),
@@ -109,7 +109,7 @@ class rhh_container<_key_type, _value_type, _size_type,
 
   static value_iterator end()
   {
-    return value_iterator(nullptr, kKeyNotFound);
+    return value_iterator();
   }
 
   /// --- performance optimized methods --- ///
@@ -120,13 +120,6 @@ class rhh_container<_key_type, _value_type, _size_type,
 
 
  private:
-
-  value_iterator(rhh_type* rhh_ptr, typename rhh_type::size_type pos) :
-    m_rhh_ptr(rhh_ptr),
-    m_key(),
-    m_pos(pos),
-    m_prb_dist()
-  { }
 
   inline bool is_equal(const value_iterator &rhs) const
   {

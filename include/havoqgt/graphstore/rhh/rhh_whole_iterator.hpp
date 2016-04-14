@@ -25,7 +25,7 @@ private:
 
 public:
 
-  /// initialize to 'end iterator' just in case
+  /// initialize to 'end iterator'
   whole_iterator() :
     m_rhh_ptr(nullptr),
     m_pos(kKeyNotFound)
@@ -104,7 +104,7 @@ public:
 
   static whole_iterator end()
   {
-    return whole_iterator(nullptr, kKeyNotFound);
+    return whole_iterator();
   }
 
   /// --- performance optimized methods --- ///
@@ -113,12 +113,8 @@ public:
     return (m_pos == rhh_type::kKeyNotFound);
   }
 
- private:
 
-  whole_iterator(rhh_type* rhh_ptr, typename rhh_type::size_type pos) :
-    m_rhh_ptr(rhh_ptr),
-    m_pos(pos)
-  { }
+ private:
 
   void next_valid_element()
   {
