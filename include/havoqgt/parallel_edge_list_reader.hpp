@@ -52,13 +52,6 @@
 #ifndef HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 #define HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 
-#define DIRECT_IO_IN_EDGELIST_READER 0
-#if DIRECT_IO_IN_EDGELIST_READER
-#include <havoqgt/graphstore/graphstore_utilities.hpp>
-#include <memory>
-#include <limits>
-#endif
-
 #define EDGE_WITH_DELTE_FLAG 0
 
 #include <vector>
@@ -73,32 +66,32 @@
 
 #include <havoqgt/environment.hpp>
 
- namespace havoqgt {
+#include <havoqgt/graphstore/graphstore_utilities.hpp>
+
+namespace havoqgt {
 
 /// Parallel edge list reader
 ///
-  class parallel_edge_list_reader {
+class parallel_edge_list_reader {
 
-  public:
-    typedef uint64_t                      vertex_descriptor;
-    typedef std::tuple<uint64_t, uint64_t, bool> edge_type;
-    /// typedef std::pair<uint64_t, uint64_t> edge_type;
+public:
+  typedef uint64_t                      vertex_descriptor;
+  typedef std::tuple<uint64_t, uint64_t, bool> edge_type;
 
   ///
   /// InputIterator class for rmat_edge_generator
+  class input_iterator_type : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t, const edge_type*, const edge_type&> {
 
-    class input_iterator_type : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t, const edge_type*, const edge_type&> {
-
-    public:
-      input_iterator_type(parallel_edge_list_reader* ptr_reader, uint64_t count)
+  public:
+    input_iterator_type(parallel_edge_list_reader* ptr_reader, uint64_t count)
       : m_ptr_reader(ptr_reader)
-      , m_count(count){
-        if(m_count == 0) {
-          get_next();
-          if (m_count != m_ptr_reader->m_local_edge_count) {
-            m_count = 0; //reset to zero
-          }
+      , m_count(count) {
+      if(m_count == 0) {
+        get_next();
+        if (m_count != m_ptr_reader->m_local_edge_count) {
+          m_count = 0; //reset to zero
         }
+      }
     }
 
     const edge_type& operator*() const { return m_current; }
@@ -141,12 +134,8 @@
 
       /// TODO: this is a temporal implementation for dynamicgraph
       if (!ret) { /// has reached to EOF
-          m_count = m_ptr_reader->m_local_edge_count;
+        m_count = m_ptr_reader->m_local_edge_count;
       }
-
-      /// Since there is no assumption on edge in dynamic graph, comment out the below codes
-      // assert(m_current.first <= m_ptr_reader->max_vertex_id());
-      // assert(m_current.second <= m_ptr_reader->max_vertex_id());
     }
 
     parallel_edge_list_reader* m_ptr_reader;
@@ -157,14 +146,17 @@
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames)
+  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool read_with_delete = false)
   {
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
     int node_size = havoqgt_env()->node_offset_comm().size();
+    int mpi_rank  = havoqgt::havoqgt_env()->world_comm().rank();
+
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
+    m_read_with_delete  = read_with_delete;
 
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
@@ -174,8 +166,9 @@
       }
     }
 
-    std::cout << "DIRECT_IO_IN_EDGELIST_READER: " << DIRECT_IO_IN_EDGELIST_READER << std::endl;
-    std::cout << "EDGE_WITH_DELTE_FLAG: " << EDGE_WITH_DELTE_FLAG << std::endl;
+    if (mpi_rank == 0) {
+      std::cout << "read_with_delete: " << m_read_with_delete << std::endl;
+    }
 
     char* p = getenv ("NUM_EDGES");
     if (p) {
@@ -211,52 +204,23 @@
 
 protected:
 
-
-#if DIRECT_IO_IN_EDGELIST_READER
-  enum { kAlignSize = 4096 };
-  typedef graphstore::utility::direct_file_reader<kAlignSize> direct_file_reaer_type;
-#endif
-
-
   bool try_read_edge(edge_type& edge) {
-#if DIRECT_IO_IN_EDGELIST_READER
-      while (!m_ptr_ifstreams.empty()) {
-        direct_file_reaer_type* reader = m_ptr_ifstreams.front();
-        std::string line;
-        if (reader->getline(line)) {
-            std::stringstream ssline(line);
-#if EDGE_WITH_DELTE_FLAG
-        ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
-#else
-        ssline >> std::get<0>(edge) >> std::get<1>(edge);
-        std::get<2>(edge) = false;
-#endif
-        // ssline >> edge.first >> edge.second;
-            return true;
-        } else { /// No remaining lines, close file.
-            delete m_ptr_ifstreams.front();
-            m_ptr_ifstreams.pop_front();
-        }
-      }
-#else
     while(!m_ptr_ifstreams.empty()) {
       std::string line;
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
         std::stringstream ssline(line);
-#if EDGE_WITH_DELTE_FLAG
-        ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
-#else
-        ssline >> std::get<0>(edge) >> std::get<1>(edge);
-        std::get<2>(edge) = false;
-#endif
-        // ssline >> edge.first >> edge.second;
+        if (m_read_with_delete) {
+          ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
+        } else {
+          ssline >> std::get<0>(edge) >> std::get<1>(edge);
+          std::get<2>(edge) = false;
+        }
         return true;
       } else { //No remaining lines, close file.
         delete m_ptr_ifstreams.front();
         m_ptr_ifstreams.pop_front();
       }
     }
-#endif
     return false;
   }
 
@@ -265,32 +229,74 @@ protected:
       HAVOQGT_ERROR_MSG("m_ptr_ifstreams not empty.");
     }
     for(auto itr=m_local_filenames.begin(); itr!=m_local_filenames.end(); ++itr) {
-#if DIRECT_IO_IN_EDGELIST_READER
-       direct_file_reaer_type *reader = new direct_file_reaer_type();
-       if (reader->set_file(itr->c_str())) {
-           m_ptr_ifstreams.push_back(reader);
-       }
-#else
       std::ifstream* ptr = new std::ifstream(*itr);
       if(ptr->good()) {
         m_ptr_ifstreams.push_back(ptr);
       } else {
         std::cerr << "Error opening filename: " << *itr;
       }
-#endif
     }
   }
 
-  std::vector< std::string >     m_local_filenames;
-#if DIRECT_IO_IN_EDGELIST_READER
-  std::deque<direct_file_reaer_type *> m_ptr_ifstreams;
-  std::deque<edge_type *> m_buffered_edges;
-#else
+  std::vector< std::string >   m_local_filenames;
   std::deque< std::ifstream* > m_ptr_ifstreams;
-#endif
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
+  bool m_read_with_delete;
+};
 
+
+/// Parallel edge list reader (direct IO)
+///
+class parallel_edge_list_reader_direct_io : public parallel_edge_list_reader {
+
+ public:
+  /// @todo Add undirected flag
+  parallel_edge_list_reader_direct_io(const std::vector< std::string >& filenames, bool read_with_delete = false) :
+    parallel_edge_list_reader(filenames, read_with_delete)
+  { }
+
+
+ protected:
+
+  enum { kAlignSize = 4096 };
+  typedef graphstore::utility::direct_file_reader<kAlignSize> direct_file_reaer_type;
+
+  bool try_read_edge(edge_type& edge) {
+    while (!m_ptr_ifstreams.empty()) {
+      direct_file_reaer_type* reader = m_ptr_ifstreams.front();
+      std::string line;
+      if (reader->getline(line)) {
+        std::stringstream ssline(line);
+        if (m_read_with_delete) {
+          ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
+        } else {
+          ssline >> std::get<0>(edge) >> std::get<1>(edge);
+          std::get<2>(edge) = false;
+        }
+        return true;
+      } else { /// No remaining lines, close file.
+        delete m_ptr_ifstreams.front();
+        m_ptr_ifstreams.pop_front();
+      }
+    }
+    return false;
+  }
+
+  void open_files() {
+    if(!m_ptr_ifstreams.empty()) {
+      HAVOQGT_ERROR_MSG("m_ptr_ifstreams not empty.");
+    }
+    for(auto itr=m_local_filenames.begin(); itr!=m_local_filenames.end(); ++itr) {
+      direct_file_reaer_type *reader = new direct_file_reaer_type();
+      if (reader->set_file(itr->c_str())) {
+        m_ptr_ifstreams.push_back(reader);
+      }
+    }
+  }
+
+  std::deque<direct_file_reaer_type *> m_ptr_ifstreams;
+  std::deque<edge_type *> m_buffered_edges;
 };
 
 } //end namespace havoqgt
