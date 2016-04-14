@@ -23,7 +23,6 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/container/vector.hpp>
 #include <boost/container/set.hpp>
-//#include <boost/sort/sort.hpp>
 #include <boost/range/algorithm.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>

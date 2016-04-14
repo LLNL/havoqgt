@@ -64,6 +64,11 @@ public:
 
 
   /// -------- Lookup -------- ///
+  std::pair<vertex_iterator, vertex_iterator> vertices()
+  {
+    return std::make_pair(vertices_begin(), vertices_end());
+  }
+
   vertex_iterator vertices_begin()
   {
     return vertex_iterator(m_map_table.begin());

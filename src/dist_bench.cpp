@@ -80,8 +80,24 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
  uint64_t chunk_size_log10_           = 6;
  std::string fname_segmentfile_       = "/dev/shm/segment_file";
  std::string graphstore_name_         = "DegAwareRHH";
+ bool     is_no_sync_                 = false;
  std::vector<std::string> fname_edge_list_;
 
+ void usage()  {
+   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
+     std::cerr << "Usage: \n"
+          << " -s <int>      - the logarithm base two of the number of vertices\n"
+          << " -e <int>      - edge factor\n"
+          << " -o <string>   - base filename to create segmentfiles\n"
+          << " -S <int>      - the logarithm base two of the size of each segmentfile\n"
+          << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
+          << " -c <int>      - the logarithm base ten of the chunk size\n"
+          << " -E <string>   - the name of the file which has a list of edgelist files\n"
+          << " -d            - delete the segmentfiles when exit\n"
+          << " -n            - don't call sync(2) every chunk\n"
+          << " -h            - print help and exit\n\n";
+   }
+ }
 
  void parse_options(int argc, char **argv)
  {
@@ -99,7 +115,7 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
    }
 
    char c;
-   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:")) != -1) {
+   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:C:")) != -1) {
      switch (c) {
        case 's':
          vertex_scale_ = boost::lexical_cast<size_t>(optarg);
@@ -131,6 +147,10 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
          is_delete_segmentfile_on_exit_ = true;
          break;
 
+       case 'n':
+         is_no_sync_ = true;
+         break;
+
        case 'E':
        {
          std::string fname(optarg);
@@ -157,7 +177,7 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
      std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
      if (fname_edge_list_.empty()) {
        std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
-       std::cout << "Building RMAT graph Edge factor: " << edge_factor_ << std::endl;
+       std::cout << "Building RMAT graph Edge factor (generate both direction): " << edge_factor_ << std::endl;
      } else {
        for (const auto itr : fname_edge_list_)
          std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
@@ -224,7 +244,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     const double time_update_end = MPI_Wtime();
 
     /// --- sync --- ///
-    if (lc_rank == 0) graphstore::utility::sync_files();
+    if (lc_rank == 0 && !is_no_sync_) graphstore::utility::sync_files();
     const double time_sync_end = MPI_Wtime();
 
     /// --- print a progress report --- ///
@@ -302,7 +322,7 @@ void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   uint64_t num_edges_per_rank = num_edges / mpi_size;
   havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
     vertex_scale, num_edges_per_rank,
-    0.57, 0.19, 0.19, 0.05, true, false);
+    0.57, 0.19, 0.19, 0.05, true, true);
 
   constract_graph(dg_visitor_queue, gstore, mmap_manager, rmat, chunk_size);
 }
@@ -414,7 +434,6 @@ int main(int argc, char** argv) {
       dist_gstore_type<degawarerhh_type> dist_graph(&gstore);
       visitor_type<degawarerhh_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<degawarerhh_type> dg_visitor_queue(&dist_graph);
-
 
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,

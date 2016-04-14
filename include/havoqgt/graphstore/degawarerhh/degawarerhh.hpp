@@ -39,7 +39,7 @@ class degawarerhh
   using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type>;
   using low_deg_table_type          = rhh_container<vertex_type, low_deg_table_value_type, size_type, segment_manager_type>;
 
-  using mh_deg_edge_chunk_type          = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
+  using mh_deg_edge_chunk_type      = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mh_deg_table_value_type     = utility::packed_pair<vertex_property_data_type, mh_deg_edge_chunk_type*>;
   using mh_deg_table_type           = rhh_container<vertex_type, mh_deg_table_value_type, size_type, segment_manager_type>;
   using graphstore_rhhda_selftype   = degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
@@ -86,22 +86,27 @@ class degawarerhh
 
 
   /// -------- Lookup -------- ///
-  inline vertex_iterator vertices_begin()
+  std::pair<vertex_iterator, vertex_iterator> vertices()
+  {
+    return std::make_pair(vertices_begin(), vertices_end());
+  }
+
+  vertex_iterator vertices_begin()
   {
     return vertex_iterator(low_deg_vertices_begin(), mh_deg_vertices_begin());
   }
 
-  inline static vertex_iterator vertices_end()
+  static vertex_iterator vertices_end()
   {
     return vertex_iterator(low_deg_vertices_end(), mh_deg_vertices_end());
   }
 
-  inline adjacent_edge_iterator adjacent_edge_begin(const vertex_type& src_vrtx)
+  adjacent_edge_iterator adjacent_edge_begin(const vertex_type& src_vrtx)
   {
     return adjacent_edge_iterator(low_deg_adjacent_edge_begin(src_vrtx), mh_deg_adjacent_edge_begin(src_vrtx));
   }
 
-  inline static adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
+  static adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
   {
     return adjacent_edge_iterator(low_deg_adjacent_edge_end(), mh_deg_adjacent_edge_end());
   }
@@ -931,15 +936,15 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 
 
  private:
-  inline typename low_deg_table_type::whole_iterator begin_low_edges()
-  {
-    return low_deg_table_type::end();
-  }
+//  inline typename low_deg_table_type::whole_iterator begin_low_edges()
+//  {
+//    return low_deg_table_type::end();
+//  }
 
-  inline typename mh_deg_table_type::whole_iterator begin_mh_edges()
-  {
-    return m_mh_degree_table->begin();
-  }
+//  inline typename mh_deg_table_type::whole_iterator begin_mh_edges()
+//  {
+//    return m_mh_degree_table->begin();
+//  }
 
   inline typename low_deg_table_type::value_iterator find_low_edge (const vertex_type& src_vrt)
   {

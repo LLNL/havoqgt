@@ -177,6 +177,7 @@ int main(int argc, char** argv) {
 
   // Run algorithm.
   havoqgt::mpi::graph_colour_dynamic<dist_graphstore_type, havoqgt::parallel_edge_list_reader, vertex_property_type>(&dist_graphstore, &edgelist, verify);
+
   if (mpi_rank == 0) {
     std::cout << "Collecting stats...\n";
   }

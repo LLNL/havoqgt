@@ -474,6 +474,7 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
     }
     assert(graphstore.num_edges() == 0);
   }
+
 }
 
 
@@ -521,14 +522,14 @@ int main(int argc, char** argv) {
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(mmap_manager.get_segment_manager());
 
-  run_time("can handle basic operations on a low degree graph?", test1(graphstore, 1024, 2));
+  run_time("can handle basic operations on a low degree graph?", test1(graphstore, 4, 2));
   run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, 1, middle_high_degree_threshold));
 
   run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 1024, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
   run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, middle_high_degree_threshold * 2, 64));
 
-//  run_time("can handle basic operations on a large graph?", test1(graphstore, 1<<22ULL, 128));
-//  run_time("can handle long probe distances on the graph?", test2(graphstore, 1<<22ULL, 128, 64));
+  run_time("can handle basic operations on a large graph?", test1(graphstore, 1<<22ULL, 128));
+  run_time("can handle long probe distances on the graph?", test2(graphstore, 1<<22ULL, 128, 64));
 
   run_time("can handle basic operations on a rmat graph?", test3(graphstore, 17, 4, 10));
   run_time("can handle duplicate operations on the graph?", test4(graphstore, 17, 4, 10));

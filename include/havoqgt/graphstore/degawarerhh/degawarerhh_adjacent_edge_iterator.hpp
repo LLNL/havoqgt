@@ -35,8 +35,8 @@ class degawarerhh<vertex_type,
 
   adjacent_edge_iterator(low_deg_edge_iterator_type&& low_itr,
                          mh_deg_edge_iterator_type&& mh_itr) :
-    m_low_itr(low_itr),
-    m_mh_itr(mh_itr)
+    m_low_itr(std::move(low_itr)),
+    m_mh_itr(std::move(mh_itr))
   { }
 
 
