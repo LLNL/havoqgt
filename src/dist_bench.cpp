@@ -115,7 +115,7 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
    }
 
    char c;
-   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:C:")) != -1) {
+   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:n")) != -1) {
      switch (c) {
        case 's':
          vertex_scale_ = boost::lexical_cast<size_t>(optarg);

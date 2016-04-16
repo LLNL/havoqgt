@@ -13,7 +13,7 @@ namespace rhh {
 
 #define RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE 1
 #define RHH_CHAIN_AT_LARGE_TABLE_SIZE 0
-#define RHH_DETAILED_ANALYSYS 0 /// !!! not supporting growing
+#define RHH_DETAILED_ANALYSYS 0 /// !!! will be invalid when the table grow !!!
 
 static constexpr double kFullCapacitFactor  = 0.9;
 

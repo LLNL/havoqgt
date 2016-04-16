@@ -52,8 +52,6 @@
 #ifndef HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 #define HAVOQGT_PARALLEL_EDGE_LIST_READER_INCLUDED
 
-#define EDGE_WITH_DELTE_FLAG 0
-
 #include <vector>
 #include <fstream>
 #include <deque>

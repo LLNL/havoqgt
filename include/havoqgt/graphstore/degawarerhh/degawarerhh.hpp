@@ -63,11 +63,11 @@ class degawarerhh
     m_low_degree_table = low_deg_table_type::allocate(2);
     m_mh_degree_table = mh_deg_table_type::allocate(2);
 
-    std::cout << "Middle-high degree threshold = " << middle_high_degree_threshold << std::endl;
-    std::cout << "Element size: \n"
-              << " low_degree_table = " << low_deg_table_type::kElementSize << "\n"
-              << " mh_edge_chunk = " << mh_deg_edge_chunk_type::kElementSize << "\n"
-              << " mh_degree_table = " << mh_deg_table_type::kElementSize << std::endl;
+//    std::cout << "Middle-high degree threshold = " << middle_high_degree_threshold << std::endl;
+//    std::cout << "Element size: \n"
+//              << " low_degree_table = " << low_deg_table_type::kElementSize << "\n"
+//              << " mh_edge_chunk = " << mh_deg_edge_chunk_type::kElementSize << "\n"
+//              << " mh_degree_table = " << mh_deg_table_type::kElementSize << std::endl;
 
 #if RHH_DETAILED_ANALYSYS
     m_low_degree_table->init_detailed_analysis();
