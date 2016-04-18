@@ -25,13 +25,13 @@ private:
 
 public:
 
-  /// initialize to 'end iterator'
+  /// initialize to an 'end iterator'
   whole_iterator() :
     m_rhh_ptr(nullptr),
     m_pos(kKeyNotFound)
   { }
 
-  explicit whole_iterator(rhh_type* rhh) :
+  explicit whole_iterator(rhh_type* const rhh) :
     m_rhh_ptr(rhh),
     m_pos(-1) /// Note: next_valid_element increment m_pos in the first line
   {
@@ -51,15 +51,19 @@ public:
   { }
 
   /// Copy assignment operators
-  whole_iterator& operator=(whole_iterator other)
+  whole_iterator& operator=(const whole_iterator& other)
   {
-    swap(other);
+    m_rhh_ptr = other.m_rhh_ptr;
+    m_pos     = other.m_pos;
+    return *this;
   }
 
   /// Move assignment operators
   whole_iterator& operator=(whole_iterator&& other)
   {
-    swap(other);
+    m_rhh_ptr = std::move(other.m_rhh_ptr);
+    m_pos     = std::move(other.m_pos);
+    return *this;
   }
 
   void swap(whole_iterator &other) noexcept

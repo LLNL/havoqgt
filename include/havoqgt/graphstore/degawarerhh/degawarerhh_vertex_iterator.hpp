@@ -29,13 +29,52 @@ class degawarerhh<vertex_type,
 
  public:
 
-  vertex_iterator() =delete;
+  /// ---- Constructors ----
+  /// initialize to an 'end iterator'
+  vertex_iterator() :
+  m_low_itr(low_deg_table_iterator_type::end()),
+  m_mh_itr(mh_deg_table_iterator_type::end())
+  { }
 
-  vertex_iterator (low_deg_table_iterator_type&& low_itr,
-                   mh_deg_table_iterator_type&& mh_itr) :
+  vertex_iterator (const low_deg_table_iterator_type& low_itr,
+                   const mh_deg_table_iterator_type& mh_itr) :
     m_low_itr(low_itr),
     m_mh_itr(mh_itr)
   { }
+
+  vertex_iterator (low_deg_table_iterator_type&& low_itr,
+                   mh_deg_table_iterator_type&& mh_itr) :
+    m_low_itr(std::move(low_itr)),
+    m_mh_itr(std::move(mh_itr))
+  { }
+
+  /// Copy constructor
+  vertex_iterator (const vertex_iterator& other) :
+    m_low_itr(other.m_low_itr),
+    m_mh_itr(other.m_mh_itr)
+  { }
+
+  /// Move constructor
+  vertex_iterator (vertex_iterator&& other) :
+    m_low_itr(std::move(other.m_low_itr)),
+    m_mh_itr(std::move(other.m_mh_itr))
+  { }
+
+  /// Copy assignment operators
+  vertex_iterator& operator=(const vertex_iterator& other)
+  {
+    m_low_itr = other.m_low_itr;
+    m_mh_itr  = other.m_mh_itr;
+    return *this;
+  }
+
+  /// Move assignment operators
+  vertex_iterator& operator=(vertex_iterator&& other)
+  {
+    m_low_itr = std::move(other.m_low_itr);
+    m_mh_itr  = std::move(other.m_mh_itr);
+    return *this;
+  }
 
   void swap(self_type &other) noexcept
   {
@@ -84,6 +123,12 @@ class degawarerhh<vertex_type,
       return m_low_itr->value.first;
     }
     return m_mh_itr->value.first;
+  }
+
+  static adjacent_edge_iterator end()
+  {
+    return adjacent_edge_iterator(low_deg_table_iterator_type::end(),
+                                  mh_deg_table_iterator_type::end());
   }
 
 

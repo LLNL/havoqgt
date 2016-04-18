@@ -26,7 +26,8 @@ class rhh_container<_key_type, _value_type, _size_type,
 
  public:
 
-  /// initialize to 'end iterator'
+  /// ---- Constructors ----
+  /// initialize to an 'end iterator'
   value_iterator() :
     m_rhh_ptr(nullptr),
     m_key(),
@@ -60,17 +61,34 @@ class rhh_container<_key_type, _value_type, _size_type,
   { }
 
   /// Assignment operators
-  value_iterator& operator=(value_iterator&) = delete;
-  value_iterator& operator=(value_iterator&&) = delete;
+  value_iterator& operator=(const value_iterator& other)
+  {
+    m_rhh_ptr   = other.m_rhh_ptr;
+    m_key       = other.m_key;
+    m_pos       = other.m_pos;
+    m_prb_dist  = other.m_prb_dist;
+    return *this;
+  }
+
+  /// Move operators
+  value_iterator& operator=(value_iterator&& other)
+  {
+    m_rhh_ptr   = std::move(other.m_rhh_ptr);
+    m_key       = std::move(other.m_key);
+    m_pos       = std::move(other.m_pos);
+    m_prb_dist  = std::move(other.m_prb_dist);
+    return *this;
+  }
 
 
-//  void swap(value_iterator &other) noexcept
-//  {
-//    using std::swap;
-//    swap(m_rhh_ptr, other.m_rhh_ptr);
-//    swap(m_pos, other.m_pos);
-//    swap(m_prb_dist, other.m_prb_dist);
-//  }
+  void swap(value_iterator &other) noexcept
+  {
+    using std::swap;
+    swap(m_rhh_ptr, other.m_rhh_ptr);
+    swap(m_key, other.m_key);
+    swap(m_pos, other.m_pos);
+    swap(m_prb_dist, other.m_prb_dist);
+  }
 
   // Pre-increment
   value_iterator &operator++ ()
@@ -134,7 +152,7 @@ class rhh_container<_key_type, _value_type, _size_type,
   }
 
   rhh_type* m_rhh_ptr;
-  const typename rhh_type::key_type m_key;
+  typename rhh_type::key_type m_key;
   typename rhh_type::size_type m_pos;
   typename rhh_type::probedistance_type m_prb_dist;
 };

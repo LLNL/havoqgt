@@ -36,7 +36,7 @@ class degawarerhh
 
  private:
   using size_type                   = size_t;
-  using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type>;
+  using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, void>;
   using low_deg_table_type          = rhh_container<vertex_type, low_deg_table_value_type, size_type, segment_manager_type>;
 
   using mh_deg_edge_chunk_type      = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
@@ -63,12 +63,6 @@ class degawarerhh
     m_low_degree_table = low_deg_table_type::allocate(2);
     m_mh_degree_table = mh_deg_table_type::allocate(2);
 
-//    std::cout << "Middle-high degree threshold = " << middle_high_degree_threshold << std::endl;
-//    std::cout << "Element size: \n"
-//              << " low_degree_table = " << low_deg_table_type::kElementSize << "\n"
-//              << " mh_edge_chunk = " << mh_deg_edge_chunk_type::kElementSize << "\n"
-//              << " mh_degree_table = " << mh_deg_table_type::kElementSize << std::endl;
-
 #if RHH_DETAILED_ANALYSYS
     m_low_degree_table->init_detailed_analysis();
 #endif
@@ -84,19 +78,42 @@ class degawarerhh
     rhh::destroy_allocator<typename mh_deg_table_type::allocator>();
   }
 
+  /// explicitly delete to prevent unexpected behaivers
+  degawarerhh(const degawarerhh&) = delete;
+  degawarerhh(degawarerhh&&) = delete;
+  degawarerhh& operator=(const degawarerhh&) = delete;
+  degawarerhh& operator=(degawarerhh&&) = delete;
+
 
   /// -------- Lookup -------- ///
-  std::pair<vertex_iterator, vertex_iterator> vertices()
+  std::pair<vertex_iterator, vertex_iterator> find_vertex(const vertex_type& vertex)
+  {
+    return std::make_pair(vertex_iterator(m_low_degree_table->find(vertex), m_mh_degree_table->find(vertex)),
+                          vertex_iterator(m_mh_degree_table->find_end(), m_mh_degree_table->find_end()));
+  }
+
+  /// TODO: implementation
+  std::pair<adjacent_edge_iterator, adjacent_edge_iterator> find_edge(const vertex_type& vertex)
+  {
+  }
+
+  std::pair<vertex_iterator, vertex_iterator> vertices() /// !!!!! this doesn't work !!!!!!
   {
     return std::make_pair(vertices_begin(), vertices_end());
   }
 
+  std::pair<adjacent_edge_iterator, adjacent_edge_iterator> adjacent_edge(const vertex_type& src_vrtx)
+  {
+    return std::make_pair(adjacent_edge_begin(src_vrtx), adjacent_edge_end());
+  }
+
+  /// TOD: move the following functions to private
   vertex_iterator vertices_begin()
   {
     return vertex_iterator(low_deg_vertices_begin(), mh_deg_vertices_begin());
   }
 
-  static vertex_iterator vertices_end()
+  vertex_iterator vertices_end()
   {
     return vertex_iterator(low_deg_vertices_end(), mh_deg_vertices_end());
   }
@@ -106,9 +123,15 @@ class degawarerhh
     return adjacent_edge_iterator(low_deg_adjacent_edge_begin(src_vrtx), mh_deg_adjacent_edge_begin(src_vrtx));
   }
 
-  static adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
+  adjacent_edge_iterator adjacent_edge_end()
   {
     return adjacent_edge_iterator(low_deg_adjacent_edge_end(), mh_deg_adjacent_edge_end());
+  }
+
+  /// a wrapper so that provide compatible interface with baseline
+  adjacent_edge_iterator adjacent_edge_end(const vertex_type&)
+  {
+    return adjacent_edge_end();
   }
 
 
@@ -573,14 +596,14 @@ class degawarerhh
     return m_mh_degree_table->begin();
   }
 
-  inline static typename low_deg_table_type::whole_iterator low_deg_vertices_end()
+  inline typename low_deg_table_type::whole_iterator low_deg_vertices_end()
   {
-    return low_deg_table_type::end();
+    return m_low_degree_table->end();
   }
 
-  inline static typename mh_deg_table_type::whole_iterator mh_deg_vertices_end()
+  inline typename mh_deg_table_type::whole_iterator mh_deg_vertices_end()
   {
-    return mh_deg_table_type::end();
+    return m_mh_degree_table->end();
   }
 
 
@@ -648,7 +671,7 @@ class degawarerhh <vertex_type, vertex_property_data_type, edge_property_data_ty
 {
  private:
   using size_type = size_t;
-  using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type>;
+  using low_deg_table_value_type    = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, void>;
   using low_deg_table_type          = rhh_container<vertex_type, low_deg_table_value_type, size_type, segment_manager_type>;
   using mh_deg_edge_chunk_type       = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mh_deg_table_value_type = utility::packed_pair<vertex_property_data_type, mh_deg_edge_chunk_type*>;

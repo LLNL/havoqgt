@@ -21,23 +21,6 @@ namespace graphstore {
 namespace rhh {
 
 /// ---- Utility functions ---- ///
-//template<typename key_type,
-//         typename value_type,
-//         typename size_type,
-//         typename segment_manager_type,
-//         typename key_hash_func,
-//         typename property_program>
-// inline bool has_key(rhh_container<key_type, value_type, size_type,
-//                            segment_manager_type,
-//                            key_hash_func, property_program>* const rhh,
-//              const key_type& key)
-//{
-//  return (rhh->find(key) != rhh_container<key_type, value_type, size_type,
-//                                           segment_manager_type,
-//                                           key_hash_func, property_program>::kKeyNotFound);
-//}
-
-
 template <typename rhh_type>
 inline static void resize(rhh_type** rhh, const typename rhh_type::size_type new_capacity)
 {
@@ -226,7 +209,6 @@ class rhh_container {
   {
     return whole_iterator::end();
   }
-
 
   /// ---- Modifiers ---- ///
   inline bool insert(key_type& key, value_type& value, key_type& key_long_prbdst, value_type& val_long_prbdst)

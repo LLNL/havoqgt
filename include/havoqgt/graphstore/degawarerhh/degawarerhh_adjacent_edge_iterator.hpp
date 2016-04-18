@@ -30,8 +30,18 @@ class degawarerhh<vertex_type,
 
  public:
 
-  adjacent_edge_iterator() =delete;
+  /// ---- Constructors ----
+  /// initialize to an 'end iterator'
+  adjacent_edge_iterator() :
+  m_low_itr(low_deg_edge_iterator_type::end()),
+  m_mh_itr(mh_deg_edge_iterator_type::end())
+  { }
 
+  adjacent_edge_iterator(const low_deg_edge_iterator_type& low_itr,
+                         const mh_deg_edge_iterator_type& mh_itr) :
+    m_low_itr(low_itr),
+    m_mh_itr(mh_itr)
+  { }
 
   adjacent_edge_iterator(low_deg_edge_iterator_type&& low_itr,
                          mh_deg_edge_iterator_type&& mh_itr) :
@@ -39,6 +49,33 @@ class degawarerhh<vertex_type,
     m_mh_itr(std::move(mh_itr))
   { }
 
+  /// Copy constructor
+  adjacent_edge_iterator (const adjacent_edge_iterator& other) :
+    m_low_itr(other.m_low_itr),
+    m_mh_itr(other.m_mh_itr)
+  { }
+
+  /// Move constructor
+  adjacent_edge_iterator (adjacent_edge_iterator&& other) :
+    m_low_itr(std::move(other.m_low_itr)),
+    m_mh_itr(std::move(other.m_mh_itr))
+  { }
+
+  /// Copy assignment operators
+  adjacent_edge_iterator& operator=(const adjacent_edge_iterator& other)
+  {
+    m_low_itr = other.m_low_itr;
+    m_mh_itr  = other.m_mh_itr;
+    return *this;
+  }
+
+  /// Move assignment operators
+  adjacent_edge_iterator& operator=(adjacent_edge_iterator&& other)
+  {
+    m_low_itr = std::move(other.m_low_itr);
+    m_mh_itr  = std::move(other.m_mh_itr);
+    return *this;
+  }
 
   void swap(self_type &other) noexcept
   {
@@ -87,6 +124,12 @@ class degawarerhh<vertex_type,
       return m_low_itr->third;
     }
     return m_mh_itr->value;
+  }
+
+  static adjacent_edge_iterator end()
+  {
+    return adjacent_edge_iterator(low_deg_edge_iterator_type::end(),
+                                  mh_deg_edge_iterator_type::end());
   }
 
 
