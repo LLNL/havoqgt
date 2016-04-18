@@ -66,6 +66,15 @@ public:
     return std::make_pair(vertices_begin(), vertices_end());
   }
 
+  std::pair<adjacent_edge_iterator, adjacent_edge_iterator> adjacent_edge(const vertex_type& src_vrt)
+  {
+    const auto itr = m_map_table.find(src_vrt);
+    edge_vec_type& edge_vec = itr->second.second;
+    return std::make_pair(adjacent_edge_iterator(edge_vec.begin()),
+                          adjacent_edge_iterator(edge_vec.end()));
+  }
+
+  /// move the following 4 functions to private
   vertex_iterator vertices_begin()
   {
     return vertex_iterator(m_map_table.begin());
