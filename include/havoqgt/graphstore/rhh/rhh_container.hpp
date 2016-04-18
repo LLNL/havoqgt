@@ -68,19 +68,19 @@ void insert(rhh_type** rhh, key_type key, value_type value)
   }
 
   /// --- dealing with a long probe distance problem --- ///
-  if (!(*rhh)->insert(key, value, key, value)) {
+  if (!(*rhh)->insert(std::move(key), std::move(value), key, value)) {
 #if RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
     grow(rhh);
 #else
     chain(rhh);
 #endif
-    if (!(*rhh)->insert(key, value, key, value)) {
+    if (!(*rhh)->insert(std::move(key), std::move(value), key, value)) {
       /// This program enter this point when a long probe distance problem is occurred
       /// and growing capacity strategy can't solve the problem.
       /// When there are a lot of element whoes key is exactoly same,
       /// chaining operation is the only strategy that can slove the problem.
       chain(rhh);
-      assert((*rhh)->insert(key, value, key, value));
+      assert((*rhh)->insert(std::move(key), std::move(value), key, value));
     }
   }
 }
@@ -211,7 +211,7 @@ class rhh_container {
   }
 
   /// ---- Modifiers ---- ///
-  inline bool insert(key_type& key, value_type& value, key_type& key_long_prbdst, value_type& val_long_prbdst)
+  inline bool insert(key_type&& key, value_type&& value, key_type& key_long_prbdst, value_type& val_long_prbdst)
   {
     const bool is_success = insert_into_body(std::move(key), std::move(value), key_long_prbdst, val_long_prbdst);
     m_num_elems += is_success;

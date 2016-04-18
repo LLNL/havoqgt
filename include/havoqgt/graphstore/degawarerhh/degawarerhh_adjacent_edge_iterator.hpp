@@ -24,8 +24,8 @@ class degawarerhh<vertex_type,
                                                  segment_manager_type,
                                                  middle_high_degree_threshold>;
   using self_type                  = graphstore_type::adjacent_edge_iterator;
-  using low_deg_edge_iterator_type = typename graphstore_type::low_deg_table_type::value_iterator;
-  using mh_deg_edge_iterator_type  = typename graphstore_type::mh_deg_edge_chunk_type::whole_iterator;
+  using ldeg_edge_iterator_type = typename graphstore_type::ldeg_table_type::value_iterator;
+  using mhdeg_edge_iterator_type  = typename graphstore_type::mhdeg_edge_chunk_type::whole_iterator;
 
 
  public:
@@ -33,18 +33,18 @@ class degawarerhh<vertex_type,
   /// ---- Constructors ----
   /// initialize to an 'end iterator'
   adjacent_edge_iterator() :
-  m_low_itr(low_deg_edge_iterator_type::end()),
-  m_mh_itr(mh_deg_edge_iterator_type::end())
+    m_low_itr(ldeg_edge_iterator_type::end()),
+    m_mh_itr(mhdeg_edge_iterator_type::end())
   { }
 
-  adjacent_edge_iterator(const low_deg_edge_iterator_type& low_itr,
-                         const mh_deg_edge_iterator_type& mh_itr) :
+  adjacent_edge_iterator(const ldeg_edge_iterator_type& low_itr,
+                         const mhdeg_edge_iterator_type& mh_itr) :
     m_low_itr(low_itr),
     m_mh_itr(mh_itr)
   { }
 
-  adjacent_edge_iterator(low_deg_edge_iterator_type&& low_itr,
-                         mh_deg_edge_iterator_type&& mh_itr) :
+  adjacent_edge_iterator(ldeg_edge_iterator_type&& low_itr,
+                         mhdeg_edge_iterator_type&& mh_itr) :
     m_low_itr(std::move(low_itr)),
     m_mh_itr(std::move(mh_itr))
   { }
@@ -128,17 +128,17 @@ class degawarerhh<vertex_type,
 
   static adjacent_edge_iterator end()
   {
-    return adjacent_edge_iterator(low_deg_edge_iterator_type::end(),
-                                  mh_deg_edge_iterator_type::end());
+    return adjacent_edge_iterator(ldeg_edge_iterator_type::end(),
+                                  mhdeg_edge_iterator_type::end());
   }
-
-
- private:
 
   inline bool is_equal(const self_type &rhs) const
   {
     return (m_low_itr == rhs.m_low_itr) && (m_mh_itr == rhs.m_mh_itr);
   }
+
+
+ private:
 
   inline void find_next_value()
   {
@@ -149,8 +149,8 @@ class degawarerhh<vertex_type,
     }
   }
 
-  low_deg_edge_iterator_type m_low_itr;
-  mh_deg_edge_iterator_type m_mh_itr;
+  ldeg_edge_iterator_type m_low_itr;
+  mhdeg_edge_iterator_type m_mh_itr;
 };
 
 }
