@@ -54,9 +54,14 @@ struct packed_pair
 
   packed_pair() {}
 
-  packed_pair(T1 t1, T2 t2) :
+  packed_pair(const T1& t1, const T2& t2) :
     first(t1),
     second(t2)
+  {}
+
+  packed_pair(T1&& t1, T2&& t2) :
+    first(std::move(t1)),
+    second(std::move(t2))
   {}
 
   packed_pair(const packed_pair<T1, T2>& other) :
@@ -69,9 +74,17 @@ struct packed_pair
     second(std::move(other.second))
   {}
 
-  packed_pair<T1, T2>& operator=(packed_pair<T1, T2> other)
+  packed_pair<T1, T2>& operator=(const packed_pair<T1, T2>& other)
   {
-    swap(other);
+    first = other.first;
+    second = other.second;
+    return *this;
+  }
+
+  packed_pair<T1, T2>& operator=(packed_pair<T1, T2>&& other)
+  {
+    first = std::move(other.first);
+    second = std::move(other.second);
     return *this;
   }
 
@@ -83,6 +96,7 @@ struct packed_pair
   }
 
 };
+
 template<typename T1, typename T2>
 inline bool operator==(const packed_pair<T1, T2>& lhs, const packed_pair<T1, T2>& rhs) {
     return lhs.first == rhs.first && lhs.second == rhs.second;
@@ -91,69 +105,6 @@ template<typename T1, typename T2>
 inline bool operator!=(const packed_pair<T1, T2>& lhs, const packed_pair<T1, T2>& rhs) {
     return !(lhs == rhs);
 }
-
-
-//#pragma pack(1)
-//template <typename T1, typename T2, typename T3>
-//struct packed_tuple
-//{
-//  T1 first;
-//  T2 second;
-//  T3 third;
-
-//  using self_type = packed_tuple<T1, T2, T3>;
-
-//  packed_tuple() {}
-
-//  packed_tuple(T1 t1, T2 t2, T3 t3) :
-//    first(t1),
-//    second(t2),
-//    third(t3)
-//  {}
-
-//  packed_tuple(const self_type& other) :
-//    first(other.first),
-//    second(other.second),
-//    third(other.third)
-//  {}
-
-//  packed_tuple(self_type&& other) noexcept :
-//    first(std::move(other.first)),
-//    second(std::move(other.second)),
-//    third(std::move(other.third))
-//  {}
-
-//  self_type& operator=(self_type other)
-//  {
-//    swap(other);
-//    return *this;
-//  }
-
-//  self_type& operator=(self_type&& other)
-//  {
-//    swap(other);
-//    return *this;
-//  }
-
-//  void swap(self_type& other)
-//  {
-//    using std::swap;
-//    swap(first, other.first);
-//    swap(second, other.second);
-//    swap(third,  other.third);
-//  }
-
-//};
-
-//template<typename T1, typename T2, typename T3>
-//inline bool operator==(const packed_tuple<T1, T2, T3>& lhs, const packed_tuple<T1, T2, T3>& rhs) {
-//    return lhs.first == rhs.first && lhs.second == rhs.second && lhs.third == rhs.third;
-//}
-
-//template<typename T1, typename T2, typename T3>
-//inline bool operator!=(const packed_tuple<T1, T2, T3>& lhs, const packed_tuple<T1, T2, T3>& rhs) {
-//    return !(lhs == rhs);
-//}
 
 #pragma pack(1)
 template <typename T1, typename T2, typename T3, typename T4>
@@ -169,11 +120,18 @@ struct packed_tuple
   /// ---- Constructors ----
   packed_tuple() {}
 
-  packed_tuple(T1 t1, T2 t2, T3 t3, T4 t4) :
+  packed_tuple(const T1& t1, const T2& t2, const T3& t3, const T4& t4) :
     first(t1),
     second(t2),
     third(t3),
     fourth(t4)
+  {}
+
+  packed_tuple(T1&& t1, T2&& t2, T3&& t3, T4&& t4) :
+    first(std::move(t1)),
+    second(std::move(t2)),
+    third(std::move(t3)),
+    fourth(std::move(t4))
   {}
 
   /// Copy constructor
@@ -234,7 +192,6 @@ inline bool operator!=(const packed_tuple<T1, T2, T3, T4>& lhs, const packed_tup
     return !(lhs == rhs);
 }
 
-
 #pragma pack(1)
 template <typename T1, typename T2, typename T3>
 struct packed_tuple <T1, T2, T3, void>
@@ -248,10 +205,16 @@ struct packed_tuple <T1, T2, T3, void>
   /// ---- Constructors ----
   packed_tuple() {}
 
-  packed_tuple(T1 t1, T2 t2, T3 t3) :
+  packed_tuple(const T1& t1, const T2& t2, const T3& t3) :
     first(t1),
     second(t2),
     third(t3)
+  {}
+
+  packed_tuple(T1&& t1, T2&& t2, T3&& t3) :
+    first(std::move(t1)),
+    second(std::move(t2)),
+    third(std::move(t3))
   {}
 
   /// Copy constructor

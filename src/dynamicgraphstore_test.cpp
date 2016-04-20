@@ -18,7 +18,7 @@ using edge_property_type    = uint64_t;
 using vertex_property_type  = uint64_t;
 
 enum : size_t {
-  middle_high_degree_threshold = 10 // must be more or equal than 1
+  middle_high_degree_threshold = 2 // must be more or equal than 1
 };
 
 #if 0

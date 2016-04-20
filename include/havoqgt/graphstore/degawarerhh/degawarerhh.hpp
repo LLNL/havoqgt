@@ -137,6 +137,22 @@ class degawarerhh
 
   /// -------- Modifiers ------- ////
 
+  void move_elements_ldeg_table_to_mhdeg_table(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
+  {
+    /// --- move the elements from low degree table to mid-high degree table --- ///
+    mhdeg_edge_chunk_type* edge_chunk = mhdeg_edge_chunk_type::allocate(middle_high_degree_threshold * 2);
+    auto itr_ldeg_value = m_ldeg_table->find(src);
+    mhdeg_table_value_type mhdeg_table_value(std::move(itr_ldeg_value->first), nullptr); /// set a vertex property
+    for (; !itr_ldeg_value.is_end(); ++itr_ldeg_value) {
+      rhh::insert(&edge_chunk, itr_ldeg_value->second, itr_ldeg_value->third); /// move a element to mhdeg table
+      m_ldeg_table->erase(itr_ldeg_value); /// erase the element from ldeg table
+    }
+    rhh::insert(&edge_chunk, trg, weight); /// insert the new edge into edge chunk
+    mhdeg_table_value.second = edge_chunk;
+    rhh::insert(&m_mhdeg_table, src, mhdeg_table_value);
+    /// rhh::shrink_to_fit(&m_ldeg_table, 2.0);
+  }
+
   ///
   /// \brief insert_edge
   ///   inert a edge uniquely
@@ -149,51 +165,37 @@ class degawarerhh
   bool insert_edge(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
   {
 
-    /// -- count the degree of the source vertex in the low degree table -- ///
+    /// -- count the degree of the source vertex in low degree table -- ///
     size_type count_in_single = 0;
-    for (auto itr_single = ldeg_adjacent_edge_begin(src); !itr_single.is_end(); ++itr_single) {
-      if ((*itr_single).second == trg) {
+    for (auto itr_ldeg_value = ldeg_adjacent_edge_begin(src); !itr_ldeg_value.is_end(); ++itr_ldeg_value) {
+      if ((*itr_ldeg_value).second == trg) {
         /// --- if the same edge is found, do nothing --- ///
         return false;
       }
       ++count_in_single;
     }
 
-    if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
+    if (count_in_single > 0) { /// -- low degree table has the source vertex -- ///
       if (count_in_single + 1 < middle_high_degree_threshold) {
-        /// --- insert into the low table --- ///
+        /// --- insert into low degree table --- ///
         rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
       } else {
-
-        /// --- move the elements from low table to high-mid table --- ///
-        mhdeg_edge_chunk_type* adj_list = mhdeg_edge_chunk_type::allocate(middle_high_degree_threshold * 2);
-        auto itr_single = m_ldeg_table->find(src);
-        mhdeg_table_value_type value((*itr_single).first, nullptr);
-        for (; !itr_single.is_end(); ++itr_single) {
-          rhh::insert(&adj_list, (*itr_single).second, (*itr_single).third);
-          m_ldeg_table->erase(itr_single);
-        }
-        rhh::insert(&adj_list, trg, weight);
-        value.second = adj_list;
-        rhh::insert(&m_mhdeg_table, src, value);
-        /// rhh::shrink_to_fit(&m_ldeg_table);
+        /// --- move the elements from low degree table to mid-high degree table --- ///
+        move_elements_ldeg_table_to_mhdeg_table(src, trg, weight);
       }
 
     } else {
-      auto itr_src = m_mhdeg_table->find(src);
-      if (itr_src.is_end()) {
-        /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
-        ldeg_table_value_type value(vertex_property_data_type(), trg, weight);
-        rhh::insert(&m_ldeg_table, src, value);
+      auto itr_mhdeg_src = m_mhdeg_table->find(src);
+      if (itr_mhdeg_src.is_end()) {
+        /// --- since mid-high degree table dosen't have the vertex, insert into low degree table (new vertex) --- ///
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
       } else {
-        /// --- the high-mid table has source vertex --- ///
-        mhdeg_edge_chunk_type* adj_list = itr_src->second;
-        auto itr_trg = adj_list->find(trg);
-
-        if (itr_trg.is_end()) {
+        /// --- mid-high degree table alredy has the source vertex --- ///
+        mhdeg_edge_chunk_type* edge_chunk = itr_mhdeg_src->second;
+        if (edge_chunk->find(trg).is_end()) {
           /// --- insert the edge --- ///
-          rhh::insert(&adj_list, trg, weight);
-          itr_src->second = adj_list;
+          rhh::insert(&edge_chunk, trg, weight);
+          itr_mhdeg_src->second = edge_chunk;
         } else {
           /// --- if the same edge is found, do nothing --- ///
           return false;
@@ -211,41 +213,28 @@ class degawarerhh
   void insert_edge_dup(const vertex_type& src, const vertex_type& trg, const edge_property_data_type& weight)
   {
 
-    /// -- count the degree of the source vertex in the low degree table -- ///
+    /// -- count the degree of the source vertex in low degree table -- ///
     const size_type count_in_single = count_degree_ldeg_table(src);
 
-    if (count_in_single > 0) { /// -- the low table has the source vertex -- ///
+    if (count_in_single > 0) { /// -- low degree table has the source vertex -- ///
       if (count_in_single + 1 < middle_high_degree_threshold) {
-        /// --- insert into the low table --- ///
-        ldeg_table_value_type value(vertex_property_data_type(), trg, weight);
-        rhh::insert(&m_ldeg_table, src, value);
+        /// --- insert into low degree table --- ///
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
       } else {
-
-        /// --- move the elements from low table to high-mid table --- ///
-        mhdeg_edge_chunk_type* adj_list = mhdeg_edge_chunk_type::allocate(middle_high_degree_threshold * 2);
-        auto itr_single = m_ldeg_table->find(src);
-        mhdeg_table_value_type value((*itr_single).first, nullptr);
-        for (; !itr_single.is_end(); ++itr_single) {
-          rhh::insert(&adj_list, (*itr_single).second, (*itr_single).third);
-          m_ldeg_table->erase(itr_single);
-        }
-        rhh::insert(&adj_list, trg, weight);
-        value.second = adj_list;
-        rhh::insert(&m_mhdeg_table, src, value);
+        /// --- move the elements from low degree table to mid-high degree table --- ///
+        move_elements_ldeg_table_to_mhdeg_table(src, trg, weight);
       }
-
     } else {
-      auto itr_src = m_mhdeg_table->find(src);
-      if (itr_src.is_end()) {
-        /// --- since the high-mid table dosen't have the vertex, insert into the low table (new vertex) --- ///
-        ldeg_table_value_type value(vertex_property_data_type(), trg, weight);
-        rhh::insert(&m_ldeg_table, src, value);
+      auto itr_mhdeg_src = m_mhdeg_table->find(src);
+      if (itr_mhdeg_src.is_end()) {
+        /// --- since mid-high degree table dosen't have the vertex, insert into low degree table (new vertex) --- ///
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
       } else {
-        /// --- the high-mid table has source vertex --- ///
-        mhdeg_edge_chunk_type* adj_list = itr_src->second;
-        /// --- insert the edge without check duplication --- ///
-        rhh::insert(&adj_list, trg, weight);
-        itr_src->second = adj_list;
+        /// --- mid-high degree table alread has the source vertex --- ///
+        /// --- insert the edge without check a duplication --- ///
+        mhdeg_edge_chunk_type* edge_chunk = itr_mhdeg_src->second;
+        rhh::insert(&edge_chunk, trg, weight);
+        itr_mhdeg_src->second = edge_chunk;
       }
 
     }
@@ -275,27 +264,27 @@ class degawarerhh
     auto itr_matrix = m_mhdeg_table->find(src);
     /// has source vertex ?
     if (itr_matrix.is_end()) return false;
-    mhdeg_edge_chunk_type* adj_list = itr_matrix->second;
+    mhdeg_edge_chunk_type* edge_chunk = itr_matrix->second;
     /// has the target edge ?
-    auto itr = adj_list->find(trg);
+    auto itr = edge_chunk->find(trg);
     if (itr.is_end()) return false;
 
     /// delete the edge
-    adj_list->erase(itr);
+    edge_chunk->erase(itr);
 
-    if (adj_list->size() < middle_high_degree_threshold) {
+    if (edge_chunk->size() < middle_high_degree_threshold) {
       const vertex_property_data_type& property_data = itr_matrix->first;
-      for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
+      for (auto itr = edge_chunk->begin(); !itr.is_end(); ++itr) {
         ldeg_table_value_type value(property_data, itr->key, itr->value);
         rhh::insert(&m_ldeg_table, src, value);
-        adj_list->erase(itr);
+        edge_chunk->erase(itr);
       }
-      mhdeg_edge_chunk_type::deallocate(adj_list);
+      mhdeg_edge_chunk_type::deallocate(edge_chunk);
       m_mhdeg_table->erase(itr_matrix);
       rhh::shrink_to_fit(&m_mhdeg_table);
     } else {
-      rhh::shrink_to_fit(&adj_list);
-      itr_matrix->second = adj_list;
+      rhh::shrink_to_fit(&edge_chunk);
+      itr_matrix->second = edge_chunk;
     }
 
     --m_num_edges;
@@ -327,26 +316,26 @@ class degawarerhh
     auto itr_matrix = m_mhdeg_table->find(src);
     /// has source vertex ?
     if (itr_matrix.is_end()) return 0;
-    mhdeg_edge_chunk_type* adj_list = itr_matrix->second;
-    for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
-      adj_list->erase(itr);
+    mhdeg_edge_chunk_type* edge_chunk = itr_matrix->second;
+    for (auto itr = edge_chunk->find(trg); !itr.is_end(); ++itr) {
+      edge_chunk->erase(itr);
       ++count;
     }
 
     if (count > 0) {
-      if (adj_list->size() < middle_high_degree_threshold) {
+      if (edge_chunk->size() < middle_high_degree_threshold) {
         const vertex_property_data_type& property_data = itr_matrix->first;
-        for (auto itr = adj_list->begin(); !itr.is_end(); ++itr) {
+        for (auto itr = edge_chunk->begin(); !itr.is_end(); ++itr) {
           ldeg_table_value_type value(property_data, itr->key, itr->value);
           rhh::insert(&m_ldeg_table, src, value);
-          adj_list->erase(itr);
+          edge_chunk->erase(itr);
         }
-        mhdeg_edge_chunk_type::deallocate(adj_list);
+        mhdeg_edge_chunk_type::deallocate(edge_chunk);
         m_mhdeg_table->erase(itr_matrix);
         rhh::shrink_to_fit(&m_mhdeg_table);
       } else {
-        rhh::shrink_to_fit(&adj_list);
-        itr_matrix->second = adj_list;
+        rhh::shrink_to_fit(&edge_chunk);
+        itr_matrix->second = edge_chunk;
       }
     }
 
@@ -373,8 +362,8 @@ class degawarerhh
     }
 
     auto itr_adjlist = m_mhdeg_table->find(src);
-    mhdeg_edge_chunk_type* adj_list = itr_adjlist->second;
-    auto edge_weight = adj_list->find(trg);
+    mhdeg_edge_chunk_type* edge_chunk = itr_adjlist->second;
+    auto edge_weight = edge_chunk->find(trg);
     return *edge_weight;
   }
 
@@ -396,8 +385,8 @@ class degawarerhh
   void clear()
   {
     for (const auto& itr : *m_mhdeg_table) {
-      mhdeg_edge_chunk_type* const adj_list = itr.value.second;
-      adj_list->clear();
+      mhdeg_edge_chunk_type* const edge_chunk = itr.value.second;
+      edge_chunk->clear();
     }
     m_mhdeg_table->clear();
     m_ldeg_table->clear();
@@ -489,26 +478,26 @@ class degawarerhh
       size_type size_sum = 0;
       size_type capacity_sum = 0;
       for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-        auto adj_list = itr->value.second;
+        auto edge_chunk = itr->value.second;
 
         /// --- size ---- ///
-        size_sum += adj_list->size();
-        const size_type sz_log2 = std::min(std::log2(adj_list->size()),
+        size_sum += edge_chunk->size();
+        const size_type sz_log2 = std::min(std::log2(edge_chunk->size()),
                                         static_cast<double>(utility::array_length(histgram_size) - 1));
         ++histgram_size[sz_log2];
 
         /// --- average probe distance (load factor) ---- ///
-        assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
-        ++histgram_ave_prbdist[static_cast<size_t>(adj_list->load_factor())];
+        assert(edge_chunk->load_factor() < utility::array_length(histgram_ave_prbdist));
+        ++histgram_ave_prbdist[static_cast<size_t>(edge_chunk->load_factor())];
 
         /// --- capacity --- ///
-        capacity_sum += adj_list->capacity() * adj_list->depth();
-        const size_type cap_log2 = std::min(std::log2(adj_list->capacity()),
+        capacity_sum += edge_chunk->capacity() * edge_chunk->depth();
+        const size_type cap_log2 = std::min(std::log2(edge_chunk->capacity()),
                                         static_cast<double>(utility::array_length(histgram_cap) - 1));
         ++histgram_cap[cap_log2];
 
         /// --- depth --- ///
-        const size_type depth = std::min(adj_list->depth(),
+        const size_type depth = std::min(edge_chunk->depth(),
                                       utility::array_length(histgram_dept) - 1);
         ++histgram_dept[depth];
       }
@@ -556,8 +545,8 @@ class degawarerhh
     }
 
     for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-      auto adj_list = itr->value.second;
-      for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
+      auto edge_chunk = itr->value.second;
+      for (auto itr2 = edge_chunk->begin(); !itr2.is_end(); ++itr2) {
         of << itr->key << " " << itr2->key << "\n";
       }
     }
@@ -575,8 +564,8 @@ class degawarerhh
   {
     std::cout << "------------------" << std::endl;
     for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-      auto adj_list = itr->value.second;
-      for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
+      auto edge_chunk = itr->value.second;
+      for (auto itr2 = edge_chunk->begin(); !itr2.is_end(); ++itr2) {
         std::cout << itr->key << " " << itr2->key << "\n";
       }
     }
@@ -599,8 +588,8 @@ class degawarerhh
   {
     auto itr_matrix = m_mhdeg_table->find(vertex);
     if (!itr_matrix.is_end()) {
-      const mhdeg_edge_chunk_type* const adj_list = itr_matrix->second;
-      return adj_list->size();
+      const mhdeg_edge_chunk_type* const edge_chunk = itr_matrix->second;
+      return edge_chunk->size();
     }
     return 0;
   }
@@ -610,7 +599,7 @@ class degawarerhh
   /// TODO: this function has a bug
   inline typename ldeg_table_type::whole_iterator ldeg_vertices_begin()
   {
-    assert(middle_high_degree_threshold <= 1);
+    assert(middle_high_degree_threshold == 2);
     return m_ldeg_table->begin();
   }
 
@@ -643,8 +632,8 @@ class degawarerhh
   {
     const auto itr_matrix = m_mhdeg_table->find(src_vrt);
     if (!itr_matrix.is_end()) {
-      mhdeg_edge_chunk_type* adj_list = itr_matrix->second;
-      return adj_list->begin();
+      mhdeg_edge_chunk_type* edge_chunk = itr_matrix->second;
+      return edge_chunk->begin();
     } else {
       return mhdeg_edge_chunk_type::end();
     }
@@ -751,22 +740,22 @@ class degawarerhh
 //  {
 
 
-//    auto itr_src = m_mhdeg_table->find(src);
-//    if (itr_src.is_end()) {
+//    auto itr_mhdeg_src = m_mhdeg_table->find(src);
+//    if (itr_mhdeg_src.is_end()) {
 //      /// --- new vertex --- ///
-//      mhdeg_edge_chunk_type* adj_list = mhdeg_edge_chunk_type::allocate(2);
-//      rhh::insert(&adj_list, trg, weight);
-//      mhdeg_table_value_type value(vertex_property_data_type(), adj_list);
+//      mhdeg_edge_chunk_type* edge_chunk = mhdeg_edge_chunk_type::allocate(2);
+//      rhh::insert(&edge_chunk, trg, weight);
+//      mhdeg_table_value_type value(vertex_property_data_type(), edge_chunk);
 //      rhh::insert(&m_mhdeg_table, src, value);
 //    } else {
-//      /// --- high-mid table has source vertex --- ///
-//      mhdeg_edge_chunk_type* adj_list = itr_src->second;
-//      auto itr_trg = adj_list->find(trg);
+//      /// --- mid-high degree table has source vertex --- ///
+//      mhdeg_edge_chunk_type* edge_chunk = itr_mhdeg_src->second;
+//      auto itr_trg = edge_chunk->find(trg);
 
 //      if (itr_trg.is_end()) {
 //        /// --- insert the edge --- ///
-//        rhh::insert(&adj_list, trg, weight);
-//        itr_src->second = adj_list;
+//        rhh::insert(&edge_chunk, trg, weight);
+//        itr_mhdeg_src->second = edge_chunk;
 //      } else {
 //        /// --- if the same edge is found, do nothing --- ///
 //        return false;
@@ -805,16 +794,16 @@ class degawarerhh
 //    auto itr_matrix = m_mhdeg_table->find(src);
 //    /// has source vertex ?
 //    if (itr_matrix.is_end()) return false;
-//    mhdeg_edge_chunk_type* adj_list = itr_matrix->second;
+//    mhdeg_edge_chunk_type* edge_chunk = itr_matrix->second;
 
-//    for (auto itr = adj_list->find(trg); !itr.is_end(); ++itr) {
-//      adj_list->erase(itr);
+//    for (auto itr = edge_chunk->find(trg); !itr.is_end(); ++itr) {
+//      edge_chunk->erase(itr);
 //      ++count;
 //    }
 
 //    if (count > 0) {
-//      if (adj_list->size() == 0) {
-//        mhdeg_edge_chunk_type::deallocate(adj_list);
+//      if (edge_chunk->size() == 0) {
+//        mhdeg_edge_chunk_type::deallocate(edge_chunk);
 //        m_mhdeg_table->erase(itr_matrix);
 //        /// rhh::shrink_to_fit(&m_mhdeg_table);
 //      }
@@ -844,8 +833,8 @@ class degawarerhh
 //  {
 //    // for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr)
 //    for (const auto& itr : *m_mhdeg_table) {
-//      mhdeg_edge_chunk_type* const adj_list = itr.value.second;
-//      adj_list->clear();
+//      mhdeg_edge_chunk_type* const edge_chunk = itr.value.second;
+//      edge_chunk->clear();
 //    }
 //  }
 
@@ -876,26 +865,26 @@ class degawarerhh
 //      size_type size_sum = 0;
 //      size_type capacity_sum = 0;
 //      for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-//        auto adj_list = itr->value.second;
+//        auto edge_chunk = itr->value.second;
 
 //        /// --- size ---- ///
-//        size_sum += adj_list->size();
-//        const size_type sz_log2 = std::min(std::log2(adj_list->size()),
+//        size_sum += edge_chunk->size();
+//        const size_type sz_log2 = std::min(std::log2(edge_chunk->size()),
 //                                        static_cast<double>(utility::array_length(histgram_size) - 1));
 //        ++histgram_size[sz_log2];
 
 //        /// --- average probe distance (laod factor) ---- ///
-//        assert(adj_list->load_factor() < utility::array_length(histgram_ave_prbdist));
-//        ++histgram_ave_prbdist[static_cast<size_t>(adj_list->load_factor())];
+//        assert(edge_chunk->load_factor() < utility::array_length(histgram_ave_prbdist));
+//        ++histgram_ave_prbdist[static_cast<size_t>(edge_chunk->load_factor())];
 
 //        /// --- capacity --- ///
-//        capacity_sum += adj_list->capacity() * adj_list->depth();
-//        const size_type cap_log2 = std::min(std::log2(adj_list->capacity()),
+//        capacity_sum += edge_chunk->capacity() * edge_chunk->depth();
+//        const size_type cap_log2 = std::min(std::log2(edge_chunk->capacity()),
 //                                        static_cast<double>(utility::array_length(histgram_cap) - 1));
 //        ++histgram_cap[cap_log2];
 
 //        /// --- depth --- ///
-//        const size_type depth = std::min(adj_list->depth(),
+//        const size_type depth = std::min(edge_chunk->depth(),
 //                                      utility::array_length(histgram_dept) - 1);
 //        ++histgram_dept[depth];
 //      }
@@ -936,8 +925,8 @@ class degawarerhh
 //  void fprint_all_elements(std::ofstream& of)
 //  {
 //    for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-//      auto adj_list = itr->value.second;
-//      for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
+//      auto edge_chunk = itr->value.second;
+//      for (auto itr2 = edge_chunk->begin(); !itr2.is_end(); ++itr2) {
 //        of << itr->key << " " << itr2->key << "\n";
 //      }
 //    }
@@ -952,8 +941,8 @@ class degawarerhh
 //  {
 //    std::cout << "------------------" << std::endl;
 //    for (auto itr = m_mhdeg_table->begin(); !itr.is_end(); ++itr) {
-//      auto adj_list = itr->value.second;
-//      for (auto itr2 = adj_list->begin(); !itr2.is_end(); ++itr2) {
+//      auto edge_chunk = itr->value.second;
+//      for (auto itr2 = edge_chunk->begin(); !itr2.is_end(); ++itr2) {
 //        std::cout << itr->key << " " << itr2->key << "\n";
 //      }
 //    }
@@ -984,15 +973,15 @@ class degawarerhh
 //  inline typename mhdeg_edge_chunk_type::whole_iterator find_mh_edge (const vertex_type& src_vrt)
 //  {
 //    const auto itr_matrix = m_mhdeg_table->find(src_vrt);
-//    mhdeg_edge_chunk_type* const adj_list = itr_matrix->second;
-//    return adj_list->begin();
+//    mhdeg_edge_chunk_type* const edge_chunk = itr_matrix->second;
+//    return edge_chunk->begin();
 //  }
 
 //  inline typename mhdeg_edge_chunk_type::const_whole_iterator find_mh_edge (const vertex_type& src_vrt) const
 //  {
 //    const auto itr_matrix = m_mhdeg_table->find(src_vrt);
-//    const mhdeg_edge_chunk_type* const adj_list = itr_matrix->second;
-//    return adj_list->cbegin();
+//    const mhdeg_edge_chunk_type* const edge_chunk = itr_matrix->second;
+//    return edge_chunk->cbegin();
 //  }
 
 

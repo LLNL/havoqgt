@@ -240,7 +240,17 @@ public:
   }
 
   void fprint_all_elements(std::ofstream& of)
-  { }
+  {
+    for (auto vitr = vertices_begin(), end = vertices_end();
+         vitr != end;
+         ++vitr) {
+      for (auto eitr = adjacent_edge_begin(vitr.source_vertex()), end = adjacent_edge_end(vitr.source_vertex());
+           eitr != end;
+           ++eitr) {
+        of << vitr.source_vertex() << " " << eitr.target_vertex() << " " << eitr.property_data() << "\n";
+      }
+    }
+  }
 
 
  private:
