@@ -47,14 +47,14 @@ using baselinemap_type      = graphstore::graphstore_baseline_map<vertex_id_type
                                                                   edge_property_type,
                                                                   segment_manager_type>;
 
- enum : size_t {
-   middle_high_degree_threshold = 2 // must be more or equal than 1
- };
- using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
-                                                       vertex_property_type,
-                                                       edge_property_type,
-                                                       segment_manager_type,
-                                                       middle_high_degree_threshold>;
+enum : size_t {
+ middle_high_degree_threshold = 2 // must be more or equal than 1
+};
+using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
+                                                     vertex_property_type,
+                                                     edge_property_type,
+                                                     segment_manager_type,
+                                                     middle_high_degree_threshold>;
 
 
 template <typename gstore_type>
@@ -72,119 +72,125 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
 
 
 
- /// --- option variables --- ///
- uint64_t vertex_scale_               = 18;
- uint64_t edge_factor_                = 16;
- uint64_t segmentfile_init_size_log2_ = 30;
- bool     is_delete_segmentfile_on_exit_ = false;
- uint64_t chunk_size_log10_           = 6;
- std::string fname_segmentfile_       = "/dev/shm/segment_file";
- std::string graphstore_name_         = "DegAwareRHH";
- bool     is_no_sync_                 = false;
- std::vector<std::string> fname_edge_list_;
+/// --- option variables --- ///
+uint64_t vertex_scale_               = 18;
+uint64_t edge_factor_                = 16;
+uint64_t segmentfile_init_size_log2_ = 30;
+uint64_t chunk_size_log10_           = 6;
+std::string fname_segmentfile_       = "/dev/shm/segment_file";
+std::string graphstore_name_         = "DegAwareRHH";
+bool is_delete_segmentfile_on_exit_  = false;
+bool is_no_sync_                     = false;
+std::vector<std::string> fname_edge_list_;
+bool is_edgelist_with_delete_       = false;
 
- void usage()  {
-   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
-     std::cerr << "Usage: \n"
-          << " -s <int>      - the logarithm base two of the number of vertices\n"
-          << " -e <int>      - edge factor\n"
-          << " -o <string>   - base filename to create segmentfiles\n"
-          << " -S <int>      - the logarithm base two of the size of each segmentfile\n"
-          << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
-          << " -c <int>      - the logarithm base ten of the chunk size\n"
-          << " -E <string>   - the name of the file which has a list of edgelist files\n"
-          << " -d            - delete the segmentfiles when exit\n"
-          << " -n            - don't call sync(2) every chunk\n"
-          << " -h            - print help and exit\n\n";
+void usage()  {
+ if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
+   std::cerr << "Usage: \n"
+        << " -s <int>      - the logarithm base two of the number of vertices\n"
+        << " -e <int>      - edge factor\n"
+        << " -o <string>   - base filename to create segmentfiles\n"
+        << " -S <int>      - the logarithm base two of the size of each segmentfile\n"
+        << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
+        << " -c <int>      - the logarithm base ten of the chunk size\n"
+        << " -E <string>   - the name of the file which has a list of edgelist files\n"
+        << " -d            - edgelist files have delete operations\n"
+        << " -f            - delete the segmentfiles when exit\n"
+        << " -n            - don't call sync(2) every chunk\n"
+        << " -h            - print help and exit\n\n";
+ }
+}
+
+void parse_options(int argc, char **argv)
+{
+
+ int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
+ int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+
+ if (mpi_rank == 0) {
+   std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
+   std::cout << "CMD line:";
+   for (int i=0; i<argc; ++i) {
+     std::cout << " " << argv[i];
+   }
+   std::cout << std::endl;
+ }
+
+ char c;
+ while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:nf")) != -1) {
+   switch (c) {
+     case 's':
+       vertex_scale_ = boost::lexical_cast<size_t>(optarg);
+       break;
+
+     case 'e':
+       edge_factor_ = boost::lexical_cast<size_t>(optarg);
+       break;
+
+     case 'o':
+     {
+       fname_segmentfile_ = optarg;
+       break;
+     }
+
+     case 'S':
+       segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
+       break;
+
+     case 'g':
+       graphstore_name_ = optarg;
+       break;
+
+     case 'c':
+       chunk_size_log10_ = boost::lexical_cast<size_t>(optarg);
+       break;
+
+     case 'd':
+       is_edgelist_with_delete_ = true;
+       break;
+
+     case 'f':
+       is_delete_segmentfile_on_exit_ = true;
+       break;
+
+     case 'n':
+       is_no_sync_ = true;
+       break;
+
+     case 'E':
+     {
+       std::string fname(optarg);
+       std::ifstream fin(fname);
+       std::string line;
+       if (!fin.is_open()) {
+         std::cerr << fname << std::endl;
+         HAVOQGT_ERROR_MSG("Unable to open a file");
+       }
+       while (std::getline(fin, line)) {
+         /// Note: parallel_edge_list_reader will assign files to multiple process
+         fname_edge_list_.push_back(line);
+       }
+       break;
+     }
+
    }
  }
 
- void parse_options(int argc, char **argv)
- {
-
-   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
-   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
-
-   if (mpi_rank == 0) {
-     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-     std::cout << "CMD line:";
-     for (int i=0; i<argc; ++i) {
-       std::cout << " " << argv[i];
-     }
-     std::cout << std::endl;
+ if (mpi_rank == 0) {
+   std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
+   std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
+   std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
+   std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
+   if (fname_edge_list_.empty()) {
+     std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
+     std::cout << "Building RMAT graph Edge factor (generate both direction): " << edge_factor_ << std::endl;
+   } else {
+     for (const auto itr : fname_edge_list_)
+       std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
    }
-
-   char c;
-   while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:n")) != -1) {
-     switch (c) {
-       case 's':
-         vertex_scale_ = boost::lexical_cast<size_t>(optarg);
-         break;
-
-       case 'e':
-         edge_factor_ = boost::lexical_cast<size_t>(optarg);
-         break;
-
-       case 'o':
-       {
-         fname_segmentfile_ = optarg;
-         break;
-       }
-
-       case 'S':
-         segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
-         break;
-
-       case 'g':
-         graphstore_name_ = optarg;
-         break;
-
-       case 'c':
-         chunk_size_log10_ = boost::lexical_cast<size_t>(optarg);
-         break;
-
-       case 'd':
-         is_delete_segmentfile_on_exit_ = true;
-         break;
-
-       case 'n':
-         is_no_sync_ = true;
-         break;
-
-       case 'E':
-       {
-         std::string fname(optarg);
-         std::ifstream fin(fname);
-         std::string line;
-         if (!fin.is_open()) {
-           std::cerr << fname << std::endl;
-           HAVOQGT_ERROR_MSG("Unable to open a file");
-         }
-         while (std::getline(fin, line)) {
-           /// Note: parallel_edge_list_reader will assign files to multiple process
-           fname_edge_list_.push_back(line);
-         }
-         break;
-       }
-
-     }
-   }
-
-   if (mpi_rank == 0) {
-     std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-     std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
-     std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
-     std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
-     if (fname_edge_list_.empty()) {
-       std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;
-       std::cout << "Building RMAT graph Edge factor (generate both direction): " << edge_factor_ << std::endl;
-     } else {
-       for (const auto itr : fname_edge_list_)
-         std::cout << mpi_rank << " : " << "Load edge list from " << itr << std::endl;
-     }
-   }
-
  }
+
+}
 
 
 template <typename gstore_type, typename edgelist_type>
@@ -312,9 +318,9 @@ template <typename gstore_type>
 void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                         gstore_type& gstore,
                         graphstore::utility::interprocess_mmap_manager& mmap_manager,
-                        size_t vertex_scale,
-                        size_t num_edges,
-                        size_t chunk_size)
+                        const size_t vertex_scale,
+                        const size_t num_edges,
+                        const size_t chunk_size)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
@@ -333,9 +339,10 @@ void run_benchmark_edgefile(dg_visitor_queue_type<gstore_type>& dg_visitor_queue
                             gstore_type& gstore,
                             graphstore::utility::interprocess_mmap_manager& mmap_manager,
                             std::vector<std::string>& fname_edge_list,
-                            size_t chunk_size)
+                            const size_t chunk_size,
+                            const bool is_edgelist_with_delete)
 {
-  havoqgt::parallel_edge_list_reader edgelist(fname_edge_list);
+  havoqgt::parallel_edge_list_reader edgelist(fname_edge_list, is_edgelist_with_delete);
 
   constract_graph(dg_visitor_queue, gstore, mmap_manager, edgelist, chunk_size);
 }
@@ -398,7 +405,8 @@ int main(int argc, char** argv) {
                                gstore,
                                mmap_manager,
                                fname_edge_list_,
-                               std::pow(10, chunk_size_log10_));
+                               std::pow(10, chunk_size_log10_),
+                               is_edgelist_with_delete_);
       }
 #if DEBUG_MODE
       dump_all_edges(gstore);
@@ -423,7 +431,8 @@ int main(int argc, char** argv) {
                                gstore,
                                mmap_manager,
                                fname_edge_list_,
-                               std::pow(10, chunk_size_log10_));
+                               std::pow(10, chunk_size_log10_),
+                               is_edgelist_with_delete_);
       }
 #if DEBUG_MODE
       dump_all_edges(gstore);
@@ -447,7 +456,8 @@ int main(int argc, char** argv) {
                                gstore,
                                mmap_manager,
                                fname_edge_list_,
-                               std::pow(10, chunk_size_log10_));
+                               std::pow(10, chunk_size_log10_),
+                               is_edgelist_with_delete_);
       }
 #if DEBUG_MODE
       dump_all_edges(gstore);
