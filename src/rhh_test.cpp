@@ -11,7 +11,6 @@
 
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
-#include <havoqgt/graphstore/rhh/rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
@@ -22,8 +21,13 @@ using segment_manager_type = boost::interprocess::managed_mapped_file::segment_m
 using key_type    = uint64_t;
 using value_type  = uint64_t;
 
+#if 0
+#include <havoqgt/graphstore/rhh/rhh_container.hpp>
 using rhh_type = graphstore::rhh_container<key_type, value_type, size_t, segment_manager_type>;
-
+#else
+#include <havoqgt/graphstore/rhh/blocked_rhh_container.hpp>
+using rhh_type = graphstore::blocked_rhh_container<key_type, value_type, size_t, segment_manager_type>;
+#endif
 
 void usage()  {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {

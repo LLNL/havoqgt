@@ -11,8 +11,8 @@
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
+#include <havoqgt/graphstore/rhh/blocked_rhh_container.hpp>
 #include <havoqgt/graphstore/rhh/rhh_allocator_holder.hpp>
-
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
 namespace graphstore {
@@ -30,6 +30,14 @@ class degawarerhh
   using edge_property_data_type     = _edge_property_data_type;
   using segment_manager_type        = _segment_manager_type;
 
+#if 0
+  template <typename A, typename B, typename C, typename D>
+  using rhh_container_type = rhh_container<A, B, C, D>;
+#else
+  template <typename A, typename B, typename C, typename D>
+  using rhh_container_type = blocked_rhh_container<A, B, C, D>;
+#endif
+
   /// --- iterators --- ///
   class vertex_iterator;
   class adjacent_edge_iterator;
@@ -37,11 +45,11 @@ class degawarerhh
  private:
   using size_type              = size_t;
   using ldeg_table_value_type  = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, void>;
-  using ldeg_table_type        = rhh_container<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
+  using ldeg_table_type        = rhh_container_type<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
 
-  using mhdeg_edge_chunk_type  = rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
+  using mhdeg_edge_chunk_type  = rhh_container_type<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mhdeg_table_value_type = utility::packed_pair<vertex_property_data_type, mhdeg_edge_chunk_type*>;
-  using mhdeg_table_type       = rhh_container<vertex_type, mhdeg_table_value_type, size_type, segment_manager_type>;
+  using mhdeg_table_type       = rhh_container_type<vertex_type, mhdeg_table_value_type, size_type, segment_manager_type>;
   using degawarerhh_selftype   = degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
                                                           segment_manager_type, middle_high_degree_threshold>;
 

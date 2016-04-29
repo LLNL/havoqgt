@@ -1,5 +1,5 @@
-#ifndef RHH_VALUE_ITERATOR_HPP
-#define RHH_VALUE_ITERATOR_HPP
+#ifndef RHH_VALUE_ITERATOR_HPP_INCLUDED
+#define RHH_VALUE_ITERATOR_HPP_INCLUDED
 
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 
@@ -22,7 +22,7 @@ class rhh_container<_key_type, _value_type, _size_type,
                                   _segment_manager_type,
                                   _key_hash_func,
                                   _property_program>;
-  friend rhh_container;
+ friend rhh_container;
 
  public:
 
@@ -152,9 +152,9 @@ class rhh_container<_key_type, _value_type, _size_type,
   }
 
   rhh_type* m_rhh_ptr;
-  typename rhh_type::key_type m_key;
-  typename rhh_type::size_type m_pos;
-  typename rhh_type::probedistance_type m_prb_dist;
+  key_type m_key;
+  size_type m_pos;
+  probedistance_type m_prb_dist;
 };
 
 }

@@ -1,5 +1,5 @@
-#ifndef RHH_WHOLE_ITERATOR_HPP
-#define RHH_WHOLE_ITERATOR_HPP
+#ifndef RHH_WHOLE_ITERATOR_HPP_INCLUDED
+#define RHH_WHOLE_ITERATOR_HPP_INCLUDED
 
 #include <havoqgt/graphstore/rhh/rhh_container.hpp>
 
@@ -21,7 +21,7 @@ private:
                                   _segment_manager_type,
                                   _key_hash_func,
                                   _property_program>;
-  friend rhh_container;
+friend rhh_container;
 
 public:
 

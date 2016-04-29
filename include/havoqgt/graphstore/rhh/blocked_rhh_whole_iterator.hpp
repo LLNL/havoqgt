@@ -1,7 +1,7 @@
-#ifndef RHH_WHOLE_ITERATOR_HPP
-#define RHH_WHOLE_ITERATOR_HPP
+#ifndef BLOCKED_RHH_WHOLE_ITERATOR_HPP_INCLUDED
+#define BLOCKED_RHH_WHOLE_ITERATOR_HPP_INCLUDED
 
-#include <havoqgt/graphstore/rhh/rhh_container.hpp>
+#include <havoqgt/graphstore/rhh/blocked_rhh_container.hpp>
 
 namespace graphstore {
 
@@ -11,17 +11,17 @@ template<typename _key_type,
          typename _segment_manager_type,
          typename _key_hash_func,
          typename _property_program>
-class rhh_container<_key_type, _value_type, _size_type,
-                    _segment_manager_type,
-                    _key_hash_func,
-                    _property_program>::whole_iterator
+class blocked_rhh_container<_key_type, _value_type, _size_type,
+                            _segment_manager_type,
+                            _key_hash_func,
+                            _property_program>::whole_iterator
 {
 private:
-  using rhh_type = rhh_container<_key_type, _value_type, _size_type,
-                                  _segment_manager_type,
-                                  _key_hash_func,
-                                  _property_program>;
-  friend rhh_container;
+  using rhh_type = blocked_rhh_container<_key_type, _value_type, _size_type,
+                                         _segment_manager_type,
+                                          _key_hash_func,
+                                          _property_program>;
+  friend blocked_rhh_container;
 
 public:
 
