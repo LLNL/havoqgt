@@ -37,7 +37,7 @@ class rhh_property_program_base {
     prop = kEmptyProperyValue;
   }
 
-  inline static void scratch(property_type& prop)
+  inline static void tombstone(property_type& prop)
   {
     prop |= kTomstone;
   }
@@ -47,7 +47,7 @@ class rhh_property_program_base {
     return (prop == kEmptyProperyValue);
   }
 
-  inline static bool is_scratched(const property_type prop)
+  inline static bool is_tombstone(const property_type prop)
   {
     return ((prop & kTomstoneExtractMask) == kTomstone);
   }

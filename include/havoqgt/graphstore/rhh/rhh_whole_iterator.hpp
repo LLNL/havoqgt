@@ -125,7 +125,7 @@ public:
     ++m_pos;
     while(m_rhh_ptr) {
       for (; m_pos < m_rhh_ptr->capacity(); ++m_pos) {
-        if (!property_program::is_empty(m_rhh_ptr->m_body[m_pos].property) && !property_program::is_scratched(m_rhh_ptr->m_body[m_pos].property))
+        if (!property_program::is_empty(m_rhh_ptr->m_body[m_pos].property) && !property_program::is_tombstone(m_rhh_ptr->m_body[m_pos].property))
           return;
       }
       m_pos = 0;

@@ -259,7 +259,7 @@ class rhh_container {
     size_type total = 0;
     for (size_type pos = 0; pos < m_capacity; ++pos) {
       if (!property_program::is_empty(m_body[pos].property) &&
-          !property_program::is_scratched(m_body[pos].property))
+          !property_program::is_tombstone(m_body[pos].property))
         total += property_program::extract_probedistance(m_body[pos].property);
     }
 
@@ -334,7 +334,7 @@ class rhh_container {
     while (source_rhh != nullptr) {
       for (size_type i = 0; i < src_capacity; ++i) {
         const property_type property = source_rhh->m_body[i].property;
-        if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
+        if (!property_program::is_empty(property) && !property_program::is_tombstone(property)) {
           bool is_successed = new_rhh->insert_into_body(std::move(source_rhh->m_body[i].key), std::move(source_rhh->m_body[i].value), wk_key, wk_val);
           if (!is_successed) {
 #if RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE
@@ -413,7 +413,7 @@ class rhh_container {
 
   inline void erase_element_at(size_type pos)
   {
-    property_program::scratch(m_body[pos].property);
+    property_program::tombstone(m_body[pos].property);
     m_body[pos].key.~key_type();
     m_body[pos].value.~value_type();
   }
@@ -447,7 +447,7 @@ class rhh_container {
         break;
       } else if (prb_dist > property_program::extract_probedistance(exist_property)) {
         break;
-      } else if (!property_program::is_scratched(exist_property) && key == (*body_ptr)->m_body[pos].key) {
+      } else if (!property_program::is_tombstone(exist_property) && key == (*body_ptr)->m_body[pos].key) {
         return;
       }
       pos = (pos+1) & mask;
@@ -527,7 +527,7 @@ class rhh_container {
 #endif
           return false;
         }
-        if(property_program::is_scratched(exist_property))
+        if(property_program::is_tombstone(exist_property))
         {
           construct(pos, prb_dist, std::move(key), std::move(value));
 #if RHH_DETAILED_ANALYSYS
@@ -563,7 +563,7 @@ class rhh_container {
 
     for (size_type i = 0; i < m_capacity; ++i) {
       const property_type property = m_body[i].property;
-      if (!property_program::is_empty(property) && !property_program::is_scratched(property)) {
+      if (!property_program::is_empty(property) && !property_program::is_tombstone(property)) {
         /// should check the return value ?
         tmp_rhh->insert_into_body(std::move(m_body[i].key), std::move(m_body[i].value), wk_key, wk_val);
         ++tmp_rhh->m_num_elems;
