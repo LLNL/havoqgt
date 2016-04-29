@@ -360,7 +360,7 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 
   /// unique insertion and deletion
   {
-    /// init (note the order)
+    /// init
     for (uint64_t j = 0; j < num_edges; ++j) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
         assert(graphstore.insert_edge(i, j, i+2));
@@ -522,17 +522,17 @@ int main(int argc, char** argv) {
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(mmap_manager.get_segment_manager());
 
-  run_time("can handle basic operations on a low degree graph?", test1(graphstore, 4, 2));
-  run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, 1, middle_high_degree_threshold));
+  run_time("can handle basic operations on a low degree graph?",         test1(graphstore, 4, middle_high_degree_threshold - 1));
+  run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 4, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
 
-  run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 1024, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
-  run_time("can handle long probe distances on the graph?", test2(graphstore, 1024, middle_high_degree_threshold * 2, 64));
+  run_time("can handle duplicated edges on a low degree graph?",         test2(graphstore, 4, 1, middle_high_degree_threshold - 1));
+  run_time("can handle duplicated edges on a middle-high degree graph?", test2(graphstore, 4, middle_high_degree_threshold * 2, 64));
 
-  run_time("can handle basic operations on a large graph?", test1(graphstore, 1<<22ULL, 128));
-  run_time("can handle long probe distances on the graph?", test2(graphstore, 1<<22ULL, 128, 64));
+  run_time("can handle basic operations on a large graph?",       test1(graphstore, 1<<22ULL, 128));
+  run_time("can handle higly duplicated edges on a large graph?", test2(graphstore, 1<<22ULL, 128, 64));
 
   run_time("can handle basic operations on a rmat graph?", test3(graphstore, 17, 4, 10));
-  run_time("can handle duplicate operations on the graph?", test4(graphstore, 17, 4, 10));
+  run_time("can handle duplicate edges on a rmat graph?",  test4(graphstore, 17, 4, 10));
 
   std::cout << "All tests completed!!!" << std::endl;
   }  // END Main MPI
