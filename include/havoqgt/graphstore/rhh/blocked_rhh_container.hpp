@@ -170,22 +170,17 @@ class blocked_rhh_container {
 
   /// --- Hash policy --- ///
   /// \brief load_factor
+  ///     Note that this function must be called from the top table (not chained tables)
   /// \return
   ///     average probe distance
   double load_factor() const
   {
-//    size_type total = 0;
-//    for (size_type pos = 0; pos < m_num_block; ++pos) {
-//      if (!property_program::is_empty(m_body[pos].property) &&
-//          !property_program::is_tombstone(m_body[pos].property))
-//        total += property_program::extract_probedistance(m_body[pos].property);
-//    }
+    const size_type total = sum_probedistane();
 
-//    if (m_num_elems > 0)
-//      return static_cast<double>(total) / static_cast<double>(m_num_elems);
-//    else
-//      return 0.0;
-
+    if (m_num_elems > 0)
+      return static_cast<double>(total) / static_cast<double>(m_num_elems);
+    else
+      return 0.0;
   }
 
   inline size_type depth() const
@@ -306,16 +301,19 @@ class blocked_rhh_container {
   template <size_t size>
   void histgram_load_factor(size_type (&histgram)[size])
   {
-//    for (size_type i = 0; i < m_num_block; ++i) {
-//      const size_type d = property_program::extract_probedistance(m_body[i].property);
-//      if (d >= size && !property_program::is_empty(m_body[i].property)) {
-//        exit(1);
-//      }
-//      ++histgram[d];
-//    }
-//    if (m_next != nullptr) {
-//      m_next->histgram_load_factor(histgram);
-//    }
+    for (size_type i = 0; i < m_num_block; ++i) {
+      for (block_size_type j = 0; j < kBlockCapacity; ++j) {
+        if (!property_program::is_empty(m_body[i][j].property) &&
+            !property_program::is_tombstone(m_body[i][j].property)) {
+          const size_type d = property_program::extract_probedistance(m_body[i][j].property);
+          if (d >= size) exit(1);
+          ++histgram[d];
+        }
+      }
+    }
+    if (m_next != nullptr) {
+      m_next->histgram_load_factor(histgram);
+    }
   }
 
 
@@ -509,6 +507,26 @@ class blocked_rhh_container {
     property_program::tombstone(m_body[block_pos][elem_pos].property);
     m_body[block_pos][elem_pos].key.~key_type();
     m_body[block_pos][elem_pos].value.~value_type();
+  }
+
+
+  /// --- Hash policy --- ///
+  size_type sum_probedistane() const
+  {
+    size_type total = 0;
+    for (size_type i = 0; i < m_num_block; ++i) {
+      for (block_size_type j = 0; j < kBlockCapacity; ++j) {
+      if (!property_program::is_empty(m_body[i][j].property) &&
+          !property_program::is_tombstone(m_body[i][j].property))
+        total += property_program::extract_probedistance(m_body[i][j].property);
+      }
+    }
+
+    if (!m_next) {
+      total += m_next->sum_probedistane();
+    }
+
+    return total;
   }
 
 

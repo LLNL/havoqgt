@@ -165,18 +165,12 @@ class rhh_container {
   ///     average probe distance
   double load_factor() const
   {
-    size_type total = 0;
-    for (size_type pos = 0; pos < m_capacity; ++pos) {
-      if (!property_program::is_empty(m_body[pos].property) &&
-          !property_program::is_tombstone(m_body[pos].property))
-        total += property_program::extract_probedistance(m_body[pos].property);
-    }
+    const size_type total = sum_probedistane();
 
     if (m_num_elems > 0)
       return static_cast<double>(total) / static_cast<double>(m_num_elems);
     else
       return 0.0;
-
   }
 
   inline size_type depth() const
@@ -287,11 +281,12 @@ class rhh_container {
   void histgram_load_factor(size_type (&histgram)[size])
   {
     for (size_type i = 0; i < m_capacity; ++i) {
-      const size_type d = property_program::extract_probedistance(m_body[i].property);
-      if (d >= size && !property_program::is_empty(m_body[i].property)) {
-        exit(1);
+      if (!property_program::is_empty(m_body[i].property) &&
+          !property_program::is_tombstone(m_body[i].property)) {
+        const size_type d = property_program::extract_probedistance(m_body[i].property);
+        if (d >= size) exit(1);
+        ++histgram[d];
       }
-      ++histgram[d];
     }
     if (m_next != nullptr) {
       m_next->histgram_load_factor(histgram);
@@ -463,6 +458,26 @@ class rhh_container {
     return false;
   }
 
+
+  /// --- Hash policy --- ///
+  size_type sum_probedistane() const
+  {
+    size_type total = 0;
+    for (size_type pos = 0; pos < m_capacity; ++pos) {
+      if (!property_program::is_empty(m_body[pos].property) &&
+          !property_program::is_tombstone(m_body[pos].property))
+        total += property_program::extract_probedistance(m_body[pos].property);
+    }
+
+    if (!m_next) {
+      total += m_next->sum_probedistane();
+    }
+
+    return total;
+  }
+
+
+  /// --- optimization --- ///
   void rehash_elements()
   {
     key_type wk_key;
