@@ -469,7 +469,7 @@ class rhh_container {
         total += property_program::extract_probedistance(m_body[pos].property);
     }
 
-    if (!m_next) {
+    if (m_next != nullptr) {
       total += m_next->sum_probedistane();
     }
 

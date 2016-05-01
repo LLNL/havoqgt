@@ -284,8 +284,9 @@ class blocked_rhh_container {
   void print_all_element()
   {
     for (size_type i = 0; i < m_num_block; ++i) {
+      std::cout << "[" << (size_t)i << "] ----------------" << std::endl;
       for (block_size_type j = 0; j < kBlockCapacity; ++j) {
-        std::cout << "property " << (uint64_t)m_body[i][j].property << ", key " << m_body[i][j].key << std::endl;
+        std::cout << "[" << (size_t)j << "]" << "property " << (uint64_t)m_body[i][j].property << ", key " << m_body[i][j].key << std::endl;
       }
     }
     if (m_next != nullptr) {
@@ -522,7 +523,7 @@ class blocked_rhh_container {
       }
     }
 
-    if (!m_next) {
+    if (m_next != nullptr) {
       total += m_next->sum_probedistane();
     }
 

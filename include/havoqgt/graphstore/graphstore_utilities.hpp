@@ -106,6 +106,13 @@ inline bool operator!=(const packed_pair<T1, T2>& lhs, const packed_pair<T1, T2>
     return !(lhs == rhs);
 }
 
+template <typename T1, typename T2>
+std::ostream& operator<<(std::ostream& stream, const packed_pair<T1, T2>& obj)
+{
+    stream << obj.first << ":" << obj.second;
+    return stream;
+}
+
 #pragma pack(1)
 template <typename T1, typename T2, typename T3, typename T4>
 struct packed_tuple
@@ -192,6 +199,13 @@ inline bool operator!=(const packed_tuple<T1, T2, T3, T4>& lhs, const packed_tup
     return !(lhs == rhs);
 }
 
+template<typename T1, typename T2, typename T3, typename T4>
+std::ostream& operator<<(std::ostream& stream, const packed_tuple<T1, T2, T3, T4>& obj)
+{
+    stream << obj.first << ":" << obj.second << ":" << obj.third << ":" << obj.fourth;
+    return stream;
+}
+
 #pragma pack(1)
 template <typename T1, typename T2, typename T3>
 struct packed_tuple <T1, T2, T3, void>
@@ -268,6 +282,13 @@ inline bool operator==(const packed_tuple<T1, T2, T3, void>& lhs, const packed_t
 template<typename T1, typename T2, typename T3>
 inline bool operator!=(const packed_tuple<T1, T2, T3, void>& lhs, const packed_tuple<T1, T2, T3, void>& rhs) {
     return !(lhs == rhs);
+}
+
+template<typename T1, typename T2, typename T3>
+std::ostream& operator<<(std::ostream& stream, const packed_tuple<T1, T2, T3, void>& obj)
+{
+    stream << obj.first << ":" << obj.second << ":" << obj.third;
+    return stream;
 }
 
 
