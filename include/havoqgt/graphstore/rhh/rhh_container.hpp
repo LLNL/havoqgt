@@ -507,6 +507,43 @@ class rhh_container {
 
 };
 
+namespace rhh {
+template<typename key_type,
+         typename value_type,
+         typename size_type,
+         typename segment_manager_type,
+         typename key_hash_func,
+         typename property_program>
+bool shrink_to_fit(rhh_container<key_type, value_type, size_type,
+                                 segment_manager_type,
+                                 key_hash_func,
+                                 property_program>** rhh,
+                   const double lazy_factor = 1.0)
+{
+  using rhh_type = rhh_container<key_type, value_type, size_type,
+                                 segment_manager_type,
+                                 key_hash_func,
+                                 property_program>;
+
+  const typename rhh_type::size_type cur_size = (*rhh)->size();
+  typename rhh_type::size_type cur_capacity = (*rhh)->capacity() /* * (*rhh)->depth()*/;
+
+  if (cur_size > static_cast<double>(cur_capacity / kCapacityGrowingFactor / lazy_factor) * kFullCapacitFactor) {
+    /// --- current capacity is fit to current size, do nothing --- ///
+    return false;
+  }
+
+  typename rhh_type::size_type new_capacity = 1;
+  while ( cur_size > static_cast<double>(new_capacity) * kFullCapacitFactor ) {
+    new_capacity *= kCapacityGrowingFactor;
+  }
+
+  resize(rhh, new_capacity);
+
+  return true;
+}
+} /// namespace rhh
+
 } /// namespace graphstore
 
 #include <havoqgt/graphstore/rhh/rhh_whole_iterator.hpp>

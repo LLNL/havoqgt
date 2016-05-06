@@ -37,7 +37,7 @@ class degawarerhh
  private:
   using size_type              = size_t;
   using ldeg_table_value_type  = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, bool>;
-  using ldeg_table_type        = rhh_container<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
+  using ldeg_table_type        = blocked_rhh_container<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
 
   using mhdeg_edge_chunk_type  = blocked_rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mhdeg_table_value_type = utility::packed_pair<vertex_property_data_type, mhdeg_edge_chunk_type*>;
@@ -300,9 +300,9 @@ class degawarerhh
       }
       mhdeg_edge_chunk_type::deallocate(edge_chunk);
       m_mhdeg_table->erase(itr_matrix);
-      rhh::shrink_to_fit(&m_mhdeg_table);
+      rhh::shrink_to_fit(&m_mhdeg_table, 2.0);
     } else {
-      rhh::shrink_to_fit(&edge_chunk);
+      rhh::shrink_to_fit(&edge_chunk, 2.0);
       itr_matrix->second = edge_chunk;
     }
 
@@ -362,9 +362,9 @@ class degawarerhh
         }
         mhdeg_edge_chunk_type::deallocate(edge_chunk);
         m_mhdeg_table->erase(itr_matrix);
-        rhh::shrink_to_fit(&m_mhdeg_table);
+        rhh::shrink_to_fit(&m_mhdeg_table, 2.0);
       } else {
-        rhh::shrink_to_fit(&edge_chunk);
+        rhh::shrink_to_fit(&edge_chunk, 2.0);
         itr_matrix->second = edge_chunk;
       }
     }

@@ -77,28 +77,6 @@ void insert(rhh_type** rhh, key_type key, value_type value)
 }
 
 
-template <typename rhh_type>
-bool shrink_to_fit(rhh_type** rhh, const double lazy_factor = 1.0)
-{
-  const typename rhh_type::size_type cur_size = (*rhh)->size();
-  typename rhh_type::size_type cur_capacity = (*rhh)->capacity() * (*rhh)->depth();
-
-  if (cur_size > static_cast<double>(cur_capacity / kCapacityGrowingFactor / lazy_factor) * kFullCapacitFactor) {
-    /// --- current capacity is fit to current size, do nothing --- ///
-    return false;
-  }
-
-  typename rhh_type::size_type new_capacity = 1;
-  while ( cur_size > static_cast<double>(new_capacity) * kFullCapacitFactor ) {
-    new_capacity *= kCapacityGrowingFactor;
-  }
-
-  resize(rhh, new_capacity);
-
-  return true;
-}
-
-
 /// --- A template helper caluculate the size of a element --- ///
 ///     if type is empy_type return 0;
 ///     the other cases, simply return sizeof(value)
