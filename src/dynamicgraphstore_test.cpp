@@ -18,7 +18,7 @@ using edge_property_type    = uint64_t;
 using vertex_property_type  = uint64_t;
 
 enum : size_t {
-  middle_high_degree_threshold = 2 // must be more or equal than 1
+  middle_high_degree_threshold = 4 // must be more or equal than 1
 };
 
 #if 0
@@ -43,41 +43,18 @@ using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
 #endif
 
 
-void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-{
-#ifdef __linux__
-    std::cout << "Call fallocate()" << std::endl;
-    int fd  = open(fname, O_RDWR);
-    assert(fd != -1);
-    /// posix_fallocate dosen't work on XFS ?
-    /// (dosen't actually expand the file size ?)
-    int ret = fallocate(fd, 0, 0, size);
-    assert(ret == 0);
-    close(fd);
-    asdf.flush();
-#else
-#warning fallocate() is not supported
-#endif
-}
-
-
 void usage()  {
-  if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
-    std::cerr << "Usage: -i <string> -s <int>\n"
-         << " -s <string>   - output graph base filename (default is /dev/shm/segment_file)\n"
-//         << " -e <string>   - filename that has a list of edgelist files\n"
-         << " -h            - print help and exit\n\n";
-  }
+  std::cerr << "Usage: -i <string> -s <int>\n"
+       << " -s <string>   - output graph base filename (default is /dev/shm/segment_file)\n"
+       << " -h            - print help and exit\n\n";
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::vector<std::string>& edgelist_files) {
-  if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
-    std::cout << "CMD line:";
-    for (int i=0; i<argc; ++i) {
-      std::cout << " " << argv[i];
-    }
-    std::cout << std::endl;
+  std::cout << "CMD line:";
+  for (int i=0; i<argc; ++i) {
+    std::cout << " " << argv[i];
   }
+  std::cout << std::endl;
 
   segmentfile_name = "/dev/shm/segment_file";
 
@@ -358,6 +335,8 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
 void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 {
 
+  assert(num_edges > 1);
+
   /// unique insertion and deletion
   {
     /// init
@@ -398,32 +377,68 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
       }
     }
 
+    /// All vertetices accessed exactoly onece
     {
-      std::vector<bool> flags(num_vertices, false);
+      std::vector<int> cnt(num_vertices, 0);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-        flags[itr.source_vertex()] = true;
+        ++cnt[itr.source_vertex()];
       }
-      for (const auto flg : flags) assert(flg);
+      for (const auto c : cnt) assert(c == 1);
     }
 
     /// update vertex property
-    for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-      itr.property_data() = itr.source_vertex() + 2;
-    }
-
-    /// check vertex property
     {
-      std::vector<bool> flags(num_vertices, false);
+      for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
+        itr.property_data() = itr.source_vertex() + 2;
+      }
+
+      /// check vertex property
+      std::vector<int> cnt(num_vertices, 0);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         assert(itr.property_data() == itr.source_vertex() + 2);
-        flags[itr.property_data() - 2] = true;
+        ++cnt[itr.property_data() - 2];
       }
-      for (const auto flg : flags) assert(flg);
+      for (const auto c : cnt) assert(c == 1);
     }
+
+
+    /// delete one edge for all vertices
+    {
+      for (uint64_t i = 0; i < num_vertices; ++i) {
+        for (uint64_t j = 0; j < 1; ++j) {
+          assert(graphstore.erase_edge(i, j));
+        }
+      }
+
+      /// check vertex property
+      std::vector<int> cnt(num_vertices, 0);
+      for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
+        assert(itr.property_data() == itr.source_vertex() + 2);
+        ++cnt[itr.property_data() - 2];
+      }
+      for (const auto c : cnt) assert(c == 1);
+    }
+
+
+    /// update vertex property
+    {
+      for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
+        itr.property_data() = itr.source_vertex() + 3;
+      }
+
+      /// check vertex property
+      std::vector<int> cnt(num_vertices, 0);
+      for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
+        assert(itr.property_data() == itr.source_vertex() + 3);
+        ++cnt[itr.property_data() - 3];
+      }
+      for (const auto c : cnt) assert(c == 1);
+    }
+
 
     /// delete all edges
     for (uint64_t i = 0; i < num_vertices; ++i) {
-      for (uint64_t j = 0; j < num_edges; ++j) {
+      for (uint64_t j = 1; j < num_edges; ++j) {
         assert(graphstore.erase_edge(i, j));
       }
     }
@@ -480,44 +495,27 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 
 #define run_time(DSC, FNC) \
   do {\
-    const double ts = MPI_Wtime();\
+    const auto ts = graphstore::utility::duration_time();\
     std::cout << "\n=================================================================" << std::endl;\
     std::cout << "Run a test: " << DSC << std::endl;\
     FNC;\
-    const double te = MPI_Wtime();\
-    std::cout << " done: " << te - ts << " sec" << std::endl;\
+    const double td = graphstore::utility::duration_time_sec(ts);\
+    std::cout << " done: " << td << " sec" << std::endl;\
     std::cout << "=================================================================" << std::endl;\
   } while(0)
 
 int main(int argc, char** argv) {
-  int mpi_rank(0), mpi_size(0);
-
-  havoqgt::havoqgt_init(&argc, &argv);
-  {
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
-  assert(mpi_size == 1);
-
-  std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-  havoqgt::get_environment().print();
-  MPI_Barrier(MPI_COMM_WORLD);
-
 
   /// --- parse argments ---- ///
   std::string segmentfile_name;
   std::vector<std::string> edgelist_files;
   parse_cmd_line(argc, argv, segmentfile_name, edgelist_files);
-  MPI_Barrier(MPI_COMM_WORLD);
 
 
   /// --- create a segument file --- ///
   size_t graph_capacity = std::pow(2, 32);
-  std::stringstream fname_local_segmentfile;
-  fname_local_segmentfile << segmentfile_name << "_" << mpi_rank;
-  graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
-  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
+  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
+  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity);
 
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(mmap_manager.get_segment_manager());
@@ -535,8 +533,6 @@ int main(int argc, char** argv) {
   run_time("can handle duplicate edges on a rmat graph?",  test4(graphstore, 17, 4, 10));
 
   std::cout << "All tests completed!!!" << std::endl;
-  }  // END Main MPI
-  havoqgt::havoqgt_finalize();
 
   return 0;
 }

@@ -30,26 +30,18 @@ class degawarerhh
   using edge_property_data_type     = _edge_property_data_type;
   using segment_manager_type        = _segment_manager_type;
 
-#if 0
-  template <typename A, typename B, typename C, typename D>
-  using rhh_container_type = rhh_container<A, B, C, D>;
-#else
-  template <typename A, typename B, typename C, typename D>
-  using rhh_container_type = blocked_rhh_container<A, B, C, D>;
-#endif
-
   /// --- iterators --- ///
   class vertex_iterator;
   class adjacent_edge_iterator;
 
  private:
   using size_type              = size_t;
-  using ldeg_table_value_type  = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, void>;
-  using ldeg_table_type        = rhh_container_type<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
+  using ldeg_table_value_type  = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, bool>;
+  using ldeg_table_type        = rhh_container<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
 
-  using mhdeg_edge_chunk_type  = rhh_container_type<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
+  using mhdeg_edge_chunk_type  = blocked_rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
   using mhdeg_table_value_type = utility::packed_pair<vertex_property_data_type, mhdeg_edge_chunk_type*>;
-  using mhdeg_table_type       = rhh_container_type<vertex_type, mhdeg_table_value_type, size_type, segment_manager_type>;
+  using mhdeg_table_type       = rhh_container<vertex_type, mhdeg_table_value_type, size_type, segment_manager_type>;
   using degawarerhh_selftype   = degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
                                                           segment_manager_type, middle_high_degree_threshold>;
 
@@ -95,8 +87,12 @@ class degawarerhh
   /// -------- Lookup -------- ///
   inline std::pair<vertex_iterator, vertex_iterator> find_vertex(const vertex_type& vertex)
   {
-    return std::make_pair(vertex_iterator(m_ldeg_table->find(vertex), m_mhdeg_table->find(vertex)),
-                          vertex_iterator(m_mhdeg_table->find_end(), m_mhdeg_table->find_end()));
+    auto ldeg_table_itr = m_ldeg_table->find(vertex);
+    /// Increment until find a top vertex
+    while (!ldeg_table_itr.is_end() && !ldeg_table_itr->fourth) ++ldeg_table_itr;
+
+    return std::make_pair(vertex_iterator(ldeg_table_itr, m_mhdeg_table->find(vertex)),
+                          vertex_iterator(m_ldeg_table->find_end(), m_mhdeg_table->find_end()));
   }
 
   /// TODO: implementation
@@ -104,7 +100,7 @@ class degawarerhh
   {
   }
 
-  inline std::pair<vertex_iterator, vertex_iterator> vertices() /// !!!!! this doesn't work !!!!!!
+  inline std::pair<vertex_iterator, vertex_iterator> vertices()
   {
     return std::make_pair(vertices_begin(), vertices_end());
   }
@@ -115,7 +111,7 @@ class degawarerhh
   }
 
   /// TOD: move the following functions to private
-  inline vertex_iterator vertices_begin()  /// !!!!! this doesn't work !!!!!!
+  inline vertex_iterator vertices_begin()
   {
     return vertex_iterator(ldeg_vertices_begin(), mhdeg_vertices_begin());
   }
@@ -186,7 +182,7 @@ class degawarerhh
     if (count_in_single > 0) { /// -- low degree table has the source vertex -- ///
       if (count_in_single + 1 < middle_high_degree_threshold) {
         /// --- insert into low degree table --- ///
-        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight, false));
       } else {
         /// --- move the elements from low degree table to mid-high degree table --- ///
         move_elements_ldeg_table_to_mhdeg_table(src, trg, weight);
@@ -195,8 +191,8 @@ class degawarerhh
     } else {
       auto itr_mhdeg_src = m_mhdeg_table->find(src);
       if (itr_mhdeg_src.is_end()) {
-        /// --- since mid-high degree table dosen't have the vertex, insert into low degree table (new vertex) --- ///
-        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
+        /// --- since mid-high degree table dosen't have the vertex, insert into low degree table (as new vertex) --- ///
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight, true));
       } else {
         /// --- mid-high degree table alredy has the source vertex --- ///
         mhdeg_edge_chunk_type* edge_chunk = itr_mhdeg_src->second;
@@ -227,7 +223,7 @@ class degawarerhh
     if (count_in_single > 0) { /// -- low degree table has the source vertex -- ///
       if (count_in_single + 1 < middle_high_degree_threshold) {
         /// --- insert into low degree table --- ///
-        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight, false));
       } else {
         /// --- move the elements from low degree table to mid-high degree table --- ///
         move_elements_ldeg_table_to_mhdeg_table(src, trg, weight);
@@ -236,7 +232,7 @@ class degawarerhh
       auto itr_mhdeg_src = m_mhdeg_table->find(src);
       if (itr_mhdeg_src.is_end()) {
         /// --- since mid-high degree table dosen't have the vertex, insert into low degree table (new vertex) --- ///
-        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight));
+        rhh::insert(&m_ldeg_table, src, ldeg_table_value_type(vertex_property_data_type(), trg, weight, true));
       } else {
         /// --- mid-high degree table alread has the source vertex --- ///
         /// --- insert the edge without check a duplication --- ///
@@ -261,10 +257,23 @@ class degawarerhh
   bool erase_edge(const vertex_type& src, const vertex_type& trg)
   {
     for (auto itr = m_ldeg_table->find(src); !itr.is_end(); ++itr) {
-      if ((*itr).second == trg) {
-        m_ldeg_table->erase(itr);
+      if (itr->second == trg) {
+        const bool is_top_vertex = itr->fourth;
+        if (is_top_vertex) {
+          vertex_property_data_type vpd(std::move(std::move(itr->first)));
+          m_ldeg_table->erase(itr);
+          /// move vertex property
+          auto itr_next = m_ldeg_table->find(src);
+          if (!itr_next.is_end()) {
+            itr_next->fourth = true;
+            itr_next->first = std::move(vpd);
+          }
+        } else {
+          m_ldeg_table->erase(itr);
+        }
         rhh::shrink_to_fit(&m_ldeg_table, 2.0);
         --m_num_edges;
+
         return true;
       }
     }
@@ -282,10 +291,12 @@ class degawarerhh
 
     if (edge_chunk->size() < middle_high_degree_threshold) {
       const vertex_property_data_type& property_data = itr_matrix->first;
+      bool is_first = true;
       for (auto itr = edge_chunk->begin(); !itr.is_end(); ++itr) {
-        ldeg_table_value_type value(property_data, itr->key, itr->value);
+        ldeg_table_value_type value(property_data, itr->key, itr->value, is_first);
         rhh::insert(&m_ldeg_table, src, value);
         edge_chunk->erase(itr);
+        is_first = false;
       }
       mhdeg_edge_chunk_type::deallocate(edge_chunk);
       m_mhdeg_table->erase(itr_matrix);
@@ -311,6 +322,15 @@ class degawarerhh
     size_type count = 0;
     for (auto itr = m_ldeg_table->find(src); !itr.is_end(); ++itr) {
       if ((*itr).second == trg) {
+        const bool is_top_vertex = itr->fourth;
+        if (is_top_vertex) {
+          /// move vertex property
+          auto itr_next = m_ldeg_table->find(src);
+          if (!itr_next.is_end()) {
+            itr_next->fourth = true;
+            itr_next->first = std::move(itr->first);
+          }
+        }
         m_ldeg_table->erase(itr);
         ++count;
       }
@@ -333,10 +353,12 @@ class degawarerhh
     if (count > 0) {
       if (edge_chunk->size() < middle_high_degree_threshold) {
         const vertex_property_data_type& property_data = itr_matrix->first;
+        bool is_first = true;
         for (auto itr = edge_chunk->begin(); !itr.is_end(); ++itr) {
-          ldeg_table_value_type value(property_data, itr->key, itr->value);
+          ldeg_table_value_type value(property_data, itr->key, itr->value, is_first);
           rhh::insert(&m_ldeg_table, src, value);
           edge_chunk->erase(itr);
+          is_first = false;
         }
         mhdeg_edge_chunk_type::deallocate(edge_chunk);
         m_mhdeg_table->erase(itr_matrix);
@@ -355,6 +377,7 @@ class degawarerhh
   {
     auto itr = m_ldeg_table->find(vertex);
     if (!itr.is_end()) {
+      assert(itr->fourth);
       return itr->first;
     }
     auto itr_matrix = m_mhdeg_table->find(vertex);
@@ -604,11 +627,12 @@ class degawarerhh
 
   /// --- Iterator supporting functions --- ///
 
-  /// TODO: this function has a bug
   inline typename ldeg_table_type::whole_iterator ldeg_vertices_begin()
   {
-    assert(middle_high_degree_threshold == 2);
-    return m_ldeg_table->begin();
+    typename ldeg_table_type::whole_iterator itr = m_ldeg_table->begin();
+    /// Increment until find a top vertex
+    while (!itr.is_end() && !itr->value.fourth) ++itr;
+    return itr;
   }
 
   inline typename ldeg_table_type::whole_iterator ldeg_vertices_end()

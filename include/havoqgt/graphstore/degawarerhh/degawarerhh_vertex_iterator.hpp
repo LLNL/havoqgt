@@ -143,6 +143,8 @@ class degawarerhh<vertex_type,
   {
     if (!m_low_itr.is_end()) {
       ++m_low_itr;
+      while (!m_low_itr.is_end() && !m_low_itr->value.fourth)
+        ++m_low_itr;
       return;
     }
     if (!m_mh_itr.is_end()) {
