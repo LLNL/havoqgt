@@ -1,0 +1,35 @@
+diff --git include/havoqgt/parallel_edge_list_reader.hpp include/havoqgt/parallel_edge_
+index 7ebd3f4..b27be5d 100644
+--- include/havoqgt/parallel_edge_list_reader.hpp
++++ include/havoqgt/parallel_edge_list_reader.hpp
+@@ -208,14 +208,24 @@ protected:
+     while(!m_ptr_ifstreams.empty()) {
+       std::string line;
+       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
++
++        /// specialized read implementation for the wikipedia graph
++        /// round robin reading
++        auto& front_stream = m_ptr_ifstreams.front();
++        m_ptr_ifstreams.pop_front();
++        m_ptr_ifstreams.push_back( front_stream );
++
+         std::stringstream ssline(line);
+-        if (m_read_with_delete) {
+-          ssline >> std::get<0>(edge) >> std::get<1>(edge) >> std::get<2>(edge);
+-        } else {
+-          ssline >> std::get<0>(edge) >> std::get<1>(edge);
+-          std::get<2>(edge) = false;
+-        }
++        uint64_t t, s, d;
++        char f;
++        ssline >> t >> f >> s >> d;
++        std::get<0>(edge) = s;
++        std::get<1>(edge) = d;
++        if (f == 'A') std::get<2>(edge) = false;
++        else if (f == 'D') std::get<2>(edge) = true;
++        else exit(1);
+         return true;
++
+       } else { //No remaining lines, close file.
+         delete m_ptr_ifstreams.front();
+         m_ptr_ifstreams.pop_front();
