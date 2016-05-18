@@ -261,7 +261,27 @@ public:
       } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }
-  
+
+  template<typename VisitorContainer>
+  void init_visitor_traversal_experiment( VisitorContainer& container ) {
+    do{
+      do{
+	do{
+	  container.process(this);
+	  process_pending_controllers();
+	  while(!empty()) {
+	    process_pending_controllers();
+	    visitor_type this_visitor = pop_top();
+	    do_visit(this_visitor);
+	    m_termination_detection.inc_completed();
+	  }
+	  
+	} while(!container.empty());
+	  m_mailbox.flush_buffers_if_idle();
+	} while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      } while(!m_termination_detection.test_for_termination());
+  }
+
   void init_visitor_traversal_new(uint64_t repeat = 1) {
     auto citr = m_ptr_graph->controller_begin();
     auto vitr = m_ptr_graph->vertices_begin();

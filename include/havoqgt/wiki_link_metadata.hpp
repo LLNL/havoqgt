@@ -6,7 +6,7 @@
 #include <iostream>
 #include <chrono>
 
-#define get(y, x) y[index_map[x]]
+#define get_index(y, x) y[index_map[x]]
 
 namespace havoqgt {
   
@@ -46,18 +46,18 @@ namespace havoqgt {
 	std::cout << "Bad line in the file. Line: " << line << std::endl;
 	return;
       }
-      link_from  = std::atol( get(tokens, 0).c_str()) - 1;
-      link_to    = std::atol( get(tokens, 1).c_str()) - 1;
+      link_from  = std::atol( get_index(tokens, 0).c_str()) - 1;
+      link_to    = std::atol( get_index(tokens, 1).c_str()) - 1;
 
-      added_at   = std::atol( get(tokens, 2).c_str());
-      deleted_at = std::atol( get(tokens, 3).c_str());
+      added_at   = std::atol( get_index(tokens, 2).c_str());
+      deleted_at = std::atol( get_index(tokens, 3).c_str());
+      if(deleted_at == 0) deleted_at = std::numeric_limits<uint64_t>::max();
+      added_by   = sha1key( get_index(tokens, 4) );
+      deleted_by = sha1key( get_index(tokens, 5) );
 
-      added_by   = sha1key( get(tokens, 4) );
-      deleted_by = sha1key( get(tokens, 5) );
-
-      type       = -(std::atoi( get(tokens, 6).c_str() ));
-      redirect   = std::atoi( get(tokens, 7).c_str() );
-      ns         = std::atoi( get(tokens, 8).c_str() );
+      type       = -(std::atoi( get_index(tokens, 6).c_str() ));
+      redirect   = std::atoi( get_index(tokens, 7).c_str() );
+      ns         = std::atoi( get_index(tokens, 8).c_str() );
 
       } catch( std::exception& e) {
 	std::cout << "exception caught in wiki_link_metadata : " << e.what() << std::endl;

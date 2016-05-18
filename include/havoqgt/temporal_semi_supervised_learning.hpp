@@ -2,7 +2,7 @@
 #define _TEMPORAL_RANDOM_WALK_SIMULATION_HPP
 
 #define SEG_TREE 0
-
+#define INT_TREE 1
 
 #include <chrono>
 #include <random>
@@ -12,7 +12,7 @@
 //#include <havoqgt/detail/visitor_priority_queue.hpp>
 #include <havoqgt/detail/fifo_queue.hpp>
 #include <havoqgt/visitor_queue.hpp>
-#include <havoqgt/segment_tree.hpp>
+#include <havoqgt/interval_tree.hpp>
 #include <unordered_set>
 
 namespace havoqgt { namespace mpi {
@@ -91,16 +91,16 @@ namespace havoqgt { namespace mpi {
       random_walker() : id(0) {}
 
       random_walker( uint64_t _id, vertex_locator _start_from, uint64_t _cost
-		     ,uint64_t _cur_time
-		     ,uint64_t _started_at
+		     , uint64_t _cur_time
+		     , uint64_t _started_at
 		     , uint64_t _steps
 		     , uint64_t _restart_count
 		     )
 	: id(_id), start_from(_start_from), cost(_cost), cur_time(_cur_time), started_at(_started_at),steps(_steps), target_hit(vertex_locator()), was_completed(false), restart_count(_restart_count) { }
 
       random_walker( uint64_t _id, vertex_locator _start_from, uint64_t _cost
-		     ,uint64_t _cur_time
-		     ,uint64_t _started_at
+		     , uint64_t _cur_time
+		     , uint64_t _started_at
 		     , uint64_t _steps
 		     , uint64_t _restart_count
 		     , bool _completed
@@ -141,7 +141,6 @@ namespace havoqgt { namespace mpi {
       std::tuple<bool, vertex_locator, random_walker> next(Graph& g, EdgeMetaData*& edges_metadata
 							   , SegmentTreeData*& segment_tree_data, vertex_locator cur_vertex ) const{
 #if SEG_TREE == 1
-	std::cout << "Not here totally" << std::endl;
 	auto &tree = (*segment_tree_data)[cur_vertex];
 	uint64_t size = 0;
 	tree.query( cur_time, size);
@@ -253,38 +252,39 @@ namespace havoqgt { namespace mpi {
 	return true;
       }
 
+      void store(uint64_t current, uint64_t source, std::string state, random_walker_t& rwalker) {
+	(*out_stream) << current << ";" << source << ";"
+		      << rwalker << ";" << state << "\n";
+      }
+
       template<typename VisitorQueueHandle>
       bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
 	if( rwalker.returned_to_mother(vertex)) {
-	  (*out_stream) << ( (rwalker.was_completed==true)?g.locator_to_label(rwalker.target_hit):0 ) << ";"
-		        << g.locator_to_label(rwalker.start_from) << ";"
-		        << rwalker << ";COMP_RET" << std::endl;
+	  store( (rwalker.was_completed==true)?g.locator_to_label(rwalker.target_hit):0,
+		 g.locator_to_label(rwalker.start_from), rwalker, "COMP_RET");
 	}else {
-
-	bool is_completed = rwalker.is_complete(vertex);
-	if( is_completed ) {
-	  /*	  temporal_random_walk_simulation_visitor neighbor( rwalker.start_from, rwalker.register_complete(vertex));
-		  vis_queue->queue_visitor(neighbor); */
-	  (*out_stream) << g.locator_to_label( vertex ) << ";"
-			<< g.locator_to_label( rwalker.start_from) << ";"
-			<< rwalker << ";COMP" << std::endl;
-
-	} else if( rwalker.in_infinite_path(vertex) ){
-	  if( rwalker.should_restart() ) {
-	    temporal_random_walk_simulation_visitor neighbor( rwalker.start_from, rwalker.restart());
-	    vis_queue->queue_visitor(neighbor);
-	  } else {
-	    (*out_stream) << "-1;"
-		        << g.locator_to_label(rwalker.start_from) << ";"
-		        << rwalker << ";DEL" << std::endl;
+	  bool is_completed = rwalker.is_complete(vertex);
+	  if( is_completed ) {
+	    store( g.locator_to_label(vertex), g.locator_to_label(rwalker.start_from), rwalker, "COMP" );
+	  } else if( rwalker.in_infinite_path(vertex) ){
+	    if( rwalker.should_restart() ) {
+	      temporal_random_walk_simulation_visitor neighbor( rwalker.start_from, rwalker.restart());
+	      vis_queue->queue_visitor(neighbor);
+	    } else {
+	      store( 0, g.locator_to_label( rwalker.start_from ), rwalker, "DEL" );
 	  }
 	}
 	else {
 	  std::tuple< bool, vertex_locator, random_walker_t> next = rwalker.next( g, edges_metadata(), segment_tree_data(), vertex);
+	  
 	  if( std::get<HAS_NEIGHBOR>(next) ) {
+	    store( g.locator_to_label(vertex), g.locator_to_label( rwalker.start_from), rwalker, "TRANSIT" );
 	    temporal_random_walk_simulation_visitor neighbor( std::get<NEIGHBOR>(next), std::get<RANDOM_WALKER>(next));
 	    vis_queue->queue_visitor(neighbor);
-	  } 
+	  } else{
+	    store( g.locator_to_label(vertex), g.locator_to_label( rwalker.start_from), rwalker, "KILLED" );
+	  }
+	    
 	}
 	}
 	return true;
@@ -361,18 +361,27 @@ namespace havoqgt { namespace mpi {
 
 	std::vector<visitor_type> visitor_list;
 
+	std::mt19937 en;
+	std::random_device r;
+	en.seed(r());
+	std::uniform_distribution<uint64_t> uniform_dist( start_times[0], start_times[start_times.size() - 1] );
 	uint64_t i = 1;
-	//for( uint64_t c = 0; c < num_of_walkers; c++ ) {
-	  //	  for( auto x : (*start_times) ) {
-	  //for( auto vertex: sources ) {
-	  //  typename visitor_type::random_walker_t _rwalker(i, vertex, 0, x, x, 0 , 0);
-	  //  visitor_list.push_back( visitor_type( vertex, _rwalker) );	      
-	  //  i++;
-	  //}
-	  // }
-	  //}
-	//      vq.init_visitor_traversal(visitor_list);
-	vq.init_visitor_traversal_new(num_of_walkers);
+#if 1
+	for( uint64_t c = 0; c < num_of_walkers; c++ ) {
+	  auto x = uniform_dist(en);
+#else
+	for( uint64_t c = 0; c < num_of_walkers/( start_times.size() ); c++ ) {
+	  for( auto x: start_times ) {
+#endif
+	  for( auto vertex: sources ) {
+	    typename visitor_type::random_walker_t _rwalker(i, vertex, 0, x, x, 0 , 0);
+	    visitor_list.push_back( visitor_type( vertex, _rwalker) );	      
+	    i++;
+	  }
+	}
+	
+	vq.init_visitor_traversal(visitor_list);
+	//vq.init_visitor_traversal_new(num_of_walkers);
 
 	out_file.close();
     }

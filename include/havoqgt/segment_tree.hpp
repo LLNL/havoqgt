@@ -53,8 +53,9 @@ public:
   template<typename sort_predicate>
   void balanced_tree(sort_predicate sort, std::vector<key>& temp) {
     //O(n logn )
-    //std::cout << "Inside the balanced tree" << std::endl;
+
     std::sort( temp.begin(), temp.end(), sort );
+
     std::vector<key> uniq_temp;
     std::size_t curr = 0;
     uniq_temp.push_back(temp[curr]);
@@ -85,7 +86,6 @@ public:
     size = 4 * n;
     arr.resize( 4 * n );
     
-    //std::cout << "Prepopulating elementary intervals" << std::endl;
     //O(n)
     std::size_t i, k;
     key prev = NegInf<key>();
@@ -95,7 +95,6 @@ public:
       prev = uniq_temp[k];
     }
 
-    //std::cout << "Filling up the tree" << std::endl;
     //O(n)
     std::size_t arr_size = 2 * uniq_temp.size();
     for( i = size/4 ; i >= 1; i /= 2 ) { // i >= 1
@@ -124,10 +123,8 @@ public:
 	// go right
 	add(2 * i + 1, range, index);
       } else {
-	//split
-	//add( 2 * i, std::make_pair(range.first, c ), index);
-	//add( 2 * i + 1, std::make_pair( arr[d_i + 1].range.first, range.second ), index ); 
-	add( d_i, range, index); add( d_i + 1, range, index);
+	add( d_i, range, index);
+	add( d_i + 1, range, index);
       }
       
     }

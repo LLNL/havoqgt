@@ -62,6 +62,13 @@ namespace mpi {
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::vertex_locator {
  public:
+
+  struct hasher {
+    std::size_t operator()( const vertex_locator& _vertex) const {
+      return _vertex.hash();
+    }
+  };
+
   vertex_locator() {
     m_is_delegate  = 0;
     m_is_bcast     = 0;

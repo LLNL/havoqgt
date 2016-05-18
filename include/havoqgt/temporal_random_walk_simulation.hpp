@@ -6,141 +6,14 @@
 #include <tuple>
 #include <sstream>
 #include <iostream>
-#include <havoqgt/detail/visitor_priority_queue.hpp>
-#include <havoqgt/visitor_queue.hpp>
 
 namespace havoqgt { namespace mpi {
-
+    /*
     using clock_t = std::chrono::high_resolution_clock;
     using time_point_t = std::chrono::time_point<clock_t>;
+    */
 
-    /**********************************************************************
-    Random Number Generator
-    ***********************************************************************/
-    struct random_number_generator {
-    public:
-      std::mt19937 en;
-      
-      static random_number_generator& get() {
-	if(val == 0) {
-	  _rng = random_number_generator();
-	  val = 1;
-	}
-	return _rng;
-      }
-
-      template<typename distribution>
-      typename distribution::result_type operator()(distribution& dist){
-	return dist(en);
-      }
-
-    private:
-      static random_number_generator _rng;
-      static int val;
-      random_number_generator(){ 
-	std::random_device r;
-	en.seed(r());
-      }
-
-    };
-
-    typedef random_number_generator rng;
-    rng rng::_rng;
-    int rng::val = 0;
-
-    /**********************************************************************
-    Random Walker
-    ***********************************************************************/
-    template <typename Graph, typename EdgeMetaData>
-    class random_walker {
-    public:
-      typedef typename Graph::vertex_locator vertex_locator;
-      typedef typename Graph::edge_iterator eitr_type;
-      typedef typename EdgeMetaData::value_type metadata_type;
-      
-      template<std::size_t sz>
-      class memory{
-      public: 
-	memory(): cur_size(0) {} 
-
-	//TODO
-	void push_back(vertex_locator vertex) {
-
-	}
-	std::size_t size() { return cur_size; }
-	std::size_t cur_size;
-	vertex_locator remembered_vertics[sz + 1];
-      };
-      
-      random_walker() : id(0) {}
-
-      random_walker( uint64_t _id, vertex_locator _start_from, uint64_t _cost
-		     ,time_point_t _cur_time
-		     ,time_point_t _started_at
-		     , uint64_t _steps
-		     ,vertex_locator _target = vertex_locator() )
-	: id(_id), start_from(_start_from), cost(_cost), cur_time(_cur_time), started_at(_started_at),steps(_steps), target(_target) { }
-
-      bool is_complete(vertex_locator vertex) const {
-	return vertex == target || steps >= random_walker::max_steps;
-      }
-
-      void set_target(vertex_locator vertex) {
-	target = vertex;
-      }
-      
-
-      //Function returning the next Visitor
-      std::tuple<bool, vertex_locator, random_walker> next(Graph& g, EdgeMetaData*& edges_metadata,
-					  vertex_locator cur_vertex ) const{
-
-	std::vector<vertex_locator> adjacents;
-	std::vector<uint32_t> cost_vec;
-	
-	for(eitr_type itr = g.edges_begin(cur_vertex); itr != g.edges_end(cur_vertex); ++itr ) {
-	  metadata_type& metadata = (*edges_metadata)[itr];
-	  if( metadata.start_time() <= cur_time && (metadata.end_time().time_since_epoch() == std::chrono::seconds(0) ||
-						    metadata.end_time() >= cur_time )) {
-	    adjacents.push_back(itr.target());
-	    cost_vec.push_back(metadata.redirect ? 0 : 1);
-	  }
-	}
-	if( adjacents.size() == 0 ) return std::make_tuple( false, vertex_locator(),  random_walker() );
-
-	std::uniform_int_distribution<std::size_t> uniform_dist( 0, adjacents.size() - 1);
-	// for memory -- uniform_dist(0, adjacents.size() + memory.size() - 1 );
-	std::size_t index;
-	{
-	  index = (rng::get())(uniform_dist);
-	}
-	random_walker next_rw(id, start_from, cost + cost_vec[index], cur_time + std::chrono::seconds(0), started_at, steps + 1, target);
-	return std::make_tuple( true , adjacents[index], next_rw );
-      }
-
-      friend std::ostream& operator<<(std::ostream& o, const random_walker& rw) {
-	return o << rw.id
-		 << ";" << std::chrono::duration_cast<std::chrono::seconds>(rw.started_at.time_since_epoch()).count()
-		 << ";" << rw.cost;
-      }
-
-      uint64_t id;
-      vertex_locator start_from;
-      vertex_locator target;
-      uint64_t cost;
-      uint64_t steps;
-      time_point_t cur_time;
-      time_point_t started_at;
-      memory<0> no_memory;
-      static uint64_t max_steps;
-    };
-
-    template<typename Graph, typename EdgeMetaData>
-    uint64_t random_walker<Graph, EdgeMetaData>::max_steps = 0;
-
-    /**********************************************************************
-    Random Walker Visitor
-    ***********************************************************************/
-    template <typename Graph, typename EdgeMetaData, typename VertexData>
+    template <typename Graph, typename EdgeMetaData, typename OutputIterator, typename RandomWalker>
     class temporal_random_walk_simulation_visitor {
 
       enum TUPLE_INDEX {
@@ -151,7 +24,7 @@ namespace havoqgt { namespace mpi {
       typedef typename Graph::vertex_locator vertex_locator;
       typedef typename Graph::edge_iterator eitr_type;
       typedef typename EdgeMetaData::value_type metadata_type;
-      using random_walker_t = random_walker<Graph, EdgeMetaData>;
+      using random_walker_t = RandomWalker;
 
       temporal_random_walk_simulation_visitor() {}
 
@@ -163,33 +36,26 @@ namespace havoqgt { namespace mpi {
       
       template<typename VisitorQueueHandle>
       bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
-	uint64_t i = 1;
-	for( auto x : (*start_time_steps()) ) {
-	  random_walker_t _rwalker(i, vertex, 0, x, x, 0);
-	  temporal_random_walk_simulation_visitor v( vertex, _rwalker);
-	  vis_queue->queue_visitor(v);
-	  i++;
-	}
+	
       }
 
       bool pre_visit() const {
 	bool is_complete = rwalker.is_complete(vertex);
-	if( rwalker.steps != 0) { //not the first time
-	  (*vertex_data())[vertex].at(rwalker.id).sum += rwalker.cost;
-	  (*vertex_data())[vertex].at(rwalker.id).min = std::min( (*vertex_data())[vertex].at(rwalker.id).min, rwalker.cost );
-	  (*vertex_data())[vertex].at(rwalker.id).max = std::max( (*vertex_data())[vertex].at(rwalker.id).max, rwalker.cost );
-	  (*vertex_data())[vertex].at(rwalker.id).count++;
-	}
+	if( rwalker.steps != 0 )
+	  (*output_iterator())(vertex, rwalker); // can do by state as well
 	return !is_complete;
       }
 
       template<typename VisitorQueueHandle>
       bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-	std::tuple< bool, vertex_locator, random_walker_t> next = rwalker.next( g, edges_metadata(), vertex);
+	std::tuple< bool, vertex_locator, random_walker_t> next = rwalker.next(vertex);
 	if( std::get<HAS_NEIGHBOR>(next) ) {
 	  temporal_random_walk_simulation_visitor neighbor( std::get<NEIGHBOR>(next), std::get<RANDOM_WALKER>(next));
 	  vis_queue->queue_visitor(neighbor);
 	}
+	/*else {
+	  (*output_iterator())( vertex, rwalker);
+	  }*/
 	return true;
       }
       
@@ -209,25 +75,18 @@ namespace havoqgt { namespace mpi {
 	static EdgeMetaData* data;
 	return data;
       }
-
-      static void set_start_time_steps(std::vector<time_point_t>* data) { start_time_steps() = data; }
-
-      static std::vector<time_point_t>*& start_time_steps() {
-	static std::vector<time_point_t>* data;
-	return data;
-     }
-
-      static void set_vertex_data(VertexData* data) { vertex_data() = data; }
       
-      static VertexData*& vertex_data() {
-	static VertexData* data;
+      static void set_output_iterator(OutputIterator* data) { output_iterator() = data; }
+
+      static OutputIterator*& output_iterator() {
+	static OutputIterator* data;
 	return data;
       }
 
       vertex_locator vertex;
       random_walker_t rwalker;
     };// __attribute__ ((packed));
-    
+    /*    
     template< typename TGraph, typename EdgeMetaData, typename VertexData>
     void temporal_random_walk_simulation( TGraph* g,
 					  EdgeMetaData* edge_metadata,
@@ -248,7 +107,7 @@ namespace havoqgt { namespace mpi {
 
       vq.init_visitor_traversal_new();
     }
-
+    */
   }/*namespace mpi ends*/ } /*namespace havoqgt ends*/
 
 #endif
