@@ -33,7 +33,8 @@ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S30 -gDegAwareRHH
 * Each process create 2^30 byte of a file to store the graph under '/mnt/device/' with the prefix 'graph_out'.
 * Use DegAwareRHH
 
-Note: 
+Note:
+
 To create a SCALE 30 graph, 250 ~ 260 GB of space is required for DegAwareRHH and Baseline. BaselineMap requires 500 GB.
 DegAwareRHH takes 14 hours to create SCALE 30 graph with 40 processes with 128 GB of DRAM.
 
@@ -57,10 +58,10 @@ Each line of the file represents a pair of source vertex and target vertex.
 Note:
 
 The number of edge list files can be any number regardless of the number of MPI processes.
-To achieve fair load balancing among MPI processes, it is recommended that number of edge list files is multiples of the number of MPI processes.
+To achieve fair load balancing among MPI processes, it is recommended that the number of edge list files is multiples of the number of MPI processes.
 
 # Reading Suraj's wikipedia graph
-Please apply a patch file in the root directory, i.e., havoqgt, to read the Suraj's wikipedia graph.
+Please apply a patch file under the root directory, i.e., havoqgt, to read the Suraj's wikipedia graph.
 ## apply patch
 ```
 cd havoqgt
