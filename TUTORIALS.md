@@ -2,13 +2,13 @@ This is a instruction to run a dynamic graph construction test.
 
 # Build
 ```
-git clone git@bitbucket.org:PerMA/havoqgt.git
-cd havoqgt
-git checkout develop_keita
-cd build/catalyst.llnl.gov/
+$ git clone git@bitbucket.org:PerMA/havoqgt.git
+$ cd havoqgt
+$ git checkout develop_keita
+$ cd build/catalyst.llnl.gov/
 # edit script/do_cmake.sh (cmake's configuretion) depends on your environment #
-sh script/do_cmake.sh
-make
+$ sh script/do_cmake.sh
+$ make
 ```
 
 # Options
@@ -26,7 +26,7 @@ make
 # Run
 ## Example1 (RMAT graph)
 ```
-mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S30 -gDegAwareRHH
+$ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S30 -gDegAwareRHH
 ```
 
 * Run the dynamic graph construction program with 2 processes on a RMAT SCALE 20 graph.
@@ -40,15 +40,15 @@ DegAwareRHH takes 14 hours to create SCALE 30 graph with 40 processes with 128 G
 
 ## Example 2 (reading a graph from file)
 ```
-mpirun -np 2 ./dist_bench -E./edgelists -o/mnt/device/graph_out -S30 -gDegAwareRHH
+$ mpirun -np 2 ./dist_bench -E./edgelists -o/mnt/device/graph_out -S30 -gDegAwareRHH
 ```
 * Run the dynamic graph construction program with 2 processes with reading a graph from files
 ```
-cat ./edgelists
+$ cat ./edgelists
 path/to/edgelist1
 path/to/edgelist2
 
-cat path/to/edgelist1
+$ cat path/to/edgelist1
 1 1
 4 2
 2 1
@@ -64,12 +64,13 @@ To achieve fair load balancing among MPI processes, it is recommended that the n
 Please apply a patch file under the root directory, i.e., havoqgt, to read the Suraj's wikipedia graph.
 ## apply patch
 ```
-cd havoqgt
-patch -p0 < ./scripts/catalyst.llnl.gov/edgelist_reader_wikipedia_support.patch
+$ cd havoqgt
+$ patch -p0 < ./scripts/catalyst.llnl.gov/edgelist_reader_wikipedia_support.patch
 ```
 ## undo patch
 ```
-patch -R -p0 < ./scripts/catalyst.llnl.gov/edgelist_reader_wikipedia_support.patch
+$ cd havoqgt
+$ patch -R -p0 < ./scripts/catalyst.llnl.gov/edgelist_reader_wikipedia_support.patch
 ```
 After applying the patch and building the program, execution commands are same as the example 2 (reading a graph from file).
 
