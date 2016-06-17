@@ -11,7 +11,9 @@ $ sh script/do_cmake.sh
 $ make
 ```
 To compile havoqgt, Boost libraries are required. Please download from http://www.boost.org/ (at least version 1.59 is required).
-You don't need to compile it; just specify its root directory in the script file (do_cmake.sh). 
+You don't need to compile it; just specify its root directory in the script file (do_cmake.sh).
+
+GCC 4.8 or more is also required.
 
 # Options
 + `-o<string>`
