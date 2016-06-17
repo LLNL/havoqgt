@@ -10,6 +10,8 @@ $ cd build/catalyst.llnl.gov/
 $ sh script/do_cmake.sh
 $ make
 ```
+To compile havoqgt, Boost libraries are required. Please download from http://www.boost.org/ (at least version 1.59 is required).
+You don't need to compile it; just specify its root directory in the script file (do_cmake.sh). 
 
 # Options
 + `-o<string>`
