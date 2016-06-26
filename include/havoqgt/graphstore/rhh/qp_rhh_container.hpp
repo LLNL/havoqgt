@@ -32,18 +32,12 @@ class blocked_rhh_container {
   using key_hash_func        = _key_hash_func;
   using value_type           = _value_type;
   using size_type            = _size_type;
-  using block_size_type      = uint8_t;
   using segment_manager_type = _segment_manager_type;
   using property_type        = typename property_program::property_type;
   using probedistance_type   = typename property_program::probedistance_type;
   using rhh_contatiner_selftype = blocked_rhh_container<key_type, value_type, size_type,
                                                         segment_manager_type,
                                                         key_hash_func, property_program>;
-
-  enum : block_size_type {
-    kBlockCapacity = 8,
-    kKeyNotFoundInBlock = std::numeric_limits<block_size_type>::max()
-  };
 
   /// TODO: specializetion for no value case
   #pragma pack(1)
@@ -54,12 +48,11 @@ class blocked_rhh_container {
     value_type    value;
   };
   using element_type = packed_element;
-  using block_type   = std::array<element_type, kBlockCapacity>;
 
   enum : size_type {
-    kKeyNotFound   = std::numeric_limits<size_type>::max(),
-    kElementSize   = sizeof(element_type),
-    kBlockSize     = sizeof(block_type),
+    kQPDistance       = 4096,
+    kKeyNotFound      = std::numeric_limits<size_type>::max(),
+    kElementSize      = sizeof(element_type),
 #if RHH_DETAILED_ANALYSYS
     kTableBaseSize = sizeof(size_type) + sizeof(size_type) + sizeof(void*) + sizeof(size_t) * 3
 #else
@@ -70,6 +63,10 @@ class blocked_rhh_container {
   using allocator = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
                                                            kElementSize,
                                                            kTableBaseSize>;
+
+  enum : probedistance_type {
+    kMaxPrbDistInBlk  = property_program::kLongProbedistanceThreshold - 1
+  };
 
   class whole_iterator;
   class value_iterator;
@@ -103,7 +100,7 @@ class blocked_rhh_container {
 
   inline size_t table_mem_size() const
   {
-    return kBlockSize * capacity() + kTableBaseSize;
+    return capacity() + kTableBaseSize;
   }
 
   /// --- Lookup --- ///
@@ -152,14 +149,14 @@ class blocked_rhh_container {
   /// TODO: move to non-member function
   inline void erase(const whole_iterator& itr)
   {
-    itr.m_rhh_ptr->erase_element_at(itr.m_block_pos, itr.m_elem_pos);
+    itr.m_rhh_ptr->erase_element_at(itr.m_pos);
     --m_num_elems;
   }
 
   /// TODO: move to non-member function ?
   inline void erase(const value_iterator& itr)
   {
-    itr.m_rhh_ptr->erase_element_at(itr.m_block_pos, itr.m_elem_pos);
+    itr.m_rhh_ptr->erase_element_at(itr.m_pos);
     --m_num_elems;
   }
 
@@ -193,17 +190,13 @@ class blocked_rhh_container {
   /// --- allocator & deallocator --- ///
   static rhh_contatiner_selftype* allocate(const size_t capacity)
   {
-    const size_type num_block = (capacity + kBlockCapacity - 1) / kBlockCapacity;
-    rhh_contatiner_selftype* rhh = reinterpret_cast<rhh_contatiner_selftype*>(allocator::instance().allocate(num_block * kBlockCapacity));
+    rhh_contatiner_selftype* rhh = reinterpret_cast<rhh_contatiner_selftype*>(allocator::instance().allocate(capacity));
     rhh->m_num_elems = 0;
-    rhh->m_num_block = num_block;
+    rhh->m_capacity = capacity;
     rhh->m_next = nullptr;
 
-    for (size_type i = 0; i < num_block; ++i) {
-      block_type& block = rhh->m_body[i];
-      for (size_type j = 0; j < kBlockCapacity; ++j) {
-        property_program::empty(block[j].property);
-      }
+    for (size_type i = 0; i < capacity; ++i) {
+      property_program::empty(rhh->m_body[i].property);
     }
     return rhh;
   }
@@ -212,7 +205,7 @@ class blocked_rhh_container {
   {
     while (rhh != nullptr) {
       rhh_contatiner_selftype* next_rhh = rhh->m_next;
-      allocator::instance().deallocate(reinterpret_cast<void*>(rhh), rhh->m_num_block * kBlockCapacity);
+      allocator::instance().deallocate(reinterpret_cast<void*>(rhh), rhh->m_capacity);
       rhh = next_rhh;
     }
   }
@@ -225,7 +218,7 @@ class blocked_rhh_container {
   inline void assign_to_chained_rhh(rhh_contatiner_selftype* next)
   {
     m_num_elems = next->m_num_elems;
-    m_num_block = next->m_num_block;
+    m_capacity = next->m_capacity;
     m_next = next;
   }
 
@@ -282,11 +275,8 @@ class blocked_rhh_container {
   /// --- debug --- ///
   void print_all_element()
   {
-    for (size_type i = 0; i < m_num_block; ++i) {
-      std::cout << "[" << (size_t)i << "] ----------------" << std::endl;
-      for (block_size_type j = 0; j < kBlockCapacity; ++j) {
-        std::cout << "[" << (size_t)j << "]" << "property " << (uint64_t)m_body[i][j].property << ", key " << m_body[i][j].key << std::endl;
-      }
+    for (size_type i = 0; i < m_capacity; ++i) {
+      std::cout << "[" << (size_t)i << "]" << "property " << (uint64_t)m_body[i].property << ", key " << m_body[i].key << std::endl;
     }
     if (m_next != nullptr) {
       m_next->print_all_element();
@@ -301,14 +291,12 @@ class blocked_rhh_container {
   template <size_t size>
   void histgram_load_factor(size_type (&histgram)[size])
   {
-    for (size_type i = 0; i < m_num_block; ++i) {
-      for (block_size_type j = 0; j < kBlockCapacity; ++j) {
-        if (!property_program::is_empty(m_body[i][j].property) &&
-            !property_program::is_tombstone(m_body[i][j].property)) {
-          const size_type d = property_program::extract_probedistance(m_body[i][j].property);
-          if (d >= size) exit(1);
-          ++histgram[d];
-        }
+    for (size_type i = 0; i < m_capacity; ++i) {
+      if (!property_program::is_empty(m_body[i].property) &&
+          !property_program::is_tombstone(m_body[i].property)) {
+        const size_type d = property_program::extract_probedistance(m_body[i].property);
+        if (d >= size) exit(1);
+        ++histgram[d];
       }
     }
     if (m_next != nullptr) {
@@ -323,84 +311,81 @@ class blocked_rhh_container {
  private:
 
   /// --- utilities --- ///
-  inline size_type cal_desired_block(const size_type hash) const
+//  inline size_type cal_desired_pos(const size_type hash) const
+//  {
+//    return hash & (m_capacity - 1);
+//  }
+
+  inline size_type cal_desired_pos(const size_type hash, const size_type block_no) const
   {
-    return hash & (m_num_block - 1);
+    return (hash +  0.5 * block_no + block_no * block_no* 0.5) * kQPDistance & (m_capacity - 1);
   }
 
 
   /// --- find ---- ///
-  inline rhh_contatiner_selftype* internal_locate(const key_type& key,
-                                                  size_type& block_pos,
-                                                  block_size_type& elem_pos,
-                                                  probedistance_type& cur_prbdist,
-                                                  bool& has_reached_last_block)
+  inline rhh_contatiner_selftype* internal_locate(const key_type& key, size_type& pos, size_type& block_no)
   {
-    const size_type hash = key_hash_func::hash(key);
-    block_pos = cal_desired_block(hash);
-    elem_pos = 0;
-    cur_prbdist = 0;
-    has_reached_last_block = false;
-    return internal_locate_with_hint(key, block_pos, elem_pos, cur_prbdist, has_reached_last_block);
+    pos = cal_desired_pos(key_hash_func::hash(key), 0);
+    block_no = 0;
+    return internal_locate_with_hint(key, 0, pos, block_no);
   }
 
   rhh_contatiner_selftype* internal_locate_with_hint(const key_type& key,
-                                                     size_type& block_pos,
-                                                     block_size_type& elem_pos,
-                                                     probedistance_type& prbdist,
-                                                     bool& has_reached_last_block)
+                                                     const probedistance_type init_prbdist,
+                                                     size_type& pos,
+                                                     size_type& block_no)
   {
-    const size_type mask = (m_num_block - 1);
+    probedistance_type prbdist = init_prbdist;
 
     while (true) {
-      auto ret = internal_locate_in_block_with_hint(m_body[block_pos], key, elem_pos, prbdist);
-      elem_pos = ret.first;
-      has_reached_last_block = ret.second;
-      if (elem_pos == kKeyNotFoundInBlock) {
-        if (has_reached_last_block) {
-          break;
-        }
-      } else {
-        return this;
-      }
+      const bool is_found = internal_locate_in_block_with_hint(key, pos, prbdist);
+      if (is_found) return this;
+      if (pos == kKeyNotFound) break;
 
-      /// Check next block
-      block_pos = (block_pos+1) & mask;
-      elem_pos = 0;
-      ++prbdist;
+      if (has_reached_last_elem(pos)) break;
+
+      /// Jump to next block
+      ++block_no;
+      if (block_no >= m_capacity) break;
+      pos = cal_desired_pos(key_hash_func::hash(key), block_no);
+      prbdist = 0;
     }
 
     if (m_next != nullptr) { /// Check chained table
-      return m_next->internal_locate(key, block_pos, elem_pos, prbdist, has_reached_last_block);
+      return m_next->internal_locate(key, pos, block_no);
     }
 
-    block_pos = kKeyNotFound;
-    elem_pos = kKeyNotFoundInBlock;
+    pos = kKeyNotFound;
     return nullptr;
   }
 
-  std::pair<block_size_type, bool>
-  internal_locate_in_block_with_hint(const block_type& block,
-                                     const key_type& key,
-                                     const block_size_type init_elem_pos,
-                                     const probedistance_type prbdist) const
+ bool internal_locate_in_block_with_hint(const key_type& key,
+                                         size_type& pos,
+                                         probedistance_type& prbdist)
   {
-    bool has_reached_last_block = false;
 
-    for (block_size_type elem_pos = init_elem_pos; elem_pos < kBlockCapacity; ++elem_pos) {
-      const property_type exist_property = block[elem_pos].property;
-      if (property_program::is_empty(exist_property)) { /// Must check if empty, first
-        return std::make_pair(kKeyNotFoundInBlock, true);
-      } else if (!property_program::is_tombstone(exist_property) && key == block[elem_pos].key) {
+   const size_type mask = m_capacity - 1;
+
+    while (prbdist < kMaxPrbDistInBlk) {
+      const property_type exist_property = m_body[pos].property;
+      if (property_program::is_empty(exist_property) ||
+          prbdist > property_program::extract_probedistance(exist_property)) {
+        pos = kKeyNotFound;
+        return false;
+      }
+
+      if (!property_program::is_tombstone(exist_property) && key == m_body[pos].key) {
         /// Found
-        return std::make_pair(elem_pos, has_reached_last_block);
+        return true;
       }
-      if (prbdist > property_program::extract_probedistance(exist_property)) {
-        has_reached_last_block = true;
-      }
+
+      pos = (pos+1) & mask;
+      ++prb_dist;
     }
 
-    return std::make_pair(kKeyNotFoundInBlock, has_reached_last_block);
+    /// Since there is a possibility the key is found in the following block,
+    /// don't set kKeyNotFound to 'pos'
+    return false;
   }
 
 
@@ -419,7 +404,7 @@ class blocked_rhh_container {
   {
     probedistance_type prbdist = 0;
     const size_type hash = key_hash_func::hash(key);
-    size_type block_pos = cal_desired_block(hash);
+    size_type block_no = 0;
     const size_type mask = (m_num_block - 1);
 
     while (!property_program::is_long_probedistance(prbdist)) {
@@ -554,9 +539,9 @@ class blocked_rhh_container {
 
   /// --- private valiable --- ///
   size_type m_num_elems; /// including chaining rhh tables
-  size_type m_num_block;  /// this table's size
+  size_type m_capacity;  /// this table's capacity
   rhh_contatiner_selftype* m_next;
-  block_type m_body[0];
+  packed_element m_body[0];
 
 };
 

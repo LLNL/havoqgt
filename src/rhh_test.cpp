@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
   graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity);
 
   /// --- allocate a graphstore --- ///
-  graphstore::rhh::init_allocator<typename rhh_type::allocator, segment_manager_type>(mmap_manager.get_segment_manager());
+  rhh_type::allocator::instance().init(mmap_manager.get_segment_manager());
   rhh_type* rhh = rhh_type::allocate(2);
 
   std::cout << "num keys, num_duplicates" << std::endl;
@@ -172,6 +172,7 @@ int main(int argc, char** argv) {
     }
   }
 
+  rhh_type::allocator::instance().destory();
   std::cout << "All tests successed!!!" << std::endl;
   return 0;
 }

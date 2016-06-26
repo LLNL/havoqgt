@@ -270,23 +270,55 @@ private:
   node_allocators_type* m_node_allocators;
 };
 
-
-template<typename allocator, typename segment_manager_type>
-void init_allocator(segment_manager_type* segment_manager)
+///
+/// \brief The allocator_holder_sglt class
+///  singleton pattern
+template<size_t element_size, size_t extra_size>
+class allocator_holder_incore
 {
-  allocator::instance().init(segment_manager);
-}
 
-template<typename allocator>
-void destroy_allocator()
-{
-  allocator::instance().destory();
-}
+ public:
+
+  using self_type = allocator_holder_incore<element_size, extra_size>;
+
+  static self_type& instance() {
+    static self_type _instance;
+    return _instance;
+  }
+
+  /// --- allocate & deallocate functions --- ///
+  /// \brief allocate
+  ///   allocate memory spaces equal to the size of required length of elements.
+  ///   if required length is less than the number of elements per a chunk, use node_allocater.
+  ///   otherwise, use raw allocator
+  /// \param length
+  ///   the number of elements want to allocate
+  /// \return
+  ///   void* pointer for allocated memory spaces
+  void* allocate(const size_t capacity, const size_t dummy = 0)
+  {
+    return malloc(capacity * element_size + extra_size);
+  }
+
+  ///
+  /// \brief deallocate
+  ///   Deallocate memory spaces.
+  ///   Note: In node_allocater, it dosen't actually deallocate the memory spaces.
+  ///         To actually deallocate the memory spaceses, call deallocate_free_blocks().
+  /// \param length
+  /// \param ptr
+  ///
+  void deallocate(void *ptr)
+  {
+    free(ptr);
+  }
+
+};
 
 
 ///
 /// \brief The allocator_holder class
-///  not using now
+///  --- not using now ---
 template<typename segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder
 {

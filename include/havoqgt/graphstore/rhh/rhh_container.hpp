@@ -197,7 +197,6 @@ class rhh_container {
   static void deallocate(rhh_contatiner_selftype* rhh)
   {
     while (rhh != nullptr) {
-      // std::cout << rhh->m_num_elems << " " << rhh->m_capacity << " " << rhh->m_next << std::endl;
       rhh_contatiner_selftype* next_rhh = rhh->m_next;
       allocator::instance().deallocate(reinterpret_cast<void*>(rhh), rhh->m_capacity);
       rhh = next_rhh;

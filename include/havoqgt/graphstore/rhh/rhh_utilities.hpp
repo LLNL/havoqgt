@@ -77,7 +77,7 @@ void insert(rhh_type** rhh, key_type key, value_type value)
 }
 
 
-/// --- A template helper caluculate the size of a element --- ///
+/// --- A template helper to caluculate the size of a element --- ///
 ///     if type is empy_type return 0;
 ///     the other cases, simply return sizeof(value)
 struct empy_type {};
@@ -95,7 +95,7 @@ struct sizeof_<empy_type> {
   };
 };
 
-// A template helper used to return the element size.
+// A template helper used to return an element size.
 template <typename property, typename key, typename value>
 struct element_size
 {
@@ -105,17 +105,7 @@ struct element_size
 };
 
 
-// ---- A template helper used to select A or B based on a condition --- ///
-template<bool cond, typename A, typename B>
-struct if_{
-  using type = A;
-};
-template<typename A, typename B>
-struct if_<false, A, B> {
-  using type = B;
-};
-
-
+/// --- Hash function for 64bit primitive types --- ///
 template<typename key_type, typename hash_type>
 class key_hash_func_64bit_to_64bit {
  public:

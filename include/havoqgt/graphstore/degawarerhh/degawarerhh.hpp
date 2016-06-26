@@ -55,9 +55,9 @@ class degawarerhh
     static_assert(middle_high_degree_threshold > 1, "middle-high degree threshold is must be larger than 1");
 
     // -- init allocator -- //
-    rhh::init_allocator<typename ldeg_table_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename mhdeg_edge_chunk_type::allocator, segment_manager_type>(segment_manager);
-    rhh::init_allocator<typename mhdeg_table_type::allocator, segment_manager_type>(segment_manager);
+    ldeg_table_type::allocator::instance().init(segment_manager);
+    mhdeg_edge_chunk_type::allocator::instance().init(segment_manager);
+    mhdeg_table_type::allocator::instance().init(segment_manager);
 
     m_ldeg_table = ldeg_table_type::allocate(2);
     m_mhdeg_table = mhdeg_table_type::allocate(2);
@@ -72,9 +72,9 @@ class degawarerhh
     clear();
     ldeg_table_type::deallocate(m_ldeg_table);
     mhdeg_table_type::deallocate(m_mhdeg_table);
-    rhh::destroy_allocator<typename ldeg_table_type::allocator>();
-    rhh::destroy_allocator<typename mhdeg_edge_chunk_type::allocator>();
-    rhh::destroy_allocator<typename mhdeg_table_type::allocator>();
+    ldeg_table_type::allocator::instance().destory();
+    mhdeg_edge_chunk_type::allocator::instance().destory();
+    mhdeg_table_type::allocator::instance().destory();
   }
 
   /// explicitly delete to prevent unexpected behaivers
