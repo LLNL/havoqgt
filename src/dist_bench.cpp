@@ -75,7 +75,7 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
 /// --- option variables --- ///
 uint64_t vertex_scale_               = 18;
 uint64_t edge_factor_                = 16;
-uint64_t segmentfile_init_size_log2_ = 30;
+uint64_t segmentfile_size_           = (1ULL << 30);
 uint64_t chunk_size_log10_           = 6;
 std::string fname_segmentfile_       = "/dev/shm/segment_file";
 std::string graphstore_name_         = "DegAwareRHH";
@@ -90,7 +90,7 @@ void usage()  {
         << " -s <int>      - the logarithm base two of the number of vertices\n"
         << " -e <int>      - edge factor\n"
         << " -o <string>   - base filename to create segmentfiles\n"
-        << " -S <int>      - the logarithm base two of the size of each segmentfile\n"
+        << " -S <int>      - the size of each segmentfile\n"
         << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
         << " -c <int>      - the logarithm base ten of the chunk size\n"
         << " -E <string>   - the name of the file which has a list of edgelist files\n"
@@ -134,7 +134,7 @@ void parse_options(int argc, char **argv)
      }
 
      case 'S':
-       segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
+       segmentfile_size_ = boost::lexical_cast<size_t>(optarg);
        break;
 
      case 'g':
@@ -178,7 +178,7 @@ void parse_options(int argc, char **argv)
 
  if (mpi_rank == 0) {
    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-   std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
+   std::cout << "Segment filse size = " << segmentfile_size_ << std::endl;
    std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
    std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
    if (fname_edge_list_.empty()) {
@@ -375,7 +375,7 @@ int main(int argc, char** argv) {
 
 
     /// --- init segment file --- ///
-    size_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
+    size_t graph_capacity = segmentfile_size_;
     std::stringstream fname_local_segmentfile;
     fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
     graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());

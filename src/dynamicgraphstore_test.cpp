@@ -44,8 +44,8 @@ using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
 
 
 void usage()  {
-  std::cerr << "Usage: -i <string> -s <int>\n"
-       << " -s <string>   - output graph base filename (default is /dev/shm/segment_file)\n"
+  std::cerr << "Usage:\n"
+       << " -o <string>   - output graph base filename (default is /dev/shm/segment_file)\n"
        << " -h            - print help and exit\n\n";
 }
 
@@ -63,12 +63,12 @@ void parse_cmd_line(int argc, char** argv, std::string& segmentfile_name, std::v
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:e:h")) != -1) {
+  while ((c = getopt(argc, argv, "o:e:h")) != -1) {
      switch (c) {
        case 'h':
          prn_help = true;
          break;
-       case 's':
+       case 'o':
          found_segmentfile_name_ = true;
          segmentfile_name = optarg;
          break;

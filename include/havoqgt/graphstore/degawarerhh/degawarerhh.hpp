@@ -35,13 +35,16 @@ class degawarerhh
   class adjacent_edge_iterator;
 
  private:
+  using in_core_allocater      = rhh::allocator_holder_sglt<rhh::ALLOC_IN_CORE, 0, 0>;
+  using out_of_core_allocater  = rhh::allocator_holder_sglt<segment_manager_type, 0, 0>;
+
   using size_type              = size_t;
   using ldeg_table_value_type  = utility::packed_tuple<vertex_property_data_type, vertex_type, edge_property_data_type, bool>;
-  using ldeg_table_type        = blocked_rhh_container<vertex_type, ldeg_table_value_type, size_type, segment_manager_type>;
+  using ldeg_table_type        = blocked_rhh_container<vertex_type, ldeg_table_value_type, size_type, out_of_core_allocater>;
 
-  using mhdeg_edge_chunk_type  = blocked_rhh_container<vertex_type, edge_property_data_type, size_type, segment_manager_type>;
+  using mhdeg_edge_chunk_type  = blocked_rhh_container<vertex_type, edge_property_data_type, size_type, out_of_core_allocater>;
   using mhdeg_table_value_type = utility::packed_pair<vertex_property_data_type, mhdeg_edge_chunk_type*>;
-  using mhdeg_table_type       = rhh_container<vertex_type, mhdeg_table_value_type, size_type, segment_manager_type>;
+  using mhdeg_table_type       = rhh_container<vertex_type, mhdeg_table_value_type, size_type, out_of_core_allocater>;
   using degawarerhh_selftype   = degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type,
                                                           segment_manager_type, middle_high_degree_threshold>;
 

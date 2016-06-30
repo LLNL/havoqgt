@@ -183,18 +183,25 @@ private:
 ///
 /// \brief The allocator_holder_sglt class
 ///  singleton pattern
-template<typename segment_manager_type, size_t element_size, size_t extra_size>
+template<typename _segment_manager_type, size_t element_size, size_t extra_size>
 class allocator_holder_sglt
 {
 
  public:
 
+  using segment_manager_type = _segment_manager_type;
   using self_type = allocator_holder_sglt<segment_manager_type, element_size, extra_size>;
 
   static self_type& instance() {
     static self_type _instance;
     return _instance;
   }
+
+  template <typename U1, size_t U2, size_t U3>
+  struct rebind
+  {
+      using other = allocator_holder_sglt<U1, U2, U3>;
+  };
 
   /// --- allocate & deallocate functions --- ///
   /// \brief allocate
@@ -253,7 +260,7 @@ class allocator_holder_sglt
     delete m_node_allocators;
   }
 
-private:
+ private:
   /// raw allocator
   using raw_allocator_type    = boost::interprocess::allocator<char, segment_manager_type>;
   /// node allocators
@@ -270,21 +277,31 @@ private:
   node_allocators_type* m_node_allocators;
 };
 
+
+struct ALLOC_IN_CORE {};
 ///
-/// \brief The allocator_holder_sglt class
+/// \brief allocator_holder_sglt class
 ///  singleton pattern
+///  specialized class for in core allocation
 template<size_t element_size, size_t extra_size>
-class allocator_holder_incore
+class allocator_holder_sglt <ALLOC_IN_CORE, element_size, extra_size>
 {
 
  public:
 
-  using self_type = allocator_holder_incore<element_size, extra_size>;
+  using segment_manager_type = ALLOC_IN_CORE;
+  using self_type = allocator_holder_sglt<ALLOC_IN_CORE, element_size, extra_size>;
 
   static self_type& instance() {
     static self_type _instance;
     return _instance;
   }
+
+  template <typename U1, size_t U2, size_t U3>
+  struct rebind
+  {
+      using other = allocator_holder_sglt<U1, U2, U3>;
+  };
 
   /// --- allocate & deallocate functions --- ///
   /// \brief allocate
@@ -295,7 +312,7 @@ class allocator_holder_incore
   ///   the number of elements want to allocate
   /// \return
   ///   void* pointer for allocated memory spaces
-  void* allocate(const size_t capacity, const size_t dummy = 0)
+  void* allocate(const size_t capacity)
   {
     return malloc(capacity * element_size + extra_size);
   }
@@ -308,10 +325,20 @@ class allocator_holder_incore
   /// \param length
   /// \param ptr
   ///
-  void deallocate(void *ptr)
+  void deallocate(void *ptr, const size_t dummy = 0)
   {
     free(ptr);
   }
+
+//  void destory()
+//  { }
+
+ private:
+  allocator_holder_sglt() {}
+  allocator_holder_sglt(const self_type &)  = delete;
+  allocator_holder_sglt(const self_type &&) = delete;
+  self_type &operator=(const self_type &)   = delete;
+  self_type &operator=(const self_type &&)  = delete;
 
 };
 

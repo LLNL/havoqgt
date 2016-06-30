@@ -17,6 +17,7 @@
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
 using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+using allocater            = graphstore::rhh::allocator_holder_sglt<segment_manager_type, 0, 0>;
 
 using key_type    = uint64_t;
 using value_type  = uint64_t;
@@ -26,7 +27,7 @@ using value_type  = uint64_t;
 using rhh_type = graphstore::rhh_container<key_type, value_type, size_t, segment_manager_type>;
 #else
 #include <havoqgt/graphstore/rhh/blocked_rhh_container.hpp>
-using rhh_type = graphstore::blocked_rhh_container<key_type, value_type, size_t, segment_manager_type>;
+using rhh_type = graphstore::blocked_rhh_container<key_type, value_type, size_t, allocater>;
 #endif
 
 void usage()  {

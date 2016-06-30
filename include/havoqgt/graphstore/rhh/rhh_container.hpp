@@ -22,7 +22,7 @@ namespace graphstore {
 template<typename _key_type,
          typename _value_type,
          typename _size_type,
-         typename _segment_manager_type,
+         typename _allocator,
          typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
          typename _property_program = rhh::rhh_property_program_base<unsigned char>>
 class rhh_container {
@@ -32,12 +32,8 @@ class rhh_container {
   using key_hash_func        = _key_hash_func;
   using value_type           = _value_type;
   using size_type            = _size_type;
-  using segment_manager_type = _segment_manager_type;
   using property_type        = typename property_program::property_type;
   using probedistance_type   = typename property_program::probedistance_type;
-  using rhh_contatiner_selftype = rhh_container<key_type, value_type, size_type,
-                                                segment_manager_type,
-                                                key_hash_func, property_program>;
 
   /// TODO: specializetion for no value case
   #pragma pack(1)
@@ -59,9 +55,13 @@ class rhh_container {
 #endif
   };
 
-  using allocator = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
-                                                           kElementSize,
-                                                           kTableBaseSize>;
+  using allocator = typename _allocator::template rebind<typename _allocator::segment_manager_type,
+                                                         kElementSize,
+                                                         kTableBaseSize>::other;
+
+  using rhh_contatiner_selftype = rhh_container<key_type, value_type, size_type,
+                                                _allocator,
+                                                key_hash_func, property_program>;
 
   class whole_iterator;
   class value_iterator;
@@ -510,17 +510,17 @@ namespace rhh {
 template<typename key_type,
          typename value_type,
          typename size_type,
-         typename segment_manager_type,
+         typename allocator,
          typename key_hash_func,
          typename property_program>
 bool shrink_to_fit(rhh_container<key_type, value_type, size_type,
-                                 segment_manager_type,
+                                 allocator,
                                  key_hash_func,
                                  property_program>** rhh,
                    const double lazy_factor = 1.0)
 {
   using rhh_type = rhh_container<key_type, value_type, size_type,
-                                 segment_manager_type,
+                                 allocator,
                                  key_hash_func,
                                  property_program>;
 

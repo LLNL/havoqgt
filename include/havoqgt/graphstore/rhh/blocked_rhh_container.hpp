@@ -22,7 +22,7 @@ namespace graphstore {
 template<typename _key_type,
          typename _value_type,
          typename _size_type,
-         typename _segment_manager_type,
+         typename _allocator,
          typename _key_hash_func = rhh::key_hash_func_64bit_to_64bit<_key_type, _size_type>,
          typename _property_program = rhh::rhh_property_program_base<unsigned char>>
 class blocked_rhh_container {
@@ -33,12 +33,8 @@ class blocked_rhh_container {
   using value_type           = _value_type;
   using size_type            = _size_type;
   using block_size_type      = uint8_t;
-  using segment_manager_type = _segment_manager_type;
   using property_type        = typename property_program::property_type;
   using probedistance_type   = typename property_program::probedistance_type;
-  using rhh_contatiner_selftype = blocked_rhh_container<key_type, value_type, size_type,
-                                                        segment_manager_type,
-                                                        key_hash_func, property_program>;
 
   enum : block_size_type {
     kBlockCapacity = 8,
@@ -67,9 +63,13 @@ class blocked_rhh_container {
 #endif
   };
 
-  using allocator = graphstore::rhh::allocator_holder_sglt<segment_manager_type,
-                                                           kElementSize,
-                                                           kTableBaseSize>;
+  using allocator = typename _allocator::template rebind<typename _allocator::segment_manager_type,
+                                                         kElementSize,
+                                                         kTableBaseSize>::other;
+
+  using rhh_contatiner_selftype = blocked_rhh_container<key_type, value_type, size_type,
+                                                        _allocator,
+                                                        key_hash_func, property_program>;
 
   class whole_iterator;
   class value_iterator;
