@@ -631,12 +631,14 @@ class interprocess_mmap_manager
   using mapped_file_type     = boost::interprocess::managed_mapped_file;
   using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
-  interprocess_mmap_manager(const std::string segment_fname, const size_t capacity, const bool is_delete_file = false) :
+  interprocess_mmap_manager(const std::string segment_fname, const size_t capacity, const bool is_call_fallocate = true, const bool is_delete_file_on_exit = false) :
     m_fname(segment_fname),
     m_mapped_file(boost::interprocess::create_only, segment_fname.c_str(), capacity),
-    m_is_delete_file_on_exit(is_delete_file)
+    m_is_delete_file_on_exit(is_delete_file_on_exit)
   {
-    fallocate(capacity);
+    if (is_call_fallocate) {
+      fallocate(capacity);
+    }
   }
 
   ~interprocess_mmap_manager()
@@ -663,8 +665,13 @@ class interprocess_mmap_manager
     return static_cast<double>(usages) / (1ULL << 30);
   }
 
+  void zero_free_segment_memory ()
+  {
+    zero_free_memory();
+  }
+
  private:
-  void segment_zero_free_memory()
+  void zero_free_memory()
   {
       segment_manager_type* segment_manager = m_mapped_file.get_segment_manager();
       std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
