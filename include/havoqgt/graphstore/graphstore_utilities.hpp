@@ -690,7 +690,8 @@ class interprocess_mmap_manager
       assert(fd != -1);
       /// posix_fallocate dosen't work on XFS ?
       /// (dosen't actually expand the file size ?)
-      int ret = ::fallocate(fd, 0, 0, size);
+      /// int ret = ::fallocate(fd, 0, 0, size);
+      int ret = posix_fallocate(fd, 0, size);
       assert(ret == 0);
       ::close(fd);
       m_mapped_file.flush();
