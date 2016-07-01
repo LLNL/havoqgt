@@ -81,6 +81,7 @@ std::string fname_segmentfile_       = "/dev/shm/segment_file";
 std::string graphstore_name_         = "DegAwareRHH";
 bool is_delete_segmentfile_on_exit_  = false;
 bool is_no_sync_                     = false;
+bool is_zero_segment_free_memory_    = false;
 std::vector<std::string> fname_edge_list_;
 bool is_edgelist_with_delete_       = false;
 
@@ -97,6 +98,7 @@ void usage()  {
         << " -d            - edgelist files have delete operations\n"
         << " -f            - delete the segmentfiles when exit\n"
         << " -n            - don't call sync(2) every chunk\n"
+        << " -z            - zero free segment memory\n"
         << " -h            - print help and exit\n\n";
  }
 }
@@ -117,7 +119,7 @@ void parse_options(int argc, char **argv)
  }
 
  char c;
- while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:nf")) != -1) {
+ while ((c = getopt (argc, argv, "s:e:dc:o:S:g:E:nzfh")) != -1) {
    switch (c) {
      case 's':
        vertex_scale_ = boost::lexical_cast<size_t>(optarg);
@@ -157,6 +159,10 @@ void parse_options(int argc, char **argv)
        is_no_sync_ = true;
        break;
 
+     case 'z':
+       is_zero_segment_free_memory_ = true;
+       break;
+
      case 'E':
      {
        std::string fname(optarg);
@@ -173,6 +179,9 @@ void parse_options(int argc, char **argv)
        break;
      }
 
+     case 'h':
+       usage();
+       break;
    }
  }
 
@@ -380,6 +389,7 @@ int main(int argc, char** argv) {
     fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
     graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
     graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
+    if (is_zero_segment_free_memory_) mmap_manager.zero_free_segment_memory();
     havoqgt::havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) print_system_mem_usages();
 

@@ -185,59 +185,58 @@ void sync_mmap()
 
 
 /// --------------------------- utilities for interprocess ----------------------------------- ///
+//void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
+//{
+//#ifdef __linux__
+//    std::cout << "Call fallocate()" << std::endl;
+//    int fd  = open(fname, O_RDWR);
+//    assert(fd != -1);
+//    /// posix_fallocate dosen't work on XFS ?
+//    /// (dosen't actually expand the file size ?)
+//    int ret = posix_fallocate(fd, 0, size);
+//    assert(ret == 0);
+//    close(fd);
+//    asdf.flush();
+//#else
+//#warning fallocate() is not supported
+//#endif
+//}
 
-void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-{
-#ifdef __linux__
-    std::cout << "Call fallocate()" << std::endl;
-    int fd  = open(fname, O_RDWR);
-    assert(fd != -1);
-    /// posix_fallocate dosen't work on XFS ?
-    /// (dosen't actually expand the file size ?)
-    int ret = fallocate(fd, 0, 0, size);
-    assert(ret == 0);
-    close(fd);
-    asdf.flush();
-#else
-#warning fallocate() is not supported
-#endif
-}
+//void flush_mmmap(mapped_file_type& mapped_file)
+//{
+//  std::cout << "flush mmap" << std::endl;
+//  mapped_file.flush();
+//}
 
-void flush_mmmap(mapped_file_type& mapped_file)
-{
-  std::cout << "flush mmap" << std::endl;
-  mapped_file.flush();
-}
+//double get_segment_size(segment_manager_type *const segment_manager)
+//{
+//  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+//  return static_cast<double>(usages) / (1ULL << 30);
+//}
 
-double get_segment_size(segment_manager_type *const segment_manager)
-{
-  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-  return static_cast<double>(usages) / (1ULL << 30);
-}
-
-void interprocess_mapped_file_dontneed(mapped_file_type& mapped_file)
-{
-  std::cout << "Call adise_dontneed" << std::endl;
-  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
-  assert(false);
-  /// assert(mapped_file.advise(advise));
-}
+//void interprocess_mapped_file_dontneed(mapped_file_type& mapped_file)
+//{
+//  std::cout << "Call adise_dontneed" << std::endl;
+//  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
+//  assert(false);
+//  /// assert(mapped_file.advise(advise));
+//}
 
 
-void segment_manager_zero_free_memory(segment_manager_type& segment_manager, mapped_file_type& mapped_file)
-{
-    std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
-    segment_manager.zero_free_memory();
-    std::cout << "Call mapped_file.flush()" << std::endl;
-    mapped_file.flush();
-    std::cout << "Call sync" << std::endl;
-    sync_mmap();
-}
+//void segment_manager_zero_free_memory(segment_manager_type& segment_manager, mapped_file_type& mapped_file)
+//{
+//    std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
+//    segment_manager.zero_free_memory();
+//    std::cout << "Call mapped_file.flush()" << std::endl;
+//    mapped_file.flush();
+//    std::cout << "Call sync" << std::endl;
+//    sync_mmap();
+//}
 
-void interprocess_delete_segmentfile(const char* fname)
-{
-  boost::interprocess::file_mapping::remove(fname);
-}
+//void interprocess_delete_segmentfile(const char* fname)
+//{
+//  boost::interprocess::file_mapping::remove(fname);
+//}
 
 /// --------------------------- utilieies for DI-MMAP ----------------------------------- ///
 void flush_dimmap()
