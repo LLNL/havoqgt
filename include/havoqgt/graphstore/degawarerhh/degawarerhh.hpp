@@ -53,7 +53,8 @@ class degawarerhh
   explicit degawarerhh(segment_manager_type* segment_manager) :
     m_ldeg_table(nullptr),
     m_mhdeg_table(nullptr),
-    m_num_edges(0)
+    m_num_edges(0),
+    m_segment_manager(segment_manager)
   {
     static_assert(middle_high_degree_threshold > 1, "middle-high degree threshold is must be larger than 1");
 
@@ -416,6 +417,11 @@ class degawarerhh
     return m_num_edges;
   }
 
+  segment_manager_type* get_segment_manager() const
+  {
+      return m_segment_manager;
+  }
+
   void clear()
   {
     for (const auto& itr : *m_mhdeg_table) {
@@ -683,6 +689,7 @@ class degawarerhh
   ldeg_table_type* m_ldeg_table;
   mhdeg_table_type* m_mhdeg_table;
   size_type m_num_edges;
+  segment_manager_type* m_segment_manager;
 };
 
 

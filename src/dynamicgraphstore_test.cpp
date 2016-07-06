@@ -9,9 +9,10 @@
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+using segment_manager_type = havoqgt::distributed_db::segment_manager_type;
 
 using vertex_id_type        = uint64_t;
 using edge_property_type    = uint64_t;
@@ -506,6 +507,13 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 
 int main(int argc, char** argv) {
 
+  havoqgt::havoqgt_init(&argc, &argv);
+  {
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  havoqgt::get_environment();
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  assert(mpi_size == 1);
+
   /// --- parse argments ---- ///
   std::string segmentfile_name;
   std::vector<std::string> edgelist_files;
@@ -513,12 +521,13 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  size_t graph_capacity = std::pow(2, 32);
-  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
-  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity);
+  size_t graph_capacity_gb = std::pow(2, 2);
+  havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_gb);
+  //  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
+  //  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity_gb);
 
   /// --- allocate a graphstore --- ///
-  graphstore_type graphstore(mmap_manager.get_segment_manager());
+  graphstore_type graphstore(ddb.get_segment_manager());
 
   run_time("can handle basic operations on a low degree graph?",         test1(graphstore, 4, middle_high_degree_threshold - 1));
   run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 4, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
@@ -533,6 +542,8 @@ int main(int argc, char** argv) {
   run_time("can handle duplicate edges on a rmat graph?",  test4(graphstore, 17, 4, 10));
 
   std::cout << "All tests completed!!!" << std::endl;
+  }
+  havoqgt::havoqgt_finalize();
 
   return 0;
 }

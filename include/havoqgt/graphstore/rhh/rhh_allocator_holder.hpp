@@ -49,6 +49,11 @@ public:
     return reinterpret_cast<void*>(m_node_allocator.allocate(1).get());
   }
 
+  segment_manager_type* get_segment_manager() const
+  {
+    return m_node_allocator.get_segment_manager();
+  }
+
   void deallocate(void *ptr)
   {
     m_node_allocator.deallocate(boost::interprocess::offset_ptr<dummy_node_type>(reinterpret_cast<dummy_node_type*>(ptr)),

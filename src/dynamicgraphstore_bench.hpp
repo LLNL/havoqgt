@@ -37,7 +37,7 @@ std::ofstream ofs_edges;
 
 /// --- typenames --- ///
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+//using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
 
 
 /// --------------------------- edge update request ----------------------------------- ///

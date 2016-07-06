@@ -24,6 +24,7 @@
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
@@ -40,12 +41,12 @@ using vertex_property_type  = unsigned char;
 using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
                                                              vertex_property_type,
                                                              edge_property_type,
-                                                             segment_manager_type>;
+                                                             havoqgt::distributed_db::segment_manager_type>;
 
 using baselinemap_type      = graphstore::graphstore_baseline_map<vertex_id_type,
                                                                   vertex_property_type,
                                                                   edge_property_type,
-                                                                  segment_manager_type>;
+                                                                  havoqgt::distributed_db::segment_manager_type>;
 
 enum : size_t {
  middle_high_degree_threshold = 2 // must be more or equal than 1
@@ -53,7 +54,7 @@ enum : size_t {
 using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                      vertex_property_type,
                                                      edge_property_type,
-                                                     segment_manager_type,
+                                                     havoqgt::distributed_db::segment_manager_type,
                                                      middle_high_degree_threshold>;
 
 
@@ -75,7 +76,7 @@ using dg_visitor_queue_type = havoqgt::mpi::visitor_queue<visitor_type<gstore_ty
 /// --- option variables --- ///
 uint64_t vertex_scale_               = 18;
 uint64_t edge_factor_                = 16;
-uint64_t segmentfile_size_           = (1ULL << 30);
+uint64_t segmentfile_size_gb_        = 1;
 uint64_t chunk_size_log10_           = 6;
 std::string fname_segmentfile_       = "/dev/shm/segment_file";
 std::string graphstore_name_         = "DegAwareRHH";
@@ -91,7 +92,7 @@ void usage()  {
         << " -s <int>      - the logarithm base two of the number of vertices\n"
         << " -e <int>      - edge factor\n"
         << " -o <string>   - base filename to create segmentfiles\n"
-        << " -S <int>      - the size of each segmentfile\n"
+        << " -S <int>      - the size of segmentfile per rank in GB\n"
         << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
         << " -c <int>      - the logarithm base ten of the chunk size\n"
         << " -E <string>   - the name of the file which has a list of edgelist files\n"
@@ -136,7 +137,7 @@ void parse_options(int argc, char **argv)
      }
 
      case 'S':
-       segmentfile_size_ = boost::lexical_cast<size_t>(optarg);
+       segmentfile_size_gb_ = boost::lexical_cast<size_t>(optarg);
        break;
 
      case 'g':
@@ -187,7 +188,7 @@ void parse_options(int argc, char **argv)
 
  if (mpi_rank == 0) {
    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-   std::cout << "Segment filse size = " << segmentfile_size_ << std::endl;
+   std::cout << "Segment filse size in GB = " << segmentfile_size_gb_ << std::endl;
    std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
    std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
    if (fname_edge_list_.empty()) {
@@ -205,7 +206,6 @@ void parse_options(int argc, char **argv)
 template <typename gstore_type, typename edgelist_type>
 void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                      gstore_type& gstore,
-                     graphstore::utility::interprocess_mmap_manager& mmap_manager,
                      edgelist_type& edges,
                      const size_t chunk_size)
 {
@@ -219,7 +219,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   havoqgt::havoqgt_env()->world_comm().barrier();
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] segment size (GB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
+      std::cout << "[" << mpi_rank << "] segment size (GB) =\t"<< graphstore::utility::segment_size_gb(gstore.get_segment_manager()) << std::endl;
     }
     havoqgt::havoqgt_env()->world_comm().barrier();
   }
@@ -275,7 +275,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                   << (time_end - time_start) << " ( "
                   << (time_update_end - time_start) << " , "
                   << (time_sync_end  - time_update_end) << " ),\t"
-                  << mmap_manager.segment_size_gb() << std::endl;
+                  << graphstore::utility::segment_size_gb(gstore.get_segment_manager()) << std::endl;
         if (lc_rank == 0)  print_system_mem_usages();
       }
       havoqgt::havoqgt_env()->world_comm().barrier();
@@ -313,7 +313,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   /// --- print summary information --- ///
   for (int i = 0; i < mpi_size; ++i) {
     if (i == mpi_rank) {
-      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< mmap_manager.segment_size_gb() << std::endl;
+      std::cout << "[" << mpi_rank << "] Usage: segment size (GiB) =\t"<< graphstore::utility::segment_size_gb(gstore.get_segment_manager()) << std::endl;
       std::cout << "num edges =\t" << gstore.num_edges() << std::endl;
       gstore.print_status(0);
     }
@@ -326,7 +326,6 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 template <typename gstore_type>
 void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                         gstore_type& gstore,
-                        graphstore::utility::interprocess_mmap_manager& mmap_manager,
                         const size_t vertex_scale,
                         const size_t num_edges,
                         const size_t chunk_size)
@@ -339,21 +338,20 @@ void run_benchmark_rmat(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     vertex_scale, num_edges_per_rank,
     0.57, 0.19, 0.19, 0.05, true, true);
 
-  constract_graph(dg_visitor_queue, gstore, mmap_manager, rmat, chunk_size);
+  constract_graph(dg_visitor_queue, gstore, rmat, chunk_size);
 }
 
 
 template <typename gstore_type>
 void run_benchmark_edgefile(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
                             gstore_type& gstore,
-                            graphstore::utility::interprocess_mmap_manager& mmap_manager,
                             std::vector<std::string>& fname_edge_list,
                             const size_t chunk_size,
                             const bool is_edgelist_with_delete)
 {
   havoqgt::parallel_edge_list_reader edgelist(fname_edge_list, is_edgelist_with_delete);
 
-  constract_graph(dg_visitor_queue, gstore, mmap_manager, edgelist, chunk_size);
+  constract_graph(dg_visitor_queue, gstore, edgelist, chunk_size);
 }
 
 
@@ -384,12 +382,14 @@ int main(int argc, char** argv) {
 
 
     /// --- init segment file --- ///
-    size_t graph_capacity = segmentfile_size_;
-    std::stringstream fname_local_segmentfile;
-    fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
-    graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
-    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
-    if (is_zero_segment_free_memory_) mmap_manager.zero_free_segment_memory();
+    size_t graph_capacity_gb_per_rank = segmentfile_size_gb_;
+    havoqgt::distributed_db ddb(havoqgt::db_create(), fname_segmentfile_.c_str(), graph_capacity_gb_per_rank);
+//    std::stringstream fname_local_segmentfile;
+//    fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
+//    graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
+//    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity_gb_per_rank);
+//    if (is_zero_segment_free_memory_) mmap_manager.zero_free_segment_memory();
+
     havoqgt::havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) print_system_mem_usages();
 
@@ -397,7 +397,7 @@ int main(int argc, char** argv) {
     /// --- allocate a graphstore and start a benchmark --- ///
     if (graphstore_name_ == "Baseline") {
 
-      baseline_type gstore(mmap_manager.get_segment_manager());
+      baseline_type gstore(ddb.get_segment_manager());
       dist_gstore_type<baseline_type> dist_graph(&gstore);
       visitor_type<baseline_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<baseline_type> dg_visitor_queue(&dist_graph);
@@ -406,14 +406,12 @@ int main(int argc, char** argv) {
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,
                            gstore,
-                           mmap_manager,
                            vertex_scale_,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(dg_visitor_queue,
                                gstore,
-                               mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_),
                                is_edgelist_with_delete_);
@@ -423,7 +421,7 @@ int main(int argc, char** argv) {
 #endif
     } else if (graphstore_name_ == "BaselineMap") {
 
-      baselinemap_type gstore(mmap_manager.get_segment_manager());
+      baselinemap_type gstore(ddb.get_segment_manager());
       dist_gstore_type<baselinemap_type> dist_graph(&gstore);
       visitor_type<baselinemap_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<baselinemap_type> dg_visitor_queue(&dist_graph);
@@ -432,14 +430,12 @@ int main(int argc, char** argv) {
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,
                            gstore,
-                           mmap_manager,
                            vertex_scale_,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(dg_visitor_queue,
                                gstore,
-                               mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_),
                                is_edgelist_with_delete_);
@@ -449,7 +445,7 @@ int main(int argc, char** argv) {
 #endif
     } else if (graphstore_name_ == "DegAwareRHH") {
 
-      degawarerhh_type gstore(mmap_manager.get_segment_manager());
+      degawarerhh_type gstore(ddb.get_segment_manager());
       dist_gstore_type<degawarerhh_type> dist_graph(&gstore);
       visitor_type<degawarerhh_type>::set_graph_ref(&dist_graph);
       dg_visitor_queue_type<degawarerhh_type> dg_visitor_queue(&dist_graph);
@@ -457,14 +453,12 @@ int main(int argc, char** argv) {
       if (fname_edge_list_.empty()) {
         run_benchmark_rmat(dg_visitor_queue,
                            gstore,
-                           mmap_manager,
                            vertex_scale_,
                            num_vertices * edge_factor_,
                            std::pow(10, chunk_size_log10_));
       } else {
         run_benchmark_edgefile(dg_visitor_queue,
                                gstore,
-                               mmap_manager,
                                fname_edge_list_,
                                std::pow(10, chunk_size_log10_),
                                is_edgelist_with_delete_);

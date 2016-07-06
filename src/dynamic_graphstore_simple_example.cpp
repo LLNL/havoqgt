@@ -5,10 +5,10 @@
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 
-using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+using segment_manager_type = havoqgt::distributed_db::segment_manager_type;
 
 using vertex_id_type        = uint64_t;
 using edge_property_type    = int;
@@ -28,24 +28,6 @@ using graphstore_type       = graphstore::degawarerhh<vertex_id_type,
                                                               edge_property_type,
                                                               segment_manager_type>;
 #endif
-
-
-void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-{
-#ifdef __linux__
-    std::cout << "Call fallocate()" << std::endl;
-    int fd  = open(fname, O_RDWR);
-    assert(fd != -1);
-    /// posix_fallocate dosen't work on XFS ?
-    /// (dosen't actually expand the file size ?)
-    int ret = fallocate(fd, 0, 0, size);
-    assert(ret == 0);
-    close(fd);
-    asdf.flush();
-#else
-#warning fallocate() is not supported
-#endif
-}
 
 
 void usage()  {
@@ -132,14 +114,15 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  size_t graph_capacity = std::pow(2, 30);
+  size_t graph_capacity_gb = std::pow(2, 1);
   std::stringstream fname_local_segmentfile;
   fname_local_segmentfile << segmentfile_name << "_" << mpi_rank;
-  graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
-  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
+  havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_gb);
+  //  graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
+  //  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
 
   /// --- allocate a graphstore --- ///
-  graphstore_type graphstore(mmap_manager.get_segment_manager());
+  graphstore_type graphstore(ddb.get_segment_manager());
 
 
   /// ------- insert edges using parallel_edge_list_reader() ------- ///

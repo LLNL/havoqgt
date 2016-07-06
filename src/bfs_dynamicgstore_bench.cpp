@@ -21,6 +21,7 @@
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
@@ -36,7 +37,7 @@ using vertex_property_type  = bool;
 using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
                                                              vertex_property_type,
                                                              edge_property_type,
-                                                             segment_manager_type>;
+                                                             havoqgt::distributed_db::segment_manager_type>;
 
  enum : size_t {
    middle_high_degree_threshold = 2 // must be more or equal than 1
@@ -44,19 +45,18 @@ using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
  using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                        vertex_property_type,
                                                        edge_property_type,
-                                                       segment_manager_type,
+                                                       havoqgt::distributed_db::segment_manager_type,
                                                        middle_high_degree_threshold>;
 
 
 template <typename graphstore_type, typename edgelist_type>
 std::pair<vertex_id_type, size_t>
 constract_graph(graphstore_type& graph_store,
-                graphstore::utility::interprocess_mmap_manager& mmap_manager,
                 edgelist_type& edgelist,
                 const size_t chunk_size)
 {
   std::cout << "-- Disp status of before generation --" << std::endl;
-  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
+  std::cout << "segment size (GB); " << graphstore::utility::segment_size_gb(graph_store.get_segment_manager()) << std::endl;
   print_system_mem_usages();
 
 
@@ -101,7 +101,7 @@ constract_graph(graphstore_type& graph_store,
   std::cout << "inserted edges : " << count_inserted << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
-  std::cout << "segment size (GB); " << mmap_manager.segment_size_gb() << std::endl;
+  std::cout << "segment size (GB); " << graphstore::utility::segment_size_gb(graph_store.get_segment_manager()) << std::endl;
   print_system_mem_usages();
 
   return std::make_pair(max_vertex_id, num_edges);
@@ -109,12 +109,11 @@ constract_graph(graphstore_type& graph_store,
 
 
 template <typename graphstore_type, typename vertex_type>
-  static void run_bfs_sync (
-      graphstore_type& graphstore,
-      trv_inf<vertex_type>& inf,
-      std::queue<vertex_type>& frontier_queue,
-      std::queue<vertex_type>& next_queue,
-      vertex_type& start_vrtx)
+  static void run_bfs_sync (graphstore_type& graphstore,
+                            trv_inf<vertex_type>& inf,
+                            std::queue<vertex_type>& frontier_queue,
+                            std::queue<vertex_type>& next_queue,
+                            vertex_type& start_vrtx)
   {
 
     /// ---- init inf ---- ///
@@ -255,11 +254,9 @@ void parse_options(int argc, char **argv)
 template<typename graphstore_type>
 std::pair<vertex_id_type, size_t>
 construct_graph(graphstore_type& graphstore,
-                graphstore::utility::interprocess_mmap_manager& mmap_manager,
                 havoqgt::parallel_edge_list_reader& edgelist)
 {
     return constract_graph(graphstore,
-                           mmap_manager,
                            edgelist,
                            static_cast<size_t>(std::pow(10, 6)));
 }
@@ -275,17 +272,18 @@ int main(int argc, char** argv) {
 
   /// --- init segment file --- ///
   uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
-  graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
-  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
+  havoqgt::distributed_db ddb(havoqgt::db_create(), fname_segmentfile_.c_str(), graph_capacity);
+  //  graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
+  //  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
   print_system_mem_usages();
 
 
   havoqgt::parallel_edge_list_reader edgelist(fname_edge_list_);
 
   if (graphstore_name_ == "Baseline") {
-    baseline_type graphstore(mmap_manager.get_segment_manager());
+    baseline_type graphstore(ddb.get_segment_manager());
 
-    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, mmap_manager, edgelist);
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
     std::cout << "\n<Run BFS>" << std::endl;
     if (source_list_.empty())
@@ -293,9 +291,9 @@ int main(int argc, char** argv) {
     run_bfs(graphstore, ret.first, ret.second, source_list_);
 
   } else if (graphstore_name_ == "DegAwareRHH") {
-    degawarerhh_type graphstore(mmap_manager.get_segment_manager());
+    degawarerhh_type graphstore(ddb.get_segment_manager());
 
-    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, mmap_manager, edgelist);
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
     std::cout << "\n<Run BFS>" << std::endl;
     if (source_list_.empty())

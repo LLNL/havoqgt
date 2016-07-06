@@ -13,6 +13,7 @@
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/offset_ptr.hpp>
 #include <boost/interprocess/containers/set.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 /// must include the files below with this order ??
 #include "dynamicgraphstore_bench.hpp"
@@ -28,7 +29,7 @@ using vertex_property_type  = bool;
 using baseline_type       = graphstore::graphstore_baseline<vertex_id_type,
                                                               vertex_property_type,
                                                               edge_property_type,
-                                                              segment_manager_type>;
+                                                              havoqgt::distributed_db::segment_manager_type>;
 
 enum : size_t {
   middle_high_degree_threshold = 2 // must be more or equal than 1
@@ -36,7 +37,7 @@ enum : size_t {
 using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                       vertex_property_type,
                                                       edge_property_type,
-                                                      segment_manager_type,
+                                                      havoqgt::distributed_db::segment_manager_type,
                                                       middle_high_degree_threshold>;
 
 

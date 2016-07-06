@@ -56,7 +56,8 @@ public:
   explicit graphstore_baseline(segment_manager_type* segment_manager) :
     m_allocator(segment_manager),
     m_map_table(m_allocator),
-    m_num_edges(0)
+    m_num_edges(0),
+    m_segment_manager(segment_manager)
   {}
 
 
@@ -256,6 +257,11 @@ public:
     return m_num_edges;
   }
 
+  segment_manager_type* get_segment_manager() const
+  {
+      return m_segment_manager;
+  }
+
   void clear()
   { }
 
@@ -268,6 +274,7 @@ public:
   allocator_type m_allocator;
   map_table_type m_map_table;
   size_type m_num_edges;
+  segment_manager_type* m_segment_manager;
 };
 
 }

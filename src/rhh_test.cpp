@@ -8,6 +8,7 @@
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include <havoqgt/graphstore/rhh/rhh_defs.hpp>
 #include <havoqgt/graphstore/rhh/rhh_utilities.hpp>
@@ -15,8 +16,7 @@
 
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
-using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+using segment_manager_type = havoqgt::distributed_db::segment_manager_type;
 using allocater            = graphstore::rhh::allocator_holder_sglt<segment_manager_type, 0, 0>;
 
 using key_type    = uint64_t;
@@ -150,6 +150,13 @@ void test1(rhh_type** _rhh, const size_t num_keys, const size_t num_duplicates)
 
 int main(int argc, char** argv) {
 
+  havoqgt::havoqgt_init(&argc, &argv);
+  {
+  int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
+  havoqgt::get_environment();
+  havoqgt::havoqgt_env()->world_comm().barrier();
+  assert(mpi_size == 1);
+
   /// --- parse argments ---- ///
   std::string segmentfile_name;
   std::vector<std::string> edgelist_files;
@@ -157,12 +164,13 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  size_t graph_capacity = std::pow(2, 25);
-  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
-  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity);
+  size_t graph_capacity_gb = std::pow(2, 1);
+  havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_gb);
+  //  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
+  //  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity_gb);
 
   /// --- allocate a graphstore --- ///
-  rhh_type::allocator::instance().init(mmap_manager.get_segment_manager());
+  rhh_type::allocator::instance().init(ddb.get_segment_manager());
   rhh_type* rhh = rhh_type::allocate(2);
 
   std::cout << "num keys, num_duplicates" << std::endl;
@@ -175,6 +183,9 @@ int main(int argc, char** argv) {
 
   rhh_type::allocator::instance().destory();
   std::cout << "All tests successed!!!" << std::endl;
+  }
+  havoqgt::havoqgt_finalize();
+
   return 0;
 }
 

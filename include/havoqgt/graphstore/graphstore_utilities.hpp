@@ -625,6 +625,14 @@ class direct_file_reader
 
 
 /// --------- Boost Interprocess ------------ ///
+
+template<typename segment_manager_type>
+static double segment_size_gb(const segment_manager_type* const segment_manager)
+{
+  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
+  return static_cast<double>(usages) / (1ULL << 30);
+}
+
 class interprocess_mmap_manager
 {
  public:
