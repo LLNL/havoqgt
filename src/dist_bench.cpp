@@ -80,9 +80,7 @@ uint64_t segmentfile_size_gb_        = 1;
 uint64_t chunk_size_log10_           = 6;
 std::string fname_segmentfile_       = "/dev/shm/segment_file";
 std::string graphstore_name_         = "DegAwareRHH";
-bool is_delete_segmentfile_on_exit_  = false;
 bool is_no_sync_                     = false;
-bool is_zero_segment_free_memory_    = false;
 std::vector<std::string> fname_edge_list_;
 bool is_edgelist_with_delete_       = false;
 
@@ -97,9 +95,7 @@ void usage()  {
         << " -c <int>      - the logarithm base ten of the chunk size\n"
         << " -E <string>   - the name of the file which has a list of edgelist files\n"
         << " -d            - edgelist files have delete operations\n"
-        << " -f            - delete the segmentfiles when exit\n"
         << " -n            - don't call sync(2) every chunk\n"
-        << " -z            - zero free segment memory\n"
         << " -h            - print help and exit\n\n";
  }
 }
@@ -152,16 +148,8 @@ void parse_options(int argc, char **argv)
        is_edgelist_with_delete_ = true;
        break;
 
-     case 'f':
-       is_delete_segmentfile_on_exit_ = true;
-       break;
-
      case 'n':
        is_no_sync_ = true;
-       break;
-
-     case 'z':
-       is_zero_segment_free_memory_ = true;
        break;
 
      case 'E':
@@ -189,7 +177,6 @@ void parse_options(int argc, char **argv)
  if (mpi_rank == 0) {
    std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
    std::cout << "Segment filse size in GB = " << segmentfile_size_gb_ << std::endl;
-   std::cout << "Delete on Exit = " << is_delete_segmentfile_on_exit_ << std::endl;
    std::cout << "Chunk size (log10) = " << chunk_size_log10_ << std::endl;
    if (fname_edge_list_.empty()) {
      std::cout << "Building RMAT graph Scale: " << vertex_scale_ << std::endl;

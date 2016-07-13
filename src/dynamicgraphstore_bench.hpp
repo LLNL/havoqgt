@@ -57,7 +57,7 @@ struct edge_update_request
 };
 
 template<typename vertex_id_type>
-edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair, const bool is_reverse)
+edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_id_type, vertex_id_type>& pair, const bool is_reverse = false)
 {
   if (is_reverse) {
     return edge_update_request<vertex_id_type>(std::make_pair(std::get<1>(pair), std::get<0>(pair)),
@@ -69,7 +69,7 @@ edge_update_request<vertex_id_type> make_update_request(const std::pair<vertex_i
 }
 
 template<typename vertex_id_type>
-edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair, const bool is_reverse)
+edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_id_type, vertex_id_type, bool>& pair, const bool is_reverse  = false)
 {
   if (is_reverse) {
     return edge_update_request<vertex_id_type>(std::make_pair(std::get<1>(pair), std::get<0>(pair)),
@@ -93,7 +93,7 @@ template<typename vertex_id_type>
 double sort_requests(request_vector_type<vertex_id_type>& requests)
 {
   const double time_start1 = MPI_Wtime();
-  std::sort(requests.begin(), requests.end(), edgerequest_asc);
+  std::sort(requests.begin(), requests.end(), edgerequest_asc<vertex_id_type>);
   return (MPI_Wtime() - time_start1);
 }
 
@@ -183,60 +183,6 @@ void sync_mmap()
 #endif
 }
 
-
-/// --------------------------- utilities for interprocess ----------------------------------- ///
-//void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-//{
-//#ifdef __linux__
-//    std::cout << "Call fallocate()" << std::endl;
-//    int fd  = open(fname, O_RDWR);
-//    assert(fd != -1);
-//    /// posix_fallocate dosen't work on XFS ?
-//    /// (dosen't actually expand the file size ?)
-//    int ret = posix_fallocate(fd, 0, size);
-//    assert(ret == 0);
-//    close(fd);
-//    asdf.flush();
-//#else
-//#warning fallocate() is not supported
-//#endif
-//}
-
-//void flush_mmmap(mapped_file_type& mapped_file)
-//{
-//  std::cout << "flush mmap" << std::endl;
-//  mapped_file.flush();
-//}
-
-//double get_segment_size(segment_manager_type *const segment_manager)
-//{
-//  const size_t usages = segment_manager->get_size() - segment_manager->get_free_memory();
-//  return static_cast<double>(usages) / (1ULL << 30);
-//}
-
-//void interprocess_mapped_file_dontneed(mapped_file_type& mapped_file)
-//{
-//  std::cout << "Call adise_dontneed" << std::endl;
-//  boost::interprocess::mapped_region::advice_types advise = boost::interprocess::mapped_region::advice_types::advice_dontneed;
-//  assert(false);
-//  /// assert(mapped_file.advise(advise));
-//}
-
-
-//void segment_manager_zero_free_memory(segment_manager_type& segment_manager, mapped_file_type& mapped_file)
-//{
-//    std::cout << "Call segment_manager.zero_free_memory()" << std::endl;
-//    segment_manager.zero_free_memory();
-//    std::cout << "Call mapped_file.flush()" << std::endl;
-//    mapped_file.flush();
-//    std::cout << "Call sync" << std::endl;
-//    sync_mmap();
-//}
-
-//void interprocess_delete_segmentfile(const char* fname)
-//{
-//  boost::interprocess::file_mapping::remove(fname);
-//}
 
 /// --------------------------- utilieies for DI-MMAP ----------------------------------- ///
 void flush_dimmap()
