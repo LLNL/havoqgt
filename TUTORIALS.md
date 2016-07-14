@@ -25,18 +25,18 @@ GCC 4.8 or more is also required.
 + `-o<string>`
 	the base file name each process creates to store the graph
 + `-S<int>`
-	the size of the file each process creates
+	the size of the file each process creates in GB
 + `-g<string>`
 	the name of  graph store (DegAwareRHH, Baseline or BaselieMap)
 
 ### Example
 ``
-$ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S1073741824 -gDegAwareRHH
+$ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S2 -gDegAwareRHH
 ``
 
 1. Run the dynamic graph construction program with 2 MPI processes on a RMAT SCALE 20 graph.
 
-2. Each process create 2^30 byte of a file to store the graph under /mnt/device directory with the suffix "graph_".
+2. Each process creates 2 GB of a file to store the graph under /mnt/device directory with the suffix "graph_".
 
 3. Use gDegAwareRHH.
 
@@ -65,11 +65,11 @@ patch -R -p0 < scripts/catalyst.llnl.gov/edgelist_reader_wikipedia_support.patch
 # Run
 ## Example1 (RMAT graph)
 ```
-$ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S1073741824 -gDegAwareRHH
+$ mpirun -np 2 ./dist_bench -s20 -o/mnt/device/graph_out -S2 -gDegAwareRHH
 ```
 
 * Run the dynamic graph construction program with 2 processes on a RMAT SCALE 20 graph.
-* Each process create 2^30 byte of a file to store the graph under '/mnt/device/' with the prefix 'graph_out'.
+* Each process creates 2 GB of a file to store the graph under '/mnt/device/' with the prefix 'graph_out'.
 * Use DegAwareRHH
 
 Note:
@@ -79,7 +79,7 @@ DegAwareRHH takes 14 hours to create SCALE 30 graph with 40 processes with 128 G
 
 ## Example 2 (reading a graph from file)
 ```
-$ mpirun -np 2 ./dist_bench -E./edgelists -o/mnt/device/graph_out -S1073741824 -gDegAwareRHH
+$ mpirun -np 2 ./dist_bench -E./edgelists -o/mnt/device/graph_out -S2 -gDegAwareRHH
 ```
 * Run the dynamic graph construction program with 2 processes with reading a graph from files
 ```
