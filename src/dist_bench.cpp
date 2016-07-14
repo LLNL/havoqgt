@@ -229,7 +229,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   ofs_edges.open(fname.str());
 #endif
 
-
+  double total_graph_storing_time = 0;
   const double whole_start = MPI_Wtime();
   while (!global_is_finished) {
     if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
@@ -252,6 +252,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     /// --- print a progress report --- ///
     havoqgt::havoqgt_env()->world_comm().barrier();
     const double time_end = MPI_Wtime();
+    total_graph_storing_time += time_end - time_start
+
     if (mpi_rank == 0) {
       std::cout << "\n-- results --" << std::endl;
       std::cout <<" exec_time (local, sync),\t segment_size(GB)" << std::endl;
@@ -292,7 +294,9 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 
   if (mpi_rank == 0) {
     std::cout << "\n-- All edge updations done --" << std::endl;
+    total_graph_construction_time
     std::cout << "whole construction time : " << (whole_end - whole_start) << std::endl;
+    std::cout << "graph storing time (not inluding edge generation time) : " << (total_graph_storing_time) << std::endl;
     print_system_mem_usages();
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
