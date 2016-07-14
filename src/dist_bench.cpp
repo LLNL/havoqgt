@@ -294,7 +294,6 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 
   if (mpi_rank == 0) {
     std::cout << "\n-- All edge updations done --" << std::endl;
-    total_graph_construction_time
     std::cout << "whole construction time : " << (whole_end - whole_start) << std::endl;
     std::cout << "graph storing time (not inluding edge generation time) : " << (total_graph_storing_time) << std::endl;
     print_system_mem_usages();
