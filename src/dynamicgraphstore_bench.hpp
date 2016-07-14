@@ -83,7 +83,8 @@ edge_update_request<vertex_id_type> make_update_request(const std::tuple<vertex_
 
 template<typename vertex_id_type>
 bool edgerequest_asc(const edge_update_request<vertex_id_type>& left, const edge_update_request<vertex_id_type>& right ) {
-  return left.edge.first < right.edge.first;
+  if (left.edge.first != right.edge.first) return (left.edge.first < right.edge.first);
+  return (left.edge.second < right.edge.second);
 }
 template<typename vertex_id_type>
 using request_vector_type = std::vector<edge_update_request<vertex_id_type>>;

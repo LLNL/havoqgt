@@ -104,9 +104,9 @@ void generate_edgelist(request_vector_type<vertex_id_type>& edgelist)
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
 
-  uint64_t num_edges_per_rank = (1ULL << 17) * 16ULL / mpi_size;
+  uint64_t num_edges_per_rank = (1ULL << 20) * 16ULL / mpi_size;
   havoqgt::rmat_edge_generator rmat(uint64_t(5489) + uint64_t(mpi_rank) * 3ULL,
-                                    17, num_edges_per_rank,
+                                    20, num_edges_per_rank,
                                     0.57, 0.19, 0.19, 0.05, true, true);
   edgelist.clear();
   for (const auto& edge : rmat) {
@@ -114,7 +114,7 @@ void generate_edgelist(request_vector_type<vertex_id_type>& edgelist)
   }
 }
 
-using mpi_buf_vec_type = std::vector<request_vector_type<vertex_id_type>>;
+using mpi_buf_vec_type = std::vector<std::vector<edge_update_request<vertex_id_type>>>;
 void global_sort(request_vector_type<vertex_id_type>& edgelist)
 {
   int mpi_rank = havoqgt::havoqgt_env()->world_comm().rank();
@@ -124,7 +124,7 @@ void global_sort(request_vector_type<vertex_id_type>& edgelist)
   mpi_buf_vec_type recev_buf_vec(mpi_size);
 
   for (const auto& edge : edgelist) {
-    const int target_rank = std::get<0>(edge.edge) % mpi_rank;
+    const int target_rank = std::get<0>(edge.edge) % mpi_size;
     send_buf_vec[target_rank].push_back(edge);
   }
   edgelist.clear();
@@ -139,6 +139,19 @@ void global_sort(request_vector_type<vertex_id_type>& edgelist)
     }
   }
   sort_requests(edgelist);
+}
+
+void remove_duplicated_edges(request_vector_type<vertex_id_type>& edgelist)
+{
+  auto pre_edge(edgelist[0].edge);
+  size_t tail = 1;
+  for (size_t i = 1; i < edgelist.size(); ++i) {
+    if (pre_edge == edgelist[i].edge) continue;
+    edgelist[tail++] = edgelist[i];
+    pre_edge = edgelist[i].edge;
+  }
+  std::cout << "#duplcates " << edgelist.size() - tail << std::endl;
+  edgelist.resize(tail);
 }
 
 void dump_all_edges(dist_gstore_type& dist_graph, request_vector_type<vertex_id_type>& buffer)
@@ -180,17 +193,41 @@ int main(int argc, char** argv) {
     generate_edgelist(edgelist);
     havoqgt::havoqgt_env()->world_comm().barrier();
 
-    /// --- start dynamic graph construction --- ///
+    /// --- dynamic graph construction --- ///
+    if (mpi_rank == 0) std::cout << "--- Start dynamic graph construction ---" << std::endl;
     dg_visitor_queue.dynamic_graphconst(&edgelist);
+    havoqgt::havoqgt_env()->world_comm().barrier();
 
+    /// --- Check result --- ///
+    if (mpi_rank == 0) std::cout << "--- start dumping edges ---" << std::endl;
     request_vector_type<vertex_id_type> stored_edgelist;
     dump_all_edges(dist_graph, stored_edgelist);
     sort_requests(stored_edgelist);
-    global_sort(edgelist);
+    havoqgt::havoqgt_env()->world_comm().barrier();
 
-    assert(stored_edgelist.size() == edgelist.size());
+    if (mpi_rank == 0) std::cout << "--- start global sort ---" << std::endl;
+    global_sort(edgelist);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    if (mpi_rank == 0) std::cout << "--- start moving duplicated edges ---" << std::endl;
+    remove_duplicated_edges(edgelist);
+    havoqgt::havoqgt_env()->world_comm().barrier();
+
+    if (mpi_rank == 0) std::cout << "--- start checking result ---" << std::endl;
+    if (stored_edgelist.size() != edgelist.size()) {
+      std::cout << stored_edgelist.size() << " != " << edgelist.size() << std::endl;
+      exit(1);
+    }
     for (size_t i = 0; i < stored_edgelist.size(); ++i) {
-      assert(stored_edgelist[i].edge == edgelist[i].edge);
+      if (stored_edgelist[i].edge != edgelist[i].edge) {
+        std::cout << "different edge" << std::endl;
+        std::cout << std::get<0>(stored_edgelist[i].edge) << " " << std::get<1>(stored_edgelist[i].edge) << "\n"
+                  << std::get<0>(edgelist[i].edge) << " " << std::get<1>(edgelist[i].edge) << std::endl;
+        exit(1);
+      }
     }
   }
+  havoqgt::havoqgt_finalize();
+
+  return 0;
 }
