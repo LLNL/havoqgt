@@ -252,7 +252,7 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
     /// --- print a progress report --- ///
     havoqgt::havoqgt_env()->world_comm().barrier();
     const double time_end = MPI_Wtime();
-    total_graph_storing_time += time_end - time_start
+    total_graph_storing_time += time_end - time_start;
 
     if (mpi_rank == 0) {
       std::cout << "\n-- results --" << std::endl;
