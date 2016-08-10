@@ -1,0 +1,15 @@
+digraph "havoqgt::mpi::visitor_queue::visitor_queue_inserter::operator="
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::visitor\l_queue::visitor_queue\l_inserter::operator=",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::visitor\l_queue::handle_mailbox\l_receive",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1visitor__queue.html#ac4598536de30937b456ed0c138a580e7"];
+  Node2 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::mailbox\l_routed::comm_rank",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mailbox__routed.html#a6d86bbb3945e3245a15e01e42ded4aa5"];
+  Node2 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::mpi::termination\l_detection::inc_completed",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1termination__detection.html#a3010c851b0ccc6f9d711c109cac8c53c"];
+  Node2 -> Node5 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="havoqgt::mpi::visitor\l_queue::push",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1visitor__queue.html#a656e79df4cce8d45087d3b65a2fe668b"];
+}

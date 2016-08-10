@@ -1,0 +1,7 @@
+digraph "Graphical Class Hierarchy"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::detail::preferential\l_attachment_helper\< DUMMY \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1detail_1_1preferential__attachment__helper.html"];
+}

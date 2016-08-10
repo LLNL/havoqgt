@@ -1,0 +1,9 @@
+digraph "havoqgt::mpi::mpi_communicator::~mpi_communicator"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::mpi_communicator\l::~mpi_communicator",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::mpi_communicator\l::check_mpi",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mpi__communicator.html#ac6ff330f1c3d0ca08230620b422abbd5",tooltip="Checks MPI return codes. "];
+}

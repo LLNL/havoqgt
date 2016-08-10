@@ -1,0 +1,16 @@
+digraph "havoqgt::detail::hash_nbits"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::detail::hash\l_nbits",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::detail::hash32",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1detail.html#a60a6e5ef157a2e103240bb5fd8dc7e18"];
+  Node1 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::detail::shifted\l_n_hash32",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1detail.html#a975a37fbe8342cd2f96792560a3e1e11"];
+  Node3 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node1 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::detail::shifted\l_n_hash16",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1detail.html#a98cc698f6043286197e3cd90fd6377ae"];
+  Node4 -> Node5 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="havoqgt::detail::hash16",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1detail.html#a0dc6539c7a32dc0da68cd3431090ee30"];
+}

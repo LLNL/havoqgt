@@ -1,0 +1,8 @@
+digraph "havoqgt::environment"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="havoqgt::environment",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node2 -> Node1 [dir="back",color="darkorchid3",fontsize="10",style="dashed",label=" m_node_offset_comm\nm_node_local_comm\nm_world_comm" ,fontname="Helvetica"];
+  Node2 [label="havoqgt::communicator",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1communicator.html"];
+}

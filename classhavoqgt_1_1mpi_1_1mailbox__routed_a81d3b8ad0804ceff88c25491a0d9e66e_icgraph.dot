@@ -1,0 +1,11 @@
+digraph "havoqgt::mpi::mailbox_routed::bcast_to_targets"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::mailbox\l_routed::bcast_to_targets",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::mailbox\l_routed\< visitor_wrapper\l \>::bcast",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mailbox__routed.html#acd518502180a3da6f351d61bc47efdd9"];
+  Node1 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::mailbox\l_routed\< visitor_wrapper\l \>::receive",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mailbox__routed.html#a44520aabc89be081179d16fcbe8584c7"];
+}

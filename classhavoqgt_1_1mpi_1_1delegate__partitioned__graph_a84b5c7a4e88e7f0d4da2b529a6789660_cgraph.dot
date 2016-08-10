@@ -1,0 +1,19 @@
+digraph "havoqgt::mpi::delegate_partitioned_graph::partition_low_degree"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::delegate\l_partitioned_graph::partition\l_low_degree",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="get_dirty_pages",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$cache__utilities_8hpp.html#ab84207f059504235e8759cc261bd9f24"];
+  Node1 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::detail\l::global_iterator_range_empty",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi_1_1detail.html#a45f3fc47781d84643fd40bbe78429aef"];
+  Node3 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::mpi::mpi_all\l_reduce",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#affa92d59ec8849eb0e9882c4e2f53576"];
+  Node4 -> Node5 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="havoqgt::mpi::mpi_typeof",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#aabf02ed62a89a1d57ec2a3905a238ac3"];
+  Node1 -> Node6 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="havoqgt::mpi::mpi_yield\l_barrier",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#a7c00fa0b2a6cb0d502c85088ae7bf5ef"];
+  Node1 -> Node7 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="havoqgt::mpi::mpi_all\l_to_all_better",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#a99fff01db5b2af9909613c77900fefd5"];
+}

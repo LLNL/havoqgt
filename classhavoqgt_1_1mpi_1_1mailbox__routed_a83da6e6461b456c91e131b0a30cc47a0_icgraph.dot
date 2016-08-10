@@ -1,0 +1,11 @@
+digraph "havoqgt::mpi::mailbox_routed::send_tree_fast"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::mailbox\l_routed::send_tree_fast",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::mailbox\l_routed\< visitor_wrapper\l \>::send_tree_parent",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mailbox__routed.html#a9b41dbf71d2f1f44f67fa53d3e6a3d53"];
+  Node1 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::mailbox\l_routed\< visitor_wrapper\l \>::send_tree_children",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1mailbox__routed.html#a00659e34108797cfeecd591479aa5b9d"];
+}

@@ -1,0 +1,11 @@
+digraph "havoqgt::detail::reservable_priority_queue::reservable_priority_queue"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::detail::reservable\l_priority_queue::reservable\l_priority_queue",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::detail::reservable\l_priority_queue::reserve",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1detail_1_1reservable__priority__queue.html#a0e2fb9bb89f82084102f9e75a7c642b0"];
+  Node1 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::detail::reservable\l_priority_queue::capacity",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1detail_1_1reservable__priority__queue.html#a548693a36def28ef9cc54e2978cea7f5"];
+}

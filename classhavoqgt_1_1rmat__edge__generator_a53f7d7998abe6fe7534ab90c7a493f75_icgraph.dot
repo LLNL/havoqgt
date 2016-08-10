@@ -1,0 +1,9 @@
+digraph "havoqgt::rmat_edge_generator::end"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::rmat_edge\l_generator::end",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::rmat_edge\l_generator::sanity_max\l_vertex_id",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1rmat__edge__generator.html#aa96b6b24dd1bfe2ae0f8d2eea3d04d05"];
+}

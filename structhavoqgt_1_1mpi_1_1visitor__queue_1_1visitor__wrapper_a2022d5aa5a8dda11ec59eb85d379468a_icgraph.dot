@@ -1,0 +1,13 @@
+digraph "havoqgt::mpi::visitor_queue::visitor_wrapper::set_intercept"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::visitor\l_queue::visitor_wrapper\l::set_intercept",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::visitor\l_queue::local_delegate_visit",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1visitor__queue.html#a7146317c7f60cb4596fcd9b071dc9c1b"];
+  Node2 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::visitor\l_queue::queue_visitor",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1visitor__queue.html#aca8e94657462b5d73484b41b0ff2fd7a"];
+  Node3 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::mpi::visitor\l_queue::init_visitor\l_traversal",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1visitor__queue.html#a88189d63aa4fd924ddc3df373aa3842f"];
+}

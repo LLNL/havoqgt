@@ -1,0 +1,15 @@
+digraph "havoqgt::parallel_edge_list_reader::max_vertex_id"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::parallel_edge\l_list_reader::max_vertex_id",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::parallel_edge\l_list_reader::input_iterator\l_type::get_next",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1parallel__edge__list__reader_1_1input__iterator__type.html#ad9f98fcb3bde54bf16f5eb9a3af26a59"];
+  Node2 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::parallel_edge\l_list_reader::input_iterator\l_type::input_iterator_type",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1parallel__edge__list__reader_1_1input__iterator__type.html#a71d17f1f1ff3711f5a5228900bc09add"];
+  Node2 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::parallel_edge\l_list_reader::input_iterator\l_type::operator++",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1parallel__edge__list__reader_1_1input__iterator__type.html#acbcb191fe834f0d93b1ffb1b5d4f0e52"];
+  Node1 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="main",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$ingest__edge__list_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627"];
+}

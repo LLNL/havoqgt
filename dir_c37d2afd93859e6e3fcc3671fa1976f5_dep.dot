@@ -1,0 +1,9 @@
+digraph "include/havoqgt/detail" {
+  compound=true
+  node [ fontsize="10", fontname="Helvetica"];
+  edge [ labelfontsize="10", labelfontname="Helvetica"];
+  subgraph clusterdir_a42862685dd72aa4ce68db8ce668c498 {
+    graph [ bgcolor="#ddddee", pencolor="black", label="havoqgt" fontname="Helvetica", fontsize="10", URL="dir_a42862685dd72aa4ce68db8ce668c498.html"]
+  dir_c37d2afd93859e6e3fcc3671fa1976f5 [shape=box, label="detail", style="filled", fillcolor="#eeeeff", pencolor="black", URL="dir_c37d2afd93859e6e3fcc3671fa1976f5.html"];
+  }
+}

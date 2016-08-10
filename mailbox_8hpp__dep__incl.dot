@@ -1,0 +1,23 @@
+digraph "include/havoqgt/mailbox.hpp"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="include/havoqgt/mailbox.hpp",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="include/havoqgt/visitor\l_queue.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$visitor__queue_8hpp.html"];
+  Node2 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="include/havoqgt/breadth\l_first_search.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$breadth__first__search_8hpp.html"];
+  Node3 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="src/run_bfs.cpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$run__bfs_8cpp.html"];
+  Node2 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="include/havoqgt/page\l_rank.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$page__rank_8hpp.html"];
+  Node5 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="src/run_triangle_count.cpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$run__triangle__count_8cpp.html"];
+  Node2 -> Node7 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="include/havoqgt/single\l_source_shortest_path.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$single__source__shortest__path_8hpp.html"];
+  Node7 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 -> Node8 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node8 [label="include/havoqgt/triangle\l_count.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$triangle__count_8hpp.html"];
+  Node8 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+}

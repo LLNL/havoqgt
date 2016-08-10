@@ -1,0 +1,13 @@
+digraph "havoqgt::mpi::delegate_partitioned_graph::send_high_info"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::delegate\l_partitioned_graph::send\l_high_info",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::mpi_yield\l_barrier",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#a7c00fa0b2a6cb0d502c85088ae7bf5ef"];
+  Node1 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="havoqgt::mpi::mpi_all\l_to_all",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#a1c11c9e4b64a248d9a7791352935c78f"];
+  Node3 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="havoqgt::mpi::mpi_typeof",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$namespacehavoqgt_1_1mpi.html#aabf02ed62a89a1d57ec2a3905a238ac3"];
+}

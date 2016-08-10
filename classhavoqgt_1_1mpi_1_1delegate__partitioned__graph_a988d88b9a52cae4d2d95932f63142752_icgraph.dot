@@ -1,0 +1,9 @@
+digraph "havoqgt::mpi::delegate_partitioned_graph::count_edge_degrees"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="havoqgt::mpi::delegate\l_partitioned_graph::count\l_edge_degrees",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="havoqgt::mpi::delegate\l_partitioned_graph::delegate\l_partitioned_graph",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classhavoqgt_1_1mpi_1_1delegate__partitioned__graph.html#add0f19ff2279c6f442a1f6f6dc746e3e",tooltip="Constructor that initializes given and unsorted sequence of edges. "];
+}
