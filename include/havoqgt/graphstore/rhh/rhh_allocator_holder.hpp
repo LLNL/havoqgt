@@ -324,7 +324,7 @@ class allocator_holder_sglt <ALLOC_IN_CORE, element_size, extra_size>
   {
 #if RHH_USE_NUMA_ALLOC
     return numa_alloc_local(capacity * element_size + extra_size);
-#elif
+#else
     return malloc(capacity * element_size + extra_size);
 #endif
   }
@@ -341,7 +341,7 @@ class allocator_holder_sglt <ALLOC_IN_CORE, element_size, extra_size>
   {
 #if RHH_USE_NUMA_ALLOC
     numa_free(ptr, capacity * element_size + extra_size);
-#elif
+#else
     free(ptr);
 #endif
   }
