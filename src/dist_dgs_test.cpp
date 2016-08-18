@@ -218,6 +218,7 @@ int main(int argc, char** argv) {
       std::cout << stored_edgelist.size() << " != " << edgelist.size() << std::endl;
       exit(1);
     }
+
     for (size_t i = 0; i < stored_edgelist.size(); ++i) {
       if (stored_edgelist[i].edge != edgelist[i].edge) {
         std::cout << "different edge" << std::endl;

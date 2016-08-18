@@ -13,6 +13,7 @@ namespace rhh {
 
 #define RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE 0
 #define RHH_CHAIN_AT_LARGE_TABLE_SIZE 0
+#define RHH_USE_NUMA_ALLOC 1 /// use numa alloc instead of malloc
 #define RHH_DETAILED_ANALYSYS 0 /// !!! will be invalid when the table grow !!!
 
 static constexpr double kFullCapacitFactor  = 0.9;
@@ -26,7 +27,8 @@ static void disp_configuration(void)
 {
   DISP_LOG_VAR(RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE);
   DISP_LOG_VAR(RHH_CHAIN_AT_LARGE_TABLE_SIZE);
-  DISP_LOG_VAR(RHH_DETAILED_ANALYSYS);
+  DISP_LOG_VAR(RHH_USE_NUMA_ALLOC);
+  //  DISP_LOG_VAR(RHH_DETAILED_ANALYSYS);
   DISP_LOG_VAR(kFullCapacitFactor);
   DISP_LOG_VAR(kNodeAllocatorChunkSize);
 }
