@@ -8,7 +8,10 @@
 
 #include <cstdio>
 #include <memory>
-#include <type_traits> // static_assert
+#include <type_traits>
+#if RHH_USE_NUMA_ALLOC
+#include <numa.h>
+#endif
 
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/allocators/node_allocator.hpp>
@@ -319,7 +322,11 @@ class allocator_holder_sglt <ALLOC_IN_CORE, element_size, extra_size>
   ///   void* pointer for allocated memory spaces
   void* allocate(const size_t capacity)
   {
+#if RHH_USE_NUMA_ALLOC
+    return numa_alloc_local(capacity * element_size + extra_size);
+#else
     return malloc(capacity * element_size + extra_size);
+#endif
   }
 
   ///
@@ -330,9 +337,13 @@ class allocator_holder_sglt <ALLOC_IN_CORE, element_size, extra_size>
   /// \param length
   /// \param ptr
   ///
-  void deallocate(void *ptr, const size_t dummy = 0)
+  void deallocate(void *ptr, const size_t capacity)
   {
+#if RHH_USE_NUMA_ALLOC
+    numa_free(ptr, capacity * element_size + extra_size);
+#else
     free(ptr);
+#endif
   }
 
 //  void destory()

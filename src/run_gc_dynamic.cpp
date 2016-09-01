@@ -5,11 +5,12 @@
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
-#include "../include/havoqgt/graph_colour_dynamic.hpp"
+#include <havoqgt/distributed_db.hpp>
+#include <havoqgt/graph_colour_dynamic.hpp>
 #include <havoqgt/graphstore/dist_dynamic_graphstore.hpp>
 
 using mapped_file_type     = boost::interprocess::managed_mapped_file;
-using segment_manager_type = boost::interprocess::managed_mapped_file::segment_manager;
+using segment_manager_type = havoqgt::distributed_db::segment_manager_type;
 
 using vertex_id_type        = uint64_t;
 using edge_property_type    = int;
@@ -155,18 +156,21 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
 
 
-  /// --- create a segument file --- ///
+  /// --- init segment file --- ///
   std::stringstream fname_local;
   fname_local << graph_file << "_" << mpi_rank;
-  boost::interprocess::file_mapping::remove(fname_local.str().c_str());
-  uint64_t graphfile_init_size = std::pow(2, SCALE) / mpi_size;
-  mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local.str().c_str(), graphfile_init_size);
+  double graph_capacity_gb_per_rank = 64.0 / mpi_size;
+  havoqgt::distributed_db ddb(havoqgt::db_create(), fname_local.str().c_str(), graph_capacity_gb_per_rank);
 
-  /// --- Call fallocate --- ///
-  fallocate(fname_local.str().c_str(), graphfile_init_size, mapped_file);
+  /// --- create a segument file --- ///
+  //  boost::interprocess::file_mapping::remove(fname_local.str().c_str());
+  //  uint64_t graphfile_init_size = std::pow(2, SCALE) / mpi_size;
+  //  mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local.str().c_str(), graphfile_init_size);
+  //  /// --- Call fallocate --- ///
+  //  fallocate(fname_local.str().c_str(), graphfile_init_size, mapped_file);
 
   /// --- get a segment_manager --- ///
-  segment_manager_type* segment_manager = mapped_file.get_segment_manager();
+  segment_manager_type* segment_manager = ddb.get_segment_manager();
 
   // Get edgelist.
   havoqgt::parallel_edge_list_reader edgelist(edgelist_files);
