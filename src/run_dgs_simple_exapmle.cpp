@@ -1,4 +1,7 @@
-
+/*
+ * Written by Keita Iwabuchi.
+ * LLNL / TokyoTech
+ */
 #include <iostream>
 #include <fstream>
 #include <boost/interprocess/managed_mapped_file.hpp>

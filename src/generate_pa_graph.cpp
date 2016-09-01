@@ -1,3 +1,7 @@
+/*
+ * Written by Keita Iwabuchi.
+ * LLNL / TokyoTech
+ */
 #include <vector>
 #include <iostream>
 #include <string>
