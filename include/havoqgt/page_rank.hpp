@@ -104,7 +104,7 @@ public:
 
 
 
-template<typename Graph, typename PRData>
+template<typename Graph>
 class pr_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
@@ -165,15 +165,15 @@ public:
 
 template <typename TGraph, typename PRData>
 void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
-  typedef  pr_visitor<TGraph, PRData>    visitor_type;
+  typedef  pr_visitor<TGraph>    visitor_type;
   auto alg_data = std::forward_as_tuple(cur_rank, next_rank);
    
   if(initial) {
     cur_rank.reset(double(1)/double(g.max_global_vertex_id()));
   }
    
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue,
-                                 TGraph, decltype(alg_data)>(&g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue
+                                 >(&g, alg_data);
   vq.init_visitor_traversal_new();
   next_rank.all_reduce();
 }

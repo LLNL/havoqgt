@@ -58,7 +58,7 @@
 
 namespace havoqgt { namespace mpi {
 
-template<typename Graph, typename CCData>
+template<typename Graph>
 class cc_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
@@ -120,7 +120,7 @@ public:
 template <typename TGraph, typename CCData>
 void connected_components(TGraph* g, CCData& cc_data) {
 
-  typedef  cc_visitor<TGraph, CCData>    visitor_type;
+  typedef  cc_visitor<TGraph>    visitor_type;
  
   for(auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
     cc_data[*vitr] = *vitr;
@@ -130,8 +130,8 @@ void connected_components(TGraph* g, CCData& cc_data) {
   } 
   
   auto alg_data = &cc_data;
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue,
-                                 TGraph, decltype(alg_data)>(g, alg_data); 
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue
+                                 >(g, alg_data); 
   vq.init_visitor_traversal_new();
 }
 

@@ -123,7 +123,7 @@ public:
 
 
 
-template<typename Graph, typename LevelData, typename ParentData>
+template<typename Graph>
 class bfs_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
@@ -197,10 +197,9 @@ void breadth_first_search(TGraph* g,
                           LevelData& level_data,
                           ParentData& parent_data,
                           typename TGraph::vertex_locator s) {
-  typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
+  typedef  bfs_visitor<TGraph>    visitor_type;
   auto alg_data = std::forward_as_tuple(level_data, parent_data);
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue, 
-                                 TGraph, decltype(alg_data)>(g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal(s);
 }
 

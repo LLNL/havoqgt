@@ -77,11 +77,11 @@ private:
 };
 
 /// This is the kth-core visitor
-template<typename Graph, typename KCoreData>
+template<typename Graph>
 class kth_core_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
-  typedef kth_core_visitor<Graph, KCoreData>    my_type;
+  typedef kth_core_visitor<Graph>    my_type;
 
   kth_core_visitor() {}
   kth_core_visitor(vertex_locator _vertex):vertex(_vertex) { }
@@ -130,7 +130,7 @@ template <typename TGraph, typename KCoreData>
 void kth_core(TGraph& graph, KCoreData& k_core_data) {
   
   uint64_t to_return(0);
-  typedef kth_core_visitor<TGraph, KCoreData>           visitor_type;
+  typedef kth_core_visitor<TGraph>           visitor_type;
   int32_t kth_core_count = 0;
   
   auto alg_data = std::forward_as_tuple(k_core_data, kth_core_count); 
@@ -145,8 +145,8 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     k_core_data[*citr].set_core_bound(graph.degree(*citr));
   } 
 
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue, 
-                                 TGraph, decltype(alg_data)>(&graph, alg_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue 
+                                 >(&graph, alg_data);
   uint64_t count_alive = 0;
   do {
     MPI_Barrier(MPI_COMM_WORLD);
