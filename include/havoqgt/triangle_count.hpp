@@ -128,9 +128,10 @@ public:
   triangle_count_visitor(vertex_locator v, vertex_locator f, vertex_locator s, uint32_t deg):
         vertex(v), first(f), second(s), last_degree(deg) { }
 
-  bool pre_visit() const {
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
     //return true;//(second == std::numeric_limits<vertex_descriptor_type>::max());
-    uint32_t my_degree = m_ptr_graph->degree(vertex);
+    uint32_t my_degree = std::get<0>(alg_data).degree(vertex); 
     if( last_degree < my_degree ) {
       return true;
     } else if( last_degree > my_degree) {
@@ -139,8 +140,8 @@ public:
     return first < vertex;
   }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
 
     if(!first.is_valid()) {
       typedef typename Graph::edge_iterator eitr_type;
@@ -162,7 +163,7 @@ public:
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
         if(neighbor == second) {
-          (*tc_data())[vertex] = (*tc_data())[vertex] + 1;
+          std::get<1>(alg_data)[vertex] = std::get<1>(alg_data)[vertex] + 1;
         }
       }
     }
@@ -179,15 +180,6 @@ public:
     return 2;
   }
   
-  typedef typename Graph::template vertex_data<uint64_t, std::allocator<uint64_t> > vdtd_type;
-
-  static void set_tc_data(vdtd_type* _data) { tc_data() = _data; }
-
-  static vdtd_type*& tc_data() {
-    static vdtd_type* data;
-    return data;
-  }
-
   friend inline bool operator>(const triangle_count_visitor& v1, const triangle_count_visitor& v2) {
     return v1.get_state() < v2.get_state();
   }
@@ -198,37 +190,20 @@ public:
 
   vertex_locator vertex, first, second;
   uint32_t last_degree;
-  static Graph* m_ptr_graph;
 };
-
-template<typename Graph>
-Graph* triangle_count_visitor<Graph>::m_ptr_graph;
-
 
 template <typename TGraph>
 uint64_t triangle_count(TGraph& g, typename TGraph::vertex_locator s) {
   typedef TGraph                                             graph_type;
   typedef typename mpi::triangle_count_visitor<TGraph>             visitor_type;
-  visitor_type::m_ptr_graph = &g;
-  typedef visitor_queue< visitor_type, triangle_priority_queue, graph_type >    visitor_queue_type;
-  
-  visitor_queue_type vq(&g);
-  
   typename graph_type::template vertex_data<uint64_t, std::allocator<uint64_t> >   tc_data(g);
-  visitor_type::set_tc_data(&tc_data);
-  
+  auto alg_data = std::forward_as_tuple(g, tc_data);
+  auto vq = create_visitor_queue<visitor_type, triangle_priority_queue,
+                                 TGraph, decltype(alg_data)>(&g, alg_data);
   vq.init_visitor_traversal(s);
-
-  return tc_data.global_accumulate();
+  return tc_data.global_accumulate();  
 }
 
-
-
-
-
 }} //end namespace havoqgt::mpi
-
-
-
 
 #endif //HAVOQGT_MPI_TRIANGLE_COUNT_HPP_INCLUDED

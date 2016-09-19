@@ -56,6 +56,7 @@
 #include <havoqgt/mailbox.hpp>
 #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/reservable_priority_queue.hpp>
+#include <havoqgt/detail/visitor_priority_queue.hpp>
 #include <vector>
 #include <iterator>
 #include <sched.h>
@@ -65,7 +66,7 @@ namespace havoqgt { namespace mpi {
 class oned_blocked_partitioned_t { };
 class el_partitioned_t { };
 
-template <typename TVisitor, template<typename T> class Queue, typename TGraph>
+template <typename TVisitor, template<typename T> class Queue, typename TGraph,   typename AlgData>
 class visitor_queue {
   typedef TVisitor              visitor_type;
 
@@ -85,10 +86,11 @@ class visitor_queue {
 
 
 public:
-  visitor_queue(TGraph* _graph)
+  visitor_queue(TGraph* _graph, AlgData& _alg_data)
     : m_mailbox(/*MPI_COMM_WORLD,*/ 0)
     , m_termination_detection(MPI_COMM_WORLD, 2, 2, 3, 4)
-    , m_ptr_graph(_graph) {
+    , m_ptr_graph(_graph) 
+    , m_alg_data(_alg_data) {
     //m_localqueue_owned.reserve(_graph->num_local_vertices());
     //m_localqueue_delegates.reserve(_graph->num_delegates() * 4);
   }
@@ -115,7 +117,7 @@ public:
 
     bool intercept(const visitor_type& __value) {
       assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
-      bool ret = __value.pre_visit();
+      bool ret = __value.pre_visit(m_vq->m_alg_data);
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
       }
@@ -152,7 +154,7 @@ public:
         process_pending_controllers();
         visitor_type this_visitor = pop_top();
         vertex_locator v = this_visitor.vertex;
-        bool ret = this_visitor.visit(*m_ptr_graph, this);
+        bool ret = this_visitor.visit(*m_ptr_graph, this, m_alg_data);
         if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
           m_mailbox.bcast(this_visitor, visitor_queue_inserter(this));
           m_termination_detection.inc_queued(m_mailbox.comm_size());
@@ -168,7 +170,7 @@ public:
 
   void do_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
-    bool ret = this_visitor.visit(*m_ptr_graph, this);
+    bool ret = this_visitor.visit(*m_ptr_graph, this, m_alg_data);
     if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
       visitor_type v = this_visitor;
       m_mailbox.bcast(v, visitor_queue_inserter(this));
@@ -178,7 +180,7 @@ public:
   
   void do_init_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
-    bool ret = this_visitor.init_visit(*m_ptr_graph, this);
+    bool ret = this_visitor.init_visit(*m_ptr_graph, this, m_alg_data);
     if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
       visitor_type v = this_visitor;
       m_mailbox.bcast(v, visitor_queue_inserter(this));
@@ -190,7 +192,7 @@ public:
     typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
     for(; citr != m_ptr_graph->controller_end(); ++citr) {
       visitor_type v(*citr);
-      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+      if(v.pre_visit(m_alg_data)) {  //RECENTLY ADDED 2013.10.10
         do_visit( v );
         check_mailbox();
       }
@@ -198,7 +200,7 @@ public:
     typename TGraph::vertex_iterator vitr = m_ptr_graph->vertices_begin();
     for(; vitr != m_ptr_graph->vertices_end(); ++vitr) {
       visitor_type v(*vitr);
-      if(v.pre_visit()) {  //RECENTLY ADDED 2013.10.10
+      if(v.pre_visit(m_alg_data)) {  //RECENTLY ADDED 2013.10.10
         do_visit( v );
         check_mailbox();
       }
@@ -251,7 +253,7 @@ public:
       local_delegate_visit(v);
     } else {
       if(v.vertex.owner() == uint32_t(m_mailbox.comm_rank())) {
-        if(v.pre_visit()) {
+        if(v.pre_visit(m_alg_data)) {
           push(v);
           m_termination_detection.inc_queued();
         }
@@ -267,7 +269,7 @@ public:
 private:
   // This occurs when the local process first encounters a delegate
   void local_delegate_visit(const visitor_type& v) {
-    if(v.pre_visit()) {
+    if(v.pre_visit(m_alg_data)) {
       if(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank())) {
         //delegate_bcast(v);
         push(v);
@@ -322,7 +324,7 @@ private:
     while(!m_local_controller_queue.empty()) {
       TVisitor v = m_local_controller_queue.front();
       m_local_controller_queue.pop();
-      v.visit(*m_ptr_graph, this);
+      v.visit(*m_ptr_graph, this, m_alg_data);
       m_termination_detection.inc_completed();
     }
   }
@@ -345,7 +347,7 @@ private:
         }
       } else {
         assert(m_ptr_graph->master(v.vertex) == uint32_t(m_mailbox.comm_rank()));
-        if(v.pre_visit()) {
+        if(v.pre_visit(m_alg_data)) {
           //if(m_ptr_graph->master(vw.m_visitor.vertex) == m_mailbox.comm_rank()) {
             //delegate_bcast(vw.m_visitor);
             push(v);
@@ -365,7 +367,7 @@ private:
       assert(v.vertex.owner() == uint32_t(m_mailbox.comm_rank()));
       //
       // Now handle owned vertices
-      if(v.pre_visit()) {
+      if(v.pre_visit(m_alg_data)) {
         push(v);
       } else {
         m_termination_detection.inc_completed();
@@ -448,18 +450,23 @@ private:
     } while(!m_termination_detection.test_for_termination());
   }*/
 
-
-
-
-
   mailbox_type           m_mailbox;
   termination_detection_type m_termination_detection;
   local_queue_type       m_localqueue_owned;
   local_queue_type       m_localqueue_delegates;
   TGraph*                m_ptr_graph;
   std::queue<TVisitor> m_local_controller_queue;
+  AlgData& 		 m_alg_data;
 };
 
+template <typename TVisitor, template<typename T> class Queue, typename TGraph, 
+  typename AlgData>  
+visitor_queue< TVisitor, Queue, TGraph, AlgData > 
+  create_visitor_queue(TGraph* g, AlgData& alg_data) {    
+    typedef visitor_queue< TVisitor, Queue, TGraph, AlgData > visitor_queue_type;
+    visitor_queue_type vq(g, alg_data);      
+    return vq;
+}
 
 }} //namespace havoqgt::mpi
 
