@@ -172,8 +172,7 @@ void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
     cur_rank.reset(double(1)/double(g.max_global_vertex_id()));
   }
    
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue
-                                 >(&g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(&g, alg_data);
   vq.init_visitor_traversal_new();
   next_rank.all_reduce();
 }

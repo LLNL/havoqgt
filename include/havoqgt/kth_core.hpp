@@ -145,8 +145,7 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     k_core_data[*citr].set_core_bound(graph.degree(*citr));
   } 
 
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue 
-                                 >(&graph, alg_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(&graph, alg_data);
   uint64_t count_alive = 0;
   do {
     MPI_Barrier(MPI_COMM_WORLD);

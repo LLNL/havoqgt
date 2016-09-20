@@ -130,8 +130,7 @@ void connected_components(TGraph* g, CCData& cc_data) {
   } 
   
   auto alg_data = &cc_data;
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue
-                                 >(g, alg_data); 
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data); 
   vq.init_visitor_traversal_new();
 }
 
