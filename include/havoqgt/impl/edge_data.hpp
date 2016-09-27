@@ -58,17 +58,30 @@ namespace havoqgt {
 namespace mpi {
 
 template <typename SegementManager>
-template <typename T, typename SegManagerOther>
+template <typename T, typename Allocator>
 class delegate_partitioned_graph<SegementManager>::edge_data {
  public:
-   typedef typename bip::vector< T, bip::allocator<T, SegManagerOther> >
-       ::iterator iterator;
+   typedef typename bip::vector< T, Allocator >::iterator iterator;
   typedef T value_type;
 
   edge_data() {}
 
-  T&       operator[] (const edge_iterator& itr);
-  const T& operator[] (const edge_iterator& itr) const;
+  T&       operator[] (const edge_iterator& itr) {
+    if(itr.m_source.is_delegate()) {
+      assert(itr.m_edge_offset < m_delegate_edge_data.size());
+      return m_delegate_edge_data[itr.m_edge_offset];
+    }
+    assert(itr.m_edge_offset < m_owned_edge_data.size());
+    return m_owned_edge_data[itr.m_edge_offset];
+  }
+  const T& operator[] (const edge_iterator& itr) const {
+    if(itr.m_source.is_delegate()) {
+      assert(itr.m_edge_offset < m_delegate_edge_data.size());
+      return m_delegate_edge_data[itr.m_edge_offset];
+    }
+    assert(itr.m_edge_offset < m_owned_edge_data.size());
+    return m_owned_edge_data[itr.m_edge_offset];
+  }
 
   void reset(const T& r) {
     for(size_t i=0; i<m_owned_edge_data.size(); ++i) {
@@ -85,64 +98,81 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
   iterator owned_end()      { return m_owned_edge_data.end(); }
 
 //private:
-//  friend class delegate_partitioned_graph;
-  edge_data(uint64_t owned_size, uint64_t delegate_size,
-      SegManagerOther* sm);
-  edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
-      SegManagerOther* sm);
+  friend class delegate_partitioned_graph;
+  edge_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+    : m_owned_edge_data(allocate)
+    , m_delegate_edge_data(allocate) {
+    m_owned_edge_data.resize(dpg.m_owned_targets_size);
+    m_delegate_edge_data.resize(dpg.m_delegate_targets_size);
+    }
+  
+  // edge_data(uint64_t owned_size, uint64_t delegate_size,
+  //     SegManagerOther* sm);
+  // edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
+  //     SegManagerOther* sm);
 
- private:
-  bip::vector< T, bip::allocator<T, SegManagerOther> >
-      m_owned_edge_data;
-  bip::vector< T, bip::allocator<T, SegManagerOther> >
-      m_delegate_edge_data;
+// private:
+ protected: 
+  bip::vector< T, Allocator >      m_owned_edge_data;
+  bip::vector< T, Allocator >      m_delegate_edge_data;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                edge_data                                 //
 ////////////////////////////////////////////////////////////////////////////////
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegmentManager>::edge_data<T,SegManagerOther>::
-edge_data(uint64_t owned_size, uint64_t delegate_size, SegManagerOther* sm)
-  : m_owned_edge_data(sm->template get_allocator<T>())
-  , m_delegate_edge_data(sm->template get_allocator<T>()) {
-  m_owned_edge_data.resize(owned_size);
-  m_delegate_edge_data.resize(delegate_size);
-  }
+// template <typename SegmentManager>
+// template<typename T, typename Allocator>
+// delegate_partitioned_graph<SegmentManager>::edge_data<T,Allocator>::
+// edge_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+//   : m_owned_edge_data(allocate)
+//   , m_delegate_edge_data(allocate) {
+//   m_owned_vert_data.resize(dpg.m_owned_targets.size());
+//   m_delegate_data.resize(dpg.m_delegate_targets.size());
+//   }
+//
+//
+// template <typename SegmentManager>
+// template<typename T, typename Allocator>
+// delegate_partitioned_graph<SegmentManager>::edge_data<T,Allocator>::
+// edge_data(uint64_t owned_size, uint64_t delegate_size, SegManagerOther* sm)
+//   : m_owned_edge_data(sm->template get_allocator<T>())
+//   , m_delegate_edge_data(sm->template get_allocator<T>()) {
+//   m_owned_edge_data.resize(owned_size);
+//   m_delegate_edge_data.resize(delegate_size);
+//   }
+//
+// template <typename SegmentManager>
+// template<typename T, typename Allocator>
+// delegate_partitioned_graph<SegmentManager>::edge_data<T, Allocator>::
+// edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, SegManagerOther* sm)
+//   : m_owned_edge_data(owned_size, init, sm->template get_allocator<T>())
+//   , m_delegate_edge_data(delegate_size, init, sm->template get_allocator<T>()) { }
 
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::
-edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init, SegManagerOther* sm)
-  : m_owned_edge_data(owned_size, init, sm->template get_allocator<T>())
-  , m_delegate_edge_data(delegate_size, init, sm->template get_allocator<T>()) { }
-
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-T&
-delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::
-operator[](const edge_iterator& itr) {
-  if(itr.m_source.is_delegate()) {
-    assert(itr.m_edge_offset < m_delegate_edge_data.size());
-    return m_delegate_edge_data[itr.m_edge_offset];
-  }
-  assert(itr.m_edge_offset < m_owned_edge_data.size());
-  return m_owned_edge_data[itr.m_edge_offset];
-}
-
-template <typename SegmentManager>
-template<typename T, typename SegManagerOther>
-const T&
-delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>::operator[](const edge_iterator& itr) const {
-  if(itr.m_source.is_delegate()) {
-    assert(itr.m_edge_offset < m_delegate_edge_data.size());
-    return m_delegate_edge_data[itr.m_edge_offset];
-  }
-  assert(itr.m_edge_offset < m_owned_edge_data.size());
-  return m_owned_edge_data[itr.m_edge_offset];
-}
+// template <typename SegmentManager>
+// template<typename T, typename Allocator>
+// T&
+// delegate_partitioned_graph<SegmentManager>::edge_data<T, Allocator>::
+// operator[](const edge_iterator& itr) {
+//   if(itr.m_source.is_delegate()) {
+//     assert(itr.m_edge_offset < m_delegate_edge_data.size());
+//     return m_delegate_edge_data[itr.m_edge_offset];
+//   }
+//   assert(itr.m_edge_offset < m_owned_edge_data.size());
+//   return m_owned_edge_data[itr.m_edge_offset];
+// }
+//
+// template <typename SegmentManager>
+// template<typename T, typename Allocator>
+// const T&
+// delegate_partitioned_graph<SegmentManager>::edge_data<T, Allocator>::operator[](const edge_iterator& itr) const {
+//   if(itr.m_source.is_delegate()) {
+//     assert(itr.m_edge_offset < m_delegate_edge_data.size());
+//     return m_delegate_edge_data[itr.m_edge_offset];
+//   }
+//   assert(itr.m_edge_offset < m_owned_edge_data.size());
+//   return m_owned_edge_data[itr.m_edge_offset];
+// }
 
 }  // mpi
 }  // namespace havoqgt

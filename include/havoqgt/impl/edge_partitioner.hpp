@@ -62,6 +62,8 @@ namespace mpi {
  * @class delegate_partitioned_graph
  * @details Put details here for class
  */
+typedef double edge_data_type;
+typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
 
 class source_partitioner {
  public:
@@ -77,6 +79,9 @@ class edge_source_partitioner {
   explicit edge_source_partitioner(int p):m_mpi_size(p) { }
   int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting) const {
     return i.first % m_mpi_size;
+  }
+  int operator()(edge_type i, bool is_counting) const {
+    return std::get<0>(i).first % m_mpi_size;
   }
 
  private:
@@ -191,6 +196,10 @@ class high_edge_partitioner {
     assert(dest != m_mpi_rank);
     return dest;
   }  // operator()
+
+  int operator()(edge_type i, bool is_counting = true) {
+    return operator()(std::get<0>(i), is_counting);      
+  }
 
  private:
   const int m_mpi_size;

@@ -97,6 +97,9 @@ namespace bip = boost::interprocess;
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
+   typedef double edge_data_type;
+   typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
+ 
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 
@@ -113,7 +116,7 @@ class delegate_partitioned_graph {
   template <typename T, typename Allocator>
   class vertex_data;
   /// Edge Data storage
-  template <typename T, typename SegManagerOther>
+  template <typename T, typename Allocator> //SegManagerOther>
   class edge_data;
   /// Stores information about owned vertices
   class vert_info;
@@ -364,10 +367,16 @@ class delegate_partitioned_graph {
       SegmentAllocator< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
   */
+
   bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
+ 
+//  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::tupel<const uint64_t, //vertex_locator, double> > > m_map_delegate_locator;
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
+
+  edge_data<edge_data_type, SegmentAllocator<edge_data_type>>* m_edge_data;
+
 };  // class delegate_partitioned_graph
 
 

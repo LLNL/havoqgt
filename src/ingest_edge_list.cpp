@@ -208,7 +208,6 @@ int main(int argc, char** argv) {
         ("graph_obj")
         (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size);
 
-
     havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
@@ -226,22 +225,22 @@ int main(int argc, char** argv) {
       havoqgt_env()->world_comm().barrier();
     }
 
-    graph->print_graph_statistics();
+//    graph->print_graph_statistics();
 
 
     //
     // Calculate max degree
-    uint64_t max_degree(0);
-    for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
-      max_degree = std::max(max_degree, graph->degree(*citr));
-    }
+//    uint64_t max_degree(0);
+//    for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
+//      max_degree = std::max(max_degree, graph->degree(*citr));
+//    }
 
-    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+//    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
     havoqgt_env()->world_comm().barrier();
 
     if (mpi_rank == 0) {
-      std::cout << "Max Degree = " << global_max_degree << std::endl;
+//      std::cout << "Max Degree = " << global_max_degree << std::endl;
     }
 
     havoqgt_env()->world_comm().barrier();
