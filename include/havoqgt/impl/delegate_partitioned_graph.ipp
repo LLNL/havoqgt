@@ -1361,6 +1361,7 @@ partition_high_degree(Container& unsorted_edges,
              /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
         const auto edge = std::get<0>(*unsorted_itr); //*unsorted_itr;
+        const auto edge_data = std::get<1>(*unsorted_itr);
         ++unsorted_itr;
 
         {
@@ -1383,7 +1384,7 @@ partition_high_degree(Container& unsorted_edges,
           //to_send_edges_high.push_back(std::make_pair(new_source_id, edge.second));
           to_send_edges_high.push_back(std::forward_as_tuple(
                                        std::make_pair(new_source_id, edge.second),
-                                       std::get<1>(*unsorted_itr) ) );    
+                                       edge_data ) );    
         }  // end if is a hub
         else {
           // assert(global_hub_set.count(edge.first) == 0);
