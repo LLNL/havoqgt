@@ -273,6 +273,11 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
     for (size_t v_itr = 0; v_itr < m_edge_data.m_delegate_edge_data.size(); v_itr++) {
       std::cout << "#### MPI Rank -> " << mpi_rank << " delegate_edge_data: " << m_edge_data.m_delegate_edge_data[v_itr] << std::endl; 
     }
+
+    for (size_t v_itr = 0; v_itr < m_edge_data.m_owned_edge_data.size(); v_itr++) {
+      std::cout << "#### MPI Rank -> " << mpi_rank << " owned_edge_data: " << m_edge_data.m_owned_edge_data[v_itr] << std::endl; 
+    }
+
     // Test
      
 //#endif
