@@ -91,7 +91,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       //m_map_delegate_locator(100, boost::hash<uint64_t>(),
       //    std::equal_to<uint64_t>(), seg_allocator),
       m_map_delegate_locator(seg_allocator),
-      m_controller_locators(seg_allocator) {
+      m_controller_locators(seg_allocator), 
+      m_edge_data(*this, seg_allocator) {
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
@@ -185,7 +186,10 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
         initialize_edge_storage(seg_allocator);
         
-        m_edge_data = new delegate_partitioned_graph<SegmentManager>::
+        //m_edge_data = new delegate_partitioned_graph<SegmentManager>::
+        //  edge_data<edge_data_type, SegmentAllocator<edge_data_type>>(*this, seg_allocator);
+ 
+        m_edge_data = delegate_partitioned_graph<SegmentManager>::
           edge_data<edge_data_type, SegmentAllocator<edge_data_type>>(*this, seg_allocator);
 
             MPI_Barrier(m_mpi_comm);
@@ -258,6 +262,19 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = GraphReady;
+    
+    // Test
+    std::cout << "#### owned_edge_data.size " << m_edge_data.m_owned_edge_data.size() << std::endl;  
+    std::cout << "#### delegate_edge_data.size " << m_edge_data.m_delegate_edge_data.size() << std::endl;
+
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+    for (size_t v_itr = 0; v_itr < m_edge_data.m_delegate_edge_data.size(); v_itr++) {
+      std::cout << "#### MPI Rank -> " << mpi_rank << " delegate_edge_data: " << m_edge_data.m_delegate_edge_data[v_itr] << std::endl; 
+    }
+    // Test
+     
 //#endif
   }  // switch
 ////////////////////////////////////////////////////////////////////////////////
@@ -822,7 +839,7 @@ partition_low_degree(Container& unsorted_edges) {
         //assert(!m_owned_targets[loc].is_valid());
 
         m_owned_targets[loc] = label_to_locator(edge.second);
-        m_edge_data->m_owned_edge_data[loc] = std::get<1>(*itr);        
+        m_edge_data.m_owned_edge_data[loc] = std::get<1>(*itr);        
       }  // for over recieved egdes
     }  // while global iterator range not empty
   }  // for node partition
@@ -1413,7 +1430,7 @@ partition_high_degree(Container& unsorted_edges,
 
           uint64_t new_target_label = edge.second;
           m_delegate_targets[place_pos] = label_to_locator(new_target_label);
-          m_edge_data->m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]); 
+          m_edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]); 
 
           assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
           m_delegate_degree[new_source_id]++;
@@ -1478,7 +1495,7 @@ partition_high_degree(Container& unsorted_edges,
 
         uint64_t new_target_label = edge.second;
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
-        m_edge_data->m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]);
+        m_edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]);
  
         assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
         m_delegate_degree[new_source_id]++;
