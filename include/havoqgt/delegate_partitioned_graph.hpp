@@ -375,7 +375,8 @@ class delegate_partitioned_graph {
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
 
-  edge_data<edge_data_type, SegmentAllocator<edge_data_type>>* m_edge_data;
+  //edge_data<edge_data_type, SegmentAllocator<edge_data_type>>* m_edge_data;
+  edge_data<edge_data_type, SegmentAllocator<edge_data_type>> m_edge_data;
 
 };  // class delegate_partitioned_graph
 
