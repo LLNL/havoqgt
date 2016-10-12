@@ -162,7 +162,7 @@ public:
       CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
       double edge_data = (double)eitr.edge_data(); 
-      std::cout << "MPI Rank -> " << mpi_rank << " Source: " << vertex.local_id() << " Neighbour : " << neighbor.local_id() << " Edge data: " << edge_data << std::endl;
+      std::cout << "MPI Rank -> " << mpi_rank << " Source: " << g.locator_to_label(vertex) << " is delegate " << vertex.is_delegate() << " Neighbour : " << g.locator_to_label(neighbor) << " Edge data: " << edge_data << std::endl;
       pr_visitor new_visitor( neighbor, send_rank);
       vis_queue->queue_visitor(new_visitor);       
     }
