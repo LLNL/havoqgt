@@ -81,7 +81,7 @@ class edge_source_partitioner {
     return i.first % m_mpi_size;
   }
   int operator()(edge_type i, bool is_counting) const {
-    return std::get<0>(i).first % m_mpi_size;
+    return operator()(std::get<0>(i), is_counting);
   }
 
  private:
