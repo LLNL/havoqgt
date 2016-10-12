@@ -130,6 +130,18 @@ public:
   
   template<typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    //std::cout << "PageRank visit: vertex: " << vertex.local_id() << " degree: " << g.degree(vertex) 
+    //          << " local degree: " << g.local_degree(vertex) << std::endl;
+    typedef typename Graph::edge_iterator eitr_type;
+    //eitr_type eitrA = g.edges_begin(vertex);
+    //std::cout << vertex.local_id() << " Neighbour :" << eitrA.source().local_id() << std::endl;
+    //eitr_type eitrB = g.edges_end(vertex);
+    //std::cout << vertex.local_id() << " Neighbour :" << eitrB.source().local_id() << std::endl;
+    
+    //for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
+    //  vertex_locator neighbor = eitr.target();
+    //  std::cout << vertex.local_id() << "Neighbour :" << neighbor.local_id() << std::endl; 
+    //}
     return visit(g, vis_queue, alg_data);
   }
 
@@ -140,12 +152,19 @@ public:
     uint64_t degree = g.degree(vertex);
     double send_rank = old_rank / double(degree);
 
+    //std::cout << "PageRank visit: vertex: " << vertex.local_id() << " degree: " << degree << std::endl;
 
     typedef typename Graph::edge_iterator eitr_type;
     for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
       vertex_locator neighbor = eitr.target();
+      //edge_data_type edge_data = eitr.edge_data(); 
+      int mpi_rank(0);
+      CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+      double edge_data = (double)eitr.edge_data(); 
+      std::cout << "MPI Rank -> " << mpi_rank << " Source: " << vertex.local_id() << " Neighbour : " << neighbor.local_id() << " Edge data: " << edge_data << std::endl;
       pr_visitor new_visitor( neighbor, send_rank);
-      vis_queue->queue_visitor(new_visitor);
+      vis_queue->queue_visitor(new_visitor);       
     }
     return true;
   }
