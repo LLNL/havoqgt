@@ -212,7 +212,7 @@ public:
 protected:
   
   bool try_read_edge(edge_type& edge) {
-    std::cout << "Reading edges from file ... " << std::endl;
+//    std::cout << "Reading edges from file ... " << std::endl;
     std::string line;
     uint64_t source;
     uint64_t target;
@@ -221,7 +221,8 @@ protected:
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
         std::stringstream ssline(line);  
 //        ssline >> edge.first >> edge.second;
-        ssline >> source >> target >> weight; 
+        ssline >> source >> target >> weight;
+//        std::cout << source << " " << target << " " << weight << std::endl;  
         std::pair<uint64_t, uint64_t> p(source, target);         
         edge = std::forward_as_tuple(p, weight);
         return true;
