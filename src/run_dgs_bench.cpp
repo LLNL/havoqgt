@@ -49,7 +49,7 @@ using baselinemap_type      = graphstore::graphstore_baseline_map<vertex_id_type
                                                                   havoqgt::distributed_db::segment_manager_type>;
 
 enum : size_t {
- middle_high_degree_threshold = 2 // must be more or equal than 1
+ middle_high_degree_threshold = 2 // must be more than 1
 };
 using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
                                                      vertex_property_type,
@@ -90,10 +90,10 @@ void usage()  {
         << " -s <int>      - the logarithm base two of the number of vertices\n"
         << " -e <int>      - edge factor\n"
         << " -o <string>   - base filename to create segmentfiles\n"
-        << " -S <int>      - the size of segmentfile per rank in GB\n"
-        << " -g <string>   - the name of graph store (DegAwareRHH; Baseline or BaselineMap)\n"
-        << " -c <int>      - the logarithm base ten of the chunk size\n"
-        << " -E <string>   - the name of the file which has a list of edgelist files\n"
+        << " -S <int>      - the size of segmentfile per MPI rank in GB\n"
+        << " -g <string>   - the name of graph store (DegAwareRHH, Baseline or BaselineMap)\n"
+        << " -c <int>      - the logarithm with base ten of the chunk size (defaults is 6, i.g., chunk size is 10^6)\n"
+        << " -E <string>   - the name of the file which has a list of edgelist file's makes\n"
         << " -d            - edgelist files have delete operations\n"
         << " -n            - don't call sync(2) every chunk\n"
         << " -h            - print help and exit\n\n";
@@ -294,8 +294,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
 
   if (mpi_rank == 0) {
     std::cout << "\n-- All edge updations done --" << std::endl;
-    std::cout << "whole construction time : " << (whole_end - whole_start) << std::endl;
-    std::cout << "graph storing time (not inluding edge generation time) : " << (total_graph_storing_time) << std::endl;
+    std::cout << "whole execution time (sec) : " << (whole_end - whole_start) << std::endl;
+    std::cout << "only graph construction time (sec) (not inluding edge generation/load time) : " << (total_graph_storing_time) << std::endl;
     print_system_mem_usages();
   }
   havoqgt::havoqgt_env()->world_comm().barrier();
@@ -374,11 +374,6 @@ int main(int argc, char** argv) {
     /// --- init segment file --- ///
     size_t graph_capacity_gb_per_rank = segmentfile_size_gb_;
     havoqgt::distributed_db ddb(havoqgt::db_create(), fname_segmentfile_.c_str(), graph_capacity_gb_per_rank);
-//    std::stringstream fname_local_segmentfile;
-//    fname_local_segmentfile << fname_segmentfile_ << "_" << mpi_rank;
-//    graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
-//    graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity_gb_per_rank);
-//    if (is_zero_segment_free_memory_) mmap_manager.zero_free_segment_memory();
 
     havoqgt::havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) print_system_mem_usages();
