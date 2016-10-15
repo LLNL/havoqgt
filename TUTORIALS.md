@@ -45,6 +45,7 @@ $ mpirun -np 2 ./run_dgs_bench -s20 -o/mnt/device/graph_out -S2 -gDegAwareRHH
 * Run the dynamic graph construction program with 2 processes on a RMAT SCALE 20 graph.
 * Each process creates 2 GB of a file to store the graph under '/mnt/device/' with the prefix 'graph_out'.
 * Use DegAwareRHH
+* You can run DegAwareRHH on DRAM with specifying '-o/dev/shm/graph_out' (store output files into DRAM)
 
 Note:
 
