@@ -692,7 +692,7 @@ class degawarerhh
   segment_manager_type* m_segment_manager;
 };
 
-
+#if 0
 ///
 /// \brief The degawarerhh<vertex_type, vertex_property_data_type, edge_property_data_type, 1> class
 ///   partial speciallization class when middle_high_degree_threshold is 1
@@ -1649,6 +1649,7 @@ class degawarerhh <_vertex_type, _vertex_property_data_type, _edge_property_data
 //  mhdeg_table_type* m_mhdeg_table;
 //  size_type m_num_edges;
 //};
+#endif
 
 }
 
