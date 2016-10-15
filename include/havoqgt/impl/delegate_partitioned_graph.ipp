@@ -1709,6 +1709,22 @@ vertices_end() const {
 
 template <typename SegmentManager>
 inline
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::
+delegate_vertices_begin() const {
+  return vertex_iterator(0, this, true);
+}
+
+template <typename SegmentManager>
+inline
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::
+delegate_vertices_end() const {
+  return vertex_iterator(m_delegate_info.size()-1, this, true);
+}
+
+template <typename SegmentManager>
+inline
 bool
 delegate_partitioned_graph<SegmentManager>::
 is_label_delegate(uint64_t label) const {

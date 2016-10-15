@@ -84,11 +84,13 @@ class delegate_partitioned_graph<SegementManager>::vertex_iterator
   friend class delegate_partitioned_graph;
 
   vertex_iterator(uint64_t index, const delegate_partitioned_graph*  pgraph);
+  vertex_iterator(uint64_t index, const delegate_partitioned_graph*  pgraph, bool is_delegate); 
   void update_locator();
 
   const delegate_partitioned_graph*  m_ptr_graph;
-  uint64_t                                m_owned_vert_index;
+  uint64_t                                m_owned_vert_index; // also index for delegate vertices
   vertex_locator                          m_locator;
+  bool					  m_is_delegate; 
 };
 
 
@@ -102,7 +104,18 @@ inline
 delegate_partitioned_graph<SegmentManager>::vertex_iterator::
 vertex_iterator(uint64_t index, const delegate_partitioned_graph<SegmentManager>*  pgraph)
   : m_ptr_graph(pgraph)
-  , m_owned_vert_index(index) {
+  , m_owned_vert_index(index) 
+  , m_is_delegate(false) {
+  update_locator();
+}
+
+template <typename SegmentManager>
+inline
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::
+vertex_iterator(uint64_t index, const delegate_partitioned_graph<SegmentManager>*  pgraph, bool is_delegate) 
+  : m_ptr_graph(pgraph)
+  , m_owned_vert_index(index) 
+  , m_is_delegate(is_delegate) {
   update_locator();
 }
 
@@ -152,13 +165,20 @@ template <typename SegmentManager>
 inline void
 delegate_partitioned_graph<SegmentManager>::vertex_iterator::
 update_locator() {
-  for(; m_owned_vert_index < m_ptr_graph->m_owned_info.size()
-        && m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == true;
-        ++ m_owned_vert_index);
-  if(m_owned_vert_index < m_ptr_graph->m_owned_info.size()) {
-    assert(m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == false);
-    uint32_t owner = m_ptr_graph->m_mpi_rank;
-    m_locator = vertex_locator(false, m_owned_vert_index, owner);
+  if (m_is_delegate) {
+    if(m_owned_vert_index < m_ptr_graph->m_delegate_info.size()) {
+      uint32_t owner = m_owned_vert_index % m_ptr_graph->m_mpi_size;
+      m_locator = vertex_locator(true, m_owned_vert_index, owner);
+    }  
+  } else {
+    for(; m_owned_vert_index < m_ptr_graph->m_owned_info.size()
+          && m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == true;
+          ++ m_owned_vert_index);
+    if(m_owned_vert_index < m_ptr_graph->m_owned_info.size()) {
+      assert(m_ptr_graph->m_owned_info[m_owned_vert_index].is_delegate == false);
+      uint32_t owner = m_ptr_graph->m_mpi_rank;
+      m_locator = vertex_locator(false, m_owned_vert_index, owner);
+    }
   }
 }
 

@@ -166,6 +166,12 @@ class delegate_partitioned_graph {
   /// Returns an end iterator for all local vertices
   vertex_iterator vertices_end() const;
 
+  /// Returns a begin iterator for all delegate vertices
+  vertex_iterator delegate_vertices_begin() const;
+
+  /// Returns an end iterator for all delegate vertices
+  vertex_iterator delegate_vertices_end() const;
+
   /// Tests if vertex label is a delegate
   bool is_label_delegate(uint64_t label) const;
 
@@ -204,7 +210,6 @@ class delegate_partitioned_graph {
   uint64_t max_local_vertex_id() {
     return m_max_vertex;
   }
-
 
   size_t num_delegates() const {
     return m_delegate_degree.size();
