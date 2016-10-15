@@ -39,7 +39,7 @@ GCC 4.8 or more is also required.
 # Run Benchmark
 ## Example1 (with RMAT graph)
 ```
-$ mpirun -np 2 ./run_dgs_bench -s20 -o/mnt/device/graph_out -S2 -gDegAwareRHH
+$ mpirun -np 2 ./src/run_dgs_bench -s20 -o/mnt/device/graph_out -S2 -gDegAwareRHH
 ```
 
 * Run the dynamic graph construction program with 2 processes on a RMAT SCALE 20 graph.
@@ -54,7 +54,7 @@ FYI, DegAwareRHH took 14 hours to create SCALE 30 graph with 40 processes with 1
 
 ## Example 2 (loading edges from files)
 ```
-$ mpirun -np 2 ./run_dgs_bench -E./edge_files -o/mnt/device/graph_out -S2 -gDegAwareRHH
+$ mpirun -np 2 ./src/run_dgs_bench -E./edge_files -o/mnt/device/graph_out -S2 -gDegAwareRHH
 ```
 * Run the dynamic graph construction program with 2 processes with loading a graph from files
 ```
@@ -76,7 +76,7 @@ To achieve fair load balancing among MPI processes, it is recommended that the n
 
 ## Example 3 (loading edges from files with delete requests)
 ```
-$ mpirun -np 2 ./run_dgs_bench -E./edge_files -o/mnt/device/graph_out -S2 -gDegAwareRHH -d
+$ mpirun -np 2 ./src/run_dgs_bench -E./edge_files -o/mnt/device/graph_out -S2 -gDegAwareRHH -d
 ```
 * Run the dynamic graph construction program with 2 processes with loading a graph from files with delete flags
 ```
