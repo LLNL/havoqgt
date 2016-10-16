@@ -3,6 +3,8 @@
 #
 add_subdirectory (gtest)
 include_directories(gtest/include)
+add_subdirectory (include)
+include_directories(include)
 
 #
 # This function adds a sequential (nompi) test.
@@ -46,3 +48,4 @@ add_nonmpi_ctest( sequential )
 # Parallel Tests
 #
 add_mpi_ctest( mpi_communicator )
+add_mpi_ctest( delegate_graph_static )
