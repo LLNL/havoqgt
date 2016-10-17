@@ -51,7 +51,6 @@
  * Implementation of delegate_partitioned_graph and internal classes.
  */
 
-//#define debugX false
 
 #ifndef HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED
 #define HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED
@@ -122,7 +121,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   }
 
   boost::unordered_set<uint64_t> global_hubs;
-//#ifdef debugX 
+ 
   {
     LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
     count_edge_degrees(edges.begin(), edges.end(), global_hubs,
@@ -131,30 +130,30 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
     MPI_Barrier(m_mpi_comm);
   }
-//#ifdef debugX
+
   {
       LogStep logstep("initialize_low_meta_data", m_mpi_comm, m_mpi_rank);
       initialize_low_meta_data(global_hubs);
         MPI_Barrier(m_mpi_comm);
   }
-//#ifdef debugX
+
   {
       LogStep logstep("initialize_high_meta_data", m_mpi_comm, m_mpi_rank);
       initialize_high_meta_data(global_hubs);
         MPI_Barrier(m_mpi_comm);
   }
-//#ifdef debugX
+
   {
     LogStep logstep("count_high_degree_edges", m_mpi_comm, m_mpi_rank);
     count_high_degree_edges(edges.begin(), edges.end(), global_hubs);
     MPI_Barrier(m_mpi_comm);
   }
-//#ifdef debugX
+
   m_graph_state = MetaDataGenerated;
   if (m_graph_state != stop_after) {
     complete_construction(seg_allocator, mpi_comm, edges);
   }
-//#endif // debugX 
+ 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -184,11 +183,8 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
 
       {
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
-        initialize_edge_storage(seg_allocator);
-        
-        //m_edge_data = new delegate_partitioned_graph<SegmentManager>::
-        //  edge_data<edge_data_type, SegmentAllocator<edge_data_type>>(*this, seg_allocator);
- 
+        initialize_edge_storage(seg_allocator);      
+
         m_edge_data = delegate_partitioned_graph<SegmentManager>::
           edge_data<edge_data_type, SegmentAllocator<edge_data_type>>(*this, seg_allocator);
 
@@ -197,7 +193,7 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
 
       m_graph_state = EdgeStorageAllocated;
       
-//#ifdef debugX
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Edge partitioning phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
@@ -215,7 +211,7 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = HighEdgesPartitioned;
-//#ifdef debugX
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Controller construction phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
@@ -243,7 +239,7 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
       }
         MPI_Barrier(m_mpi_comm);
     }
-//#ifdef debugX
+
     //
     // Verify CSR integration properlly tagged owned delegates
     {
@@ -262,25 +258,6 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = GraphReady;
-    
-    // Test
-    std::cout << "#### owned_edge_data.size " << m_edge_data.m_owned_edge_data.size() << std::endl;  
-    std::cout << "#### delegate_edge_data.size " << m_edge_data.m_delegate_edge_data.size() << std::endl;
-
-    int mpi_rank(0);
-    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-
-    for (size_t v_itr = 0; v_itr < m_edge_data.m_delegate_edge_data.size(); v_itr++) {
-      std::cout << "#### MPI Rank -> " << mpi_rank << " delegate_edge_data: " << m_edge_data.m_delegate_edge_data[v_itr] << std::endl; 
-    }
-
-    for (size_t v_itr = 0; v_itr < m_edge_data.m_owned_edge_data.size(); v_itr++) {
-      std::cout << "#### MPI Rank -> " << mpi_rank << " owned_edge_data: " << m_edge_data.m_owned_edge_data[v_itr] << std::endl; 
-    }
-
-    // Test
-     
-//#endif
   }  // switch
 ////////////////////////////////////////////////////////////////////////////////
 /// End of graph construction
@@ -349,11 +326,11 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
     // Generate Enough information to send
     for (size_t i = 0; i < edge_chunk_size && unsorted_itr != unsorted_itr_end; i++) {
       edge_counter++;
-      auto edge = std::get<0>(*unsorted_itr); // TODO: change to auto 
+      auto edge = std::get<0>(*unsorted_itr);
 
       // Update this vertex's outgoing edge count (first member of the pair)
-      uint64_t local_id = local_source_id(m_mpi_size)(edge); //(*unsorted_itr);
-      int owner    = owner_source_id(m_mpi_size)(edge); //(*unsorted_itr);
+      uint64_t local_id = local_source_id(m_mpi_size)(edge);
+      int owner    = owner_source_id(m_mpi_size)(edge);
       if (owner == m_mpi_rank) {
         m_local_outgoing_count[local_id]++;
         if (m_local_outgoing_count[local_id] == delegate_degree_threshold) {
@@ -367,8 +344,8 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
       }
 
       // Update the vertex's incoming edge count (second member of the pair)
-      local_id = local_dest_id(m_mpi_size)(edge); //(*unsorted_itr);
-      owner    = owner_dest_id(m_mpi_size)(edge); //(*unsorted_itr);
+      local_id = local_dest_id(m_mpi_size)(edge);
+      owner    = owner_dest_id(m_mpi_size)(edge);
       if (owner == m_mpi_rank) {
         m_local_incoming_count[local_id]++;
         // if (m_local_incoming_count[local_id] == delegate_degree_threshold) {
@@ -768,11 +745,9 @@ partition_low_degree(Container& unsorted_edges) {
       loop_counter++;
 
       // Generate Edges to Send
-      //std::vector<std::pair<uint64_t, uint64_t> > to_recv_edges_low;
       std::vector<edge_type> to_recv_edges_low;    
       
       {
-        //std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_low;
         std::vector<edge_type> to_send_edges_low; 
         to_send_edges_low.reserve(edge_chunk_size);
 
@@ -780,18 +755,17 @@ partition_low_degree(Container& unsorted_edges) {
           unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
           ++unsorted_itr, ++i) {
           // Get next edge
-          const auto edge = std::get<0>(*unsorted_itr); //*unsorted_itr;
+          const auto edge = std::get<0>(*unsorted_itr);
 
           {
-            const int owner = edge.first %m_mpi_size; //unsorted_itr->first %m_mpi_size;
+            const int owner = edge.first %m_mpi_size;
             if ( (owner % processes_per_node) % node_partitions != node_turn ) {
               continue;
             }
           }
           edge_counter++;
 
-          if (m_map_delegate_locator.count(edge.first) == 0) { //unsorted_itr->first) == 0) {
-            //to_send_edges_low.push_back(edge); //*unsorted_itr);
+          if (m_map_delegate_locator.count(edge.first) == 0) {
             to_send_edges_low.push_back(*unsorted_itr);
             //++i;
           } else {
@@ -811,7 +785,7 @@ partition_low_degree(Container& unsorted_edges) {
   #ifdef DEBUG_DPG
       // Sanity Check to make sure we recieve the correct edges
       for (size_t i = 0; i<to_recv_edges_low.size(); ++i) {
-        auto edge =  std::get<0>(to_recv_edges_low[i]); //to_recv_edges_low[i]
+        auto edge =  std::get<0>(to_recv_edges_low[i]);
         assert(int(edge.first) % m_mpi_size ==m_mpi_rank);
         assert(m_map_delegate_locator.count(edge.first) == 0);
       }
@@ -821,7 +795,7 @@ partition_low_degree(Container& unsorted_edges) {
      
       for (auto itr = to_recv_edges_low.begin(); itr != itr_end; itr++) {
 
-        auto edge = std::get<0>(*itr); //*itr;
+        auto edge = std::get<0>(*itr);
          
         uint64_t new_vertex_id = local_source_id(m_mpi_size)(edge);
         assert(m_mpi_rank == int(edge.first % m_mpi_size));
@@ -921,30 +895,30 @@ count_high_degree_edges(InputIterator unsorted_itr,
            ++unsorted_itr, ++i) {
 
         // Get next edge
-        const auto edge = std::get<0>(*unsorted_itr);//*unsorted_itr;
+        const auto edge = std::get<0>(*unsorted_itr);
         edge_counter++;
 
 
-        if (global_hub_set.count(edge.first) == 0) { //unsorted_itr->first) == 0) {
+        if (global_hub_set.count(edge.first) == 0) {
           continue;
-        } else if(global_hub_set.count(edge.first)) { //unsorted_itr->first)) {
+        } else if(global_hub_set.count(edge.first)) {
           #if DEBUG_DPG
             // This edge's source is a hub
             // 1) Increment the high edge count for the owner of the edge's dest
-            tmp_high_count_per_rank[edge.second %m_mpi_size]++; //unsorted_itr->second %m_mpi_size]++;
+            tmp_high_count_per_rank[edge.second %m_mpi_size]++;
           #endif
 
           // 2) Increment the owner's count of edges for this hub.
-          const int owner = edge.second %m_mpi_size; //unsorted_itr->second %m_mpi_size;
+          const int owner = edge.second %m_mpi_size;
           if (owner == m_mpi_rank) {
-            const uint64_t ver_id = edge.first; //unsorted_itr->first;
+            const uint64_t ver_id = edge.first;
 
             const uint64_t new_source_id = m_map_delegate_locator[ver_id].local_id();
             assert(new_source_id < m_delegate_info.size()-1);
             m_delegate_info[new_source_id]++;
             m_edges_high_count++;
           } else {
-            int c = maps_to_send.at(owner)[edge.first]++; //unsorted_itr->first]++;
+            int c = maps_to_send.at(owner)[edge.first]++;
             if (c == 0) {
               maps_to_send_element_count++;
               //i++;
@@ -1312,7 +1286,6 @@ partition_high_degree(Container& unsorted_edges,
   uint64_t gave_edge_counter = 0;
 
   // Scratch vector use for storing edges to send
-  //std::vector<std::pair<uint64_t, uint64_t> > to_send_edges_high;
   std::vector<edge_type> to_send_edges_high; 
   to_send_edges_high.reserve(edge_chunk_size);
 
@@ -1360,12 +1333,12 @@ partition_high_degree(Container& unsorted_edges,
       while (unsorted_itr != unsorted_itr_end &&
              /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
-        const auto edge = std::get<0>(*unsorted_itr); //*unsorted_itr;
+        const auto edge = std::get<0>(*unsorted_itr);
         const auto edge_data = std::get<1>(*unsorted_itr);
         ++unsorted_itr;
 
         {
-            const int owner = edge.second %m_mpi_size; //unsorted_itr->second %m_mpi_size;
+            const int owner = edge.second %m_mpi_size;
             if (owner % processes_per_node % node_partitions != node_turn) {
               continue;
             }
@@ -1395,7 +1368,6 @@ partition_high_degree(Container& unsorted_edges,
       // Exchange edges we generated that we don't need with the other nodes and
       // recieve edges we may need
       // // Scratch vector use for storing recieved edges.
-      //std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
       std::vector<edge_type> to_recv_edges_high;
       mpi_yield_barrier(m_mpi_comm);
       mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
@@ -1403,7 +1375,6 @@ partition_high_degree(Container& unsorted_edges,
 
       // Empty the vector
       {
-        //std::vector<std::pair<uint64_t, uint64_t> > temp;
         std::vector<edge_type> temp; 
         to_send_edges_high.swap(temp);
       }
@@ -1415,7 +1386,7 @@ partition_high_degree(Container& unsorted_edges,
       for (size_t i = 0; i < to_recv_edges_high.size(); ++i) {
         // Iterate over recieved edges, addiing them using similar logic from
         // above
-        const auto edge = std::get<0>(to_recv_edges_high[i]); //to_recv_edges_high[i];
+        const auto edge = std::get<0>(to_recv_edges_high[i]);
         const uint64_t new_source_id = edge.first;
         assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 
@@ -1427,7 +1398,7 @@ partition_high_degree(Container& unsorted_edges,
           // room.
           assert(transfer_info.size() > 0);
           assert(transfer_info.count(new_source_id) != 0);
-          to_send_edges_high.push_back(to_recv_edges_high[i]); //edge);
+          to_send_edges_high.push_back(to_recv_edges_high[i]);
           gave_edge_counter++;
         }
         else {
@@ -1466,7 +1437,6 @@ partition_high_degree(Container& unsorted_edges,
   {//
   // Exchange edges we generated  with the other nodes and recieve edges we may need
     // // Scratch vector use for storing recieved edges.
-    //std::vector< std::pair<uint64_t, uint64_t> > to_recv_edges_high;
     std::vector<edge_type> to_recv_edges_high;
     mpi_yield_barrier(m_mpi_comm);
     mpi_all_to_all_better(to_send_edges_high, to_recv_edges_high, paritioner,
@@ -1474,7 +1444,6 @@ partition_high_degree(Container& unsorted_edges,
 
     // Empty the vector
     {
-      //std::vector<std::pair<uint64_t, uint64_t> > temp;
       std::vector<edge_type> temp; 
       to_send_edges_high.swap(temp);
     }
@@ -1483,7 +1452,7 @@ partition_high_degree(Container& unsorted_edges,
     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
       // Iterate over recieved edges, addiing them using similar logic from
       // above
-      const auto edge = std::get<0>(to_recv_edges_high[i]); //to_recv_edges_high[i];
+      const auto edge = std::get<0>(to_recv_edges_high[i]);
       const uint64_t new_source_id = edge.first;
       assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 

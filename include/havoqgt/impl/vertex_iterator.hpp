@@ -88,7 +88,7 @@ class delegate_partitioned_graph<SegementManager>::vertex_iterator
   void update_locator();
 
   const delegate_partitioned_graph*  m_ptr_graph;
-  uint64_t                                m_owned_vert_index; // also index for delegate vertices
+  uint64_t                                m_owned_vert_index; // also, for delegate vertices
   vertex_locator                          m_locator;
   bool					  m_is_delegate; 
 };

@@ -116,7 +116,7 @@ class delegate_partitioned_graph {
   template <typename T, typename Allocator>
   class vertex_data;
   /// Edge Data storage
-  template <typename T, typename Allocator> //SegManagerOther>
+  template <typename T, typename Allocator>
   class edge_data;
   /// Stores information about owned vertices
   class vert_info;

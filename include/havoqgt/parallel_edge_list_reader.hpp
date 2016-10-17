@@ -71,7 +71,6 @@ class parallel_edge_list_reader {
 
 public:
   typedef uint64_t                      vertex_descriptor;
-//  typedef std::pair<uint64_t, uint64_t> edge_type;
   typedef double edge_data_type;  
   typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
 
@@ -127,7 +126,6 @@ public:
 
     void get_next() {
       if(m_ptr_reader->m_undirected && m_make_undirected) {
-//        std::swap(m_current.first, m_current.second);
         std::swap(std::get<0>(m_current).first, std::get<0>(m_current).second);  
         m_make_undirected = false;
       } else {
@@ -135,9 +133,7 @@ public:
         ++m_count;
         m_make_undirected = true;
       }
-//      assert(m_current.first <= m_ptr_reader->max_vertex_id());
       assert(std::get<0>(m_current).first <= m_ptr_reader->max_vertex_id()); 
-//      assert(m_current.second <= m_ptr_reader->max_vertex_id());
       assert(std::get<0>(m_current).second <= m_ptr_reader->max_vertex_id()); 
            
     }
@@ -179,9 +175,7 @@ public:
     uint64_t local_max_vertex = 0;
     while(try_read_edge(edge)) {
       ++m_local_edge_count;
-//      local_max_vertex = std::max(edge.first, local_max_vertex);
       local_max_vertex = std::max(std::get<0>(edge).first, local_max_vertex);
-//      local_max_vertex = std::max(edge.second, local_max_vertex);
       local_max_vertex = std::max(std::get<0>(edge).second, local_max_vertex);      
     }
     m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
@@ -212,7 +206,6 @@ public:
 protected:
   
   bool try_read_edge(edge_type& edge) {
-//    std::cout << "Reading edges from file ... " << std::endl;
     std::string line;
     uint64_t source;
     uint64_t target;
@@ -220,7 +213,6 @@ protected:
     while(!m_ptr_ifstreams.empty()) {
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
         std::stringstream ssline(line);  
-//        ssline >> edge.first >> edge.second;
         ssline >> source >> target >> weight;
 //        std::cout << source << " " << target << " " << weight << std::endl;  
         std::pair<uint64_t, uint64_t> p(source, target);         
