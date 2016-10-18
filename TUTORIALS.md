@@ -96,7 +96,7 @@ Note:
 Please don't forget to specify -d option
 
 
-# Reading our wikipedia graph (will be open soruced soon)
+# Reading our wikipedia graph (will be open source soon)
 Please apply a patch file under the root directory, i.e., havoqgt, to read our wikipedia graph.
 ## apply patch
 ```
