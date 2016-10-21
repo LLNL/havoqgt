@@ -16,5 +16,7 @@ typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 typedef typename graph_type::edge_iterator eitr_type;
 typedef typename graph_type::vertex_iterator vitr_type;
 typedef typename graph_type::vertex_locator vloc_type;
- 
+
+typedef double edge_data_type;
+typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type; 
 

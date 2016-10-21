@@ -7,13 +7,19 @@
 
 namespace havoqgt { namespace test {
 
+typedef graph_type::edge_data<edge_data_type, 
+  bip::allocator<edge_data_type, segment_manager_t>> edge_data_t;
+
 const std::string graph_unique_instance_name = "graph_obj";
-const std::string input_graph_file_name = "/dev/shm/test_havoqgt_graph";
+const std::string edge_data_unique_instance_name = "graph_edge_data_obj";
+const std::string input_graph_file_name = "/dev/shm/test_havoqgt_graph_6";
+
 std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> input_graph;
 std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> vec_global_edges; 
 std::set<uint64_t> delegate_vertices;
 
-void create_local_edge_list(graph_type& g, vloc_type vertex, 
+void create_local_edge_list(graph_type& g, edge_data_t& edge_data_ptr, 
+                            vloc_type vertex,  
                             std::vector<uint64_t>& edge_source, 
                             std::vector<uint64_t>& edge_target, 
                             std::vector<uint64_t>& edge_data) {
@@ -21,7 +27,8 @@ void create_local_edge_list(graph_type& g, vloc_type vertex,
       ++eitr) {
     edge_source.push_back(g.locator_to_label(vertex));
     edge_target.push_back(g.locator_to_label(eitr.target()));
-    edge_data.push_back((uint64_t)eitr.edge_data());   
+    //edge_data.push_back((uint64_t)eitr.edge_data());   
+    edge_data.push_back((uint64_t)edge_data_ptr[eitr]); 
   }
 }
 
@@ -34,7 +41,8 @@ void test_Delegate_Graph_Weighted_Edges() {
   //MPI_Barrier(MPI_COMM_WORLD);
 
   create_delegate_graph(input_graph, input_graph_file_name, 
-                        graph_unique_instance_name, mpi_rank);
+                        graph_unique_instance_name, 
+                        edge_data_unique_instance_name, mpi_rank);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -45,6 +53,10 @@ void test_Delegate_Graph_Weighted_Edges() {
   graph_type *g = ddb.get_segment_manager()->
     find<graph_type>(graph_unique_instance_name.c_str()).first;
   assert(g != nullptr);
+
+  edge_data_t* edge_data_ptr = ddb.get_segment_manager()->
+    find<edge_data_t>(edge_data_unique_instance_name.c_str()).first;
+  assert(edge_data_ptr != nullptr);  
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -72,7 +84,7 @@ void test_Delegate_Graph_Weighted_Edges() {
     if (vertex.is_delegate()) {
       delegate_vertices.insert(g->locator_to_label(vertex));
     }
-    create_local_edge_list(*g, vertex, vec_local_edge_source, 
+    create_local_edge_list(*g, *edge_data_ptr, vertex, vec_local_edge_source, 
                            vec_local_edge_target, vec_local_edge_data); 
   }
 
@@ -82,7 +94,7 @@ void test_Delegate_Graph_Weighted_Edges() {
     if (vertex.is_delegate()) {
       delegate_vertices.insert(g->locator_to_label(vertex));
     } 
-    create_local_edge_list(*g, vertex, vec_local_edge_source,
+    create_local_edge_list(*g, *edge_data_ptr, vertex, vec_local_edge_source,
                            vec_local_edge_target, vec_local_edge_data);
   }
  

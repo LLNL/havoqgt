@@ -23,10 +23,11 @@ bool create_edge_list_file(
   else return FAILURE;
 }
 
+//template <typename edge_data_type>
 void create_delegate_graph(
   std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>& input_graph, 
   std::string graph_filename, std::string graph_unique_instance_name, 
-  int mpi_rank) {
+  std::string edge_data_unique_instance_name, int mpi_rank) {
 
   if (mpi_rank == 0) {
      //assert(create_edge_list_file(input_graph, graph_filename));
@@ -40,7 +41,8 @@ void create_delegate_graph(
   double                     gbyte_per_rank = 0.25;
   uint64_t                   chunk_size = 8*1024;
   bool                       undirected = false;   
-  
+  bool                       has_edge_data = true; 
+ 
   std::vector< std::string > input_filenames;
   input_filenames.clear();
   input_filenames.push_back(graph_filename);
@@ -56,10 +58,15 @@ void create_delegate_graph(
     output_filename.c_str(), gbyte_per_rank);  
 
   segment_manager_t* segment_manager = ddb.get_segment_manager();
-  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager); 
+  
+  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+
+  graph_type::edge_data<edge_data_type, 
+    bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
   //Setup edge list reader
-  havoqgt::parallel_edge_list_reader pelr(input_filenames, undirected);
+  havoqgt::parallel_edge_list_reader<edge_type, edge_data_type> 
+    pelr(input_filenames, undirected, has_edge_data);
 
   if (mpi_rank == 0) {
     std::cout << "Generating new graph." << std::endl;
@@ -68,7 +75,17 @@ void create_delegate_graph(
   graph_type *graph = segment_manager->construct<graph_type>
     (graph_unique_instance_name.c_str())
     (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), 
-     delegate_threshold, partition_passes, chunk_size);
+     delegate_threshold, partition_passes, chunk_size, edge_data, 
+     has_edge_data);
+
+  if (has_edge_data) {
+      graph_type::edge_data<edge_data_type, 
+      bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
+      = segment_manager->construct<graph_type::edge_data<edge_data_type, 
+      bip::allocator<edge_data_type, segment_manager_t>>>
+        (edge_data_unique_instance_name.c_str())
+        (edge_data);
+  }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
