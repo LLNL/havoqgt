@@ -67,11 +67,13 @@ namespace havoqgt {
 
 /// Parallel edge list reader
 ///
-template <typename edge_type, typename edge_data_type>
+template <typename edge_data_type>
 class parallel_edge_list_reader {
 
 public:
   typedef uint64_t                      vertex_descriptor;
+  typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> value_type;
+  typedef value_type edge_type; 
 
   ///
   /// InputIterator class for rmat_edge_generator

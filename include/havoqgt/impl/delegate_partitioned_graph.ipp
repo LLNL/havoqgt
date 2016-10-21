@@ -703,7 +703,8 @@ template <typename Container, typename edge_data_type>
 void
 delegate_partitioned_graph<SegmentManager>::
 partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
-
+  typedef typename Container::value_type edge_type;
+  
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
 
@@ -1283,6 +1284,8 @@ void
 delegate_partitioned_graph<SegmentManager>::
 partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info, edge_data_type& _edge_data) {
+ 
+  typedef typename Container::value_type edge_type;
 
   // Initates the paritioner, which determines where overflowed edges go
   high_edge_partitioner<edge_type> paritioner(m_mpi_size, m_mpi_rank, &transfer_info);

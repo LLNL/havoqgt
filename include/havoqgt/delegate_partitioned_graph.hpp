@@ -98,7 +98,6 @@ template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
    typedef struct _no_parameter {} no_parameter;
-   typedef std::tuple<std::pair<uint64_t, uint64_t>, double> edge_type;
  
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
