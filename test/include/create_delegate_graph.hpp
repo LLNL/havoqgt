@@ -65,7 +65,7 @@ void create_delegate_graph(
     bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
   //Setup edge list reader
-  havoqgt::parallel_edge_list_reader<edge_type, edge_data_type> 
+  havoqgt::parallel_edge_list_reader<edge_data_type> 
     pelr(input_filenames, undirected, has_edge_data);
 
   if (mpi_rank == 0) {
