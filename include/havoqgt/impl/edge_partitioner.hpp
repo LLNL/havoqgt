@@ -62,8 +62,6 @@ namespace mpi {
  * @class delegate_partitioned_graph
  * @details Put details here for class
  */
-typedef double edge_data_type;
-typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
 
 class source_partitioner {
  public:
@@ -74,6 +72,7 @@ class source_partitioner {
   int m_mpi_size;
 };
 
+template <typename edge_type>
 class edge_source_partitioner {
  public:
   explicit edge_source_partitioner(int p):m_mpi_size(p) { }
@@ -121,6 +120,7 @@ class edge_target_partitioner {
   int32_t temp_to_send_count;
 }OverflowSendInfo;
 
+template <typename edge_type>
 class high_edge_partitioner {
  public:
   explicit high_edge_partitioner(int s, int r,

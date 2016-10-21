@@ -77,6 +77,9 @@ using namespace havoqgt::mpi;
 typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
+typedef double edge_data_type;
+typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
+  
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
@@ -88,6 +91,7 @@ void usage()  {
          << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
          << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
          << " -u <bool>     - Treat edgelist as undirected (Default is 0)\n"
+         << " -m <bool>     - Read edge-metadata (Default is 0)\n"
          << "[file ...] - list of edge list files to ingest\n\n";
   }
 }
@@ -95,7 +99,7 @@ void usage()  {
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
                     uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
-                    bool& undirected) {
+                    bool& undirected, bool&has_edge_data) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -111,11 +115,11 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-
+  has_edge_data = false;
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:m:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -141,6 +145,9 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          break;
       case 'u':
          undirected = atoi(optarg);
+         break;
+      case 'm':
+         has_edge_data = atoi(optarg);
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -168,6 +175,7 @@ int main(int argc, char** argv) {
   {
     std::string                output_filename;
     std::string                backup_filename;
+ 
     { // Build Distributed_DB
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
@@ -185,35 +193,64 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-    
-    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
+    bool                       has_edge_data; 
+   
+    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected, has_edge_data);
 
     if (mpi_rank == 0) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
+    //graph_type::edge_data<edge_data_type, std::allocator<edge_data_type>> edge_data;
     havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-    //Setup edge list reader
-    havoqgt::parallel_edge_list_reader pelr(input_filenames, undirected);
+    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
+    //Setup edge list reader
+    havoqgt::parallel_edge_list_reader<edge_type, edge_data_type> pelr(input_filenames, undirected, has_edge_data);
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size);
+        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
+         edge_data, has_edge_data); 
+    
+    if (has_edge_data) {
+      graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
+      = segment_manager->construct<graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>>
+          ("graph_edge_data_obj")
+          (edge_data);
+    }
+   
+    // Test  
+//    typedef typename graph_type::vertex_iterator vitr_type;
+//    typedef typename graph_type::vertex_locator vloc_type;  
+//    typedef typename graph_type::edge_iterator eitr_type; 
+//    for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
+//      vloc_type vertex = *vitr;
+//      std::cout << "MPI Rank -> " << mpi_rank << " local vertex " << graph->locator_to_label(vertex) << std::endl;
+//      for(eitr_type eitr = graph->edges_begin(vertex); eitr != graph->edges_end(vertex); ++eitr) {
+//        vloc_type neighbor = eitr.target();            
+//        double edge_data_d = 101;
+//        if (has_edge_data) {
+//          edge_data_d = edge_data[eitr];
+//        }
+//        std::cout << "# MPI Rank -> " << mpi_rank << " Source: " << graph->locator_to_label(vertex) << " is delegate " << vertex.is_delegate() << " Neighbour : " << graph->locator_to_label(neighbor) << " Edge data: " << edge_data_d << std::endl;
+
+//      }
+       
+//    }
+    // Test
 
     havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
-
-
 
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {

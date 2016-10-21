@@ -66,15 +66,19 @@ namespace mpi {
  * @param delegate_degree_threshold Threshold used to assign delegates
 */
 template <typename SegmentManager>
-template <typename Container>
+template <typename Container, typename edge_data_type>
 delegate_partitioned_graph<SegmentManager>::
 delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                            MPI_Comm mpi_comm,
-                           Container& edges, uint64_t max_vertex,
+                           Container& edges, 
+                           uint64_t max_vertex,
                            uint64_t delegate_degree_threshold,
                            uint64_t _node_partitions,
                            uint64_t _chunk_size,  
-                           ConstructionState stop_after)
+                           edge_data_type& _edge_data,
+                           bool _has_edge_data,
+                           ConstructionState stop_after
+                           )
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
       m_local_outgoing_count(seg_allocator),
@@ -91,7 +95,8 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       //    std::equal_to<uint64_t>(), seg_allocator),
       m_map_delegate_locator(seg_allocator),
       m_controller_locators(seg_allocator), 
-      m_edge_data(*this, seg_allocator) {
+      m_has_edge_data(_has_edge_data) 
+      {
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
@@ -117,7 +122,6 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
     m_local_outgoing_count.resize(m_max_vertex+1, 0);
     m_local_incoming_count.resize(m_max_vertex+1, 0);
     MPI_Barrier(m_mpi_comm);
-
   }
 
   boost::unordered_set<uint64_t> global_hubs;
@@ -151,7 +155,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 
   m_graph_state = MetaDataGenerated;
   if (m_graph_state != stop_after) {
-    complete_construction(seg_allocator, mpi_comm, edges);
+    complete_construction(seg_allocator, mpi_comm, edges, _edge_data);
   }
  
 }
@@ -160,11 +164,11 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
 /// Edge storage allocation  phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
 template <typename SegmentManager>
-template <typename Container>
+template <typename Container, typename edge_data_type>
 void
 delegate_partitioned_graph<SegmentManager>::
 complete_construction(const SegmentAllocator<void>& seg_allocator,
-  MPI_Comm mpi_comm, Container& edges) {
+  MPI_Comm mpi_comm, Container& edges, edge_data_type& _edge_data) {
   m_mpi_comm = mpi_comm;
   int temp_mpi_rank, temp_mpi_size;
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &temp_mpi_size) );
@@ -185,10 +189,12 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
         initialize_edge_storage(seg_allocator);      
 
-        m_edge_data = delegate_partitioned_graph<SegmentManager>::
-          edge_data<edge_data_type, SegmentAllocator<edge_data_type>>(*this, seg_allocator);
+        if (m_has_edge_data) {
+          assert(_edge_data != NULL); 
+          _edge_data.resize(*this);
+        }  
 
-            MPI_Barrier(m_mpi_comm);
+          MPI_Barrier(m_mpi_comm);
       }
 
       m_graph_state = EdgeStorageAllocated;
@@ -200,14 +206,14 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
   case EdgeStorageAllocated:
     {
       LogStep logstep("partition_low_degree", m_mpi_comm, m_mpi_rank);
-      partition_low_degree(edges);
+      partition_low_degree(edges, _edge_data);
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = LowEdgesPartitioned;
 
     {
       LogStep logstep("partition_high_degree", m_mpi_comm, m_mpi_rank);
-      partition_high_degree(edges, transfer_info);
+      partition_high_degree(edges, transfer_info, _edge_data);
         MPI_Barrier(m_mpi_comm);
     }
     m_graph_state = HighEdgesPartitioned;
@@ -693,10 +699,10 @@ initialize_edge_storage(const SegmentAllocator<void>& seg_allocator) {
  *
  */
 template <typename SegmentManager>
-template <typename Container>
+template <typename Container, typename edge_data_type>
 void
 delegate_partitioned_graph<SegmentManager>::
-partition_low_degree(Container& unsorted_edges) {
+partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
 
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -774,7 +780,7 @@ partition_low_degree(Container& unsorted_edges) {
         }  // for
 
         // Exchange Edges/Recieve edges
-        edge_source_partitioner paritioner(m_mpi_size);
+        edge_source_partitioner<edge_type> paritioner(m_mpi_size);
         mpi_yield_barrier(m_mpi_comm);
         mpi_all_to_all_better(to_send_edges_low, to_recv_edges_low, paritioner,
             m_mpi_comm);
@@ -818,7 +824,9 @@ partition_low_degree(Container& unsorted_edges) {
         //assert(!m_owned_targets[loc].is_valid());
 
         m_owned_targets[loc] = label_to_locator(edge.second);
-        m_edge_data.m_owned_edge_data[loc] = std::get<1>(*itr);        
+        if(m_has_edge_data) {
+          _edge_data.m_owned_edge_data[loc] = std::get<1>(*itr);        
+        } 
       }  // for over recieved egdes
     }  // while global iterator range not empty
   }  // for node partition
@@ -1270,14 +1278,14 @@ generate_send_list(std::vector<uint64_t> &send_list, uint64_t num_send,
  * used to determine where overflowed edges go.
  */
 template <typename SegmentManager>
-template <typename Container>
+template <typename Container, typename edge_data_type>
 void
 delegate_partitioned_graph<SegmentManager>::
 partition_high_degree(Container& unsorted_edges,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info) {
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info, edge_data_type& _edge_data) {
 
   // Initates the paritioner, which determines where overflowed edges go
-  high_edge_partitioner paritioner(m_mpi_size, m_mpi_rank, &transfer_info);
+  high_edge_partitioner<edge_type> paritioner(m_mpi_size, m_mpi_rank, &transfer_info);
 
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -1407,8 +1415,10 @@ partition_high_degree(Container& unsorted_edges,
 
           uint64_t new_target_label = edge.second;
           m_delegate_targets[place_pos] = label_to_locator(new_target_label);
-          m_edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]); 
-
+          if(m_has_edge_data) {
+	    _edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]); 
+          }
+  
           assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
           m_delegate_degree[new_source_id]++;
 
@@ -1470,7 +1480,9 @@ partition_high_degree(Container& unsorted_edges,
 
         uint64_t new_target_label = edge.second;
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
-        m_edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]);
+        if(m_has_edge_data) {
+          _edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]);
+        }
  
         assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
         m_delegate_degree[new_source_id]++;

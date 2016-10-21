@@ -102,9 +102,19 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
   edge_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
     : m_owned_edge_data(allocate)
     , m_delegate_edge_data(allocate) {
+    //m_owned_edge_data.resize(dpg.m_owned_targets_size);
+    //m_delegate_edge_data.resize(dpg.m_delegate_targets_size);
+    resize(dpg);
+  }
+
+  edge_data(Allocator allocate = Allocator() )
+    : m_owned_edge_data(allocate)
+    , m_delegate_edge_data(allocate) {}
+
+  void resize(const delegate_partitioned_graph& dpg) {
     m_owned_edge_data.resize(dpg.m_owned_targets_size);
     m_delegate_edge_data.resize(dpg.m_delegate_targets_size);
-    }
+  }
   
   // edge_data(uint64_t owned_size, uint64_t delegate_size,
   //     SegManagerOther* sm);
@@ -116,7 +126,6 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
   bip::vector< T, Allocator >      m_owned_edge_data;
   bip::vector< T, Allocator >      m_delegate_edge_data;
 };
-
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                edge_data                                 //

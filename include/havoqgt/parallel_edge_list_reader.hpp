@@ -67,12 +67,11 @@ namespace havoqgt {
 
 /// Parallel edge list reader
 ///
+template <typename edge_type, typename edge_data_type>
 class parallel_edge_list_reader {
 
 public:
   typedef uint64_t                      vertex_descriptor;
-  typedef double edge_data_type;  
-  typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
 
   ///
   /// InputIterator class for rmat_edge_generator
@@ -146,8 +145,8 @@ public:
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected )
-    : m_undirected(undirected) {
+  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected, bool has_edge_data )
+    : m_undirected(undirected), m_has_edge_data(has_edge_data) {
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
@@ -212,9 +211,14 @@ protected:
     edge_data_type weight;
     while(!m_ptr_ifstreams.empty()) {
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
-        std::stringstream ssline(line);  
-        ssline >> source >> target >> weight;
-//        std::cout << source << " " << target << " " << weight << std::endl;  
+        std::stringstream ssline(line); 
+        if (m_has_edge_data) {  
+          ssline >> source >> target >> weight;
+          //std::cout << source << " " << target << " " << weight << std::endl;  
+        } else {
+          ssline >> source >> target;
+          //std::cout << source << " " << target << " " << weight << std::endl;  
+        }         
         std::pair<uint64_t, uint64_t> p(source, target);         
         edge = std::forward_as_tuple(p, weight);
         return true;
@@ -245,6 +249,7 @@ protected:
   uint64_t m_local_edge_count;
   uint64_t m_global_max_vertex;
   bool m_undirected;
+  bool m_has_edge_data;
 
 };
 
