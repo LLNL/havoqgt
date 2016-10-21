@@ -78,7 +78,6 @@ typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
 typedef double edge_data_type;
-typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> edge_type;
   
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
@@ -202,6 +201,7 @@ int main(int argc, char** argv) {
     }
 
     //graph_type::edge_data<edge_data_type, std::allocator<edge_data_type>> edge_data;
+
     havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
     graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
     //Setup edge list reader
-    havoqgt::parallel_edge_list_reader<edge_type, edge_data_type> pelr(input_filenames, undirected, has_edge_data);
+    havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected, has_edge_data);
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
