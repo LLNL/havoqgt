@@ -117,12 +117,8 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  size_t graph_capacity_gb = std::pow(2, 1);
-  std::stringstream fname_local_segmentfile;
-  fname_local_segmentfile << segmentfile_name << "_" << mpi_rank;
-  havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_gb);
-  //  graphstore::utility::interprocess_mmap_manager::delete_file(fname_local_segmentfile.str());
-  //  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_local_segmentfile.str(), graph_capacity);
+  size_t graph_capacity_per_rank_gb = std::pow(2, 1);
+  havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_per_rank_gb);
 
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(ddb.get_segment_manager());
@@ -138,7 +134,12 @@ int main(int argc, char** argv) {
       vertex_id_type dst = std::get<1>(edge);
       edge_property_type weight = 0;
 
-      bool is_inserted = graphstore.insert_edge(src, dst, weight);          // uniquely insert a edge
+      // uniquely insert a edge; return true if the edge is inserted (duplicated edge wasn't found)
+      bool is_inserted = graphstore.insert_edge(src, dst, weight);
+
+      graphstore.edge_property_data(src, dst) = weight + 1; // update edge's property
+                                                            // edge_property_data() return a reference
+
     }
   }
 
@@ -152,14 +153,14 @@ int main(int argc, char** argv) {
 
       vertex_property_type v_prop = graphstore.vertex_property_data(src);  // get a vertex property data or
       graphstore.vertex_property_data(src) = v_prop;                       // update a vertex property data.
-                                                                           // Note that vertex_property_data() return a reference
+                                                                           // vertex_property_data() return a reference
       if (i%2)
-        size_t erased_edges = graphstore.erase_edge(src, dst);             // erase edges
+        bool is_erased_edge = graphstore.erase_edge(src, dst);             // return true if the edge is deleted
     }
   }
 
 
-  /// ------- iterator over an adjacent-list ------- ///
+  /// ------- iterat over an adjacent-list ------- ///
   {
     vertex_id_type src_vrtx = 0;
     for (auto adj_edges = graphstore.adjacent_edge_begin(src_vrtx), end = graphstore.adjacent_edge_end(src_vrtx);

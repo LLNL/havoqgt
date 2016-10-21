@@ -13,7 +13,7 @@ namespace rhh {
 
 #define RHH_ATTEMPT_GROWING_TO_SOLVE_LONG_PROBE_DISTANCE 0
 #define RHH_CHAIN_AT_LARGE_TABLE_SIZE 0
-#define RHH_USE_NUMA_ALLOC 1 /// use numa alloc instead of malloc
+#define RHH_USE_NUMA_ALLOC 0 /// use numa alloc instead of malloc
 #define RHH_DETAILED_ANALYSYS 0 /// !!! will be invalid when the table grow !!!
 
 static constexpr double kFullCapacitFactor  = 0.9;

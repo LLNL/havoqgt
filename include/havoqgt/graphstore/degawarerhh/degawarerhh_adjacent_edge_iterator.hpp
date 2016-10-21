@@ -153,6 +153,134 @@ class degawarerhh<vertex_type,
   mhdeg_edge_iterator_type m_mh_itr;
 };
 
+
+template <typename vertex_type,
+          typename vertex_property_data_type,
+          typename edge_property_data_type,
+          typename segment_manager_type>
+class degawarerhh<vertex_type,
+                  vertex_property_data_type,
+                  edge_property_data_type,
+                  segment_manager_type,
+                  1>::adjacent_edge_iterator
+{
+
+ private:
+  using graphstore_type            = degawarerhh<vertex_type,
+                                                 vertex_property_data_type,
+                                                 edge_property_data_type,
+                                                 segment_manager_type,
+                                                 1>;
+  using self_type                = graphstore_type::adjacent_edge_iterator;
+  using ldeg_edge_iterator_type  = typename graphstore_type::ldeg_table_type::value_iterator;
+  using mhdeg_edge_iterator_type = typename graphstore_type::mhdeg_edge_chunk_type::whole_iterator;
+
+
+ public:
+
+  /// ---- Constructors ----
+  /// initialize to an 'end iterator'
+  adjacent_edge_iterator() :
+    m_mh_itr(mhdeg_edge_iterator_type::end())
+  { }
+
+  adjacent_edge_iterator(const mhdeg_edge_iterator_type& mh_itr) :
+    m_mh_itr(mh_itr)
+  { }
+
+  adjacent_edge_iterator(mhdeg_edge_iterator_type&& mh_itr) :
+    m_mh_itr(std::move(mh_itr))
+  { }
+
+  /// Copy constructor
+  adjacent_edge_iterator (const adjacent_edge_iterator& other) :
+    m_mh_itr(other.m_mh_itr)
+  { }
+
+  /// Move constructor
+  adjacent_edge_iterator (adjacent_edge_iterator&& other) :
+    m_mh_itr(std::move(other.m_mh_itr))
+  { }
+
+  /// Copy assignment operators
+  adjacent_edge_iterator& operator=(const adjacent_edge_iterator& other)
+  {
+    m_mh_itr  = other.m_mh_itr;
+    return *this;
+  }
+
+  /// Move assignment operators
+  adjacent_edge_iterator& operator=(adjacent_edge_iterator&& other)
+  {
+    m_mh_itr  = std::move(other.m_mh_itr);
+    return *this;
+  }
+
+  void swap(self_type &other) noexcept
+  {
+    using std::swap;
+    swap(m_mh_itr, other.m_mh_itr);
+  }
+
+  self_type &operator++ () // Pre-increment
+  {
+    find_next_value();
+    return *this;
+  }
+
+  self_type operator++ (int) // Post-increment
+  {
+    self_type tmp(*this);
+    find_next_value();
+    return tmp;
+  }
+
+  // two-way comparison: v.begin() == v.cbegin() and vice versa
+  bool operator == (const self_type &rhs) const
+  {
+    return is_equal(rhs);
+  }
+
+  bool operator != (const self_type &rhs) const
+  {
+    return !is_equal(rhs);
+  }
+
+  /// TODO: handle an error when m_mh_itr.is_end() == true
+  const vertex_type& target_vertex()
+  {
+    return m_mh_itr->key;
+  }
+
+  /// TODO: handle an error when m_mh_itr.is_end() == true
+  edge_property_data_type& property_data()
+  {
+    return m_mh_itr->value;
+  }
+
+  static adjacent_edge_iterator end()
+  {
+    return adjacent_edge_iterator(mhdeg_edge_iterator_type::end());
+  }
+
+  inline bool is_equal(const self_type &rhs) const
+  {
+    return (m_mh_itr == rhs.m_mh_itr);
+  }
+
+
+ private:
+
+  inline void find_next_value()
+  {
+    if (!m_mh_itr.is_end()) {
+      ++m_mh_itr;
+    }
+  }
+
+  mhdeg_edge_iterator_type m_mh_itr;
+};
+
 }
 #endif // DEGAWARERHH_ADJACENT_EDGE_ITERATOR_HPP
 
