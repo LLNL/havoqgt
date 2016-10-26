@@ -72,8 +72,9 @@ class parallel_edge_list_reader {
 
 public:
   typedef uint64_t                      vertex_descriptor;
-  typedef std::tuple<std::pair<uint64_t, uint64_t>, edge_data_type> value_type;
-  typedef value_type edge_type; 
+  typedef std::tuple<uint64_t, uint64_t, edge_data_type> value_type;
+  typedef value_type edge_type;
+  typedef edge_data_type edge_data_value_type; 
 
   ///
   /// InputIterator class for rmat_edge_generator
@@ -127,16 +128,18 @@ public:
 
     void get_next() {
       if(m_ptr_reader->m_undirected && m_make_undirected) {
-        std::swap(std::get<0>(m_current).first, std::get<0>(m_current).second);  
+        //std::swap(std::get<0>(m_current).first, std::get<0>(m_current).second);  
+        std::swap(std::get<0>(m_current), std::get<1>(m_current));
         m_make_undirected = false;
       } else {
         bool ret = m_ptr_reader->try_read_edge(m_current);
         ++m_count;
         m_make_undirected = true;
       }
-      assert(std::get<0>(m_current).first <= m_ptr_reader->max_vertex_id()); 
-      assert(std::get<0>(m_current).second <= m_ptr_reader->max_vertex_id()); 
-           
+      //assert(std::get<0>(m_current).first <= m_ptr_reader->max_vertex_id()); 
+      assert(std::get<0>(m_current) <= m_ptr_reader->max_vertex_id());
+      //assert(std::get<0>(m_current).second <= m_ptr_reader->max_vertex_id()); 
+      assert(std::get<1>(m_current) <= m_ptr_reader->max_vertex_id());           
     }
 
     parallel_edge_list_reader* m_ptr_reader;
@@ -147,14 +150,15 @@ public:
 
 
   /// @todo Add undirected flag
-  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected, bool has_edge_data )
-    : m_undirected(undirected), m_has_edge_data(has_edge_data) {
+  parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected)
+    : m_undirected(undirected) {
     int shm_rank  = havoqgt_env()->node_local_comm().rank();
     int shm_size  = havoqgt_env()->node_local_comm().size();
     int node_rank = havoqgt_env()->node_offset_comm().rank();
     int node_size = havoqgt_env()->node_offset_comm().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
+    m_has_edge_data = true;
     
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
@@ -176,8 +180,10 @@ public:
     uint64_t local_max_vertex = 0;
     while(try_read_edge(edge)) {
       ++m_local_edge_count;
-      local_max_vertex = std::max(std::get<0>(edge).first, local_max_vertex);
-      local_max_vertex = std::max(std::get<0>(edge).second, local_max_vertex);      
+      local_max_vertex = std::max(std::get<0>(edge), local_max_vertex);
+//std::max(std::get<0>(edge).first, local_max_vertex);
+      local_max_vertex = std::max(std::get<1>(edge), local_max_vertex);
+//std::max(std::get<0>(edge).second, local_max_vertex);      
     }
     m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
   }
@@ -201,7 +207,11 @@ public:
   }
 
   size_t size() {
-  	return m_local_edge_count;
+    return m_local_edge_count;
+  }
+
+  bool has_edge_data() {
+    return m_has_edge_data; 
   }
 
 protected:
@@ -221,8 +231,7 @@ protected:
           ssline >> source >> target;
           //std::cout << source << " " << target << " " << weight << std::endl;  
         }         
-        std::pair<uint64_t, uint64_t> p(source, target);         
-        edge = std::forward_as_tuple(p, weight);
+        edge = std::forward_as_tuple(source, target, weight);
         return true;
       } else { //No remaining lines, close file.
         delete m_ptr_ifstreams.front();

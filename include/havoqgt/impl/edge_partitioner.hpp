@@ -76,11 +76,12 @@ template <typename edge_type>
 class edge_source_partitioner {
  public:
   explicit edge_source_partitioner(int p):m_mpi_size(p) { }
-  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting) const {
-    return i.first % m_mpi_size;
-  }
+  //int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting) const {
+  //  return i.first % m_mpi_size;
+  //}
   int operator()(edge_type i, bool is_counting) const {
-    return operator()(std::get<0>(i), is_counting);
+    //return operator()(std::make_pair(std::get<0>(i), std::get<1>(i)), is_counting);
+    return std::get<0>(i) % m_mpi_size;
   }
 
  private:
@@ -138,14 +139,15 @@ class high_edge_partitioner {
    * @param  is_counting determines how to adjust the send_count variavles
    * @return the node to send the passed edge to.
    */
-  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting = true) {
+  //int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting = true) {
+  int operator()(edge_type i, bool is_counting = true) {
 
-
-    int dest = int(i.second % m_mpi_size);
+    //int dest = int(i.second % m_mpi_size);
+    int dest = int(std::get<1>(i) % m_mpi_size);
     if (dest == m_mpi_rank) {
       // If the current node is the destination, then determine the destination
       // by examing the transfer_info object
-      const uint64_t delegate_id = i.first;
+      const uint64_t delegate_id = std::get<0>(i); //i.first;
       if (m_transfer_info->count(delegate_id) == 0) {
         return m_mpi_rank;
       }
@@ -197,9 +199,9 @@ class high_edge_partitioner {
     return dest;
   }  // operator()
 
-  int operator()(edge_type i, bool is_counting = true) {
-    return operator()(std::get<0>(i), is_counting);      
-  }
+//  int operator()(edge_type i, bool is_counting = true) {
+    //return operator()(std::make_pair(std::get<0>(i), std::get<1>(i)), is_counting);      
+//  }
 
  private:
   const int m_mpi_size;

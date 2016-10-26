@@ -52,7 +52,6 @@
 #ifndef HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 #define HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 
-
 #include <limits>
 #include <utility>
 #include <stdint.h>
@@ -97,8 +96,8 @@ namespace bip = boost::interprocess;
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
-   typedef struct _no_parameter {} no_parameter;
- 
+   //typedef struct _no_parameter {} no_parameter;
+
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 
@@ -127,7 +126,8 @@ class delegate_partitioned_graph {
   // Public Member Functions
   //////////////////////////////////////////////////////////////////////////////
   /// Constructor that initializes given and unsorted sequence of edges
-  template <typename Container, typename edge_data_type = no_parameter>
+
+  template <typename Container>
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, 
@@ -135,8 +135,19 @@ class delegate_partitioned_graph {
                              uint64_t delegate_degree_threshold,
                              uint64_t _node_partitions,
                              uint64_t chunk_size,
-                             edge_data_type& _edge_data, //= edge_data_type(), 
-                             bool _has_edge_data = false,
+                             ConstructionState stop_after = GraphReady
+                             );
+
+  template <typename Container, typename edge_data_type>  
+  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+                             MPI_Comm mpi_comm,
+                             Container& edges, 
+                             uint64_t max_vertex,
+                             uint64_t delegate_degree_threshold,
+                             uint64_t _node_partitions,
+                             uint64_t chunk_size,
+                             edge_data_type& _edge_data,  
+                             bool _has_edge_data = true,
                              ConstructionState stop_after = GraphReady
                              );
 
@@ -384,6 +395,7 @@ class delegate_partitioned_graph {
     m_controller_locators;
 
   bool m_has_edge_data;
+  //uint32_t m_edge_data_tuple_index;
 
 };  // class delegate_partitioned_graph
 

@@ -51,9 +51,13 @@
  * Implementation of delegate_partitioned_graph and internal classes.
  */
 
+#include <type_traits>
 
 #ifndef HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED
 #define HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED
+
+# define is_pair_type 0 // 1 or 0
+# define m_edge_data_tuple_index 2 // 1 or 2
 
 namespace havoqgt {
 namespace mpi {
@@ -65,6 +69,111 @@ namespace mpi {
  * @param Container input edges to partition
  * @param delegate_degree_threshold Threshold used to assign delegates
 */
+
+template <typename SegmentManager>
+template <typename Container>
+delegate_partitioned_graph<SegmentManager>::
+delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+                           MPI_Comm mpi_comm,
+                           Container& edges,
+                           uint64_t max_vertex,
+                           uint64_t delegate_degree_threshold,
+                           uint64_t _node_partitions,
+                           uint64_t _chunk_size,
+                           ConstructionState stop_after
+                           )
+    : m_mpi_comm(mpi_comm),
+      m_global_edge_count(edges.size()),
+      m_local_outgoing_count(seg_allocator),
+      m_local_incoming_count(seg_allocator),
+      m_owned_info(seg_allocator),
+      m_owned_info_tracker(seg_allocator),
+      // m_owned_targets(seg_allocator),
+      m_delegate_degree_threshold(delegate_degree_threshold),
+      m_delegate_info(seg_allocator),
+      m_delegate_degree(seg_allocator),
+      m_delegate_label(seg_allocator),
+      // m_delegate_targets(seg_allocator),
+      //m_map_delegate_locator(100, boost::hash<uint64_t>(),
+      //    std::equal_to<uint64_t>(), seg_allocator),
+      m_map_delegate_locator(seg_allocator),
+      m_controller_locators(seg_allocator),
+      m_has_edge_data(false) 
+{
+  
+  // this is just a dummy edge_data object 
+  delegate_partitioned_graph<SegmentManager>::
+    edge_data<uint64_t, SegmentAllocator<uint64_t>> _edge_data = 
+      delegate_partitioned_graph<SegmentManager>::
+      edge_data<uint64_t, SegmentAllocator<uint64_t>>(seg_allocator);
+ 
+  // this causes run-time exception 
+  //delegate_partitioned_graph(seg_allocator, mpi_comm, edges, max_vertex, 
+  //                           delegate_degree_threshold, _node_partitions,
+  //                           _chunk_size, _edge_data, false, stop_after); 
+  
+  CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
+  CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
+
+  processes_per_node = havoqgt_env()->node_local_comm().size();
+  node_partitions = std::min(_node_partitions,uint64_t(processes_per_node));
+  edge_chunk_size = _chunk_size;
+
+  m_global_max_vertex = max_vertex;
+  m_max_vertex = (std::ceil(double(max_vertex) / double(m_mpi_size)));
+
+  LogStep logstep_main("Delegate Partitioning", m_mpi_comm, m_mpi_rank); 
+ 
+////////////////////////////////////////////////////////////////////////////////
+///// Meta data phase of graph construction
+////////////////////////////////////////////////////////////////////////////////
+
+  {
+    LogStep logstep("Allocating 4 Arrays of length max local vertex.",
+      m_mpi_comm, m_mpi_rank);
+    m_owned_info.resize(m_max_vertex+2, vert_info(false, 0, 0));
+    m_owned_info_tracker.resize(m_max_vertex+2, 0);
+    m_local_outgoing_count.resize(m_max_vertex+1, 0);
+    m_local_incoming_count.resize(m_max_vertex+1, 0);
+    MPI_Barrier(m_mpi_comm);
+  }
+
+  boost::unordered_set<uint64_t> global_hubs;
+
+  {
+    LogStep logstep("count_edge_degree", m_mpi_comm, m_mpi_rank);
+    count_edge_degrees(edges.begin(), edges.end(), global_hubs,
+      delegate_degree_threshold);
+    if (m_mpi_rank == 0)
+      std::cout << "\tNumber of Delegates: " << global_hubs.size() << std::endl;
+    MPI_Barrier(m_mpi_comm);
+  }
+
+  {
+      LogStep logstep("initialize_low_meta_data", m_mpi_comm, m_mpi_rank);
+      initialize_low_meta_data(global_hubs);
+        MPI_Barrier(m_mpi_comm);
+  }
+
+  {
+      LogStep logstep("initialize_high_meta_data", m_mpi_comm, m_mpi_rank);
+      initialize_high_meta_data(global_hubs);
+        MPI_Barrier(m_mpi_comm);
+  }
+
+  {
+    LogStep logstep("count_high_degree_edges", m_mpi_comm, m_mpi_rank);
+    count_high_degree_edges(edges.begin(), edges.end(), global_hubs);
+    MPI_Barrier(m_mpi_comm);
+  }
+
+  m_graph_state = MetaDataGenerated;
+  if (m_graph_state != stop_after) {
+    complete_construction(seg_allocator, mpi_comm, edges, _edge_data);
+  }
+   
+}
+
 template <typename SegmentManager>
 template <typename Container, typename edge_data_type>
 delegate_partitioned_graph<SegmentManager>::
@@ -95,8 +204,36 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
       //    std::equal_to<uint64_t>(), seg_allocator),
       m_map_delegate_locator(seg_allocator),
       m_controller_locators(seg_allocator), 
-      m_has_edge_data(_has_edge_data) 
+      m_has_edge_data(_has_edge_data)//,
+      //m_edge_data_tuple_index(0) 
       {
+
+  //typedef std::pair<uint64_t, uint64_t> pair_type;
+  //typedef std::tuple<uint64_t, uint64_t> two_tuple_type;
+
+  //constexpr bool is_pair = std::is_same<edge_type, pair_type>::value;
+  //constexpr bool is_two_tuple = std::is_same<edge_type, two_tuple_type>::value;
+
+  //if (is_pair || is_two_tuple) {
+  //  m_has_edge_data = false;  
+  //}
+  
+  # if is_pair_type == 2
+ 
+  if (m_has_edge_data) {
+
+    typedef typename Container::value_type edge_type;
+    //typedef typename Container::edge_data_value_type container_edge_data_value_type; 
+    auto container_itr = edges.begin();
+    auto edge_data_obj = std::get<m_edge_data_tuple_index>(*container_itr); 
+    //std::tuple_element<m_edge_data_tuple_index, decltype(*container_itr)>::type tuple_edge_data_type;  
+     
+    typedef typename edge_data_type::value_type edge_data_value_type;
+ 
+    static_assert(std::is_same<decltype(edge_data_obj), edge_data_value_type>::value, "Types do not match!");
+  }
+
+  # endif
 
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
@@ -192,6 +329,7 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         if (m_has_edge_data) {
           assert(_edge_data != NULL); 
           _edge_data.resize(*this);
+          //m_edge_data_tuple_index = 2;      
         }  
 
           MPI_Barrier(m_mpi_comm);
@@ -332,7 +470,7 @@ count_edge_degrees(InputIterator unsorted_itr, InputIterator unsorted_itr_end,
     // Generate Enough information to send
     for (size_t i = 0; i < edge_chunk_size && unsorted_itr != unsorted_itr_end; i++) {
       edge_counter++;
-      auto edge = std::get<0>(*unsorted_itr);
+      auto edge = std::make_pair(std::get<0>(*unsorted_itr), std::get<1>(*unsorted_itr)); //std::get<0>(*unsorted_itr);
 
       // Update this vertex's outgoing edge count (first member of the pair)
       uint64_t local_id = local_source_id(m_mpi_size)(edge);
@@ -762,7 +900,7 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
           unsorted_itr != unsorted_itr_end && i < edge_chunk_size;
           ++unsorted_itr, ++i) {
           // Get next edge
-          const auto edge = std::get<0>(*unsorted_itr);
+          const auto edge = std::make_pair(std::get<0>(*unsorted_itr), std::get<1>(*unsorted_itr)); //std::get<0>(*unsorted_itr);
 
           {
             const int owner = edge.first %m_mpi_size;
@@ -792,7 +930,7 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
   #ifdef DEBUG_DPG
       // Sanity Check to make sure we recieve the correct edges
       for (size_t i = 0; i<to_recv_edges_low.size(); ++i) {
-        auto edge =  std::get<0>(to_recv_edges_low[i]);
+        auto edge =  std::make_pair(std::get<0>(to_recv_edges_low[i]), std::get<1>(to_recv_edges_low[i])); //std::get<0>(to_recv_edges_low[i]);
         assert(int(edge.first) % m_mpi_size ==m_mpi_rank);
         assert(m_map_delegate_locator.count(edge.first) == 0);
       }
@@ -802,7 +940,7 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
      
       for (auto itr = to_recv_edges_low.begin(); itr != itr_end; itr++) {
 
-        auto edge = std::get<0>(*itr);
+        auto edge = std::make_pair(std::get<0>(*itr), std::get<1>(*itr)); //std::get<0>(*itr);
          
         uint64_t new_vertex_id = local_source_id(m_mpi_size)(edge);
         assert(m_mpi_rank == int(edge.first % m_mpi_size));
@@ -826,7 +964,7 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
 
         m_owned_targets[loc] = label_to_locator(edge.second);
         if(m_has_edge_data) {
-          _edge_data.m_owned_edge_data[loc] = std::get<1>(*itr);        
+          _edge_data.m_owned_edge_data[loc] = std::get<m_edge_data_tuple_index>(*itr);         
         } 
       }  // for over recieved egdes
     }  // while global iterator range not empty
@@ -904,7 +1042,7 @@ count_high_degree_edges(InputIterator unsorted_itr,
            ++unsorted_itr, ++i) {
 
         // Get next edge
-        const auto edge = std::get<0>(*unsorted_itr);
+        const auto edge = std::make_pair(std::get<0>(*unsorted_itr), std::get<1>(*unsorted_itr)); //std::get<0>(*unsorted_itr);
         edge_counter++;
 
 
@@ -1284,7 +1422,7 @@ void
 delegate_partitioned_graph<SegmentManager>::
 partition_high_degree(Container& unsorted_edges,
     std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info, edge_data_type& _edge_data) {
- 
+
   typedef typename Container::value_type edge_type;
 
   // Initates the paritioner, which determines where overflowed edges go
@@ -1344,8 +1482,8 @@ partition_high_degree(Container& unsorted_edges,
       while (unsorted_itr != unsorted_itr_end &&
              /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
-        const auto edge = std::get<0>(*unsorted_itr);
-        const auto edge_data = std::get<1>(*unsorted_itr);
+        const auto edge = std::make_pair(std::get<0>(*unsorted_itr), std::get<1>(*unsorted_itr)); //std::get<0>(*unsorted_itr);
+        const auto edge_data = std::get<m_edge_data_tuple_index>(*unsorted_itr);
         ++unsorted_itr;
 
         {
@@ -1365,10 +1503,13 @@ partition_high_degree(Container& unsorted_edges,
           assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 
           // Send the edge if we don't own it or if we own it but have no room.
-          //to_send_edges_high.push_back(std::make_pair(new_source_id, edge.second));
-          to_send_edges_high.push_back(std::forward_as_tuple(
-                                       std::make_pair(new_source_id, edge.second),
+          # if is_pair_type == 1
+          to_send_edges_high.push_back(std::make_pair(new_source_id, edge.second));
+          //to_send_edges_high.push_back(std::forward_as_tuple(new_source_id, edge.second ) ); 
+          # else 	
+          to_send_edges_high.push_back(std::forward_as_tuple(new_source_id, edge.second,
                                        edge_data ) );    
+          # endif 
         }  // end if is a hub
         else {
           // assert(global_hub_set.count(edge.first) == 0);
@@ -1397,7 +1538,7 @@ partition_high_degree(Container& unsorted_edges,
       for (size_t i = 0; i < to_recv_edges_high.size(); ++i) {
         // Iterate over recieved edges, addiing them using similar logic from
         // above
-        const auto edge = std::get<0>(to_recv_edges_high[i]);
+        const auto edge = std::make_pair(std::get<0>(to_recv_edges_high[i]), std::get<1>(to_recv_edges_high[i])); //std::get<0>(to_recv_edges_high[i]);
         const uint64_t new_source_id = edge.first;
         assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 
@@ -1419,7 +1560,7 @@ partition_high_degree(Container& unsorted_edges,
           uint64_t new_target_label = edge.second;
           m_delegate_targets[place_pos] = label_to_locator(new_target_label);
           if(m_has_edge_data) {
-	    _edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]); 
+	    _edge_data.m_delegate_edge_data[place_pos] = std::get<m_edge_data_tuple_index>(to_recv_edges_high[i]); 
           }
   
           assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
@@ -1465,7 +1606,7 @@ partition_high_degree(Container& unsorted_edges,
     for (size_t i=0; i<to_recv_edges_high.size(); ++i) {
       // Iterate over recieved edges, addiing them using similar logic from
       // above
-      const auto edge = std::get<0>(to_recv_edges_high[i]);
+      const auto edge = std::make_pair(std::get<0>(to_recv_edges_high[i]), std::get<1>(to_recv_edges_high[i])); //std::get<0>(to_recv_edges_high[i]);
       const uint64_t new_source_id = edge.first;
       assert(new_source_id >=0 && new_source_id < m_delegate_info.size()-1);
 
@@ -1484,7 +1625,7 @@ partition_high_degree(Container& unsorted_edges,
         uint64_t new_target_label = edge.second;
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
         if(m_has_edge_data) {
-          _edge_data.m_delegate_edge_data[place_pos] = std::get<1>(to_recv_edges_high[i]);
+          _edge_data.m_delegate_edge_data[place_pos] = std::get<m_edge_data_tuple_index>(to_recv_edges_high[i]);
         }
  
         assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);

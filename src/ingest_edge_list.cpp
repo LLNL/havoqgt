@@ -90,7 +90,6 @@ void usage()  {
          << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
          << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
          << " -u <bool>     - Treat edgelist as undirected (Default is 0)\n"
-         << " -m <bool>     - Read edge-metadata (Default is 0)\n"
          << "[file ...] - list of edge list files to ingest\n\n";
   }
 }
@@ -98,7 +97,7 @@ void usage()  {
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
                     uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
-                    bool& undirected, bool&has_edge_data) {
+                    bool& undirected) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -114,11 +113,10 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-  has_edge_data = false;
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:m:h ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -144,9 +142,6 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          break;
       case 'u':
          undirected = atoi(optarg);
-         break;
-      case 'm':
-         has_edge_data = atoi(optarg);
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -192,9 +187,8 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-    bool                       has_edge_data; 
    
-    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected, has_edge_data);
+    parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
@@ -210,7 +204,8 @@ int main(int argc, char** argv) {
     graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
     //Setup edge list reader
-    havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected, has_edge_data);
+    havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
+    bool has_edge_data = pelr.has_edge_data(); 
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
@@ -218,7 +213,7 @@ int main(int argc, char** argv) {
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
         (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
-         edge_data, has_edge_data); 
+         edge_data); 
     
     if (has_edge_data) {
       graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
