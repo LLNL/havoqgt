@@ -218,8 +218,6 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-
-
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
         double percent = double(segment_manager->get_free_memory()) /

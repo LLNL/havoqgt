@@ -69,9 +69,9 @@ class rmat_edge_generator {
 
 public:
   typedef uint64_t                      vertex_descriptor;
-  typedef std::pair<uint64_t, uint64_t> edge_type;
-
-
+  typedef std::pair<uint64_t, uint64_t> value_type;
+  typedef value_type edge_type;
+  
   ///
   /// InputIterator class for rmat_edge_generator
 
@@ -257,7 +257,7 @@ protected:
       v = havoqgt::detail::hash_nbits(v, m_vertex_scale);
     }
 
-    return std::make_pair(u, v);
+    return std::make_pair(u, v);       
   }
 
 
