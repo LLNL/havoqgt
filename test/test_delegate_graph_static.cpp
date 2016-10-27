@@ -40,9 +40,9 @@ void test_Delegate_Graph_Weighted_Edges() {
 
   //MPI_Barrier(MPI_COMM_WORLD);
 
-  create_delegate_graph(input_graph, input_graph_file_name, 
-                        graph_unique_instance_name, 
-                        edge_data_unique_instance_name, mpi_rank);
+  //create_delegate_graph(input_graph, input_graph_file_name, 
+ //                       graph_unique_instance_name, 
+ //                       edge_data_unique_instance_name, mpi_rank);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
