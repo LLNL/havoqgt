@@ -66,7 +66,7 @@ void create_delegate_graph(
 
   //Setup edge list reader
   havoqgt::parallel_edge_list_reader<edge_data_type> 
-    pelr(input_filenames, undirected, has_edge_data);
+    pelr(input_filenames, undirected);
 
   if (mpi_rank == 0) {
     std::cout << "Generating new graph." << std::endl;
@@ -75,8 +75,7 @@ void create_delegate_graph(
   graph_type *graph = segment_manager->construct<graph_type>
     (graph_unique_instance_name.c_str())
     (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), 
-     delegate_threshold, partition_passes, chunk_size, edge_data, 
-     has_edge_data);
+     delegate_threshold, partition_passes, chunk_size, edge_data);
 
   if (has_edge_data) {
       graph_type::edge_data<edge_data_type, 
