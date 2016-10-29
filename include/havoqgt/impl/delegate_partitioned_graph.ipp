@@ -815,8 +815,8 @@ initialize_edge_storage(const SegmentAllocator<void>& seg_allocator) {
  * compile time. For std::pair, this is either 0 or 1. 
  */
 constexpr std::size_t get_edge_data_tuple_index(
-  bool is_edge_pair_type = false) {
-  return is_edge_pair_type == true ? 0 : 2; 
+  bool is_edge_pair_type = false, bool is_edge_two_tuple_type = false) {
+  return ((is_edge_pair_type == true) || (is_edge_two_tuple_type == true)) ? 0 : 2; 
   // c++11: must be a single return statemnet 
 }
 
@@ -836,6 +836,8 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
   typedef typename Container::value_type edge_type;
   typedef std::pair<uint64_t, uint64_t> edge_pair_type; 
   constexpr bool is_edge_pair_type = std::is_same<edge_type, edge_pair_type>::value;
+  typedef std::tuple<uint64_t, uint64_t> edge_two_tuple_type;
+  constexpr bool is_edge_two_tuple_type = std::is_same<edge_type, edge_two_tuple_type>::value; 
   
   uint64_t loop_counter = 0;
   uint64_t edge_counter = 0;
@@ -959,7 +961,7 @@ partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data) {
         m_owned_targets[loc] = label_to_locator(edge.second);
         if(m_has_edge_data) {
           
-          _edge_data.m_owned_edge_data[loc] = std::get<get_edge_data_tuple_index(is_edge_pair_type)>(*itr); //m_edge_data_tuple_index>(*itr);         
+          _edge_data.m_owned_edge_data[loc] = std::get<get_edge_data_tuple_index(is_edge_pair_type, is_edge_two_tuple_type)>(*itr); //m_edge_data_tuple_index>(*itr);         
         } 
       }  // for over recieved egdes
     }  // while global iterator range not empty
@@ -1421,6 +1423,8 @@ partition_high_degree(Container& unsorted_edges,
   typedef typename Container::value_type edge_type;
   typedef std::pair<uint64_t, uint64_t> edge_pair_type;
   constexpr bool is_edge_pair_type = std::is_same<edge_type, edge_pair_type>::value;
+  typedef std::tuple<uint64_t, uint64_t> edge_two_tuple_type;
+  constexpr bool is_edge_two_tuple_type = std::is_same<edge_type, edge_two_tuple_type>::value;
 
   typedef typename edge_data_type::value_type edge_data_value_type;
   typedef std::tuple<uint64_t, uint64_t, edge_data_value_type> edge_type_comm; // used by the communication routines
@@ -1485,7 +1489,7 @@ partition_high_degree(Container& unsorted_edges,
              /*to_send_edges_high.size()*/i++ < edge_chunk_size) {
         // Get next edge
         const auto edge = std::make_pair(std::get<0>(*unsorted_itr), std::get<1>(*unsorted_itr)); //std::get<0>(*unsorted_itr);
-        const auto edge_data = std::get<get_edge_data_tuple_index(is_edge_pair_type)>(*unsorted_itr); //m_edge_data_tuple_index>(*unsorted_itr);
+        const auto edge_data = std::get<get_edge_data_tuple_index(is_edge_pair_type, is_edge_two_tuple_type)>(*unsorted_itr); //m_edge_data_tuple_index>(*unsorted_itr);
         ++unsorted_itr;
 
         {
@@ -1568,7 +1572,7 @@ partition_high_degree(Container& unsorted_edges,
           uint64_t new_target_label = edge.second;
           m_delegate_targets[place_pos] = label_to_locator(new_target_label);
           if(m_has_edge_data) {
-	    _edge_data.m_delegate_edge_data[place_pos] = std::get<get_edge_data_tuple_index(is_edge_pair_type)>(to_recv_edges_high[i]); //m_edge_data_tuple_index>(to_recv_edges_high[i]); 
+	    _edge_data.m_delegate_edge_data[place_pos] = std::get<get_edge_data_tuple_index(is_edge_pair_type, is_edge_two_tuple_type)>(to_recv_edges_high[i]); //m_edge_data_tuple_index>(to_recv_edges_high[i]); 
           }
   
           assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
@@ -1635,7 +1639,7 @@ partition_high_degree(Container& unsorted_edges,
         uint64_t new_target_label = edge.second;
         m_delegate_targets[place_pos] = label_to_locator(new_target_label);
         if(m_has_edge_data) {
-          _edge_data.m_delegate_edge_data[place_pos] = std::get<get_edge_data_tuple_index(is_edge_pair_type)>(to_recv_edges_high[i]); //m_edge_data_tuple_index>(to_recv_edges_high[i]);
+          _edge_data.m_delegate_edge_data[place_pos] = std::get<get_edge_data_tuple_index(is_edge_pair_type, is_edge_two_tuple_type)>(to_recv_edges_high[i]); //m_edge_data_tuple_index>(to_recv_edges_high[i]);
         }
  
         assert(m_delegate_targets[place_pos].m_owner_dest < m_mpi_size);
