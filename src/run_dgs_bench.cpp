@@ -234,9 +234,8 @@ void constract_graph(dg_visitor_queue_type<gstore_type>& dg_visitor_queue,
   while (!global_is_finished) {
     if (mpi_rank == 0) std::cout << "\n\n<< Loop no. " << loop_cnt << " >>" << std::endl;
 
-    /// --- generate edges --- ///
-    /// \brief generate_update_requests
-    if (mpi_rank == 0) std::cout << "-- generate requests --" << std::endl;
+    /// --- generate or load edge update requests --- ///
+    if (mpi_rank == 0) std::cout << "-- generate or load edge update requests --" << std::endl;
     generate_update_requests(edges_itr, edges_itr_end, update_request_vec, chunk_size);
     havoqgt::havoqgt_env()->world_comm().barrier();
 

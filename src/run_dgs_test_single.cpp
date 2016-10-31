@@ -22,7 +22,7 @@ using edge_property_type    = uint64_t;
 using vertex_property_type  = uint64_t;
 
 enum : size_t {
-  middle_high_degree_threshold = 4 // must be more or equal than 1
+  middle_high_degree_threshold = 1 // must be more or equal than 1
 };
 
 #if 0
@@ -524,25 +524,25 @@ int main(int argc, char** argv) {
 
 
   /// --- create a segument file --- ///
-  size_t graph_capacity_gb = std::pow(2, 2);
+  size_t graph_capacity_gb = std::pow(2, 6);
   havoqgt::distributed_db ddb(havoqgt::db_create(), segmentfile_name.c_str(), graph_capacity_gb);
-  //  graphstore::utility::interprocess_mmap_manager::delete_file(segmentfile_name);
-  //  graphstore::utility::interprocess_mmap_manager mmap_manager(segmentfile_name, graph_capacity_gb);
 
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(ddb.get_segment_manager());
 
-  run_time("can handle basic operations on a low degree graph?",         test1(graphstore, 4, middle_high_degree_threshold - 1));
+  if(middle_high_degree_threshold > 1)
+    run_time("can handle basic operations on a low degree graph?",         test1(graphstore, 4, middle_high_degree_threshold - 1));
   run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 4, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
 
-  run_time("can handle duplicated edges on a low degree graph?",         test2(graphstore, 4, 1, middle_high_degree_threshold - 1));
+  if(middle_high_degree_threshold > 1)
+    run_time("can handle duplicated edges on a low degree graph?",         test2(graphstore, 4, 1, middle_high_degree_threshold - 1));
   run_time("can handle duplicated edges on a middle-high degree graph?", test2(graphstore, 4, middle_high_degree_threshold * 2, 64));
 
-  run_time("can handle basic operations on a large graph?",       test1(graphstore, 1<<22ULL, 128));
-  run_time("can handle higly duplicated edges on a large graph?", test2(graphstore, 1<<22ULL, 128, 64));
+  run_time("can handle basic operations on a large graph?",       test1(graphstore, 1<<20ULL, 128));
+//  run_time("can handle higly duplicated edges on a large graph?", test2(graphstore, 1<<17ULL, 16, 32));
 
-  run_time("can handle basic operations on a rmat graph?", test3(graphstore, 17, 4, 10));
-  run_time("can handle duplicate edges on a rmat graph?",  test4(graphstore, 17, 4, 10));
+  run_time("can handle basic operations on a rmat graph?", test3(graphstore, 20, 16, 10));
+//  run_time("can handle duplicate edges on a rmat graph?",  test4(graphstore, 20, 16, 10));
 
   std::cout << "All tests completed!!!" << std::endl;
   }

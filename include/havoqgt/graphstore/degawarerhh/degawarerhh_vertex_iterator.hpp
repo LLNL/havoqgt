@@ -125,11 +125,11 @@ class degawarerhh<vertex_type,
     return m_mh_itr->value.first;
   }
 
-  static adjacent_edge_iterator end()
-  {
-    return adjacent_edge_iterator(ldeg_table_iterator_type::end(),
-                                  mhdeg_table_iterator_type::end());
-  }
+//  static adjacent_edge_iterator end()
+//  {
+//    return adjacent_edge_iterator(ldeg_table_iterator_type::end(),
+//                                  mhdeg_table_iterator_type::end());
+//  }
 
   inline bool is_equal(const self_type &rhs) const
   {
@@ -156,6 +156,7 @@ class degawarerhh<vertex_type,
   ldeg_table_iterator_type m_low_itr;
   mhdeg_table_iterator_type m_mh_itr;
 };
+
 
 
 template <typename vertex_type,
@@ -284,7 +285,6 @@ class degawarerhh<vertex_type,
 
   mhdeg_table_iterator_type m_mh_itr;
 };
-
 }
 #endif // DEGAWARERHH_VERTEX_ITERATOR_HPP
 
