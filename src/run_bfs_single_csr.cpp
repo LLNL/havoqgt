@@ -44,21 +44,22 @@ void run_bfs_sync (graphstore_type& graph,
                    trv_inf<vertex_type>& inf,
                    std::queue<vertex_type>& frontier_queue,
                    std::queue<vertex_type>& next_queue,
-                   vertex_type& start_vrtx)
+                   vertex_type& root_vrtx)
 {
 
   /// ---- init inf ---- ///
   auto tic_init = graphstore::utility::duration_time();
 #if BFS_USE_BITMAP
   inf.init(true);
-  inf.is_visited[start_vrtx] = true;
+  uint64_t* const visited = inf.visited;
+  visited[bitmap_global_pos(root_vrtx)] |= 0x1 << bitmap_local_pos(root_vrtx);
 #else
   inf.init(false);
   bool init(false);
   graph.init_vertex_property(init);
-  graph.vertex_property(start_vrtx) = true;
+  graph.vertex_property(root_vrtx) = true;
 #endif
-  /// inf.tree[start_vrtx] = start_vrtx;
+  /// inf.tree[root_vrtx] = root_vrtx;
   std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
   /// --- BFS main loop -------- ///
@@ -78,14 +79,17 @@ void run_bfs_sync (graphstore_type& graph,
       for (auto edge = graph.adjacencylist(src), end = graph.adjacencylist_end(src); edge != end; ++edge) {
         const vertex_type dst = *edge;
 #if BFS_USE_BITMAP
-        bool& is_visited = inf.is_visited[dst];
+          const bool is_visited = visited[bitmap_global_pos(dst)] & (0x1 << bitmap_local_pos(dst));
 #else
         bool& is_visited = graph.vertex_property(dst);
 #endif
         if (!is_visited) {
           next_queue.push(dst);
-          /// inf.tree[dst] = src;
-          is_visited = true;
+#if BFS_USE_BITMAP
+          visited[bitmap_global_pos(dst)] |= 0x1 << bitmap_local_pos(dst);
+#else
+          graphstore.vertex_property_data(dst) = true;
+#endif
         }
         ++(inf.count_visited_edges);
       }

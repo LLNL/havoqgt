@@ -26,6 +26,7 @@
 #include "dynamicgraphstore_bench.hpp" /// must include before the files below ??
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 #include <havoqgt/graphstore/baseline/baseline.hpp>
+#include <havoqgt/graphstore/baseline/baseline_map.hpp>
 #include <havoqgt/graphstore/degawarerhh/degawarerhh.hpp>
 #include "bfs_bench.hpp"
 
@@ -34,19 +35,26 @@
 using vertex_id_type        = uint64_t;
 using edge_property_type    = unsigned char;
 using vertex_property_type  = bool;
-using baseline_type         = graphstore::graphstore_baseline<vertex_id_type,
-                                                             vertex_property_type,
-                                                             edge_property_type,
-                                                             havoqgt::distributed_db::segment_manager_type>;
+
+/// --- graph stores --- ///
+using baseline_type = graphstore::graphstore_baseline<vertex_id_type,
+                                                      vertex_property_type,
+                                                      edge_property_type,
+                                                      havoqgt::distributed_db::segment_manager_type>;
+
+using baseline_map_type = graphstore::graphstore_baseline_map<vertex_id_type,
+                                                              vertex_property_type,
+                                                              edge_property_type,
+                                                              havoqgt::distributed_db::segment_manager_type>;
 
  enum : size_t {
    middle_high_degree_threshold = 2 // must be more or equal than 1
  };
  using degawarerhh_type  = graphstore::degawarerhh<vertex_id_type,
-                                                       vertex_property_type,
-                                                       edge_property_type,
-                                                       havoqgt::distributed_db::segment_manager_type,
-                                                       middle_high_degree_threshold>;
+                                                   vertex_property_type,
+                                                   edge_property_type,
+                                                   havoqgt::distributed_db::segment_manager_type,
+                                                   middle_high_degree_threshold>;
 
 
 template <typename graphstore_type, typename edgelist_type>
@@ -55,7 +63,7 @@ constract_graph(graphstore_type& graph_store,
                 edgelist_type& edgelist,
                 const size_t chunk_size)
 {
-  std::cout << "-- Disp status of before generation --" << std::endl;
+  std::cout << "-- Disp a status of before construction --" << std::endl;
   std::cout << "segment size (GB); " << graphstore::utility::segment_size_gb(graph_store.get_segment_manager()) << std::endl;
   print_system_mem_usages();
 
@@ -74,7 +82,7 @@ constract_graph(graphstore_type& graph_store,
 
   auto global_start = graphstore::utility::duration_time();
   while (edgelist_itr != edgelist_itr_end) {
-    std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
+//    std::cout << "[" << loop_cnt << "] : chunk_size =\t" << chunk_size << std::endl;
 
     generate_update_requests(edgelist_itr, edgelist_itr_end, update_request_vec, chunk_size);
 
@@ -94,10 +102,9 @@ constract_graph(graphstore_type& graph_store,
     ++loop_cnt;
   }
   const double whole_construction_time = graphstore::utility::duration_time_sec(global_start);
+  assert(graph_store.num_edges() == count_inserted);
 
-  num_edges = count_inserted;
-
-  std::cout << "\n-- All edge updations done --" << std::endl;
+  std::cout << "\n-- All edge insertion done --" << std::endl;
   std::cout << "inserted edges : " << count_inserted << std::endl;
   std::cout << "construction time (insertion only) : " << construction_time << std::endl;
   std::cout << "whole construction time : " << whole_construction_time << std::endl;
@@ -113,14 +120,15 @@ template <typename graphstore_type, typename vertex_type>
                             trv_inf<vertex_type>& inf,
                             std::queue<vertex_type>& frontier_queue,
                             std::queue<vertex_type>& next_queue,
-                            vertex_type& start_vrtx)
+                            vertex_type& root_vrtx)
   {
 
     /// ---- init inf ---- ///
     auto tic_init = graphstore::utility::duration_time();
 #if BFS_USE_BITMAP
     inf.init(true);
-    inf.is_visited[start_vrtx] = true;
+    uint64_t* const visited = inf.visited;
+    visited[bitmap_global_pos(root_vrtx)] |= 0x1 << bitmap_local_pos(root_vrtx);
 #else
     inf.init(false);
     for (auto vert_itr = graphstore.vertices_begin(), end = graphstore.vertices_end();
@@ -128,7 +136,7 @@ template <typename graphstore_type, typename vertex_type>
          ++vert_itr) {
       vert_itr.property_data() = false;
     }
-    graphstore.vertex_property_data(start_vrtx) = true;
+    graphstore.vertex_property_data(root_vrtx) = true;
 #endif
     std::cout << "Init time (sec.):\t"  << graphstore::utility::duration_time_sec(tic_init) << std::endl;
 
@@ -150,13 +158,17 @@ template <typename graphstore_type, typename vertex_type>
              ++edge) {
           const vertex_type& dst = edge.target_vertex();
 #if BFS_USE_BITMAP
-          bool& is_visited = inf.is_visited[dst];
+          const bool is_visited = visited[bitmap_global_pos(dst)] & (0x1 << bitmap_local_pos(dst));
 #else
-          bool& is_visited = graphstore.vertex_property_data(dst);
+          const bool is_visited = graphstore.vertex_property_data(dst);
 #endif
           if (!is_visited) {
             next_queue.push(dst);
-            is_visited = true;
+#if BFS_USE_BITMAP
+          visited[bitmap_global_pos(dst)] |= 0x1 << bitmap_local_pos(dst);
+#else
+          graphstore.vertex_property_data(dst) = true;
+#endif
           }
           ++count_visited_edges;
         }
@@ -186,10 +198,10 @@ template void run_bfs_sync<degawarerhh_type, vertex_id_type>(degawarerhh_type&,
 
 
 /// --- option variables --- ///
-std::string fname_segmentfile_;
+std::string fname_segmentfile_ = "/dev/shm/graph";
 std::vector<std::string> fname_edge_list_;
-size_t segmentfile_init_size_log2_ = 30;
-std::string graphstore_name_;
+size_t segmentfile_init_size_gb_ = 30;
+std::string graphstore_name_ = "DegAwareRHH";
 std::vector<vertex_id_type> source_list_;
 
 void parse_options(int argc, char **argv)
@@ -206,7 +218,7 @@ void parse_options(int argc, char **argv)
   while ((c = getopt (argc, argv, "S:o:E:r:g:")) != -1) {
     switch (c) {
       case 'S':
-        segmentfile_init_size_log2_ = boost::lexical_cast<size_t>(optarg);
+        segmentfile_init_size_gb_ = boost::lexical_cast<size_t>(optarg);
         break;
 
       case 'o':
@@ -244,7 +256,7 @@ void parse_options(int argc, char **argv)
   }
 
   std::cout << "Segment file name = " << fname_segmentfile_ << std::endl;
-  std::cout << "Initialize segment filse size (log2) = " << segmentfile_init_size_log2_ << std::endl;
+  std::cout << "Initialize segment filse size (GB) = " << segmentfile_init_size_gb_ << std::endl;
   for (const auto itr : fname_edge_list_) {
     std::cout << "Load edge list from " << itr << std::endl;
   }
@@ -271,10 +283,8 @@ int main(int argc, char** argv) {
 
 
   /// --- init segment file --- ///
-  uint64_t graph_capacity = std::pow(2, segmentfile_init_size_log2_);
+  uint64_t graph_capacity = segmentfile_init_size_gb_;
   havoqgt::distributed_db ddb(havoqgt::db_create(), fname_segmentfile_.c_str(), graph_capacity);
-  //  graphstore::utility::interprocess_mmap_manager::delete_file(fname_segmentfile_);
-  //  graphstore::utility::interprocess_mmap_manager mmap_manager(fname_segmentfile_, graph_capacity);
   print_system_mem_usages();
 
 
@@ -282,6 +292,16 @@ int main(int argc, char** argv) {
 
   if (graphstore_name_ == "Baseline") {
     baseline_type graphstore(ddb.get_segment_manager());
+
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
+
+    std::cout << "\n<Run BFS>" << std::endl;
+    if (source_list_.empty())
+      generate_bfs_sources(4, ret.first, source_list_);
+    run_bfs(graphstore, ret.first, ret.second, source_list_);
+
+  } else if (graphstore_name_ == "BaselineMap") {
+    baseline_map_type graphstore(ddb.get_segment_manager());
 
     std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
