@@ -139,7 +139,7 @@ void test4(graphstore_type& graphstore, size_t vertex_scale, size_t edge_factor,
 
     if (is_delete) {
       const size_t num_deleted = table.erase(std::make_pair(src, trg));
-      assert(graphstore.erase_edge_dup(src, trg) == num_deleted);
+      EXPECT_EQ(graphstore.erase_edge_dup(src, trg), num_deleted);
 
     } else {
       table.insert(std::make_pair(src, trg));
@@ -173,12 +173,12 @@ void test3(graphstore_type& graphstore, size_t vertex_scale, size_t edge_factor,
 
     if (is_delete) {
       const bool is_deleted = table.erase(std::make_pair(src, trg));
-      assert(graphstore.erase_edge(src, trg) == is_deleted);
+      EXPECT_EQ(graphstore.erase_edge(src, trg), is_deleted);
 
     } else {
       const auto ret = table.insert(std::make_pair(src, trg));
       const bool is_inserted = ret.second;
-      assert(graphstore.insert_edge(src, trg, 1) == is_inserted);
+      EXPECT_EQ(graphstore.insert_edge(src, trg, 1), is_inserted);
     }
   }
 
@@ -195,19 +195,19 @@ void test3(graphstore_type& graphstore, size_t vertex_scale, size_t edge_factor,
            e_itr != e_end;
            ++e_itr) {
         const vertex_id_type& trg = e_itr.target_vertex();
-        assert(tmp_table.erase(std::make_pair(src, trg)));
+        EXPECT_EQ(tmp_table.erase(std::make_pair(src, trg)), true);
       }
     }
-    assert(tmp_table.size() == 0);
+    EXPECT_EQ(tmp_table.size(), 0);
   }
 
 
   /// check all elements from an another direction
   {
     for (const auto& edge : table) {
-      assert(graphstore.erase_edge(edge.first, edge.second));
+      EXPECT_EQ(graphstore.erase_edge(edge.first, edge.second), true);
     }
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 }
@@ -228,18 +228,18 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
       }
     }
     /// num edges
-    assert(graphstore.num_edges() == num_vertices * num_edges * fact_dup);
+    EXPECT_EQ(graphstore.num_edges(), num_vertices * num_edges * fact_dup);
 //    graphstore.print_status(1);
 
     /// delete all edges  (note the order)
     for (uint64_t j = 0; j < num_edges; ++j) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
-        assert(graphstore.erase_edge_dup(i, j) == fact_dup);
+        EXPECT_EQ(graphstore.erase_edge_dup(i, j), fact_dup);
       }
     }
 
     /// num edges
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 
@@ -259,7 +259,7 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         flags[itr.source_vertex()] = true;
       }
-      for (const auto flg : flags) assert(flg);
+      for (const auto flg : flags) EXPECT_EQ(flg, true);
     }
 
     /// update vertex property
@@ -271,19 +271,19 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
     {
       std::vector<bool> flags(num_vertices, false);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-        assert(itr.property_data() == itr.source_vertex() + 2);
+        EXPECT_EQ(itr.property_data(), itr.source_vertex() + 2);
         flags[itr.property_data() - 2] = true;
       }
-      for (const auto flg : flags) assert(flg);
+      for (const auto flg : flags) EXPECT_EQ(flg, true);
     }
 
     /// delete all edges
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(graphstore.erase_edge_dup(i, j) == fact_dup);
+        EXPECT_EQ(graphstore.erase_edge_dup(i, j), fact_dup);
       }
     }
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 
@@ -306,20 +306,20 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
-          assert(adj_edge.target_vertex() + 2 == adj_edge.property_data());
+          EXPECT_EQ(adj_edge.target_vertex() + 2, adj_edge.property_data());
           ++cnts1[adj_edge.target_vertex()];
           ++cnts2[adj_edge.property_data() - 2];
           ++adj_edge.property_data(); /// set new value via adjacent iterator
         }
-        for (auto cnt : cnts1) assert(cnt == fact_dup);
-        for (auto cnt : cnts2) assert(cnt == fact_dup);
+        for (auto cnt : cnts1) EXPECT_EQ(cnt, fact_dup);
+        for (auto cnt : cnts2) EXPECT_EQ(cnt, fact_dup);
       }
 
       for (uint64_t i = 0; i < num_vertices; ++i) {
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
-          assert(adj_edge.property_data() == adj_edge.target_vertex() + 3);
+          EXPECT_EQ(adj_edge.property_data(), adj_edge.target_vertex() + 3);
         }
       }
     }
@@ -327,10 +327,10 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
     /// delete all edges
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(graphstore.erase_edge_dup(i, j) == fact_dup);
+        EXPECT_EQ(graphstore.erase_edge_dup(i, j), fact_dup);
       }
     }
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 }
 
@@ -339,36 +339,36 @@ void test2(graphstore_type& graphstore, size_t num_vertices, size_t num_edges, s
 void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
 {
 
-  assert(num_edges > 1);
+  EXPECT_EQ(num_edges > 1, true);
 
   /// unique insertion and deletion
   {
     /// init
     for (uint64_t j = 0; j < num_edges; ++j) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
-        assert(graphstore.insert_edge(i, j, i+2));
+        EXPECT_EQ(graphstore.insert_edge(i, j, i+2), true);
       }
     }
     /// num edges
-    assert(graphstore.num_edges() == num_vertices * num_edges);
+    EXPECT_EQ(graphstore.num_edges(), num_vertices * num_edges);
 
     /// unique insertion
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(!graphstore.insert_edge(i, j, i+2));
+        EXPECT_EQ(graphstore.insert_edge(i, j, i+2), false);
       }
     }
     /// num edges
-    assert(graphstore.num_edges() == num_vertices * num_edges);
+    EXPECT_EQ(graphstore.num_edges(), num_vertices * num_edges);
 
     /// delete all edges  (note the order)
     for (uint64_t j = 0; j < num_edges; ++j) {
       for (uint64_t i = 0; i < num_vertices; ++i) {
-        assert(graphstore.erase_edge(i, j));
+        EXPECT_EQ(graphstore.erase_edge(i, j), true);
       }
     }
     /// num edges
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 
@@ -377,7 +377,7 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
     /// init
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(graphstore.insert_edge(i, j, i+2));
+        EXPECT_EQ(graphstore.insert_edge(i, j, i+2), true);
       }
     }
 
@@ -387,7 +387,7 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
         ++cnt[itr.source_vertex()];
       }
-      for (const auto c : cnt) assert(c == 1);
+      for (const auto c : cnt) EXPECT_EQ(c, 1);
     }
 
     /// update vertex property
@@ -399,10 +399,10 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
       /// check vertex property
       std::vector<int> cnt(num_vertices, 0);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-        assert(itr.property_data() == itr.source_vertex() + 2);
+        EXPECT_EQ(itr.property_data(), itr.source_vertex() + 2);
         ++cnt[itr.property_data() - 2];
       }
-      for (const auto c : cnt) assert(c == 1);
+      for (const auto c : cnt) EXPECT_EQ(c, 1);
     }
 
 
@@ -410,17 +410,17 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
     {
       for (uint64_t i = 0; i < num_vertices; ++i) {
         for (uint64_t j = 0; j < 1; ++j) {
-          assert(graphstore.erase_edge(i, j));
+          EXPECT_EQ(graphstore.erase_edge(i, j), true);
         }
       }
 
       /// check vertex property
       std::vector<int> cnt(num_vertices, 0);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-        assert(itr.property_data() == itr.source_vertex() + 2);
+        EXPECT_EQ(itr.property_data(), itr.source_vertex() + 2);
         ++cnt[itr.property_data() - 2];
       }
-      for (const auto c : cnt) assert(c == 1);
+      for (const auto c : cnt) EXPECT_EQ(c, 1);
     }
 
 
@@ -433,20 +433,20 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
       /// check vertex property
       std::vector<int> cnt(num_vertices, 0);
       for (auto itr = graphstore.vertices_begin(), end = graphstore.vertices_end(); itr != end; ++itr) {
-        assert(itr.property_data() == itr.source_vertex() + 3);
+        EXPECT_EQ(itr.property_data(), itr.source_vertex() + 3);
         ++cnt[itr.property_data() - 3];
       }
-      for (const auto c : cnt) assert(c == 1);
+      for (const auto c : cnt) EXPECT_EQ(c, 1);
     }
 
 
     /// delete all edges
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 1; j < num_edges; ++j) {
-        assert(graphstore.erase_edge(i, j));
+        EXPECT_EQ(graphstore.erase_edge(i, j), true);
       }
     }
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 
@@ -455,7 +455,7 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
     /// init
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(graphstore.insert_edge(i, j, j+2));
+        EXPECT_EQ(graphstore.insert_edge(i, j, j+2), true);
       }
     }
 
@@ -467,20 +467,20 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
-          assert(adj_edge.target_vertex() + 2 == adj_edge.property_data());
+          EXPECT_EQ(adj_edge.target_vertex() + 2, adj_edge.property_data());
           flags1[adj_edge.target_vertex()] = true;
           flags2[adj_edge.property_data() - 2] = true;
           ++adj_edge.property_data(); /// set new value via adjacent iterator
         }
-        for (const auto flg : flags1) assert(flg);
-        for (const auto flg : flags2) assert(flg);
+        for (const auto flg : flags1) EXPECT_EQ(flg, true);
+        for (const auto flg : flags2) EXPECT_EQ(flg, true);
       }
 
       for (uint64_t i = 0; i < num_vertices; ++i) {
         for (auto adj_edge = graphstore.adjacent_edge_begin(i), end = graphstore.adjacent_edge_end(i);
              adj_edge != end;
              ++adj_edge) {
-          assert(adj_edge.property_data() == adj_edge.target_vertex() + 3);
+          EXPECT_EQ(adj_edge.property_data(), adj_edge.target_vertex() + 3);
         }
       }
     }
@@ -488,10 +488,10 @@ void test1(graphstore_type& graphstore, size_t num_vertices, size_t num_edges)
     /// delete all edges
     for (uint64_t i = 0; i < num_vertices; ++i) {
       for (uint64_t j = 0; j < num_edges; ++j) {
-        assert(graphstore.erase_edge(i, j));
+        EXPECT_EQ(graphstore.erase_edge(i, j), true);
       }
     }
-    assert(graphstore.num_edges() == 0);
+    EXPECT_EQ(graphstore.num_edges(), 0);
   }
 
 }
@@ -515,7 +515,7 @@ int main(int argc, char** argv) {
   int mpi_size = havoqgt::havoqgt_env()->world_comm().size();
   havoqgt::get_environment();
   havoqgt::havoqgt_env()->world_comm().barrier();
-  assert(mpi_size == 1);
+  EXPECT_EQ(mpi_size, 1);
 
   /// --- parse argments ---- ///
   std::string segmentfile_name;
@@ -530,11 +530,11 @@ int main(int argc, char** argv) {
   /// --- allocate a graphstore --- ///
   graphstore_type graphstore(ddb.get_segment_manager());
 
-  if(middle_high_degree_threshold > 1)
+  if (middle_high_degree_threshold > 1)
     run_time("can handle basic operations on a low degree graph?",         test1(graphstore, 4, middle_high_degree_threshold - 1));
   run_time("can handle basic operations on a middle-high degree graph?", test1(graphstore, 4, middle_high_degree_threshold * 2)); // There is a possibility of long probedistances
 
-  if(middle_high_degree_threshold > 1)
+  if (middle_high_degree_threshold > 1)
     run_time("can handle duplicated edges on a low degree graph?",         test2(graphstore, 4, 1, middle_high_degree_threshold - 1));
   run_time("can handle duplicated edges on a middle-high degree graph?", test2(graphstore, 4, middle_high_degree_threshold * 2, 64));
 
@@ -550,4 +550,3 @@ int main(int argc, char** argv) {
 
   return 0;
 }
-

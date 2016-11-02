@@ -343,6 +343,22 @@ static double duration_time_sec(const std::chrono::high_resolution_clock::time_p
   return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(duration_time).count() / 1000000.0);
 }
 
+template<typename t1, typename t2>
+void expect_eq_helper(const char* func_name, const char* file_name, int line_no,
+                      const char* v1_name, const t1& v1,
+                      const char* v2_name, const t2& v2)
+{
+  if (v1 != v2) {
+    std::cout << std::flush;
+    std::cerr << "Failed at " << file_name << ":" << func_name << " (" << line_no << ") "
+              << v1_name << "(" << v1 << ") != " << v2_name << "(" << v2 << ")" << std::endl;
+    exit(1);
+  }
+}
+
+#define EXPECT_EQ(v1, v2) graphstore::utility::expect_eq_helper(__func__, __FILE__, __LINE__, #v1, v1, #v2, v2)
+
+/// TODO: Erase this class
 class rhh_log_holder {
 
  public:
@@ -383,7 +399,6 @@ class rhh_log_holder {
   self_type &operator=(const self_type &&)  = delete;
 
 };
-
 
 /// -------------- For I/O ---------------- ///
 
