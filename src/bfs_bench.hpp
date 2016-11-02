@@ -7,14 +7,24 @@
 #include <havoqgt/graphstore/csr/csr_graph.hpp>
 #include <havoqgt/graphstore/graphstore_utilities.hpp>
 
-#define BFS_USE_BITMAP 0
+#define BFS_USE_BITMAP 1
 
+/// 0011 1111
+inline size_t bitmap_global_pos(const uint64_t pos)
+{
+  return (pos >> 6ULL);
+}
+
+inline size_t bitmap_local_pos(const uint64_t pos)
+{
+  return pos & 0x2fULL;
+}
 
 template<typename vertex_type>
 struct trv_inf {
   const size_t num_vertices;
   const size_t num_edges;
-  bool* is_visited;
+  uint64_t* visited;
   vertex_type* tree;
   size_t count_visited_vertices;
   size_t count_visited_edges;
@@ -22,7 +32,7 @@ struct trv_inf {
   trv_inf(size_t max_vertex_id, size_t n_edges)
     : num_vertices(max_vertex_id + 1),
       num_edges(n_edges),
-      is_visited(nullptr),
+      visited(nullptr),
       tree(nullptr),
       count_visited_vertices(0),
       count_visited_edges(0)
@@ -31,29 +41,30 @@ struct trv_inf {
 
   ~trv_inf()
   {
-    delete[] is_visited;
+    delete[] visited;
     delete[] tree;
   }
 
   void init(const bool is_allocate_maps)
   {
     if (is_allocate_maps) {
-      is_visited = new bool[num_vertices];
-      std::cout << "Allocate is_visited:\t" <<  (double)num_vertices * sizeof(bool) / (1ULL<<30) << " GB" << std::endl;
+      visited = new uint64_t[num_vertices/ sizeof(uint64_t) + 1];
+      std::cout << "Allocate visited:\t" <<  (double)num_vertices * sizeof(bool) / (1ULL<<30) / sizeof(uint64_t) << " GB" << std::endl;
 
-      tree = new vertex_type[num_vertices];
-      std::cout << "Allocate tree:\t" <<  (double)num_vertices * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
+//      tree = new vertex_type[num_vertices];
+//      std::cout << "Allocate tree:\t" <<  (double)num_vertices * sizeof(vertex_type) / (1ULL<<30) << " GB" << std::endl;
 
-      for (size_t i = 0 ; i < num_vertices; ++i) {
-        is_visited[i] = false;
-        tree[i] = std::numeric_limits<vertex_type>::max();
+      for (size_t i = 0 ; i < num_vertices / sizeof(uint64_t) + 1; ++i) {
+        visited[i] = 0x0;
       }
+
+//      for (size_t i = 0 ; i < num_vertices; ++i) {
+//        tree[i] = std::numeric_limits<vertex_type>::max();
+//      }
     }
     count_visited_vertices = 0;
     count_visited_edges = 0;
   }
-
-
 };
 
 
