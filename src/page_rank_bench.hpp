@@ -1,0 +1,4 @@
+#ifndef PAGE_RANK_BENCH_HPP
+#define PAGE_RANK_BENCH_HPP
+
+#endif // PAGE_RANK_BENCH_HPP

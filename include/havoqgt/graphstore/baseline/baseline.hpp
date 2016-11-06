@@ -116,8 +116,7 @@ public:
 
     auto value = m_map_table.find(src);
     if (value == m_map_table.end()) { // new vertex
-      const vertex_property_data_type dummy_vp = false;
-      map_value_type map_value(dummy_vp,
+      map_value_type map_value(vertex_property_data_type(),
                                edge_vec_type(1, edge_vec_element_type(trg, edge_property), m_allocator));
       m_map_table.insert(map_element_type(src, map_value));
     } else {
