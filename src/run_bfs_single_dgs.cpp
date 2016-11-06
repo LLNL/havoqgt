@@ -313,6 +313,16 @@ int main(int argc, char** argv) {
       generate_bfs_sources(4, ret.first, source_list_);
     run_bfs(graphstore, ret.first, ret.second, source_list_);
 
+  } else if (graphstore_name_ == "BaselineMap") {
+    baseline_map_type graphstore(ddb.get_segment_manager());
+
+    std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
+
+    std::cout << "\n<Run BFS>" << std::endl;
+    if (source_list_.empty())
+      generate_bfs_sources(4, ret.first, source_list_);
+    run_bfs(graphstore, ret.first, ret.second, source_list_);
+
   } else if (graphstore_name_ == "DegAwareRHH") {
     degawarerhh_type graphstore(ddb.get_segment_manager());
 
