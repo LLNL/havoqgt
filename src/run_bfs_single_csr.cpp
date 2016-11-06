@@ -44,7 +44,7 @@ void run_bfs_sync (graphstore_type& graph,
                    trv_inf<vertex_type>& inf,
                    std::queue<vertex_type>& frontier_queue,
                    std::queue<vertex_type>& next_queue,
-                   vertex_type& root_vrtx)
+                   const vertex_type& root_vrtx)
 {
 
   /// ---- init inf ---- ///
@@ -106,10 +106,9 @@ template void run_bfs_sync<graphstore_type, vertex_type>(graphstore_type&,
                                                          trv_inf<vertex_type>&,
                                                          std::queue<vertex_type>&,
                                                          std::queue<vertex_type>&,
-                                                         vertex_type&);
+                                                         const vertex_type&);
 
 
-std::string fname_graph_;
 std::string fname_segmentfile_;
 size_t segment_size_log2_ = 30;
 std::vector<std::string> fname_edge_list_;
@@ -130,9 +129,6 @@ void parse_options(int argc, char **argv)
 
   while ((c = getopt (argc, argv, "g:S:o:E:v:m:r:")) != -1) {
     switch (c) {
-      case 'g':
-        fname_graph_ = optarg;
-        break;
       case 'o':
         fname_segmentfile_ = optarg;
         break;
@@ -205,7 +201,7 @@ int main(int argc, char* argv[])
   std::cout << "\n<Run BFS>" << std::endl;
   if (source_list_.empty())
     generate_bfs_sources(4, max_vertex_id_, source_list_);
-  run_bfs(*graph, max_vertex_id_, max_vertex_id_, source_list_);
+  run_bfs(*graph, max_vertex_id_, num_edges_, source_list_);
 
   delete graph;
 }

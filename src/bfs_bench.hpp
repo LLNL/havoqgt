@@ -76,7 +76,7 @@ extern void run_bfs_sync(graphstore_type&,
                          vertex_type&);
 
 template <typename graphstore_type, typename vertex_type>
-void run_bfs(graphstore_type& graph, size_t max_vertex_id, size_t num_edges, std::vector<vertex_type>& source_list)
+void run_bfs(graphstore_type& graph, const std::size_t max_vertex_id, const std::size_t num_edges, const std::vector<vertex_type>& source_list)
 {
   std::cout << "\n--- BFS ---" << std::endl;
 

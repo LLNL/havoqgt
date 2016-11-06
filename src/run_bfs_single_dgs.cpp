@@ -119,7 +119,7 @@ template <typename graphstore_type, typename vertex_type>
                             trv_inf<vertex_type>& inf,
                             std::queue<vertex_type>& frontier_queue,
                             std::queue<vertex_type>& next_queue,
-                            vertex_type& root_vrtx)
+                            const vertex_type& root_vrtx)
   {
 
     /// ---- init inf ---- ///
@@ -183,16 +183,22 @@ template <typename graphstore_type, typename vertex_type>
 
 /// Avoid linker errors with template function
 template void run_bfs_sync<baseline_type, vertex_id_type>(baseline_type&,
-                                                           trv_inf<vertex_id_type>&,
-                                                           std::queue<vertex_id_type>&,
-                                                           std::queue<vertex_id_type>&,
-                                                           vertex_id_type&);
+                                                          trv_inf<vertex_id_type>&,
+                                                          std::queue<vertex_id_type>&,
+                                                          std::queue<vertex_id_type>&,
+                                                          const vertex_id_type&);
+
+template void run_bfs_sync<baseline_map_type, vertex_id_type>(baseline_map_type&,
+                                                              trv_inf<vertex_id_type>&,
+                                                              std::queue<vertex_id_type>&,
+                                                              std::queue<vertex_id_type>&,
+                                                              const vertex_id_type&);
 
 template void run_bfs_sync<degawarerhh_type, vertex_id_type>(degawarerhh_type&,
-                                                         trv_inf<vertex_id_type>&,
-                                                         std::queue<vertex_id_type>&,
-                                                         std::queue<vertex_id_type>&,
-                                                         vertex_id_type&);
+                                                             trv_inf<vertex_id_type>&,
+                                                             std::queue<vertex_id_type>&,
+                                                             std::queue<vertex_id_type>&,
+                                                             const vertex_id_type&);
 
 
 
@@ -294,7 +300,6 @@ int main(int argc, char** argv) {
 
     std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
-    std::cout << "\n<Run BFS>" << std::endl;
     if (source_list_.empty())
       generate_bfs_sources(4, ret.first, source_list_);
     run_bfs(graphstore, ret.first, ret.second, source_list_);
@@ -304,7 +309,6 @@ int main(int argc, char** argv) {
 
     std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
-    std::cout << "\n<Run BFS>" << std::endl;
     if (source_list_.empty())
       generate_bfs_sources(4, ret.first, source_list_);
     run_bfs(graphstore, ret.first, ret.second, source_list_);
@@ -314,7 +318,6 @@ int main(int argc, char** argv) {
 
     std::pair<vertex_id_type, size_t> ret = construct_graph(graphstore, edgelist);
 
-    std::cout << "\n<Run BFS>" << std::endl;
     if (source_list_.empty())
       generate_bfs_sources(4, ret.first, source_list_);
     run_bfs(graphstore, ret.first, ret.second, source_list_);
