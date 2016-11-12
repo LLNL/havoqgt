@@ -181,6 +181,7 @@ class degawarerhh
         return false;
       }
       ++count_in_single;
+      if (count_in_single + 1 == middle_high_degree_threshold) break;
     }
 
     if (count_in_single > 0) { /// -- low degree table has the source vertex -- ///
@@ -825,7 +826,7 @@ class degawarerhh <_vertex_type, _vertex_property_data_type, _edge_property_data
     auto itr_mhdeg_src = m_mhdeg_table->find(src);
     if (itr_mhdeg_src.is_end()) {
       /// --- since mid-high degree table dosen't have the vertex, insert as a new vertex --- ///
-      mhdeg_edge_chunk_type* edge_chunk = mhdeg_edge_chunk_type::allocate(2);
+      mhdeg_edge_chunk_type* edge_chunk = mhdeg_edge_chunk_type::allocate(4);
       rhh::insert(&edge_chunk, trg, weight); /// insert the new edge into edge chunk
       mhdeg_table_value_type mhdeg_table_value(vertex_property_data_type(), edge_chunk); /// set a vertex property
       rhh::insert(&m_mhdeg_table, src, mhdeg_table_value);
