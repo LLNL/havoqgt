@@ -96,7 +96,6 @@ namespace bip = boost::interprocess;
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
-   //typedef struct _no_parameter {} no_parameter;
 
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
@@ -388,14 +387,11 @@ class delegate_partitioned_graph {
   */
 
   bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
- 
-//  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::tupel<const uint64_t, //vertex_locator, double> > > m_map_delegate_locator;
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
 
   bool m_has_edge_data;
-  //uint32_t m_edge_data_tuple_index;
 
 };  // class delegate_partitioned_graph
 
