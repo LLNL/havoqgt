@@ -65,9 +65,21 @@
 
 namespace havoqgt {
 
+std::vector<std::string> split(const std::string& line, const char delim) {
+  std::vector<std::string> tokens;
+  std::string token;
+  std::istringstream iss(line);
+
+  while(std::getline(iss, token, delim)) {
+    tokens.push_back(token);
+  }
+
+  return tokens;
+}
+
 /// Parallel edge list reader
 ///
-template <typename edge_data_type>
+template <typename edge_data_type = uint8_t>
 class parallel_edge_list_reader {
 
 public:
@@ -158,7 +170,8 @@ public:
     int node_size = havoqgt_env()->node_offset_comm().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;
-    m_has_edge_data = true;
+    m_has_edge_data = false;
+    m_verify_has_edge_data = true;
     
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
@@ -223,14 +236,22 @@ protected:
     edge_data_type weight;
     while(!m_ptr_ifstreams.empty()) {
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
+    	if (m_verify_has_edge_data) {
+    	  m_verify_has_edge_data = false;
+    	  auto tokens = split(line, ' ');
+          if (tokens.size() > 2) {
+            m_has_edge_data = true;
+    	  }
+    	}
         std::stringstream ssline(line); 
         if (m_has_edge_data) {  
           ssline >> source >> target >> weight;
-          //std::cout << source << " " << target << " " << weight << std::endl;  
+          //std::cout << source << " " << target << " " << weight << std::endl;
         } else {
           ssline >> source >> target;
-          //std::cout << source << " " << target << " " << weight << std::endl;  
-        }         
+          weight = static_cast<edge_data_type>(0);
+          //std::cout << source << " " << target << " " << weight << std::endl;
+        }
         edge = std::forward_as_tuple(source, target, weight);
         return true;
       } else { //No remaining lines, close file.
@@ -261,7 +282,7 @@ protected:
   uint64_t m_global_max_vertex;
   bool m_undirected;
   bool m_has_edge_data;
-
+  bool m_verify_has_edge_data;
 };
 
 } //end namespace havoqgt

@@ -194,8 +194,6 @@ int main(int argc, char** argv) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    //graph_type::edge_data<edge_data_type, std::allocator<edge_data_type>> edge_data;
-
     havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
@@ -221,26 +219,6 @@ int main(int argc, char** argv) {
           ("graph_edge_data_obj")
           (edge_data);
     }
-   
-    // Test  
-//    typedef typename graph_type::vertex_iterator vitr_type;
-//    typedef typename graph_type::vertex_locator vloc_type;  
-//    typedef typename graph_type::edge_iterator eitr_type; 
-//    for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
-//      vloc_type vertex = *vitr;
-//      std::cout << "MPI Rank -> " << mpi_rank << " local vertex " << graph->locator_to_label(vertex) << std::endl;
-//      for(eitr_type eitr = graph->edges_begin(vertex); eitr != graph->edges_end(vertex); ++eitr) {
-//        vloc_type neighbor = eitr.target();            
-//        double edge_data_d = 101;
-//        if (has_edge_data) {
-//          edge_data_d = edge_data[eitr];
-//        }
-//        std::cout << "# MPI Rank -> " << mpi_rank << " Source: " << graph->locator_to_label(vertex) << " is delegate " << vertex.is_delegate() << " Neighbour : " << graph->locator_to_label(neighbor) << " Edge data: " << edge_data_d << std::endl;
-
-//      }
-       
-//    }
-    // Test
 
     havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) {
@@ -258,7 +236,6 @@ int main(int argc, char** argv) {
     }
 
 //    graph->print_graph_statistics();
-
 
     //
     // Calculate max degree
