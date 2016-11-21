@@ -7,10 +7,6 @@ TEST(my_test, test_b) {
   EXPECT_EQ(5, 5);
 }
 
-TEST(my_test, test_c) {
-  EXPECT_EQ(5, 15);
-}
-
 }} //end namespace apgaf::test
 
 //mpi main for gteset

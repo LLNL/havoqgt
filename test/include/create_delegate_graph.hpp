@@ -41,7 +41,6 @@ void create_delegate_graph(
   double                     gbyte_per_rank = 0.25;
   uint64_t                   chunk_size = 8*1024;
   bool                       undirected = false;   
-  bool                       has_edge_data = true; 
  
   std::vector< std::string > input_filenames;
   input_filenames.clear();
@@ -67,6 +66,7 @@ void create_delegate_graph(
   //Setup edge list reader
   havoqgt::parallel_edge_list_reader<edge_data_type> 
     pelr(input_filenames, undirected);
+  bool has_edge_data = pelr.has_edge_data(); 
 
   if (mpi_rank == 0) {
     std::cout << "Generating new graph." << std::endl;
