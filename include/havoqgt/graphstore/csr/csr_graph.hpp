@@ -89,7 +89,17 @@ class csr_graph_container {
     std::cout << "finished:\t" << graphstore::utility::duration_time_sec(sa) << std::endl;
   }
 
-  typename adjlist_array_type::iterator adjacencylist(const vertex_type& src)
+  typename index_array_type::iterator vertices_begin()
+  {
+    return m_index_array.begin();
+  }
+
+  typename index_array_type::iterator vertices_end()
+  {
+    return m_index_array.end() - 1;
+  }
+
+  typename adjlist_array_type::iterator adjacent_edge_begin(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
     const index_type s = m_index_array[src];
@@ -97,7 +107,7 @@ class csr_graph_container {
     return itr;
   }
 
-  typename adjlist_array_type::iterator adjacencylist_end(const vertex_type& src)
+  typename adjlist_array_type::iterator adjacent_edge_end(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
     const index_type s = m_index_array[src+1];
@@ -144,8 +154,7 @@ class prop_csr_graph_container {
     m_adjlist_array(),
     m_edge_property_array()
   {
-    index_array_element_type zero_index(0, vertex_property_type());
-    m_index_array.resize(m_num_vertices + 1, zero_index);
+    m_index_array.resize(m_num_vertices + 1, index_array_element_type(0, vertex_property_type()));
     m_adjlist_array.resize(m_num_edges, adjlist_array_element_type());
     m_edge_property_array.resize(m_num_edges, edge_property_element_type());
 
@@ -191,31 +200,67 @@ class prop_csr_graph_container {
     std::cout << "finished:\t" << graphstore::utility::duration_time_sec(sa) << std::endl;
   }
 
-  void init_vertex_property(vertex_property_type& init_val)
+  void init_vertex_property(const vertex_property_type& init_val)
   {
     for (index_type i = 0; i < m_num_vertices; ++i) {
       std::get<index_array_element::vrt_prop>(m_index_array[i]) = init_val;
     }
   }
 
-  vertex_property_type& vertex_property(const vertex_type& src)
+  vertex_property_type& vertex_property_data(const vertex_type& vertex)
   {
-    return std::get<index_array_element::vrt_prop>(m_index_array[src]);
+    return std::get<index_array_element::vrt_prop>(m_index_array[vertex]);
   }
 
-  typename adjlist_array_type::iterator adjacencylist(const vertex_type& src)
+  vertex_property_type& vertex_property_data(const typename index_array_type::iterator& vertex)
+  {
+    return std::get<index_array_element::vrt_prop>(*vertex);
+  }
+
+  size_t degree(const typename index_array_type::iterator& vertex)
+  {
+    return (vertex + 1)->first - vertex->first;
+  }
+
+  typename index_array_type::iterator vertices_begin()
+  {
+    return m_index_array.begin();
+  }
+
+  typename index_array_type::iterator vertices_end()
+  {
+    return m_index_array.end() - 1;
+  }
+
+  typename adjlist_array_type::iterator adjacent_edge_begin(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
-    const index_type s = std::get<index_array_element::index>(m_index_array[src]);
-    itr += s;
+    const index_type offset = std::get<index_array_element::index>(m_index_array[src]);
+    itr += offset;
     return itr;
   }
 
-  typename adjlist_array_type::iterator adjacencylist_end(const vertex_type& src)
+  typename adjlist_array_type::iterator adjacent_edge_end(const vertex_type& src)
   {
     auto itr = m_adjlist_array.begin();
-    const index_type s = std::get<index_array_element::index>(m_index_array[src+1]);
-    itr += s;
+    const index_type offset = std::get<index_array_element::index>(m_index_array[src+1]);
+    itr += offset;
+    return itr;
+  }
+
+  typename adjlist_array_type::iterator adjacent_edge_begin(const typename index_array_type::iterator& vertex)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type offset = std::get<index_array_element::index>(*vertex);
+    itr += offset;
+    return itr;
+  }
+
+  typename adjlist_array_type::iterator adjacent_edge_end(const typename index_array_type::iterator& vertex)
+  {
+    auto itr = m_adjlist_array.begin();
+    const index_type offset = std::get<index_array_element::index>(*(vertex + 1));
+    itr += offset;
     return itr;
   }
 
@@ -372,8 +417,17 @@ class hyper_prop_csr_graph_container {
     return std::get<index_array_element::vrt_prop>(m_index_array[index]);
   }
 
+  typename index_array_type::iterator vertices_begin()
+  {
+    return m_index_array.begin();
+  }
 
-  typename adjlist_array_type::iterator adjacencylist(const vertex_type& src)
+  typename index_array_type::iterator vertices_end()
+  {
+    return m_index_array.end() - 1;
+  }
+
+  typename adjlist_array_type::iterator adjacent_edge_begin(const vertex_type& src)
   {
     const index_type index = compute_index(src);
     const index_type s = std::get<index_array_element::index>(m_index_array[index]);
@@ -382,7 +436,7 @@ class hyper_prop_csr_graph_container {
     return itr;
   }
 
-  typename adjlist_array_type::iterator adjacencylist_end(const vertex_type& src)
+  typename adjlist_array_type::iterator adjacent_edge_end(const vertex_type& src)
   {
     const index_type index = compute_index(src);
     const index_type s = std::get<index_array_element::index>(m_index_array[index+1]);

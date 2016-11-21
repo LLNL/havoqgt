@@ -189,7 +189,7 @@ void parse_options(int argc, char **argv)
 
   char c;
 
-  while ((c = getopt (argc, argv, "S:o:E:r:g:")) != -1) {
+  while ((c = getopt (argc, argv, "S:o:E:l:g:")) != -1) {
     switch (c) {
       case 'S':
         segmentfile_init_size_gb_ = boost::lexical_cast<size_t>(optarg);
@@ -207,7 +207,7 @@ void parse_options(int argc, char **argv)
         damping_factor_ = boost::lexical_cast<double>(optarg);
         break;
 
-      case 'r':
+      case 'l':
         num_loop_ = boost::lexical_cast<int>(optarg);
         break;
 

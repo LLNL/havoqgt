@@ -76,7 +76,7 @@ void run_bfs_sync (graphstore_type& graph,
 
 
       /// push adjacent vertices to the next queue
-      for (auto edge = graph.adjacencylist(src), end = graph.adjacencylist_end(src); edge != end; ++edge) {
+      for (auto edge = graph.adjacent_edge_begin(src), end = graph.adjacent_edge_end(src); edge != end; ++edge) {
         const vertex_type dst = *edge;
 #if BFS_USE_BITMAP
           const bool is_visited = visited[bitmap_global_pos(dst)] & (0x1 << bitmap_local_pos(dst));
