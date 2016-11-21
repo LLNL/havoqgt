@@ -7,3 +7,4 @@ Makefile
 *.error
 *.autosave
 *.DS_Store
+*~
