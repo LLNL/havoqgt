@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
   /// --- init segment file --- ///
   std::stringstream fname_local;
   fname_local << graph_file << "_" << mpi_rank;
-  double graph_capacity_gb_per_rank = 64.0 / mpi_size;
+  double graph_capacity_gb_per_rank = std::pow(2, SCALE) / mpi_size;
   havoqgt::distributed_db ddb(havoqgt::db_create(), fname_local.str().c_str(), graph_capacity_gb_per_rank);
 
   /// --- create a segument file --- ///
