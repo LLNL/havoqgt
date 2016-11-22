@@ -813,7 +813,7 @@ struct mailbox<T>::shm_exchange {
   using scoped_lock = boost::interprocess::scoped_lock<mutex>;
   static const uint32_t capacity = 2048;
   volatile uint64_t recv_end;
-  char pad2[65-sizeof(recv_end)];
+  char pad2[64-sizeof(recv_end)];
   volatile uint64_t recv_beg;
   uint64_t source_core;
   mutex recv_mutex;
