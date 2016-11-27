@@ -41,25 +41,6 @@ using graphstore_type       = degawarerhh_type; // baseline_type or degawarerhh_
 /// --- wrapper class to easy fit into the visitor program --- ///
 using dist_graphstore_type  = graphstore::dist_dynamic_graphstore<graphstore_type>;
 
-
-void fallocate(const char* const fname, size_t size, mapped_file_type& asdf)
-{
-#ifdef __linux__
-    // std::cout << "Call fallocate()" << std::endl;
-    int fd  = open(fname, O_RDWR);
-    assert(fd != -1);
-    /// posix_fallocate dosen't work on XFS ?
-    /// (dosen't actually expand the file size ?)
-    int ret = fallocate(fd, 0, 0, size);
-    // assert(ret == 0);
-    close(fd);
-    asdf.flush();
-#else
-#warning fallocate() is not supported
-#endif
-}
-
-
 void usage()  {
   if(havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
@@ -131,7 +112,7 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_file,
 
 
 int main(int argc, char** argv) {
-  const int SCALE = 32;
+  double graph_capacity_gb_per_rank = 4.0;
   int mpi_rank(0), mpi_size(0);
   bool col_count = false;
   bool verify = false;
@@ -159,15 +140,7 @@ int main(int argc, char** argv) {
   /// --- init segment file --- ///
   std::stringstream fname_local;
   fname_local << graph_file << "_" << mpi_rank;
-  double graph_capacity_gb_per_rank = std::pow(2, SCALE) / mpi_size;
   havoqgt::distributed_db ddb(havoqgt::db_create(), fname_local.str().c_str(), graph_capacity_gb_per_rank);
-
-  /// --- create a segument file --- ///
-  //  boost::interprocess::file_mapping::remove(fname_local.str().c_str());
-  //  uint64_t graphfile_init_size = std::pow(2, SCALE) / mpi_size;
-  //  mapped_file_type mapped_file = mapped_file_type(boost::interprocess::create_only, fname_local.str().c_str(), graphfile_init_size);
-  //  /// --- Call fallocate --- ///
-  //  fallocate(fname_local.str().c_str(), graphfile_init_size, mapped_file);
 
   /// --- get a segment_manager --- ///
   segment_manager_type* segment_manager = ddb.get_segment_manager();
