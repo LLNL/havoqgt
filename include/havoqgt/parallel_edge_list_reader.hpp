@@ -140,7 +140,6 @@ public:
 
     void get_next() {
       if(m_ptr_reader->m_undirected && m_make_undirected) {
-        //std::swap(std::get<0>(m_current).first, std::get<0>(m_current).second);  
         std::swap(std::get<0>(m_current), std::get<1>(m_current));
         m_make_undirected = false;
       } else {
@@ -148,9 +147,7 @@ public:
         ++m_count;
         m_make_undirected = true;
       }
-      //assert(std::get<0>(m_current).first <= m_ptr_reader->max_vertex_id()); 
       assert(std::get<0>(m_current) <= m_ptr_reader->max_vertex_id());
-      //assert(std::get<0>(m_current).second <= m_ptr_reader->max_vertex_id()); 
       assert(std::get<1>(m_current) <= m_ptr_reader->max_vertex_id());           
     }
 
@@ -169,9 +166,8 @@ public:
     int node_rank = havoqgt_env()->node_offset_comm().rank();
     int node_size = havoqgt_env()->node_offset_comm().size();
     m_local_edge_count = 0;
-    m_global_max_vertex = 0;
+    m_global_max_vertex = 0;      
     m_has_edge_data = false;
-    m_verify_has_edge_data = true;
     
     // identify filenames to be read by local rank
     for(size_t i=0; i<filenames.size(); ++i) {
@@ -183,20 +179,34 @@ public:
 
     size_t global_num_files = mpi::mpi_all_reduce(m_local_filenames.size(), std::plus<size_t>(), MPI_COMM_WORLD);
     if(havoqgt_env()->world_comm().rank() == 0) {
-      std::cout << "Ingesting from " << global_num_files << " files." << std::endl;
+      std::cout << "Ingesting from " << global_num_files << " files." << std::endl;   
+
+      // rank 0 reads the first input file and determines if edge data exists 
+      // and broadcasts to all other ranks
+      std::string line;         
+      std::ifstream input_file(m_local_filenames[0], std::ifstream::in);            
+      if(std::getline(input_file, line)) {
+        auto tokens = split(line, ' ');
+        if(tokens.size() > 2) {
+          m_has_edge_data = true;
+        }
+      }       
+      input_file.close();     
     }
-    
+
+    // broadcast if edge data exists
+    mpi::mpi_bcast(m_has_edge_data, 0, MPI_COMM_WORLD);
+
     // First pass to calc max vertex and count edges.
     open_files();
     //std::cout << "files open" << std::endl;
+
     edge_type edge;
     uint64_t local_max_vertex = 0;
     while(try_read_edge(edge)) {
       ++m_local_edge_count;
       local_max_vertex = std::max(std::get<0>(edge), local_max_vertex);
-//std::max(std::get<0>(edge).first, local_max_vertex);
       local_max_vertex = std::max(std::get<1>(edge), local_max_vertex);
-//std::max(std::get<0>(edge).second, local_max_vertex);      
     }
     m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
   }
@@ -236,13 +246,6 @@ protected:
     edge_data_type weight;
     while(!m_ptr_ifstreams.empty()) {
       if(std::getline(*(m_ptr_ifstreams.front()), line)) {
-    	if (m_verify_has_edge_data) {
-    	  m_verify_has_edge_data = false;
-    	  auto tokens = split(line, ' ');
-          if (tokens.size() > 2) {
-            m_has_edge_data = true;
-    	  }
-    	}
         std::stringstream ssline(line); 
         if (m_has_edge_data) {  
           ssline >> source >> target >> weight;
@@ -282,7 +285,6 @@ protected:
   uint64_t m_global_max_vertex;
   bool m_undirected;
   bool m_has_edge_data;
-  bool m_verify_has_edge_data;
 };
 
 } //end namespace havoqgt
