@@ -48,7 +48,7 @@ public:
   typedef typename Graph::vertex_locator vertex_locator;
   typedef typename Graph::edge_iterator eitr_type;
 
-  fpm_walker() {}
+  fpm_walker() : current_pattern_index(0) {}
 
   fpm_walker(vertex_locator _vertex) :
     vertex(_vertex),
@@ -109,9 +109,12 @@ public:
       vertex_locator neighbor = eitr.target();
       auto neighbor_data = std::get<0>(alg_data)[neighbor]; 
 
-      // create clones
-      fpm_walker new_visitor(neighbor, next_pattern_index);
-      vis_queue->queue_visitor(new_visitor);  
+      if (neighbor_data == pattern[next_pattern_index]) {
+        // create clone
+        fpm_walker new_visitor(neighbor, next_pattern_index);
+        vis_queue->queue_visitor(new_visitor);   
+      }
+  
     }
     return true;
   }
