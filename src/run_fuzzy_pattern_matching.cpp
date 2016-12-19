@@ -127,8 +127,8 @@ int main(int argc, char** argv) {
   // setup patterns
   std::cout << "Setting up patterns to search ... " << std::endl;
   pattern_util<VertexData> ptrn_util_two(pattern_input_filename, true);
-  auto pattern = std::get<0>(ptrn_util_two.input_patterns[1]);
-  auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[1]);
+  auto pattern = std::get<0>(ptrn_util_two.input_patterns[3]);
+  auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[3]);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
