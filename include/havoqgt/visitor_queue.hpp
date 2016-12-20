@@ -257,6 +257,27 @@ public:
     // std::cout << havoqgt::havoqgt_env()->world_comm().rank() << "TERM ";
   }
 
+  // For graph traversal w/o delegates
+  void traversal_no_delegate(visitor_type _source_v) {
+    if(0 /*_source_v.owner()*/ == m_mailbox.comm_rank()) {
+      queue_visitor(_source_v);
+    }
+    do {
+      do {
+      process_pending_controllers();
+      while(!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        this_visitor.visit(*m_ptr_graph, this);
+        m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      sched_yield();
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+
   // Note: similar to below, but uses graphstore iterator and no delegates.
   void init_dynamic_test_traversal() {
     for(auto vitr = m_ptr_graph->vertices_begin(), end = m_ptr_graph->vertices_end(); vitr != end; vitr++) {
