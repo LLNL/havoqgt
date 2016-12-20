@@ -11,6 +11,22 @@
 
 namespace graphstore {
 
+template<typename map_t>
+void bucket_size_histogram(const map_t& map,
+                           std::vector<size_t>& histogram)
+{
+  histogram.clear();
+  for (size_t i = 0; i < map.bucket_count(); ++i) {
+    size_t s = map.bucket_size(i);
+    if (histogram.size() < s + 1) histogram.resize(s+1, 0);
+    ++histogram[s];
+  }
+}
+
+}
+
+
+namespace graphstore {
 template <typename _vertex_type,
           typename _vertex_property_data_type,
           typename _edge_property_data_type,
@@ -229,12 +245,11 @@ public:
   void clear()
   { }
 
-  void print_status(const int level) const
+  void print_status(const int level = 0) const
   {
     size_t cnt = 0;
     double ave_num_buckets = 0;
-    for (auto vmp_itr = m_map_table.begin(), end = m_map_table.end(); vmp_itr != end; ++vmp_itr)
-    {
+    for (auto vmp_itr = m_map_table.begin(), end = m_map_table.end(); vmp_itr != end; ++vmp_itr) {
       const edge_map_table_type& edge_map = std::get<edg_map>(std::get<vmp_val>(*vmp_itr));
       ave_num_buckets += edge_map.bucket_count();
       ++cnt;
@@ -243,6 +258,37 @@ public:
 
     std::cout << "vertex-map's num buckets: " << m_map_table.bucket_count() << std::endl;
     std::cout << "vertex-map's size: " << m_map_table.size() << std::endl;
+
+    if (level < 1) return;
+
+    /// --- print vertex table's detailed status --- ///
+    {
+      std::vector<size_t> cnt;
+      bucket_size_histogram(m_map_table, cnt);
+      for (size_t i = 0; i < cnt.size(); ++i) {
+        std::cout << cnt[i] << "[" << i << "] ";
+      }
+      std::cout << std::endl;
+    }
+
+    /// --- print edge table's detailed status --- ///
+    {
+      std::vector<size_t> cnt;
+      for (auto vmp_itr = m_map_table.begin(), end = m_map_table.end(); vmp_itr != end; ++vmp_itr) {
+        const edge_map_table_type& edge_map = std::get<edg_map>(std::get<vmp_val>(*vmp_itr));
+        std::vector<size_t> wk;
+        bucket_size_histogram(edge_map, wk);
+        if (cnt.size() < wk.size()) cnt.resize(wk.size(), 0);
+        for (size_t i = 0; i < cnt.size(); ++i) {
+          cnt[i] += wk[i];
+        }
+      }
+      for (size_t i = 0; i < cnt.size(); ++i) {
+        std::cout << cnt[i] << "[" << i << "] ";
+      }
+      std::cout << std::endl;
+    }
+
   }
 
   void fprint_all_elements(std::ofstream& of)
