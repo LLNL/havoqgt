@@ -19,6 +19,10 @@ namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
 using namespace havoqgt;
 
+typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+template<typename T>
+    using SegmentAllocator = bip::allocator<T, segment_manager_t>;
+
 template <typename Vertex, typename VertexData, typename VertexDataList>
     void read_vertex_data_list(std::string vertex_data_input_filename,
       VertexDataList& vertex_data) {
@@ -36,7 +40,6 @@ template <typename Vertex, typename VertexData, typename VertexDataList>
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
@@ -64,7 +67,7 @@ int main(int argc, char** argv) {
   std::string pattern_input_filename = argv[3];
   std::string vertex_rank_output_filename = argv[4];
 
-  // parse commandline
+  // TODO: parse commandline
 
   MPI_Barrier(MPI_COMM_WORLD);
   if(backup_filename.size() > 0) {
@@ -73,7 +76,11 @@ int main(int argc, char** argv) {
 
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
-  graph_type *graph = ddb.get_segment_manager()->
+  segment_manager_t* segment_manager = ddb.get_segment_manager();
+    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+
+  //graph_type *graph = ddb.get_segment_manager()->
+  graph_type *graph = segment_manager->
     find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
@@ -87,29 +94,33 @@ int main(int argc, char** argv) {
 
   // fuzzy pattern matching
   {
-  // types for reading from file
+
+  // user defined types
   typedef uint64_t Vertex;
-  typedef uint16_t VertexData;   // assuming metadata is a 16-bit uint
-  typedef uint64_t VertexRank;
+  typedef uint16_t VertexData; // assuming metadata is a 16-bit uint
+  typedef uint64_t VertexRankType;
 
   // types used the delegate partitioned graph
   typedef typename graph_type::vertex_iterator vitr_type;
   typedef typename graph_type::vertex_locator vloc_type;
   //typedef typename graph_type::edge_iterator eitr_type;
 
-  typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData; 
+  //typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData;
+  //typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
+  typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
+  typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank; 
 
   std::cout << "Distributed fuzzy pattern matching." << std::endl;
 
   // read vertex data from file
   std::cout << "Reading vertex data list ... " << std::endl;
-  std::vector<VertexData> vertex_metadata_all; // for now
+  std::vector<VertexData> vertex_metadata_all; // for now all the ranks read from the same file
   read_vertex_data_list<Vertex, VertexData>(vertex_data_input_filename, vertex_metadata_all);  
   std::cout << "Size of vertex data list: " << vertex_metadata_all.size() << std::endl;
 
-  // vertex metadata container
-  VertexMetaData vertex_metadata(*graph);
-  //graph_type::vertex_data<VertexRank, std::allocator<VertexRank> >  vertex_rank(*graph); 
+  // vertex containers
+  VertexMetaData vertex_metadata(*graph, alloc_inst);
+  VertexRank vertex_rank(*graph, alloc_inst); 
   
   // iterate over the vertices and populate metadata
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();       
@@ -124,18 +135,46 @@ int main(int argc, char** argv) {
     vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
   }
 
+  // test print
+/*  int set_mpi_rank = 4;
+  for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
+    ++vitr) {
+    vloc_type vertex = *vitr;
+    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
+    if (mpi_rank == set_mpi_rank)
+    std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
+
+  }
+  
+  for(vitr_type vitr = graph->delegate_vertices_begin();
+    vitr != graph->delegate_vertices_end(); ++vitr) {
+    vloc_type vertex = *vitr;
+    if (mpi_rank == set_mpi_rank)
+    std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
+  }*/ 
+  
   // setup patterns
   std::cout << "Setting up patterns to search ... " << std::endl;
   pattern_util<VertexData> ptrn_util_two(pattern_input_filename, true);
-  auto pattern = std::get<0>(ptrn_util_two.input_patterns[3]);
-  auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[3]);
+
+  for(size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
+
+  auto pattern = std::get<0>(ptrn_util_two.input_patterns[pl]);
+  auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[pl]);
+
+  if(mpi_rank == 0) {
+    std::cout << "[" << pl << "] Searching pattern: "; 
+    pattern_util<VertexData>::output_pattern(pattern);
+  }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   double time_start = MPI_Wtime();
+
+  vertex_rank.reset(0);
   
   // run application
-  fuzzy_pattern_matching(graph, vertex_metadata, pattern, pattern_indices);
+  fuzzy_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -144,6 +183,25 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching Time = " << time_end - time_start << std::endl;
   }     
+
+  // test print
+  for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
+    ++vitr) {
+    vloc_type vertex = *vitr;
+    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
+    if (vertex_rank[vertex] > 0)
+    std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_rank[vertex] << std::endl; 
+
+  }
+  
+  for(vitr_type vitr = graph->delegate_vertices_begin();
+    vitr != graph->delegate_vertices_end(); ++vitr) {
+    vloc_type vertex = *vitr;
+    if (vertex_rank[vertex] > 0)
+    std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_rank[vertex] << std::endl; 
+  } 
+
+  } // for
 
   } // fuzzy pattern matching  
 
