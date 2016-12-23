@@ -9,11 +9,12 @@
 #include <boost/interprocess/managed_heap_memory.hpp>
 
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/pattern_util.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/environment.hpp>
 #include <havoqgt/fuzzy_pattern_matching.hpp>
+#include <havoqgt/pattern_util.hpp>
+#include <havoqgt/vertex_data_db.hpp>
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
@@ -23,9 +24,9 @@ typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 template<typename T>
     using SegmentAllocator = bip::allocator<T, segment_manager_t>;
 
-template <typename Vertex, typename VertexData, typename VertexDataList>
+template <typename Vertex, typename VertexData, typename VertexDataList, typename VertexEntryList>
     void read_vertex_data_list(std::string vertex_data_input_filename,
-      VertexDataList& vertex_data) {
+      VertexDataList& vertex_data, VertexEntryList& vertex_entry) {
       std::ifstream vertex_data_input_file(vertex_data_input_filename,
         std::ifstream::in);
       std::string line;
@@ -35,6 +36,7 @@ template <typename Vertex, typename VertexData, typename VertexDataList>
         VertexData v_data(0);
         iss >> v_source >> v_data;
         vertex_data.push_back(v_data);
+        vertex_entry.push_back(std::forward_as_tuple(v_source, v_data)); 
       }
       vertex_data_input_file.close();
 }
@@ -109,31 +111,35 @@ int main(int argc, char** argv) {
   //typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
   typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
   typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank; 
+  typedef std::vector<std::tuple<Vertex, VertexData>> VertexEntry;
 
   std::cout << "Distributed fuzzy pattern matching." << std::endl;
 
   // read vertex data from file
-  std::cout << "Reading vertex data list ... " << std::endl;
-  std::vector<VertexData> vertex_metadata_all; // for now all the ranks read from the same file
-  read_vertex_data_list<Vertex, VertexData>(vertex_data_input_filename, vertex_metadata_all);  
-  std::cout << "Size of vertex data list: " << vertex_metadata_all.size() << std::endl;
+  //std::cout << "Reading vertex data list ... " << std::endl;
+  //std::vector<VertexData> vertex_metadata_all; // for now all the ranks read from the same file
+  //VertexEntry vertex_entry;
+ 
+  //read_vertex_data_list<Vertex, VertexData>(vertex_data_input_filename, vertex_metadata_all, vertex_entry);  
+  //std::cout << "Size of vertex data list: " << vertex_metadata_all.size() << std::endl;
+  //std::cout << "Size of vertex entry list: " << vertex_entry.size() << std::endl;
 
   // vertex containers
   VertexMetaData vertex_metadata(*graph, alloc_inst);
   VertexRank vertex_rank(*graph, alloc_inst); 
   
   // iterate over the vertices and populate metadata
-  for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();       
-    ++vitr) {
-    vloc_type vertex = *vitr;
-    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
-  }
+  //for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();       
+    //++vitr) {
+    //vloc_type vertex = *vitr;
+    //vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
+  //}
 
-  for (vitr_type vitr = graph->delegate_vertices_begin(); 
-    vitr != graph->delegate_vertices_end(); ++vitr) { 
-    vloc_type vertex = *vitr;
-    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
-  }
+  //for (vitr_type vitr = graph->delegate_vertices_begin(); 
+    //vitr != graph->delegate_vertices_end(); ++vitr) { 
+    //vloc_type vertex = *vitr;
+    //vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
+  //}
 
   // test print
 /*  int set_mpi_rank = 4;
@@ -152,6 +158,11 @@ int main(int argc, char** argv) {
     if (mpi_rank == set_mpi_rank)
     std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
   }*/ 
+
+  // build the distributed vertex data db
+  vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
+    (graph, vertex_metadata, vertex_data_input_filename, 10000); // each rank reads 10K lines at a atime
+  //vertex_data_db<graph_type, VertexMetaData, VertexEntry, VertexData>(graph, vertex_metadata, vertex_entry);  
   
   // setup patterns
   std::cout << "Setting up patterns to search ... " << std::endl;
@@ -188,7 +199,6 @@ int main(int argc, char** argv) {
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
     ++vitr) {
     vloc_type vertex = *vitr;
-    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
     if (vertex_rank[vertex] > 0)
     std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_rank[vertex] << std::endl; 
 
