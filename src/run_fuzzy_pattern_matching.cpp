@@ -81,7 +81,6 @@ int main(int argc, char** argv) {
   segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-  //graph_type *graph = ddb.get_segment_manager()->
   graph_type *graph = segment_manager->
     find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
@@ -97,72 +96,46 @@ int main(int argc, char** argv) {
   // fuzzy pattern matching
   {
 
-  // user defined types
+  // user defined types for the application
   typedef uint64_t Vertex;
   typedef uint16_t VertexData; // assuming metadata is a 16-bit uint
   typedef uint64_t VertexRankType;
 
-  // types used the delegate partitioned graph
+  // types used by the delegate partitioned graph
   typedef typename graph_type::vertex_iterator vitr_type;
   typedef typename graph_type::vertex_locator vloc_type;
   //typedef typename graph_type::edge_iterator eitr_type;
 
-  //typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData;
-  //typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
   typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
   typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank; 
   typedef std::vector<std::tuple<Vertex, VertexData>> VertexEntry;
 
   std::cout << "Distributed fuzzy pattern matching." << std::endl;
 
-  // read vertex data from file
-  //std::cout << "Reading vertex data list ... " << std::endl;
-  //std::vector<VertexData> vertex_metadata_all; // for now all the ranks read from the same file
-  //VertexEntry vertex_entry;
- 
-  //read_vertex_data_list<Vertex, VertexData>(vertex_data_input_filename, vertex_metadata_all, vertex_entry);  
-  //std::cout << "Size of vertex data list: " << vertex_metadata_all.size() << std::endl;
-  //std::cout << "Size of vertex entry list: " << vertex_entry.size() << std::endl;
-
   // vertex containers
   VertexMetaData vertex_metadata(*graph, alloc_inst);
   VertexRank vertex_rank(*graph, alloc_inst); 
-  
-  // iterate over the vertices and populate metadata
-  //for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();       
-    //++vitr) {
-    //vloc_type vertex = *vitr;
-    //vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
-  //}
-
-  //for (vitr_type vitr = graph->delegate_vertices_begin(); 
-    //vitr != graph->delegate_vertices_end(); ++vitr) { 
-    //vloc_type vertex = *vitr;
-    //vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
-  //}
-
+ 
+  // build the distributed vertex data db
+  vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
+    (graph, vertex_metadata, vertex_data_input_filename, 10000); // each rank reads 10K lines at a time
+ 
   // test print
 /*  int set_mpi_rank = 4;
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
     ++vitr) {
     vloc_type vertex = *vitr;
-    vertex_metadata[vertex] = vertex_metadata_all[graph->locator_to_label(vertex)];
     if (mpi_rank == set_mpi_rank)
-    std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
-
+      std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
   }
   
   for(vitr_type vitr = graph->delegate_vertices_begin();
     vitr != graph->delegate_vertices_end(); ++vitr) {
     vloc_type vertex = *vitr;
     if (mpi_rank == set_mpi_rank)
-    std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
+      std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
   }*/ 
-
-  // build the distributed vertex data db
-  vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
-    (graph, vertex_metadata, vertex_data_input_filename, 10000); // each rank reads 10K lines at a atime
-  //vertex_data_db<graph_type, VertexMetaData, VertexEntry, VertexData>(graph, vertex_metadata, vertex_entry);  
+  // test print
   
   // setup patterns
   std::cout << "Setting up patterns to search ... " << std::endl;
@@ -209,7 +182,8 @@ int main(int argc, char** argv) {
     vloc_type vertex = *vitr;
     if (vertex_rank[vertex] > 0)
     std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_rank[vertex] << std::endl; 
-  } 
+  }
+  // test print 
 
   } // for
 
