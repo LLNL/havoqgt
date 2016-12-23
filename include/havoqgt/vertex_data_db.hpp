@@ -126,7 +126,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     vq.queue_visitor(new_visitor); 
   }
   std::cout << "MPI Rank " << mpi_rank << " done queuing ... building distributed vertex data db ... " << std::endl;
-
+  // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit the ones already in the queue
   vq.init_visitor_traversal_new();
 
   std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
@@ -184,6 +184,10 @@ void read_file_and_build_vertex_data_db(std::string vertex_data_input_filename,
 
   vertex_data_db<TGraph, VertexMetaData, VertexEntry, VertexData>
     (g, vertex_metadata, vertex_entry);
+
+  // TODO: process in chunks. Important: same issue as number of files per-rank.
+  // For now, make sure each vertex data file is not too big.
+  // It can handel any number of files, so reading a file in chunks is not important. 
 }
 
 template <typename TGraph, typename VertexMetaData, typename Vertex, 
@@ -192,6 +196,10 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
   std::string base_filename, size_t chunk_size) {
   int mpi_rank = havoqgt_env()->world_comm().rank();
   int mpi_size = havoqgt_env()->world_comm().size();
+
+  if (mpi_rank == 0) {
+    std::cout << "Building distributed vertex data db ... " << std::endl;
+  }
 
   boost::filesystem::path dir_path(base_filename);
   std::string wildcard = dir_path.filename().string();
@@ -216,7 +224,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
       max_files_per_rank = static_cast<size_t>(floor(quotient) + 1);
     }
   }
-  std::cout << "Maximum number of files per rank " << " " << 
+  std::cout << "Maximum number of files per-rank " << " " << 
    max_files_per_rank << std::endl; 
 
   for (size_t i = mpi_rank <= file_paths.size() - 1 ? mpi_rank : 
@@ -234,7 +242,12 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     if (i + mpi_size < file_paths.size()) {
       i+=mpi_size;  
     }     
-  }    
+  } 
+
+  if (mpi_rank == 0) {
+    std::cout << "Done building vertex data db." << std::endl;
+  }
+   
     
 } 
 
