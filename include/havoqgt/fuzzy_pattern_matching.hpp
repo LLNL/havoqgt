@@ -104,7 +104,9 @@ public:
       if (current_pattern_index == pattern.size() - 1) {
         std::cout << "Pre-visit Found" << std::endl;
         //return false;
-        return true; // for now, for printing
+        // TODO: can not update the ranks here, do not have reference to the graph or visitor_queue
+        // Requires a new version of the pre_visit function in the visitor_queue class 
+        return true;
       }
       // TODO: degree > 0 
       return true;
