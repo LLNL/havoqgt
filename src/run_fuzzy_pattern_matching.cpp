@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -15,6 +16,7 @@
 #include <havoqgt/fuzzy_pattern_matching.hpp>
 #include <havoqgt/label_propagation_pattern_matching.hpp> 
 #include <havoqgt/pattern_util.hpp>
+#include <havoqgt/token_passing_pattern_matching.hpp>
 #include <havoqgt/vertex_data_db.hpp>
 
 namespace hmpi = havoqgt::mpi;
@@ -24,7 +26,21 @@ using namespace havoqgt;
 typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 
 template<typename T>
-    using SegmentAllocator = bip::allocator<T, segment_manager_t>;
+  using SegmentAllocator = bip::allocator<T, segment_manager_t>;
+
+/*template<typename VertexData, typename IntegralType>
+class vertex_state {
+public:  
+  vertex_state() :
+  global_itr_count(0), 
+  local_itr_count(0) {
+  }
+
+  IntegralType global_itr_count;   
+  IntegralType local_itr_count;
+  std::vector<VertexData> labels;
+  std::vector<IntegralType> label_itr_count;  
+};*/ 
 
 int main(int argc, char** argv) {
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
@@ -96,15 +112,21 @@ int main(int argc, char** argv) {
   typedef graph_type::vertex_data<bool, SegmentAllocator<bool> > VertexActive;
   typedef graph_type::vertex_data<uint64_t, SegmentAllocator<uint64_t> > VertexPatternID;
 
+  typedef vertex_state<uint64_t> VertexState;
+  typedef std::unordered_map<Vertex, VertexState> VertexStateMap;
+
   if(mpi_rank == 0) {
     std::cout << "Distributed fuzzy pattern matching." << std::endl;
   }
+
+  // per-rank containers
+  VertexStateMap vertex_state_map; 
 
   // vertex containers
   VertexMetaData vertex_metadata(*graph, alloc_inst);
   VertexRank vertex_rank(*graph, alloc_inst);
   VertexActive vertex_active(*graph, alloc_inst);
-  VertexPatternID vertex_pattern_id(*graph, alloc_inst);   
+  //VertexPatternID vertex_pattern_id(*graph, alloc_inst);   
  
   // build the distributed vertex data db
   vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
@@ -149,15 +171,21 @@ int main(int argc, char** argv) {
 
   vertex_rank.reset(0);
   vertex_active.reset(true);
-  vertex_pattern_id.reset(0); // TODO: -1 
+  //vertex_pattern_id.reset(0); // TODO: -1
+  std::cout << "Vertex state map size (initially): " << vertex_state_map.size() << std::endl; // Test 
   
   // run application
+
   // clone pattern matchng
   //fuzzy_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);
+
   // label propagation pattern matching 
   label_propagation_pattern_matching<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
-   VertexRank, VertexActive, VertexPatternID>
-   (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, vertex_pattern_id);
+    VertexRank, VertexActive/*, VertexPatternID*/, VertexStateMap>
+    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active/*, vertex_pattern_id*/, vertex_state_map);
+
+  // toekn passing
+  //token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);  
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -165,7 +193,9 @@ int main(int argc, char** argv) {
 
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching Time = " << time_end - time_start << std::endl;
-  }     
+  }    
+
+  std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
 
   // test print
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
