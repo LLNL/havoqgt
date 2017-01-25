@@ -10,13 +10,15 @@ template<typename IntegralType>
 class vertex_state {
 public:
   vertex_state() :
+  is_active(false),
   global_itr_count(0),
   local_itr_count(0) {
   }
 
+  bool is_active;
   IntegralType global_itr_count;
   IntegralType local_itr_count;
-  std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; 
+  std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; //TODO: change size_t type 
 };
 
 template<typename Visitor>
@@ -64,22 +66,27 @@ public:
 
   lppm_visitor() : 
     itr_count(0),
+    parent_min_itr_count(0),
     do_update_vertex_pattern_id(false) {}
 
   lppm_visitor(vertex_locator _vertex, uint64_t _itr_count = 0, 
+    uint64_t _parent_min_itr_count = 0, 
     bool _do_update_vertex_pattern_id = false) : 
     vertex(_vertex), 
     itr_count(_itr_count), 
+    parent_min_itr_count(_parent_min_itr_count),
     do_update_vertex_pattern_id(_do_update_vertex_pattern_id) {}
 
   lppm_visitor(vertex_locator _vertex, vertex_locator _parent, 
     VertexData _parent_vertex_data, size_t _parent_pattern_index, 
-    uint64_t _itr_count, bool _do_update_vertex_pattern_id = false) :
+    uint64_t _itr_count, uint64_t _parent_min_itr_count = 0, 
+    bool _do_update_vertex_pattern_id = false) :
     vertex(_vertex), 
     parent(_parent),
     parent_vertex_data(_parent_vertex_data),
     parent_pattern_index(_parent_pattern_index), 
-    itr_count(_itr_count), 
+    itr_count(_itr_count),
+    parent_min_itr_count(_parent_min_itr_count),  
     do_update_vertex_pattern_id(_do_update_vertex_pattern_id) {}
 
   ~lppm_visitor() {}
@@ -91,8 +98,9 @@ public:
     }
 
     auto vertex_data = std::get<0>(alg_data)[vertex];
-    auto pattern = std::get<1>(alg_data);
-    auto pattern_indices = std::get<2>(alg_data);
+    //auto pattern = std::get<1>(alg_data);
+    //auto pattern_indices = std::get<2>(alg_data);
+    auto& pattern_graph = std::get<7>(alg_data);
 
     // TODO: update veretx_pattern_id
     // need to write a new constructor to do update only
@@ -114,17 +122,25 @@ public:
     }
 
     auto vertex_data = std::get<0>(alg_data)[vertex];
-    auto pattern = std::get<1>(alg_data);
-    auto pattern_indices = std::get<2>(alg_data);
+    //auto pattern = std::get<1>(alg_data);
+    //auto pattern_indices = std::get<2>(alg_data);
     auto& pattern_graph = std::get<7>(alg_data); 
 
     // does vertex_data match any entry in the query pattern
     bool match_found = false;
 
     // TODO: do you want to compute this every time or store in the memory
+    // I think all the invalid vertices would be filtered out by itr #0/1/2; 
+    // set std::get<4>(alg_data)[vertex] = false. 
+    // So, if it_count > # then you do not need to perform this check. 
+    // Use the same vertex_state map instead of std::get<4>(alg_data)[vertex]?
+    // Add to the map if match_found is true or also have valid neighbours?
+    // For multiple pattern labels, add a vector to the vertex_state class 
     std::vector<size_t> vertex_pattern_indices(0); // a vertex label could match to multiple pattern labels
-    for (size_t vertex_pattern_index = 0; vertex_pattern_index < pattern.size(); vertex_pattern_index++) { 
-      if (pattern[vertex_pattern_index] == vertex_data) {
+    for (size_t vertex_pattern_index = 0; 
+      vertex_pattern_index < pattern_graph.vertex_data.size(); 
+      vertex_pattern_index++) { 
+      if (pattern_graph.vertex_data[vertex_pattern_index] == vertex_data) {
         vertex_pattern_indices.push_back(vertex_pattern_index);
         // TODO: compare with the entry in pattern_indices to detect loop or use token passing
         match_found = true;
@@ -134,7 +150,8 @@ public:
 
     if (!match_found) {
       std::get<4>(alg_data)[vertex] = false;
-      return false;
+      //return false;
+      return true; // TODO: ask Roger?
     } 
 
     if (itr_count == 0 && match_found) {
@@ -146,14 +163,14 @@ public:
         for (auto vertex_pattern_index : vertex_pattern_indices) {
           // do this for all the pattern indices for this vertex
           //if (g.locator_to_label(vertex) == 28) // Test
-	  //  std::cout << g.locator_to_label(vertex) << " sending to " << g.locator_to_label(neighbor) << std::endl; // Test	 
+	  //  std::cout << g.locator_to_label(vertex) << " sending to " << g.locator_to_label(neighbor) << std::endl; // Test
           lppm_visitor new_visitor(neighbor, vertex, vertex_data, vertex_pattern_index, 1); 
           vis_queue->queue_visitor(new_visitor); 
         } // for
       } // for
-    }
+    } // if itr_count == 0
 
-    if ((itr_count >= 1 && itr_count <= 2*pattern.size() + 1) && match_found) {
+    if ((itr_count >= 1 && itr_count <= 2*pattern_graph.vertex_data.size() + 1) && match_found) {
     //if (itr_count == 1 && match_found) {  
       if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
         std::cout << g.locator_to_label(vertex) << " receiving from " << g.locator_to_label(parent) << " " << itr_count << std::endl; // Test 
@@ -168,9 +185,9 @@ public:
 
         // verify and decide if vertex should reply to the parent and 
         // update vertex_state_map accordingly  
-        uint64_t next_itr_count = verify_and_update_vertex_state_map(g, vis_queue, alg_data, vertex_pattern_index);
+         auto vertex_itr_count = verify_and_update_vertex_state_map(g, vis_queue, alg_data, vertex_pattern_index);
 
-        if (next_itr_count == 0) {
+        if (vertex_itr_count == 0) {
           //std ::cout << "."; // Test 
           continue;
         }
@@ -184,13 +201,14 @@ public:
 
         //}
 
-        else  {
+        else {
           //std ::cout << itr_count; // Test
           if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
             std::cout << g.locator_to_label(vertex) << " sending to " << g.locator_to_label(parent) << " " << (itr_count + 1) << std::endl; // Test
 
           match_found = true;
-          lppm_visitor new_visitor(parent, vertex, vertex_data, vertex_pattern_index, itr_count + 1/*next_itr_count*/);
+          // TODO: add next_itr_count in the message
+          lppm_visitor new_visitor(parent, vertex, vertex_data, vertex_pattern_index, itr_count + 1, vertex_itr_count);
           vis_queue->queue_visitor(new_visitor); 
 
         }  
@@ -221,18 +239,33 @@ public:
   }
 
   template<typename VisitorQueueHandle, typename AlgData>
-  uint64_t verify_and_update_vertex_state_map(Graph& g, VisitorQueueHandle vis_queue, 
-    AlgData& alg_data, size_t vertex_pattern_index) const {
+  uint64_t verify_and_update_vertex_state_map(Graph& g, 
+    VisitorQueueHandle vis_queue, AlgData& alg_data, 
+    size_t vertex_pattern_index) const {
 
-    typedef vertex_state<uint64_t> VertexState;
+    typedef vertex_state<uint64_t> VertexState; // TODO: user defined type
 
-    auto pattern = std::get<1>(alg_data);  
-    auto pattern_indices = std::get<2>(alg_data);
-    auto& pattern_graph = std::get<7>(alg_data); 
+    //auto pattern = std::get<1>(alg_data);  
+    //auto pattern_indices = std::get<2>(alg_data);
+    auto& pattern_graph = std::get<7>(alg_data);
+
+    bool match_found = false;
+
+    // verify if parent_pattern_index is valid
+    for (auto e = pattern_graph.vertices[vertex_pattern_index];
+      e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
+      if (pattern_graph.edges[e] == parent_pattern_index) {
+        match_found = true;
+      }
+    }
+
+    if (!match_found) {
+      return 0;
+    } 
 
     // verify if parent_pattern_index is valid 
     // TODO: this only works for chains, better move to adjacency list representation 
-    if (vertex_pattern_index == 0 && 
+/*    if (vertex_pattern_index == 0 && 
       !(parent_pattern_index == vertex_pattern_index + 1)) {
       //continue;
       return 0;
@@ -244,7 +277,7 @@ public:
       !(parent_pattern_index == vertex_pattern_index + 1)) {
       //continue;
       return 0;
-    }
+    }*/
 
     // vertex heard from a valid neighbour (possibly) 
     // create an entry for this vertex in the vertex_state_map or update, if exists already 
@@ -265,16 +298,22 @@ public:
     // figure out what pattern indices are expected and add them to pattern_vertex_itr_count_map
     //if (itr_count == 1) {
     if(find_vertex->second.pattern_vertex_itr_count_map.size() < 1) {
-      bool match_found = false; 
-      for (size_t pattern_index = 0;  pattern_index < pattern_indices.size(); pattern_index++) {
-        match_found = false;
-        if (vertex_pattern_index - 1 == pattern_index) {
-          match_found = true;
-        } else if (vertex_pattern_index + 1 == pattern_index) {
-          match_found = true;
-        }
+      //bool match_found = false; 
+      //for (size_t pattern_index = 0;  pattern_index < pattern_indices.size(); pattern_index++) {
+      for (auto e = pattern_graph.vertices[vertex_pattern_index];
+        e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) { 
+
+        //match_found = false;
+
+        auto pattern_index = pattern_graph.edges[e];
+
+        //if (vertex_pattern_index - 1 == pattern_index) {
+        //  match_found = true;
+        //} else if (vertex_pattern_index + 1 == pattern_index) {
+        //  match_found = true;
+        //}
         
-        if (match_found) {
+        //if (match_found) {
           auto find_pattern_vertex =  find_vertex->second.pattern_vertex_itr_count_map.find(pattern_index);
           if (find_pattern_vertex == find_vertex->second.pattern_vertex_itr_count_map.end()) {
             auto insert_status = find_vertex->second.pattern_vertex_itr_count_map.insert({pattern_index, 0});
@@ -284,13 +323,17 @@ public:
             }
             //find_pattern_vertex = insert_status.first;
           } 
-        } 
+        //} 
 
       } // for
       
     } // if
 
-    auto find_pattern_vertex =  find_vertex->second.pattern_vertex_itr_count_map.find(parent_pattern_index);  
+    if (find_vertex->second.pattern_vertex_itr_count_map.size() < 1) {
+      return 0;
+    }
+
+    auto find_pattern_vertex = find_vertex->second.pattern_vertex_itr_count_map.find(parent_pattern_index);  
     if (find_pattern_vertex == find_vertex->second.pattern_vertex_itr_count_map.end()) {
       //auto insert_status = find_vertex->second.pattern_vertex_itr_count_map.insert({parent_pattern_index, 0});
       //if(!insert_status.second) {
@@ -303,42 +346,42 @@ public:
     }      
    
     // update itr_count of the pattern vertex 
-    if (find_pattern_vertex->second < itr_count) {
+    if (find_pattern_vertex->second < itr_count) { // TODO: parent_min_itr_count?
       find_pattern_vertex->second = itr_count;
     }   
 
-    if (find_vertex->second.pattern_vertex_itr_count_map.size() < 1) {
-      return 0;
-    }
-
     // figure out current iteration count for this vertex      
-    uint64_t min_itr_count = find_vertex->second.pattern_vertex_itr_count_map.begin()->second;
+    auto min_itr_count = find_vertex->second.pattern_vertex_itr_count_map.begin()->second;
 
     // TODO: verify if v.first's are valid
     if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test    
       std::cout << " > " << g.locator_to_label(vertex) << " : "; // Test 
+
     for (auto& v : find_vertex->second.pattern_vertex_itr_count_map) {
+
       if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test   
         std::cout << "(" << v.first << ", " << v.second << ") "; // Test
 
       if (v.second < min_itr_count) { // TODO: should be min
         min_itr_count = v.second;  
       } 
-    }        
+    } // for
+        
     if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test
       std::cout << std::endl; // Test
 
+    // update current iteration count for this vertex
     if (find_vertex->second.local_itr_count <= min_itr_count) {  
-      find_vertex->second.local_itr_count = min_itr_count + 1;    
+      find_vertex->second.local_itr_count = min_itr_count + 1; // TODO: what should this be?   
     } 
 
-    // vertex_iteration
+    // update vertex_iteration
     if (find_vertex->second.local_itr_count > std::get<5>(alg_data)[vertex]) {
       std::get<5>(alg_data)[vertex] = find_vertex->second.local_itr_count;    
     }
 
     if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test
-      std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << " pattern_graph size " << std::endl; // Test   
+      std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << std::endl; // Test   
 
     return find_vertex->second.local_itr_count;
  
@@ -346,9 +389,10 @@ public:
 
   vertex_locator vertex;
   vertex_locator parent;
-  VertexData parent_vertex_data; 
-  size_t parent_pattern_index;
-  uint64_t itr_count;
+  VertexData parent_vertex_data; // TODO: might not need this at all 
+  size_t parent_pattern_index; // TODO: change to the same type as in the pattern_graph  
+  uint64_t itr_count; // TODO: change to user defined type, IntegralType 
+  uint64_t parent_min_itr_count;  
   bool do_update_vertex_pattern_id;
 }; 
 
@@ -359,15 +403,14 @@ void label_propagation_pattern_matching(TGraph* g, VertexMetaData& vertex_metada
   PatternData& pattern, PatternIndices& pattern_indices, VertexRank& vertex_rank,
   VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMap& vertex_state_map, PatternGraph& pattern_graph) {
   //std::cout << "label_propagation_pattern_matching.hpp" << std::endl;
-
   typedef lppm_visitor<TGraph, VertexData> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
     vertex_active, vertex_iteration, vertex_state_map, pattern_graph);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal_new(); 
-  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this barrier?
   //vertex_rank.all_reduce();
-  vertex_iteration.all_max_reduce();
+  vertex_iteration.all_max_reduce(); // TODO
   MPI_Barrier(MPI_COMM_WORLD);
 }  
 
