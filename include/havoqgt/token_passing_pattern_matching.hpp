@@ -100,7 +100,7 @@ public:
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
 
-        if (g.locator_to_label(neighbor) != 46) {
+        if (g.locator_to_label(neighbor) != 46) { // TODO: put all the valid vertices form label propagation in a queue and pop here and create visitors like this 
           continue;    
         }  
  
@@ -128,7 +128,7 @@ public:
         // TODO: verify if vertex is valid (tighter constrains verification)
         // is vertex_data is valid
 
-        if (vertex_data == pattern[pattern_indices[source_pattern_index + new_itr_count]]) {
+        if (vertex_data == pattern[pattern_indices[source_pattern_index + new_itr_count]]) { // TODO: do comparison using parent_pattern_index to reduce number of messages 
           // TODO: verify if this vertex has a valid pattern index 
           // forward along
           std::cout << g.locator_to_label(vertex) << " " << new_itr_count << " forwarding ... " << g.locator_to_label(target_vertex) << std::endl; // Test
@@ -138,6 +138,7 @@ public:
         }      
       } else if (max_itr_count <= itr_count) {
         // is this the target vertex
+        // TODO: also verify parent_pattern_index 
         if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex)) {
           // found loop
           std::cout << "found loop - vertex " << g.locator_to_label(vertex) << " itr " << itr_count << std::endl; // Test
@@ -149,7 +150,7 @@ public:
         << g.locator_to_label(target_vertex) <<  " after " << itr_count 
         << " iterations" <<std::endl; // Test
         return false;  
-      }
+      }  
 
       if (!do_forward_token) {
         return false;
@@ -177,6 +178,7 @@ public:
     return false;
   }
 
+  // parent_pattern_index
   vertex_locator vertex;
   vertex_locator target_vertex;
   size_t itr_count;
