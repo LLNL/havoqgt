@@ -130,8 +130,8 @@ public:
     // TODO: do you want to compute this every time or store in the memory?
     std::vector<size_t> vertex_pattern_indices(0); // a vertex label could match to multiple pattern labels
     for (size_t vertex_pattern_index = 0; 
-         vertex_pattern_index < pattern_graph.vertex_data.size(); 
-         vertex_pattern_index++) { 
+      vertex_pattern_index < pattern_graph.vertex_data.size(); 
+      vertex_pattern_index++) { 
       if (pattern_graph.vertex_data[vertex_pattern_index] == vertex_data) {
         vertex_pattern_indices.push_back(vertex_pattern_index);
         // TODO: compare with the entry in pattern_indices to detect loop or 
@@ -236,8 +236,9 @@ public:
   }
 
   template<typename VisitorQueueHandle, typename AlgData>
-  uint64_t verify_and_update_vertex_state_map(Graph& g, VisitorQueueHandle vis_queue, 
-    AlgData& alg_data, size_t vertex_pattern_index) const {
+  uint64_t verify_and_update_vertex_state_map(Graph& g, 
+    VisitorQueueHandle vis_queue, AlgData& alg_data, 
+    size_t vertex_pattern_index) const {
 
     typedef vertex_state<uint64_t> VertexState;
 
@@ -277,7 +278,8 @@ public:
     }*/
 
     // vertex heard from a valid neighbour (possibly) 
-    // create an entry for this vertex in the vertex_state_map or update, if exists already 
+    // create an entry for this vertex in the vertex_state_map or 
+    // update, if exists already 
     auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
     if (find_vertex == std::get<6>(alg_data).end()) {
       auto insert_status = std::get<6>(alg_data).insert({g.locator_to_label(vertex), VertexState()});
@@ -292,6 +294,9 @@ public:
       return 0;
     }
 
+    // Important: a vertex could receive messages after it has met all the 
+    // constraints. In that case, do not update vertex state but return 1, 
+    // since the parent is a valid one. 
     if (find_vertex->second.is_active) {
       return 1;
     }
@@ -385,7 +390,7 @@ public:
       find_vertex->second.local_itr_count = min_itr_count + 1;    
     } 
 
-    // vertex_iteration
+    // update vertex_iteration
     if (find_vertex->second.local_itr_count > std::get<5>(alg_data)[vertex]) {
       std::get<5>(alg_data)[vertex] = find_vertex->second.local_itr_count;    
     }
@@ -446,15 +451,15 @@ void verify_and_update_vertex_state_map(TGraph* g, VertexStateMap& vertex_state_
     
     if (!v.second.is_active) {
       vertex_remove_from_map_list.push_back(v.first);
-      vertex_active[v_locator] = false; 
+      vertex_active[v_locator] = false;  
     } else {
-      v.second.is_active = false;
+      v.second.is_active = false; // reset for next iteration
     } 
 
   } // for
 
   for (auto v : vertex_remove_from_map_list) {
-    if(vertex_state_map.erase(v) < 1) {
+    if (vertex_state_map.erase(v) < 1) {
       std::cerr << "Error: failed to remove an element from the map." << std::endl;  
     }    
   }
@@ -493,7 +498,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   }
   //vertex_rank.all_reduce();
   //vertex_iteration.all_max_reduce();
-  MPI_Barrier(MPI_COMM_WORLD);
+  //MPI_Barrier(MPI_COMM_WORLD);
 }  
 
 }} //end namespace havoqgt::mpi

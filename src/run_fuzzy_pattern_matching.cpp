@@ -30,20 +30,6 @@ typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 template<typename T>
   using SegmentAllocator = bip::allocator<T, segment_manager_t>;
 
-/*template<typename VertexData, typename IntegralType>
-class vertex_state {
-public:  
-  vertex_state() :
-  global_itr_count(0), 
-  local_itr_count(0) {
-  }
-
-  IntegralType global_itr_count;   
-  IntegralType local_itr_count;
-  std::vector<VertexData> labels;
-  std::vector<IntegralType> label_itr_count;  
-};*/ 
-
 int main(int argc, char** argv) {
   typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
@@ -99,16 +85,16 @@ int main(int argc, char** argv) {
   // fuzzy pattern matching
   {
 
-  // user defined types for the application
-  typedef uint64_t Vertex;
-  typedef uint64_t Edge;
-  typedef uint16_t VertexData; // assuming metadata is a 16-bit uint
-  typedef uint64_t VertexRankType;
-
   // types used by the delegate partitioned graph
   typedef typename graph_type::vertex_iterator vitr_type;
   typedef typename graph_type::vertex_locator vloc_type;
   //typedef typename graph_type::edge_iterator eitr_type;
+
+  // user defined types
+  typedef uint64_t Vertex;
+  typedef uint64_t Edge;
+  typedef uint16_t VertexData; // assuming metadata is a 16-bit uint
+  typedef uint64_t VertexRankType;
 
   typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
   typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank;
@@ -129,12 +115,17 @@ int main(int argc, char** argv) {
   VertexMetaData vertex_metadata(*graph, alloc_inst);
   VertexRank vertex_rank(*graph, alloc_inst);
   VertexActive vertex_active(*graph, alloc_inst);
-  VertexIteration vertex_iteration(*graph, alloc_inst);   
+  VertexIteration vertex_iteration(*graph, alloc_inst);  
+
+  MPI_Barrier(MPI_COMM_WORLD); 
  
   // build the distributed vertex data db
+  // each rank reads 10K lines at a time
   vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
-    (graph, vertex_metadata, vertex_data_input_filename, 10000); // each rank reads 10K lines at a time
- 
+    (graph, vertex_metadata, vertex_data_input_filename, 10000);
+
+  // barrier 
+
   // test print
 /*  int set_mpi_rank = 4;
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
@@ -169,37 +160,36 @@ int main(int argc, char** argv) {
   } // for
 
   // setup patterns - version 2
-
-  //pattern_util<VertexData, Vertex, Edge> ptrn_util_three(
-  //  pattern_input_filename + "_edge",
-  //  pattern_input_filename + "_vertex",  
-  //  pattern_input_filename + "_vertex_data", true);
-
-  typedef ::graph<Vertex, Edge, VertexData> PatternGraph;
-  PatternGraph g(pattern_input_filename + "_edge",
+  typedef ::graph<Vertex, Edge, VertexData> PatternGraph; // TODO: ::graph class name conflict!
+  PatternGraph pattern_graph(pattern_input_filename + "_edge",
     pattern_input_filename + "_vertex",
     pattern_input_filename + "_vertex_data", true, true);
 
   // test print
-  for (Vertex v = 0; v < g.vertex_count; v++) {
-    std::cout << g.vertices[v] << " " << g.vertex_data[v] << " " << g.vertex_degree[v] << std::endl;
-    for (auto e = g.vertices[v]; e < g.vertices[v + 1]; e++) {
-    auto v_nbr = g.edges[e];
+  if(mpi_rank == 0) {
+  std::cout << "Searching pattern (version 2): " << std::endl;
+  for (Vertex v = 0; v < pattern_graph.vertex_count; v++) {
+    std::cout << v << " : " << pattern_graph.vertices[v] << " " << pattern_graph.vertex_data[v] 
+    << " " << pattern_graph.vertex_degree[v] << std::endl;
+    for (auto e = pattern_graph.vertices[v]; e < pattern_graph.vertices[v + 1]; e++) {
+    auto v_nbr = pattern_graph.edges[e];
       std::cout << v_nbr << ", " ;
     }
     std::cout << std::endl; 
   } 
+  }
   // test print
 
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  double time_start = MPI_Wtime();
-
+  // initialize containers
   vertex_rank.reset(0);
   vertex_active.reset(true);
   vertex_iteration.reset(0); // TODO: -1 ?
   std::cout << "Vertex state map size (initially): " << vertex_state_map.size() << std::endl; // Test 
-  
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  double time_start = MPI_Wtime();
+ 
   // run application
 
   // clone pattern matchng
@@ -208,17 +198,20 @@ int main(int argc, char** argv) {
   // label propagation pattern matching 
 //  label_propagation_pattern_matching<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
 //    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
-//    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, vertex_iteration, vertex_state_map, g);
+//    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
+//    vertex_iteration, vertex_state_map, pattern_graph);
 
   // label propagation pattern matching bsp 
   label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
     VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
-    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, vertex_iteration, vertex_state_map, g);
+    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
+    vertex_iteration, vertex_state_map, pattern_graph);
 
   // toekn passing
   //token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);  
 
-  MPI_Barrier(MPI_COMM_WORLD);
+  // barrier
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
 
   double time_end = MPI_Wtime();
 
@@ -235,7 +228,7 @@ int main(int argc, char** argv) {
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
     ++vitr) {
     vloc_type vertex = *vitr;
-    if (vertex_iteration[vertex] >= 2*pattern.size()) { 
+    if (vertex_iteration[vertex] >= 2*pattern_graph.vertex_data.size() + 1) { 
       //std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_iteration[vertex] << std::endl;
       vertex_iteration_valid_count++;
     }   
@@ -253,7 +246,7 @@ int main(int argc, char** argv) {
   for(vitr_type vitr = graph->delegate_vertices_begin();
     vitr != graph->delegate_vertices_end(); ++vitr) {
     vloc_type vertex = *vitr;
-    if (vertex_iteration[vertex] >= 2*pattern.size()) { 
+    if (vertex_iteration[vertex] >= 2*pattern_graph.vertex_data.size() + 1) {
       //std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_iteration[vertex] << std::endl;
       vertex_iteration_valid_count++;
     }
