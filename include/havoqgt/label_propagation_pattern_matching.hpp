@@ -338,7 +338,7 @@ public:
     }
 
     if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test
-      std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << " pattern_graph size " << pattern_graph.edges.size() << std::endl; // Test   
+      std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << " pattern_graph size " << std::endl; // Test   
 
     return find_vertex->second.local_itr_count;
  
