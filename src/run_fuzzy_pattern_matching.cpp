@@ -202,13 +202,13 @@ int main(int argc, char** argv) {
 //    vertex_iteration, vertex_state_map, pattern_graph);
 
   // label propagation pattern matching bsp 
-  label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
-    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
-    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
-    vertex_iteration, vertex_state_map, pattern_graph);
+//  label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
+//    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
+//    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
+//    vertex_iteration, vertex_state_map, pattern_graph);
 
   // toekn passing
-  //token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);  
+  token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank, pattern_graph);  
 
   // barrier
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
