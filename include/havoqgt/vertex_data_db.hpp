@@ -117,7 +117,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
   auto alg_data = std::forward_as_tuple(vertex_metadata);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
-  std::cout << "MPI Rank " << mpi_rank << " queuing local vertex entries ... " << std::endl;  
+//  std::cout << "MPI Rank " << mpi_rank << " queuing local vertex entries ... " << std::endl;  
   for (auto entry : vertex_entry) {
     auto vertex = std::get<0>(entry);
     auto vertex_data = std::get<1>(entry);
@@ -125,11 +125,13 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     visitor_type new_visitor(vertex_location, vertex_data); 
     vq.queue_visitor(new_visitor); 
   }
-  std::cout << "MPI Rank " << mpi_rank << " done queuing ... building distributed vertex data db ... " << std::endl;
+//  std::cout << "MPI Rank " << mpi_rank << " done queuing ... building distributed vertex data db ... " << std::endl;
+  
   // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit the ones already in the queue
+  //MPI_Barrier(MPI_COMM_WORLD); // TODO: deadlock
   vq.init_visitor_traversal_new();
-
-  std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
+  MPI_Barrier(MPI_COMM_WORLD);
+//  std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
 }
 
 bool get_files_in_dir(boost::filesystem::path& dir_path, 
@@ -224,8 +226,10 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
       max_files_per_rank = static_cast<size_t>(floor(quotient) + 1);
     }
   }
-  std::cout << "Maximum number of files per-rank " << " " << 
-   max_files_per_rank << std::endl; 
+  if (mpi_rank == 0) {
+    std::cout << "Maximum number of files per-rank " << 
+      max_files_per_rank << std::endl; 
+  }
 
   for (size_t i = mpi_rank <= file_paths.size() - 1 ? mpi_rank : 
     static_cast<size_t>(mpi_rank % file_paths.size()), j = 0; 
@@ -233,8 +237,8 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     j < max_files_per_rank; j++) {
 
     assert(i >= 0 && i < file_paths.size());    
-    std::cout << "MPI Rank " << mpi_rank << " processing file [" << i << "] " 
-      << file_paths[i] << " ... " << std::endl;
+//    std::cout << "MPI Rank " << mpi_rank << " processing file [" << i << "] " 
+//      << file_paths[i] << " ... " << std::endl;
 
     read_file_and_build_vertex_data_db<TGraph, VertexMetaData, Vertex, VertexData>
       (file_paths[i], chunk_size, g, vertex_metadata);
@@ -246,8 +250,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
 
   if (mpi_rank == 0) {
     std::cout << "Done building vertex data db." << std::endl;
-  }
-   
+  }   
     
 } 
 

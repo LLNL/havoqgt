@@ -1,3 +1,4 @@
+#include <memory>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -51,12 +52,13 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);  
 
   std::string graph_input = argv[1];
-  std::string backup_filename; 
+//  std::string backup_filename; 
 
   // for fuzzy pattern matching
   std::string vertex_data_input_filename = argv[2];
   std::string pattern_input_filename = argv[3];
   std::string vertex_rank_output_filename = argv[4];
+  std::string backup_filename = argv[5];
 
   // TODO: parse commandline
 
@@ -93,13 +95,18 @@ int main(int argc, char** argv) {
   // user defined types
   typedef uint64_t Vertex;
   typedef uint64_t Edge;
-  typedef uint16_t VertexData; // assuming metadata is a 16-bit uint
+  typedef uint64_t VertexData; // assuming metadata is a 16-bit uint
   typedef uint64_t VertexRankType;
 
-  typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
-  typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank;
-  typedef graph_type::vertex_data<bool, SegmentAllocator<bool> > VertexActive;
-  typedef graph_type::vertex_data<uint64_t, SegmentAllocator<uint64_t> > VertexIteration;
+  //typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
+  //typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank;
+  //typedef graph_type::vertex_data<bool, SegmentAllocator<bool> > VertexActive;
+  //typedef graph_type::vertex_data<uint64_t, SegmentAllocator<uint64_t> > VertexIteration;
+
+  typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData;
+  typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
+  typedef graph_type::vertex_data<bool, std::allocator<bool> > VertexActive;
+  typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration;
 
   typedef vertex_state<uint64_t> VertexState;
   typedef std::unordered_map<Vertex, VertexState> VertexStateMap;
@@ -112,22 +119,30 @@ int main(int argc, char** argv) {
   VertexStateMap vertex_state_map; 
 
   // vertex containers
-  VertexMetaData vertex_metadata(*graph, alloc_inst);
-  VertexRank vertex_rank(*graph, alloc_inst);
-  VertexActive vertex_active(*graph, alloc_inst);
-  VertexIteration vertex_iteration(*graph, alloc_inst);  
+//  VertexMetaData vertex_metadata(*graph, alloc_inst);
+//  VertexRank vertex_rank(*graph, alloc_inst);
+//  VertexActive vertex_active(*graph, alloc_inst);
+//  VertexIteration vertex_iteration(*graph, alloc_inst);
+
+  VertexMetaData vertex_metadata(*graph); 
+  VertexRank vertex_rank(*graph);
+  VertexActive vertex_active(*graph);
+  VertexIteration vertex_iteration(*graph);
 
   MPI_Barrier(MPI_COMM_WORLD); 
  
   // build the distributed vertex data db
   // each rank reads 10K lines at a time
+  
   vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
     (graph, vertex_metadata, vertex_data_input_filename, 10000);
 
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this?
   // barrier 
 
   // test print
-/*  int set_mpi_rank = 4;
+  /*if(mpi_rank == 0) {
+  int set_mpi_rank = 0;
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
     ++vitr) {
     vloc_type vertex = *vitr;
@@ -140,7 +155,8 @@ int main(int argc, char** argv) {
     vloc_type vertex = *vitr;
     if (mpi_rank == set_mpi_rank)
       std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
-  }*/ 
+  } 
+  }*/
   // test print
   
   // setup patterns
@@ -160,7 +176,7 @@ int main(int argc, char** argv) {
   } // for
 
   // setup patterns - version 2
-  typedef ::graph<Vertex, Edge, VertexData> PatternGraph; // TODO: ::graph class name conflict!
+  typedef ::graph<Vertex, Edge, VertexData> PatternGraph; // TODO: graph class name conflict!
   PatternGraph pattern_graph(pattern_input_filename + "_edge",
     pattern_input_filename + "_vertex",
     pattern_input_filename + "_vertex_data", true, true);
@@ -184,7 +200,7 @@ int main(int argc, char** argv) {
   vertex_rank.reset(0);
   vertex_active.reset(true);
   vertex_iteration.reset(0); // TODO: -1 ?
-  std::cout << "Vertex state map size (initially): " << vertex_state_map.size() << std::endl; // Test 
+//  std::cout << "Vertex state map size (initially): " << vertex_state_map.size() << std::endl; // Test 
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -202,13 +218,13 @@ int main(int argc, char** argv) {
 //    vertex_iteration, vertex_state_map, pattern_graph);
 
   // label propagation pattern matching bsp 
-//  label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
-//    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
-//    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
-//    vertex_iteration, vertex_state_map, pattern_graph);
+  label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
+    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
+    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
+    vertex_iteration, vertex_state_map, pattern_graph);
 
   // toekn passing
-  token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank, pattern_graph);  
+//  token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank, pattern_graph);  
 
   // barrier
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
@@ -216,10 +232,10 @@ int main(int argc, char** argv) {
   double time_end = MPI_Wtime();
 
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching Time | label Propagation = " << time_end - time_start << std::endl;
+    std::cout << "Fuzzy Pattern Matching Time | Label Propagation : " << time_end - time_start << std::endl;
   }    
 
-  std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
+//  std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
 
   // test print
   uint64_t vertex_active_count = 0;
@@ -260,19 +276,34 @@ int main(int argc, char** argv) {
       vertex_active_count++;
     }
   }
-  std::cout << mpi_rank << " # active vertices " << vertex_active_count << std::endl;
-  std::cout << mpi_rank << " # inactive vertices " << vertex_inactive_count << std::endl; 
-  std::cout << mpi_rank << " # vertices reached max-iterations " << vertex_iteration_valid_count << std::endl;
+//  std::cout << mpi_rank << " # active vertices " << vertex_active_count << std::endl;
+//  std::cout << mpi_rank << " # inactive vertices " << vertex_inactive_count << std::endl; 
+//  std::cout << mpi_rank << " # vertices reached max-iterations " << vertex_iteration_valid_count << std::endl;
+
   // test print
   
   // cleanup memeory
   //vertex_rank.clear(); // TODO: add clear() method to vertex_data.cpp   
   //vertex_active.clear(); // TODO: add clear() method to vertex_data.cpp
-  vertex_state_map.clear();
+  //vertex_state_map.clear();
+  
+  // Test
+  //for (auto& v : vertex_state_map) {
+  //  auto v_locator = graph->label_to_locator(v.first); 
+  //  std::cout << v.first << " " << v.second.vertex_pattern_index << " " << vertex_metadata[v_locator] << std::endl; 
+  //}
+  // Test
 
   // toekn passing
-  //token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank);
-  //
+  time_start = MPI_Wtime();
+
+  token_passing_pattern_matching(graph, vertex_metadata, pattern, pattern_indices, vertex_rank, pattern_graph, vertex_state_map);
+ 
+  time_end = MPI_Wtime();
+
+  if(mpi_rank == 0) {
+    std::cout << "Fuzzy Pattern Matching Time | Token Passing : " << time_end - time_start << std::endl;
+  } 
 
   } // for - loop over query patterns
 

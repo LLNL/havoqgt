@@ -11,13 +11,15 @@ class vertex_state {
 public:
   vertex_state() :
   is_active(false),
+  vertex_pattern_index(0),
   global_itr_count(0),
   local_itr_count(0) {
   }
 
   bool is_active;
-  IntegralType global_itr_count;
-  IntegralType local_itr_count;
+  size_t vertex_pattern_index; // TODO: change type
+  IntegralType global_itr_count; // TODO: remove for BSP
+  IntegralType local_itr_count; // TODO: remove for BSP
   // map<pattern_vertex, itr_count>
   // TODO: cahnge size_t to pattern_vertex type  
   std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; 
@@ -93,15 +95,61 @@ public:
     if (!std::get<4>(alg_data)[vertex]) {
       return false;
     }
+ 
+    // TODO: pass pointer to the delegate graph to pre_visit
+    // if the vertex is not in the global map after the first superstep, ignore it
+    //if (std::get<8>(alg_data) > 0) { // supestep #
+    //  auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
+    //  if (find_vertex == std::get<6>(alg_data).end()) {
+    //    return false; 
+    //  }
+    //}    
 
     auto vertex_data = std::get<0>(alg_data)[vertex];
     //auto& pattern = std::get<1>(alg_data);
     //auto& pattern_indices = std::get<2>(alg_data);
+    auto& pattern_graph = std::get<7>(alg_data);
 
+    bool match_found = false;
+    bool valid_parent_found = false;
+
+    // does vertex_data match any entry in the query pattern
+    for (size_t vertex_pattern_index = 0;
+      vertex_pattern_index < pattern_graph.vertex_data.size();
+      vertex_pattern_index++) {
+      if (pattern_graph.vertex_data[vertex_pattern_index] == vertex_data) {
+        match_found = true;   
+
+        // verify if heard from a valid parent
+        if ((itr_count == 1 || itr_count == 2) && match_found) {
+          //match_found = false;
+          for (auto e = pattern_graph.vertices[vertex_pattern_index];
+            e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
+            if (pattern_graph.edges[e] == parent_pattern_index) {
+              //match_found = true;
+              valid_parent_found = true; 
+              break; 
+            }
+          } // for  
+        } // if            
+ 
+      } // if
+
+      if (valid_parent_found) {
+        break;
+      }
+
+    } // for 
+
+    // initial case - return true to handle delegates
+    if (std::get<4>(alg_data)[vertex] && itr_count == 0 && !match_found) {
+      return true;  
+    }
+ 
     // TODO: update veretx_pattern_id
     // need to write a new constructor to do update only
 
-    return true;
+    return match_found; //true;
   }
   
   template<typename VisitorQueueHandle, typename AlgData>
@@ -117,7 +165,13 @@ public:
       return false;
     }
 
-    // TODO: if the vertex is not in the global map after the first superstep, ignore it too !!!!!!!!!!!!!!!!!!!!!!!!!! 
+    // if the vertex is not in the global map after the first superstep, ignore it
+    if (std::get<8>(alg_data) > 0) { // supestep #
+      auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
+      if (find_vertex == std::get<6>(alg_data).end()) {
+        return false; 
+      }
+    } 
 
     auto vertex_data = std::get<0>(alg_data)[vertex];
     //auto& pattern = std::get<1>(alg_data);
@@ -147,6 +201,8 @@ public:
       return true; // TODO: ask Roger?
     } 
 
+    //std::cout << g.locator_to_label(vertex) << std::endl; // Test
+
     if (itr_count == 0 && match_found) {
       // send to all the neighbours
       for(eitr_type eitr = g.edges_begin(vertex); 
@@ -165,7 +221,10 @@ public:
       } // for
     }
 
-    if ((itr_count == 1 || itr_count == 2) && match_found) {
+    // itr_count == 1 as a result of BCAST to out-edges
+    // itr_count == 2 as a result of P2P to in-edges 
+
+    else if ((itr_count == 1 || itr_count == 2) && match_found) {
     //if (itr_count == 1 && match_found) {  
       if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
         std::cout << g.locator_to_label(vertex) << " receiving from " << g.locator_to_label(parent) << " " << itr_count << std::endl; // Test 
@@ -196,7 +255,7 @@ public:
 
         //}
 
-        else  {
+        else {
           //std ::cout << itr_count; // Test
           if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
             std::cout << g.locator_to_label(vertex) << " | " << vertex_pattern_index << " sending to " << g.locator_to_label(parent) << " " << (itr_count + 1) << std::endl; // Test
@@ -205,10 +264,11 @@ public:
           if (itr_count == 1) {
             //match_found = true;
             lppm_visitor new_visitor(parent, vertex, vertex_data, vertex_pattern_index, itr_count + 1/*next_itr_count*/);
-            vis_queue->queue_visitor(new_visitor); 
+            vis_queue->queue_visitor(new_visitor);
+            //std::cout << " >> Superstep # " << std::get<8>(alg_data) << std::endl; // Test 
           }            
 
-        }  
+        } // else  
  
       } // for all vertex patterns 
 
@@ -242,8 +302,8 @@ public:
 
     typedef vertex_state<uint64_t> VertexState;
 
-    auto& pattern = std::get<1>(alg_data);  
-    auto& pattern_indices = std::get<2>(alg_data);
+    //auto& pattern = std::get<1>(alg_data);  
+    //auto& pattern_indices = std::get<2>(alg_data);
     auto& pattern_graph = std::get<7>(alg_data); 
  
     bool match_found = false;
@@ -288,6 +348,7 @@ public:
         return 0;
       }     	
       find_vertex = insert_status.first;
+      find_vertex->second.vertex_pattern_index = vertex_pattern_index; // ID of the vertex in the pattern_graph 
     }
 
     if (std::get<6>(alg_data).size() < 1) {
@@ -362,12 +423,22 @@ public:
     uint64_t min_itr_count = find_vertex->second.pattern_vertex_itr_count_map.begin()->second;
 
     // TODO: verify if v.first's are valid
-    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test    
+    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+        || g.locator_to_label(vertex) == 28
+        || g.locator_to_label(vertex) == 55681294
+        || g.locator_to_label(vertex) == 55681295
+        || g.locator_to_label(vertex) == 55668937
+        || g.locator_to_label(vertex) == 55668938) // Test    
       std::cout << " > " << g.locator_to_label(vertex) << " : "; // Test
  
     for (auto& v : find_vertex->second.pattern_vertex_itr_count_map) {
 
-      if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test   
+      if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+          || g.locator_to_label(vertex) == 28
+          || g.locator_to_label(vertex) == 55681294
+          || g.locator_to_label(vertex) == 55681295
+          || g.locator_to_label(vertex) == 55668937
+          || g.locator_to_label(vertex) == 55668938) // Test   
         std::cout << "(" << v.first << ", " << v.second << ") "; // Test
 
       if (v.second == 0) {
@@ -381,19 +452,26 @@ public:
  
     } // for
     find_vertex->second.is_active = did_heard_from_all; // update is_active status for this vertex
+
+    // TODO: probably do not need the itr_count fields  
         
-    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) // Test
+    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+        || g.locator_to_label(vertex) == 28
+        || g.locator_to_label(vertex) == 55681294 
+        || g.locator_to_label(vertex) == 55681295
+        || g.locator_to_label(vertex) == 55668937 
+        || g.locator_to_label(vertex) == 55668938) // Test
       std::cout << std::endl; // Test
 
     // update current iteration count for this vertex
-    if (find_vertex->second.local_itr_count <= min_itr_count) {  
-      find_vertex->second.local_itr_count = min_itr_count + 1;    
-    } 
+//    if (find_vertex->second.local_itr_count <= min_itr_count) {  
+//      find_vertex->second.local_itr_count = min_itr_count + 1;    
+//    } 
 
     // update vertex_iteration
-    if (find_vertex->second.local_itr_count > std::get<5>(alg_data)[vertex]) {
-      std::get<5>(alg_data)[vertex] = find_vertex->second.local_itr_count;    
-    }
+//    if (find_vertex->second.local_itr_count > std::get<5>(alg_data)[vertex]) {
+//      std::get<5>(alg_data)[vertex] = find_vertex->second.local_itr_count;    
+//    }
 
     // Test
     if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) {// Test
@@ -407,7 +485,7 @@ public:
 
     } // Test
 
-    // rest vertex state for the next iteration
+    // Importnt: rest vertex state for the next iteration
     if (find_vertex->second.is_active) {
       for (auto& v : find_vertex->second.pattern_vertex_itr_count_map) {
         v.second = 0;
@@ -426,19 +504,29 @@ public:
   bool do_update_vertex_pattern_id;
 };
 
-template <typename TGraph, typename VertexStateMap, typename PatternGraph, 
-  typename VertexActive, typename VertexIteration>
-void verify_and_update_vertex_state_map(TGraph* g, VertexStateMap& vertex_state_map, 
-  PatternGraph& pattern_graph, VertexActive& vertex_active, 
+template <typename TGraph, typename AlgData, typename VertexStateMap, 
+  typename PatternGraph, typename VertexActive, typename VertexIteration>
+void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data, 
+  VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
+  VertexActive& vertex_active, 
   VertexIteration& vertex_iteration, uint64_t superstep) {
 
-  std::cout << "Superstep #" << superstep << " vertex state map size " << vertex_state_map.size() << std::endl;  
+  int mpi_rank = havoqgt_env()->world_comm().rank();
+  
+  uint64_t max_superstep = pattern_graph.vertex_data.size() - 1; // Test
+  
+  if (vertex_state_map.size() > 0 && superstep == max_superstep) {
+    //std::cout << mpi_rank << " Superstep #" << superstep << " vertex state map size " 
+    //  << vertex_state_map.size() << std::endl; // Test  
+  }
  
   auto vertex_temp = vertex_state_map.begin()->first;
   std::vector<decltype(vertex_temp)> vertex_remove_from_map_list(0); // TODO: use Vetex type instead of uint64_t
 
   for (auto& v : vertex_state_map) {
-    auto v_locator = g->label_to_locator(v.first); 
+    auto v_locator = g->label_to_locator(v.first);
+    auto vertex_data = std::get<0>(alg_data)[v_locator]; // Test 
+    
     //for (auto& p : v.second.pattern_vertex_itr_count_map) {
     //  if (p.second < 1) {
     //    vertex_active[v_locator] = false; 
@@ -448,7 +536,12 @@ void verify_and_update_vertex_state_map(TGraph* g, VertexStateMap& vertex_state_
     //    p.second = 0; // reset for next iteration   
     //  }   
     //}
-    
+   
+    if (vertex_state_map.size() > 0 && superstep == max_superstep) { 
+      std::cout << mpi_rank << " Superstep #" << superstep << " | vertex " << v.first <<  " data " << vertex_data  
+        << " is in the map" << std::endl; // Test   
+    }
+ 
     if (!v.second.is_active) {
       vertex_remove_from_map_list.push_back(v.first);
       vertex_active[v_locator] = false;  
@@ -460,15 +553,18 @@ void verify_and_update_vertex_state_map(TGraph* g, VertexStateMap& vertex_state_
 
   for (auto v : vertex_remove_from_map_list) {
     if (vertex_state_map.erase(v) < 1) {
-      std::cerr << "Error: failed to remove an element from the map." << std::endl;  
+      std::cerr << "Error: failed to remove an element from the map." 
+        << std::endl;  
     }    
   }
 
-  std::cout << "Superstep #" << superstep << " | " 
-  << vertex_remove_from_map_list.size() 
-  << " vertices were removed from the vertex state map, new map size " 
-  << vertex_state_map.size()
-  << std::endl;     
+  if (vertex_state_map.size() > 0 && superstep == max_superstep) {
+    std::cout << mpi_rank << " Superstep #" << superstep << " | " 
+      << vertex_remove_from_map_list.size() 
+      << " vertices were removed from the vertex state map, new map size " 
+      << vertex_state_map.size()
+      << std::endl; // Test     
+  } 
 }   
 
 template <typename TGraph, typename VertexMetaData, typename VertexData, typename PatternData, 
@@ -479,23 +575,38 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMap& vertex_state_map, PatternGraph& pattern_graph) {
   //std::cout << "label_propagation_pattern_matching_bsp.hpp" << std::endl;
 
+  int mpi_rank = havoqgt_env()->world_comm().rank();
+  uint64_t superstep_var = 0;
+  uint64_t& superstep_ref = superstep_var; 
+
   typedef lppm_visitor<TGraph, VertexData> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
-    vertex_active, vertex_iteration, vertex_state_map, pattern_graph);
+    vertex_active, vertex_iteration, vertex_state_map, pattern_graph, superstep_var);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
-  int mpi_rank = havoqgt_env()->world_comm().rank();
-  uint64_t superstep = 0;
-  for (; superstep < pattern_graph.vertex_data.size(); superstep++) {
-    //if (mpi_rank == 0) { 
+  // beiginning of BSP execution
+  for (uint64_t superstep = 0; superstep < pattern_graph.vertex_data.size(); superstep++) {
+    superstep_ref = superstep;
+    if (mpi_rank == 0) { 
       std::cout << "Superstep #" << superstep << std::endl;
-    //}
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD); 
+    double time_start = MPI_Wtime();
     vq.init_visitor_traversal_new(); 
     MPI_Barrier(MPI_COMM_WORLD);
-    std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
-    verify_and_update_vertex_state_map(g, vertex_state_map, pattern_graph, vertex_active, vertex_iteration, superstep);
-    MPI_Barrier(MPI_COMM_WORLD);
+    if (mpi_rank == 0) {    
+      std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
+    } 
+    verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, vertex_active, vertex_iteration, superstep);
+    //MPI_Barrier(MPI_COMM_WORLD);
+    double time_end = MPI_Wtime();
+    if (mpi_rank == 0) {
+      std::cout << "Superstep #" << superstep <<  " elapsed time = " << time_end - time_start << std::endl;
+    }
   }
+  // end of BSP execution
+   
   //vertex_rank.all_reduce();
   //vertex_iteration.all_max_reduce();
   //MPI_Barrier(MPI_COMM_WORLD);

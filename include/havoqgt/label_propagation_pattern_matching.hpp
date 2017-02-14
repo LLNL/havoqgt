@@ -11,11 +11,13 @@ class vertex_state {
 public:
   vertex_state() :
   is_active(false),
+  vertex_pattern_index(0),
   global_itr_count(0),
   local_itr_count(0) {
   }
 
   bool is_active;
+  size_t vertex_pattern_index;
   IntegralType global_itr_count;
   IntegralType local_itr_count;
   std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; //TODO: change size_t type 
@@ -289,6 +291,7 @@ public:
         return 0;
       }     	
       find_vertex = insert_status.first;
+      find_vertex->second.vertex_pattern_index = vertex_pattern_index; // ID of the vertex in the pattern_graph
     }
 
     if (std::get<6>(alg_data).size() < 1) {
