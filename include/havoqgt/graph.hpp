@@ -6,6 +6,8 @@
 #include <vector>
 #include <tuple>
 
+#include <boost/algorithm/string.hpp>
+
 template<typename Vertex, typename Edge, typename VertexData>
 class graph {
   public:
@@ -30,14 +32,17 @@ class graph {
       edge_count = read_edge_list(edge_input_filename, edges);
 
       std::cout << "Completed building graph." << std::endl;
-      output_stats(); 
+      output_stat(); 
     }
 
     graph(std::string edge_input_filename, std::string vertex_input_filename,
-      std::string vertex_data_input_filename, const bool _mutable = true, const bool _directed = true) :
+      std::string vertex_data_input_filename, 
+      std::string stat_input_filename,
+      const bool _directed = true, const bool _mutable = false) :
       directed(_directed),
       vertex_count(0),
-      edge_count(0), 
+      edge_count(0),
+      diameter(0),  
       vertices(0),
       vertex_degree(0),
       vertex_data(0), 
@@ -57,8 +62,10 @@ class graph {
 //      std::cout << "Reading vertex data list ... " << std::endl;
       read_vertex_data_list(vertex_data_input_filename);
 
+      read_stat(stat_input_filename);
+
 //      std::cout << "Completed building graph." << std::endl;
-//      output_stats(); 
+//      output_stat(); 
     }
 
     ~graph() {
@@ -68,6 +75,7 @@ class graph {
     const bool directed; 
     Vertex vertex_count;
     Edge edge_count;
+    Edge diameter;  
     std::vector<Edge> vertices;
     std::vector<Edge> vertex_degree;
     std::vector<VertexData> vertex_data;
@@ -167,7 +175,30 @@ class graph {
       return vertex_count;  
     }
 
-    void output_stats() {
+    void read_stat(std::string stat_input_filename) {
+      std::ifstream stat_input_file(stat_input_filename, 
+        std::ifstream::in);
+      std::string line;
+      const char delim = ':';
+      while(std::getline(stat_input_file, line)) {
+        std::istringstream iss(line);
+        std::string token;
+        std::vector<std::string> tokens;
+        while(std::getline(iss, token, delim)) {
+          tokens.push_back(token);
+        }          
+        //std::cout << tokens[0] << " " << tokens[1] << std::endl; 
+        assert(tokens.size() > 1);
+        boost::trim(tokens[0]);
+        boost::trim(tokens[1]); 
+        if (boost::iequals(tokens[0], "diameter")) {
+          diameter = std::stoull(tokens[1]);         
+        } 
+      }
+      stat_input_file.close();
+    } 
+
+    void output_stat() {
       std::cout << "Number of vertices: " << vertex_count << std::endl;
       std::cout << "Number of edges: " << edge_count << std::endl;
       std::cout << "Number of vertex data: " << vertex_data.size() << std::endl;

@@ -7,7 +7,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-//#include <havoqgt/graph.hpp>
 #include <havoqgt/util.hpp> 
 
 template <typename PatternType, typename Vertex = uint64_t, typename Edge = uint64_t> 
@@ -80,9 +79,7 @@ class pattern_util {
     std::vector<std::vector<PatternType>> one_path_patterns;
     std::vector<std::vector<PatternType>> two_path_patterns; 
 
-    std::vector< std::tuple< std::vector<PatternType>, std::vector<PatternType> > > input_patterns;
-
-     
+    std::vector< std::tuple< std::vector<PatternType>, std::vector<Vertex>, Edge, bool> > input_patterns;  
 
   private:
 
@@ -98,18 +95,20 @@ class pattern_util {
         assert(tokens.size() > 1);
 
         boost::trim(tokens[0]); // important  
-        boost::trim(tokens[1]); // important       
+        boost::trim(tokens[1]); // important      
+        boost::trim(tokens[2]); // important
+        boost::trim(tokens[3]); // important   
  
         if (is_integral_type) {
           input_patterns.push_back(
             std::forward_as_tuple(
-              split<PatternType>(tokens[0], ' '), split<PatternType>(tokens[1], ' ')
+              split<PatternType>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), std::stoull(tokens[2]), std::stoull(tokens[3])
             )
           );
         } else { 
           input_patterns.push_back( 
             std::forward_as_tuple( 
-              split_char<PatternType>(tokens[0], ' '), split<PatternType>(tokens[1], ' ')
+              split_char<PatternType>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), std::stoull(tokens[2]), std::stoull(tokens[3]) 
             ) 
           );   
         }

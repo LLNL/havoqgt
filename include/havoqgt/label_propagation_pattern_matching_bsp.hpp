@@ -166,7 +166,9 @@ public:
     }
 
     // if the vertex is not in the global map after the first superstep, ignore it
-    if (std::get<8>(alg_data) > 0) { // supestep #
+    // std::get<8>(alg_data) - superstep
+    // std::get<9>(alg_data) - initstep
+    if (std::get<8>(alg_data) > 0 || !std::get<9>(alg_data)) {
       auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
       if (find_vertex == std::get<6>(alg_data).end()) {
         return false; 
@@ -485,7 +487,7 @@ public:
 
     } // Test
 
-    // Importnt: rest vertex state for the next iteration
+    // Importnt: reset vertex state for the next iteration
     if (find_vertex->second.is_active) {
       for (auto& v : find_vertex->second.pattern_vertex_itr_count_map) {
         v.second = 0;
@@ -509,15 +511,15 @@ template <typename TGraph, typename AlgData, typename VertexStateMap,
 void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data, 
   VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
   VertexActive& vertex_active, 
-  VertexIteration& vertex_iteration, uint64_t superstep) {
+  VertexIteration& vertex_iteration, uint64_t superstep, bool& global_not_finished) {
 
   int mpi_rank = havoqgt_env()->world_comm().rank();
   
   uint64_t max_superstep = pattern_graph.vertex_data.size() - 1; // Test
   
   if (vertex_state_map.size() > 0 && superstep == max_superstep) {
-    //std::cout << mpi_rank << " Superstep #" << superstep << " vertex state map size " 
-    //  << vertex_state_map.size() << std::endl; // Test  
+  // std::cout << mpi_rank << " Superstep #" << superstep << " vertex state map size " 
+  //   << vertex_state_map.size() << std::endl; // Test  
   }
  
   auto vertex_temp = vertex_state_map.begin()->first;
@@ -538,8 +540,8 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
     //}
    
     if (vertex_state_map.size() > 0 && superstep == max_superstep) { 
-      std::cout << mpi_rank << " Superstep #" << superstep << " | vertex " << v.first <<  " data " << vertex_data  
-        << " is in the map" << std::endl; // Test   
+    //  std::cout << mpi_rank << " Superstep #" << superstep << " | vertex " << v.first <<  " data " << vertex_data  
+    //    << " is in the map" << std::endl; // Test   
     }
  
     if (!v.second.is_active) {
@@ -551,6 +553,10 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
 
   } // for
 
+  if (vertex_remove_from_map_list.size() > 0) {
+    global_not_finished = true;
+  }
+
   for (auto v : vertex_remove_from_map_list) {
     if (vertex_state_map.erase(v) < 1) {
       std::cerr << "Error: failed to remove an element from the map." 
@@ -559,11 +565,11 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
   }
 
   if (vertex_state_map.size() > 0 && superstep == max_superstep) {
-    std::cout << mpi_rank << " Superstep #" << superstep << " | " 
-      << vertex_remove_from_map_list.size() 
-      << " vertices were removed from the vertex state map, new map size " 
-      << vertex_state_map.size()
-      << std::endl; // Test     
+  // std::cout << mpi_rank << " Superstep #" << superstep << " | " 
+  //    << vertex_remove_from_map_list.size() 
+  //    << " vertices were removed from the vertex state map, new map size " 
+  //    << vertex_state_map.size()
+  //    << std::endl; // Test     
   } 
 }   
 
@@ -572,7 +578,9 @@ template <typename TGraph, typename VertexMetaData, typename VertexData, typenam
   typename VertexIteration, typename VertexStateMap, typename PatternGraph>
 void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_metadata, 
   PatternData& pattern, PatternIndices& pattern_indices, VertexRank& vertex_rank,
-  VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMap& vertex_state_map, PatternGraph& pattern_graph) {
+  VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMap& vertex_state_map, 
+  PatternGraph& pattern_graph, bool initstep, bool& global_not_finished, size_t global_itr_count, 
+  std::ofstream& superstep_result_file, std::ofstream& active_vertices_count_result_file) {
   //std::cout << "label_propagation_pattern_matching_bsp.hpp" << std::endl;
 
   int mpi_rank = havoqgt_env()->world_comm().rank();
@@ -581,11 +589,14 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 
   typedef lppm_visitor<TGraph, VertexData> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
-    vertex_active, vertex_iteration, vertex_state_map, pattern_graph, superstep_var);
+    vertex_active, vertex_iteration, vertex_state_map, pattern_graph, superstep_var, initstep);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   // beiginning of BSP execution
-  for (uint64_t superstep = 0; superstep < pattern_graph.vertex_data.size(); superstep++) {
+  // TODO: change this to use a local termination detection at the end of a seperstep
+  bool not_finished = false;
+ 
+  for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       std::cout << "Superstep #" << superstep << std::endl;
@@ -598,13 +609,37 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     if (mpi_rank == 0) {    
       std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
     } 
-    verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, vertex_active, vertex_iteration, superstep);
+    verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, 
+      vertex_active, vertex_iteration, superstep, global_not_finished);
     //MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
       std::cout << "Superstep #" << superstep <<  " elapsed time = " << time_end - time_start << std::endl;
     }
-  }
+
+    // result
+    if (mpi_rank == 0) { 
+      superstep_result_file << global_itr_count << ", LP, "
+        << superstep << ", "
+        << time_end - time_start << "\n"; 
+    }
+
+    // Important : This may slow down things -only for presenting results
+    uint64_t active_vertices_count = 0; 
+    for (auto& v : vertex_state_map) {
+      auto v_locator = g->label_to_locator(v.first);
+      if (v_locator.is_delegate() && (g->master(v_locator) == mpi_rank)) {
+        active_vertices_count++;  
+      } else if (!v_locator.is_delegate()) {
+        active_vertices_count++;
+      }
+    }
+ 
+    active_vertices_count_result_file << global_itr_count << ", LP, "
+      << superstep << ", " 
+      << active_vertices_count << "\n";
+
+  } // for 
   // end of BSP execution
    
   //vertex_rank.all_reduce();

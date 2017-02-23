@@ -109,7 +109,11 @@ public:
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
     auto& pattern_indices = std::get<2>(alg_data);   
-    auto& pattern_graph = std::get<4>(alg_data); 
+    auto& pattern_graph = std::get<4>(alg_data);
+
+    auto pattern_cycle_length = std::get<7>(alg_data);   
+    auto pattern_valid_cycle = std::get<8>(alg_data);
+    //auto& pattern_found = std::get<9>(alg_data); 
 
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // create visitors only for the source vertices
@@ -135,13 +139,30 @@ public:
 //      vis_queue->queue_visitor(new_visitor);
 //      return true;
       
+      //std::cout << "Found source vertex " << g.locator_to_label(vertex) << " vertex_data " << vertex_data << std::endl; // Test
+
+      auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
+      if (find_token_source == std::get<6>(alg_data).end()) {
+        auto insert_status = std::get<6>(alg_data).insert({g.locator_to_label(vertex), false});
+        if(!insert_status.second) {
+          std::cerr << "Error: failed to add an element to the map." << std::endl;
+          return false;   
+        } 
+      }	
+
       // initiate token passing from the source vertex
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbour = eitr.target();
         // token passing constraints go here
-        tppm_visitor new_visitor(neighbour, g.label_to_locator(55668938), 0, 2, 0, pattern_indices[0], true, true, false);
+//        tppm_visitor new_visitor(neighbour, g.label_to_locator(4902294), 0, 2, 0, pattern_indices[0], true, true, false);
+//        tppm_visitor new_visitor(neighbour, g.label_to_locator(932746), 0, (pattern_indices.size() - 2), 0, pattern_indices[0], true, true, false); // Test              
+
         // loop detection - path back to the source vertex is valid
         //tppm_visitor new_visitor(neighbour, vertex, 0, 2, 0, pattern_indices[0], true, true, false);
+
+//        tppm_visitor new_visitor(neighbour, vertex, 0, (pattern_indices.size() - 2), 0, pattern_indices[0], true, true, false);
+        tppm_visitor new_visitor(neighbour, vertex, 0, pattern_cycle_length, 0, pattern_indices[0], pattern_valid_cycle, true, false);
+
         // loop detection - path back to the source vertex is invalid
         //tppm_visitor new_visitor(neighbour, vertex, 0, 2, 0, pattern_indices[0], false, true, false);
         vis_queue->queue_visitor(new_visitor);
@@ -166,11 +187,19 @@ public:
       auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index  
       auto vertex_pattern_index = find_vertex->second.vertex_pattern_index;
       //auto vertex_pattern_index = pattern_indices[source_index_pattern_indices + new_itr_count]; // TODO: read from the map
+      
+      // TODO: verify next_pattern_index < pattern_indices.size() before anythin else
+
+      //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index "
+      //  << vertex_pattern_index << " received from parent_pattern_index " 
+      //  << parent_pattern_index << " itr_count " << itr_count << " max_itr_count" << max_itr_count << std::endl; // Test	 
 
       if (max_itr_count > itr_count) {
 
         // are vertex_data and vertex_pattern_index valid
-        if (vertex_data == pattern[pattern_indices[next_pattern_index]] && 
+//        if (vertex_data == pattern[pattern_indices[next_pattern_index]] && 
+	// TODO: Important: for token passing only        
+        if (vertex_data == pattern[next_pattern_index] &&
           vertex_pattern_index == pattern_indices[next_pattern_index]) {
           // verify if received from a valid parent
           for (auto e = pattern_graph.vertices[vertex_pattern_index]; 
@@ -185,7 +214,9 @@ public:
       } else if (max_itr_count <= itr_count) {
         // are vertex_data and vertex_pattern_index valid
         bool match_found = false;
-        if (vertex_data == pattern[pattern_indices[next_pattern_index]] &&
+//        if (vertex_data == pattern[pattern_indices[next_pattern_index]] &&
+        // TODO: Important: for token passing only        
+        if (vertex_data == pattern[next_pattern_index] &&        
           vertex_pattern_index == pattern_indices[next_pattern_index]) { 
           // verify if received from a valid parent
           for (auto e = pattern_graph.vertices[vertex_pattern_index];
@@ -204,8 +235,19 @@ public:
           <<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex) 
           <<  " vertex_pattern_index " << vertex_pattern_index << " itr " 
           << itr_count << std::endl; // Test
-          //return false; // TODO: true ?		
+          //return false; // TODO: true ?	
+
+          auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
+          if (find_token_source == std::get<6>(alg_data).end()) {
+            std::cerr << "Error: did not find the expected item in the map." << std::endl;
+            return true; // false ?            
+          }
+          find_token_source->second = true;   
+ 
+          std::get<9>(alg_data) = 1; // true; // pattern_found	
+
           return true;
+
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
           // TODO: TBA 
@@ -273,13 +315,18 @@ public:
 };
 
 template <typename TGraph, typename VertexMetaData, typename PatternData, 
-  typename PatternIndices, typename VertexRank, typename PatternGraph, typename VertexStateMap>
+  typename PatternIndices, typename VertexRank, typename PatternGraph, 
+  typename VertexStateMap, typename TokenSourceMap>
 void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata, 
   PatternData& pattern, PatternIndices& pattern_indices, 
-  VertexRank& vertex_rank, PatternGraph& pattern_graph, VertexStateMap& vertex_state_map) {
+  VertexRank& vertex_rank, PatternGraph& pattern_graph, VertexStateMap& vertex_state_map,
+  TokenSourceMap& token_source_map, size_t pattern_cycle_length, bool pattern_valid_cycle, 
+  std::vector<uint8_t>::reference pattern_found) { // TODO: bool& pattern_found does not work, why?
   //std::cout << "token_passing_pattern_matching.hpp" << std::endl;
+ 
   typedef tppm_visitor<TGraph> visitor_type;
-  auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, pattern_graph, vertex_state_map);
+  auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
+    pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal_new();
   MPI_Barrier(MPI_COMM_WORLD);

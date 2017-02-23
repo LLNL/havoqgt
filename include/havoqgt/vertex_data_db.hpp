@@ -189,7 +189,7 @@ void read_file_and_build_vertex_data_db(std::string vertex_data_input_filename,
 
   // TODO: process in chunks. Important: same issue as number of files per-rank.
   // For now, make sure each vertex data file is not too big.
-  // It can handel any number of files, so reading a file in chunks is not important. 
+  // It can handel any number of files, so reading fileis in chunks is not important. 
 }
 
 template <typename TGraph, typename VertexMetaData, typename Vertex, 
