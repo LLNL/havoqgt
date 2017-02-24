@@ -231,10 +231,10 @@ public:
         // is this the target vertex
         if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) && match_found && expect_target_vertex) {
           // found loop
-          std::cout << "found valid loop - vertex " <<  " | parent_pattern_index " 
-          <<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex) 
-          <<  " vertex_pattern_index " << vertex_pattern_index << " itr " 
-          << itr_count << std::endl; // Test
+          //std::cout << "found valid loop - vertex " <<  " | parent_pattern_index " 
+          //<<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex) 
+          //<<  " vertex_pattern_index " << vertex_pattern_index << " itr " 
+          //<< itr_count << std::endl; // Test
           //return false; // TODO: true ?	
 
           auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
@@ -251,10 +251,10 @@ public:
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
           // TODO: TBA 
-          std::cout << "found invalid loop - vertex " <<  " | parent_pattern_index "
-          <<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex)
-          <<  " vertex_pattern_index " << vertex_pattern_index << " itr "
-          << itr_count << std::endl; // Test  
+          //std::cout << "found invalid loop - vertex " <<  " | parent_pattern_index "
+          //<<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex)
+          //<<  " vertex_pattern_index " << vertex_pattern_index << " itr "
+          //<< itr_count << std::endl; // Test  
           return true; 
         } else {
           // reached max iteration but did not find the target vertex or a loop

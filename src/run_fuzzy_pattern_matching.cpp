@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
   VertexIteration vertex_iteration(*graph);
 
   // application parameters
-  bool us_degree_as_vertex_data = true; // TODO: add cmdline flag    
+  bool us_degree_as_vertex_data = false; // TODO: add cmdline flag    
  
   // token passing types
   size_t token_passing_algo = 0; // TODO: use enum if this stays
@@ -196,8 +196,8 @@ int main(int argc, char** argv) {
   // setup pattern set 
   // a pattern set is collection of directories containing pattern files  
    
-  // TODO: loop over pattern set
-  for(size_t ps = 0; ps < 1; ps++) {
+  // loop over pattern set
+  for(size_t ps = 0; ps < 1; ps++) { // TODO: for now only reading from pattern_dir/0 
   // beginning of an elemnet in the pattern set
    
   // setup pattern to search
@@ -409,7 +409,7 @@ int main(int argc, char** argv) {
   TokenSourceMap token_source_map;
 
   //std::vector<bool> pattern_found(ptrn_util_two.input_patterns.size(), false); 
-  // TODO: does not work with mpi_all_reduce_inplace   
+  // TODO: bool does not work with mpi_all_reduce_inplace   
   std::vector<uint8_t> pattern_found(ptrn_util_two.input_patterns.size(), 0); 
 
   // loop over the patterns and run token passing
@@ -572,7 +572,7 @@ int main(int argc, char** argv) {
       << ptrn_util_two.input_patterns.size() << "\n"; 
   }
 
-  // Important : This may slow down things -only for presenting results
+  // Important : This may slow things down -only for presenting results
 
   for (auto& v : vertex_state_map) {
     auto v_locator = graph->label_to_locator(v.first);

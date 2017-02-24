@@ -100,7 +100,7 @@ public:
       } else if (tmp_uint > 3) {
         std::get<0>(alg_data)[vertex] = 3;
       } else {
-        std::cerr << "Error: Wrong code branch." << std::endl; 
+        std::cerr << "Error: wrong code branch." << std::endl; 
       }
     }
       

@@ -624,7 +624,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
         << time_end - time_start << "\n"; 
     }
 
-    // Important : This may slow down things -only for presenting results
+    // Important : This may slow things down -only for presenting results
     uint64_t active_vertices_count = 0; 
     for (auto& v : vertex_state_map) {
       auto v_locator = g->label_to_locator(v.first);
