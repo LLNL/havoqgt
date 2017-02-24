@@ -21,6 +21,7 @@
 #include <havoqgt/pattern_util.hpp>
 #include <havoqgt/token_passing_pattern_matching.hpp>
 #include <havoqgt/vertex_data_db.hpp>
+#include <havoqgt/vertex_data_db_degree.hpp>
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
@@ -136,6 +137,8 @@ int main(int argc, char** argv) {
   VertexIteration vertex_iteration(*graph);
 
   // application parameters
+  bool us_degree_as_vertex_data = true; // TODO: add cmdline flag    
+ 
   // token passing types
   size_t token_passing_algo = 0; // TODO: use enum if this stays
 
@@ -146,9 +149,14 @@ int main(int argc, char** argv) {
   // build the distributed vertex data db
   // each rank reads 10K lines at a time
   time_start = MPI_Wtime();
- 
-  vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
-    (graph, vertex_metadata, vertex_data_input_filename, 10000);
+
+  if (us_degree_as_vertex_data) {
+    vertex_data_db_degree<graph_type, VertexMetaData, Vertex, VertexData>
+      (graph, vertex_metadata);   
+  } else { 
+    vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
+      (graph, vertex_metadata, vertex_data_input_filename, 10000);
+  }
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this?
   time_end = MPI_Wtime();
@@ -159,21 +167,25 @@ int main(int argc, char** argv) {
   ///////////////////////////////////////////////////////////////////////////// 
 
   // test print
-  /*if(mpi_rank == 0) {
-  int set_mpi_rank = 0;
+  //if(mpi_rank == 0) {
+/*  int set_mpi_rank = 0;
   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
     ++vitr) {
     vloc_type vertex = *vitr;
-    if (mpi_rank == set_mpi_rank)
+    //if (mpi_rank == set_mpi_rank)
       std::cout << mpi_rank << " l " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
   }
   
   for(vitr_type vitr = graph->delegate_vertices_begin();
     vitr != graph->delegate_vertices_end(); ++vitr) {
     vloc_type vertex = *vitr;
-    if (mpi_rank == set_mpi_rank)
+    //if (mpi_rank == set_mpi_rank)
       std::cout << mpi_rank << " d " << graph->locator_to_label(vertex) << " " << vertex_metadata[vertex] << std::endl; 
   } 
+  //}
+
+  if (us_degree_as_vertex_data) {
+    return 0;
   }*/
   // test print
   
