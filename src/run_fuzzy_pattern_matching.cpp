@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
   VertexIteration vertex_iteration(*graph);
 
   // application parameters
-  bool us_degree_as_vertex_data = false; // TODO: add cmdline flag    
+  bool use_degree_as_vertex_data = false; // TODO: add cmdline flag    
  
   // token passing types
   size_t token_passing_algo = 0; // TODO: use enum if this stays
@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
   // each rank reads 10K lines at a time
   time_start = MPI_Wtime();
 
-  if (us_degree_as_vertex_data) {
+  if (use_degree_as_vertex_data) {
     vertex_data_db_degree<graph_type, VertexMetaData, Vertex, VertexData>
       (graph, vertex_metadata);   
   } else { 
