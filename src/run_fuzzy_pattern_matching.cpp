@@ -239,10 +239,10 @@ int main(int argc, char** argv) {
   auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]);
   auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]);
 
-  if(mpi_rank == 0) {
-    std::cout << "[" << "0" << "] Searching pattern: "; 
-    pattern_util<VertexData>::output_pattern(pattern);
-  }
+  //if(mpi_rank == 0) {
+    //std::cout << "[" << "0" << "] Searching pattern: "; 
+    //pattern_util<VertexData>::output_pattern(pattern);
+  //}
 
   // initialize containers
   vertex_state_map.clear(); // important
