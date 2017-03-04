@@ -87,14 +87,14 @@ public:
     // 1 - low degree
     // 2 - medium degree
     // 3 - high degree  
-    if (g.degree(vertex) == 0) {
+    if (g.degree(vertex) < 2) { 
       std::get<0>(alg_data)[vertex] = 0;  
     } else {
       auto vertex_degree = g.degree(vertex); 
-      auto tmp_float = ceil(log10(vertex_degree)) + 1; // ceil(log2(vertex_degree)) + 1;
-      auto tmp_uint = static_cast<VertexData>(tmp_float); // TODO: do range check before casting
+      auto tmp_float = ceil(log10(vertex_degree + 1)); // ceil(log2(vertex_degree)) + 1;
+      auto tmp_uint = static_cast<VertexData>(tmp_float); // TODO: do uint range check before casting
       if (tmp_uint <= 2) {
-        std::get<0>(alg_data)[vertex] = 1; //vertex_data;
+        std::get<0>(alg_data)[vertex] = 1;
       } else if (tmp_uint > 2 && tmp_uint <= 3) {
         std::get<0>(alg_data)[vertex] = 2; 
       } else if (tmp_uint > 3) {
@@ -125,7 +125,6 @@ template <typename TGraph, typename VertexMetaData, typename Vertex,
   typename VertexData>
 void vertex_data_db_degree(TGraph* g, VertexMetaData& vertex_metadata) {
   int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt_env()->world_comm().size();
 
   if (mpi_rank == 0) {
     std::cout << "Building distributed vertex data (vertex degree) db ... " << std::endl;

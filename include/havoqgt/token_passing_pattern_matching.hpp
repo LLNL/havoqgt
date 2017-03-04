@@ -192,7 +192,7 @@ public:
 
       //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index "
       //  << vertex_pattern_index << " received from parent_pattern_index " 
-      //  << parent_pattern_index << " itr_count " << itr_count << " max_itr_count" << max_itr_count << std::endl; // Test	 
+      //  << parent_pattern_index << " itr_count " << itr_count << " max_itr_count " << max_itr_count << std::endl; // Test	 
 
       if (max_itr_count > itr_count) {
 
@@ -202,13 +202,16 @@ public:
         if (vertex_data == pattern[next_pattern_index] &&
           vertex_pattern_index == pattern_indices[next_pattern_index]) {
           // verify if received from a valid parent
-          for (auto e = pattern_graph.vertices[vertex_pattern_index]; 
-            e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {  
-            if (pattern_graph.edges[e] == parent_pattern_index) {
-              do_forward_token = true; 
-              break; 
-            }  
-          } // for      
+//          for (auto e = pattern_graph.vertices[vertex_pattern_index]; 
+//            e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {  
+//            if (pattern_graph.edges[e] == parent_pattern_index) {
+//              do_forward_token = true; 
+//              break; 
+//            }  
+//          } // for      
+          if (parent_pattern_index == pattern_indices[next_pattern_index - 1]) { 
+           do_forward_token = true; 
+          }   
         } // if    
  
       } else if (max_itr_count <= itr_count) {
@@ -219,22 +222,27 @@ public:
         if (vertex_data == pattern[next_pattern_index] &&        
           vertex_pattern_index == pattern_indices[next_pattern_index]) { 
           // verify if received from a valid parent
-          for (auto e = pattern_graph.vertices[vertex_pattern_index];
-            e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
-            if (pattern_graph.edges[e] == parent_pattern_index) {
-              match_found = true;
-              break;
-            }
-          } // for
+//          for (auto e = pattern_graph.vertices[vertex_pattern_index];
+//            e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
+//            if (pattern_graph.edges[e] == parent_pattern_index) {
+//              match_found = true;
+//              break;
+//            }
+//          } // for
+          if (parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+            match_found = true; 
+          }      
         } // if
 
         // is this the target vertex
-        if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) && match_found && expect_target_vertex) {
-          // found loop
-          //std::cout << "found valid loop - vertex " <<  " | parent_pattern_index " 
+        if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
+          && match_found && expect_target_vertex) {
+          // found cycle 
+          //std::cout << "found valid cycle - vertex " <<  " | parent_pattern_index " 
           //<<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex) 
           //<<  " vertex_pattern_index " << vertex_pattern_index << " itr " 
           //<< itr_count << std::endl; // Test
+
           //return false; // TODO: true ?	
 
           auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
@@ -251,7 +259,7 @@ public:
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
           // TODO: TBA 
-          //std::cout << "found invalid loop - vertex " <<  " | parent_pattern_index "
+          //std::cout << "found invalid cycle - vertex " <<  " | parent_pattern_index "
           //<<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex)
           //<<  " vertex_pattern_index " << vertex_pattern_index << " itr "
           //<< itr_count << std::endl; // Test  
@@ -270,14 +278,16 @@ public:
 
       if (!do_forward_token) {
         return false;
-      }
+      } //else {
+        //return false; // Test 
+      //} 
 
       // all good, forward along
 
       //if (vertex_pattern_index == 2) // Test 
-      //  std::cout << g.locator_to_label(vertex) << " vertex_pattern_index " 
-      //  << vertex_pattern_index << " " << new_itr_count << " forwarding ... " 
-      //  << g.locator_to_label(target_vertex) << std::endl; // Test
+        //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index " 
+        //<< vertex_pattern_index << " " << new_itr_count << " forwarding ... " 
+        //<< g.locator_to_label(target_vertex) << std::endl; // Test
 
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
@@ -297,11 +307,29 @@ public:
 
   friend inline bool operator>(const tppm_visitor& v1, const tppm_visitor& v2) {
     return false;
+    //if (v1.itr_count > v2.itr_count) {
+    //  return true;
+    //} else if (v1.itr_count < v2.itr_count) {
+    //  return false; 
+    //}
+    //if (v1.vertex == v2.vertex) {
+    //  return false;
+    //}
+    //return !(v1.vertex < v2.vertex);
   }
 
-  friend inline bool operator<(const tppm_visitor& v1, const tppm_visitor& v2) {
-    return false;
-  }
+  //friend inline bool operator<(const tppm_visitor& v1, const tppm_visitor& v2) {
+    //return false;
+    //if (v1.itr_count < v2.itr_count) {
+    //  return true;
+    //} else if (v1.itr_count > v2.itr_count) {
+    //  return false;
+    //}
+    //if (v1.vertex == v2.vertex) {
+    //  return false;
+    //}
+    //return !(v1.vertex < v2.vertex);    
+  //}
 
   vertex_locator vertex;
   vertex_locator target_vertex;

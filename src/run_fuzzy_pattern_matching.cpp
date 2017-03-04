@@ -62,22 +62,30 @@ int main(int argc, char** argv) {
   std::string vertex_rank_output_filename = argv[4];
   std::string backup_filename = argv[5];
   std::string result_dir = argv[6];
+  bool use_degree_as_vertex_data = std::stoull(argv[7]); // 1 - yes, 0 - no   
 
   // TODO: parse commandline
 
   MPI_Barrier(MPI_COMM_WORLD);
+
   if(backup_filename.size() > 0) {
     distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
 
+  //std::cout << "Graph input source : " << graph_input << std::endl; // Test
+
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
-  segment_manager_t* segment_manager = ddb.get_segment_manager();
-    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+  //segment_manager_t* segment_manager = ddb.get_segment_manager();
+  //  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-  graph_type *graph = segment_manager->
+  //graph_type *graph = segment_manager->
+  //  find<graph_type>("graph_obj").first;
+  //assert(graph != nullptr);
+  
+  graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
-  assert(graph != nullptr);
+  assert(graph != nullptr); 
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
@@ -98,7 +106,8 @@ int main(int argc, char** argv) {
   // user defined types
   typedef uint64_t Vertex;
   typedef uint64_t Edge;
-  typedef uint64_t VertexData; // assuming metadata is a 64-bit uint
+  typedef uint64_t VertexData; // for string hash
+  //typedef uint8_t VertexData; // for log binning  
   typedef uint64_t VertexRankType;
 
   //typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetaData;
@@ -137,7 +146,6 @@ int main(int argc, char** argv) {
   VertexIteration vertex_iteration(*graph);
 
   // application parameters
-  bool use_degree_as_vertex_data = false; // TODO: add cmdline flag    
  
   // token passing types
   size_t token_passing_algo = 0; // TODO: use enum if this stays
@@ -184,7 +192,7 @@ int main(int argc, char** argv) {
   } 
   //}
 
-  if (us_degree_as_vertex_data) {
+  if (use_degree_as_vertex_data) {
     return 0;
   }*/
   // test print
@@ -239,12 +247,7 @@ int main(int argc, char** argv) {
   auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]);
   auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]);
 
-  //if(mpi_rank == 0) {
-    //std::cout << "[" << "0" << "] Searching pattern: "; 
-    //pattern_util<VertexData>::output_pattern(pattern);
-  //}
-
-  // initialize containers
+  // initialize containers - per-pattern
   vertex_state_map.clear(); // important
   vertex_rank.reset(0);
   vertex_active.reset(true);
@@ -255,7 +258,7 @@ int main(int argc, char** argv) {
   bool global_initstep = true;  
   bool global_not_finished = false;
 
-  size_t global_itr_count = 0;
+  uint64_t global_itr_count = 0;
 
   // result
   std::string itr_result_filename = result_dir + "/" + std::to_string(ps) + "/result_itr";
@@ -385,10 +388,6 @@ int main(int argc, char** argv) {
 
   // test print
   
-  // cleanup memeory
-  //vertex_rank.clear(); // TODO: add clear() method to vertex_data.cpp   
-  //vertex_active.clear(); // TODO: add clear() method to vertex_data.cpp
-  //vertex_state_map.clear();
   
   // test print
   //for (auto& v : vertex_state_map) {
@@ -462,6 +461,7 @@ int main(int argc, char** argv) {
   // only invalidate it as a token source, but do not remove it from the vertex_state_map 
 
   //std::cout << "token_source_map size " << token_source_map.size() << std::endl; // Test
+  uint64_t remove_count = 0; 
   for (auto& s : token_source_map) {
     if (!s.second) {
       if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
@@ -469,7 +469,9 @@ int main(int argc, char** argv) {
         std::cerr << "Error: failed to remove an element from the map."
           << std::endl;
       } else {
-        std::cout << s.first << " was removed from token_source_map" << std::endl; // Test
+        //std::cout << s.first << " was removed from token_source_map" << std::endl; // Test
+        remove_count++;
+        vertex_active[graph->label_to_locator(s.first)] = false; 
         if (!global_not_finished) {
           global_not_finished = true;
         } 
@@ -478,6 +480,10 @@ int main(int argc, char** argv) {
       //std::cout << "token_source_map " << s.first << " is " << s.second << std::endl; // Test
     }
   } // for - token_source_map
+
+  if(mpi_rank == 0) {
+    std::cout << "Token Passing | Removed " << remove_count << " vertices."<< std::endl;
+  }
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
@@ -540,8 +546,9 @@ int main(int argc, char** argv) {
       << (itr_time_end - itr_time_start) << "\n";
   }
 
-  // verify global termination condition
   global_itr_count++;
+
+  // verify global termination condition
   //if (global_itr_count >= 2) { // Test
   //  global_not_finished = false;
   //}
@@ -586,7 +593,12 @@ int main(int argc, char** argv) {
         << v.second.vertex_pattern_index << "\n";
     }
   }
- 
+
+  // cleanup memeory
+  //vertex_rank.clear(); // TODO: add clear() method to vertex_data.cpp   
+  //vertex_active.clear(); // TODO: add clear() method to vertex_data.cpp
+  //vertex_state_map.clear();
+
   // close files
   itr_result_file.close();
   step_result_file.close();
@@ -597,7 +609,7 @@ int main(int argc, char** argv) {
   // end of an elemnet in the pattern set
   } // for - loop over pattern set
 
-  pattern_set_result_file.close(); // file
+  pattern_set_result_file.close(); // close file
 
   } // fuzzy pattern matching  
 

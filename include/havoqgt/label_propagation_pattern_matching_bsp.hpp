@@ -228,8 +228,8 @@ public:
 
     else if ((itr_count == 1 || itr_count == 2) && match_found) {
     //if (itr_count == 1 && match_found) {  
-      if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
-        std::cout << g.locator_to_label(vertex) << " receiving from " << g.locator_to_label(parent) << " " << itr_count << std::endl; // Test 
+      ///if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
+      ///  std::cout << g.locator_to_label(vertex) << " receiving from " << g.locator_to_label(parent) << " " << itr_count << std::endl; // Test 
       // heard from a neighbour (parent) whose vertex_data matches an entry in the query pattern
       
       // verify if parent_vertex_data meet constrains for current vertex
@@ -259,8 +259,8 @@ public:
 
         else {
           //std ::cout << itr_count; // Test
-          if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
-            std::cout << g.locator_to_label(vertex) << " | " << vertex_pattern_index << " sending to " << g.locator_to_label(parent) << " " << (itr_count + 1) << std::endl; // Test
+          ///if (g.locator_to_label(vertex) == 28 || g.locator_to_label(vertex) == 89) // Test
+          ///  std::cout << g.locator_to_label(vertex) << " | " << vertex_pattern_index << " sending to " << g.locator_to_label(parent) << " " << (itr_count + 1) << std::endl; // Test
 
           match_found = true;
           if (itr_count == 1) {
@@ -425,23 +425,23 @@ public:
     uint64_t min_itr_count = find_vertex->second.pattern_vertex_itr_count_map.begin()->second;
 
     // TODO: verify if v.first's are valid
-    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
-        || g.locator_to_label(vertex) == 28
-        || g.locator_to_label(vertex) == 55681294
-        || g.locator_to_label(vertex) == 55681295
-        || g.locator_to_label(vertex) == 55668937
-        || g.locator_to_label(vertex) == 55668938) // Test    
-      std::cout << " > " << g.locator_to_label(vertex) << " : "; // Test
+    ///if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+    ///    || g.locator_to_label(vertex) == 28
+    ///    || g.locator_to_label(vertex) == 55681294
+    ///    || g.locator_to_label(vertex) == 55681295
+    ///    || g.locator_to_label(vertex) == 55668937
+    ///    || g.locator_to_label(vertex) == 55668938) // Test    
+    ///  std::cout << " > " << g.locator_to_label(vertex) << " : "; // Test
  
     for (auto& v : find_vertex->second.pattern_vertex_itr_count_map) {
 
-      if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
-          || g.locator_to_label(vertex) == 28
-          || g.locator_to_label(vertex) == 55681294
-          || g.locator_to_label(vertex) == 55681295
-          || g.locator_to_label(vertex) == 55668937
-          || g.locator_to_label(vertex) == 55668938) // Test   
-        std::cout << "(" << v.first << ", " << v.second << ") "; // Test
+      ///if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+      ///    || g.locator_to_label(vertex) == 28
+      ///    || g.locator_to_label(vertex) == 55681294
+      ///    || g.locator_to_label(vertex) == 55681295
+      ///    || g.locator_to_label(vertex) == 55668937
+      ///    || g.locator_to_label(vertex) == 55668938) // Test   
+      ///  std::cout << "(" << v.first << ", " << v.second << ") "; // Test
 
       if (v.second == 0) {
         did_heard_from_all = false;
@@ -457,13 +457,13 @@ public:
 
     // TODO: probably do not need the itr_count fields  
         
-    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
-        || g.locator_to_label(vertex) == 28
-        || g.locator_to_label(vertex) == 55681294 
-        || g.locator_to_label(vertex) == 55681295
-        || g.locator_to_label(vertex) == 55668937 
-        || g.locator_to_label(vertex) == 55668938) // Test
-      std::cout << std::endl; // Test
+    ///if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 
+    ///    || g.locator_to_label(vertex) == 28
+    ///    || g.locator_to_label(vertex) == 55681294 
+    ///    || g.locator_to_label(vertex) == 55681295
+    ///    || g.locator_to_label(vertex) == 55668937 
+    ///    || g.locator_to_label(vertex) == 55668938) // Test
+    ///  std::cout << std::endl; // Test
 
     // update current iteration count for this vertex
 //    if (find_vertex->second.local_itr_count <= min_itr_count) {  
@@ -476,16 +476,16 @@ public:
 //    }
 
     // Test
-    if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) {// Test
-      std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << std::endl; // Test   
+    ///if (find_vertex->first == g.locator_to_label(vertex) && g.locator_to_label(vertex) == 89 || g.locator_to_label(vertex) == 28) {// Test
+    ///  std::cout << " > " << g.locator_to_label(vertex) << " : current local_itr_count " << find_vertex->second.local_itr_count << std::endl; // Test   
 
-      for (auto e = pattern_graph.vertices[vertex_pattern_index]; e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {  
-        auto v_nbr = pattern_graph.edges[e];
-        std::cout << v_nbr << ", " ; 
-      }
-      std::cout << std::endl;
+      ///for (auto e = pattern_graph.vertices[vertex_pattern_index]; e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {  
+      ///  auto v_nbr = pattern_graph.edges[e];
+      ///  std::cout << v_nbr << ", " ; 
+      ///}
+      ///std::cout << std::endl;
 
-    } // Test
+    ///} // Test
 
     // Importnt: reset vertex state for the next iteration
     if (find_vertex->second.is_active) {
