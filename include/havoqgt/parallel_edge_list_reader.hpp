@@ -252,7 +252,7 @@ protected:
           //std::cout << source << " " << target << " " << weight << std::endl;
         } else {
           ssline >> source >> target;
-          weight = static_cast<edge_data_type>(0);
+          weight = static_cast<edge_data_type>(1); // 1 - true
           //std::cout << source << " " << target << " " << weight << std::endl;
         }
         edge = std::forward_as_tuple(source, target, weight);

@@ -20,6 +20,7 @@
 #include <havoqgt/label_propagation_pattern_matching_bsp.hpp> 
 #include <havoqgt/pattern_util.hpp>
 #include <havoqgt/token_passing_pattern_matching.hpp>
+#include <havoqgt/update_edge_state.hpp>
 #include <havoqgt/vertex_data_db.hpp>
 #include <havoqgt/vertex_data_db_degree.hpp>
 
@@ -68,28 +69,46 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
+  // graph
   if(backup_filename.size() > 0) {
     distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
-
-  //std::cout << "Graph input source : " << graph_input << std::endl; // Test
 
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
   //segment_manager_t* segment_manager = ddb.get_segment_manager();
   //  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
+  if (mpi_rank == 0) {
+    std::cout << "Loading Graph ... " << std::endl;
+  }
   //graph_type *graph = segment_manager->
   //  find<graph_type>("graph_obj").first;
   //assert(graph != nullptr);
   
   graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
-  assert(graph != nullptr); 
+  assert(graph != nullptr);
+
+  // edge data
+  if (mpi_rank == 0) {
+    std::cout << "Loading / Initializing Edge Data ... " << std::endl;
+  }
+
+  typedef uint8_t edge_data_type; 
+  // TODO: figure out a way to get it from "graph_type".
+  // edge_data_value_type in parallel_edge_list_reader.hpp is edge_data_type
+
+  typedef graph_type::edge_data<edge_data_type, 
+    bip::allocator<edge_data_type, segment_manager_t>> edge_data_t;
+
+  edge_data_t* edge_data_ptr = ddb.get_segment_manager()->
+    find<edge_data_t>("graph_edge_data_obj").first;
+  assert(edge_data_ptr != nullptr); 
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
-    std::cout << "Graph Loaded Ready." << std::endl;
+    std::cout << "Done Loading Graph." << std::endl;
   }
 
   //graph->print_graph_statistics(); // causes MPI error
@@ -145,8 +164,7 @@ int main(int argc, char** argv) {
   VertexActive vertex_active(*graph);
   VertexIteration vertex_iteration(*graph);
 
-  // application parameters
- 
+  // application parameters 
   // token passing types
   size_t token_passing_algo = 0; // TODO: use enum if this stays
 
@@ -291,6 +309,11 @@ int main(int argc, char** argv) {
   double itr_time_start = MPI_Wtime();
 
   /////////////////////////////////////////////////////////////////////////////
+
+  // mark inactive edges
+  //update_edge_state();
+
+  /////////////////////////////////////////////////////////////////////////////
    
   double label_propagation_time_start = MPI_Wtime();
 
@@ -429,7 +452,7 @@ int main(int argc, char** argv) {
 
   token_passing_pattern_matching(graph, vertex_metadata, pattern_tp, 
     pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map, 
-    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl]);
+    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl], *edge_data_ptr);
  
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
   time_end = MPI_Wtime();

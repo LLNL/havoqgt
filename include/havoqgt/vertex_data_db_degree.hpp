@@ -83,11 +83,12 @@ public:
     //} 
   
     // vertex data based on degree classification
+    // log10
     // 0 - singleton
     // 1 - low degree
     // 2 - medium degree
     // 3 - high degree  
-    if (g.degree(vertex) < 2) { 
+/*    if (g.degree(vertex) < 2) { 
       std::get<0>(alg_data)[vertex] = 0;  
     } else {
       auto vertex_degree = g.degree(vertex); 
@@ -103,6 +104,9 @@ public:
         std::cerr << "Error: wrong code branch." << std::endl; 
       }
     }
+*/
+    // log2  
+    std::get<0>(alg_data)[vertex] = static_cast<VertexData>(ceil(log2(g.degree(vertex) + 1)));
       
     //std::cout << "Visiting " << g.locator_to_label(vertex) << " " << std::get<0>(alg_data)[vertex] << std::endl; // test
     return true;
