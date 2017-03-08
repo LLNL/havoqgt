@@ -223,6 +223,52 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
 
+  // For dynamic graph traversal: this currently does one edge at a time per
+  // process.
+  template <typename edgelist_t>
+  void init_dynamic_traversal(edgelist_t* edgelist, vertex_locator _source_v) {
+    auto edge = edgelist->begin();
+    const auto edge_end = edgelist->end();
+    bool done_edges = (edge == edge_end);
+
+    do {
+      do {
+        if (!done_edges) {
+          vertex_locator vl_src(std::get<0>(*edge));
+          vertex_locator vl_dst(std::get<1>(*edge));
+          if (true) {  // TODO(Whomever): This should catch the "add" event.
+            visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
+            queue_visitor(visitor);
+          } else if (false) {  // TODO(Whomever): This should catch the "delete" event.
+            visitor_type visitor(visitor_type::create_visitor_del_type(vl_src, vl_dst));
+            queue_visitor(visitor);
+          }
+          if(vl_src == _source_v) {
+            if (vertex_locator::lesser_hash_priority(vl_dst, vl_src)) {
+              visitor_type visitor(visitor_type::create_visitor_init_type(vl_src, vl_dst));
+              queue_visitor(visitor);
+            } else {
+              visitor_type visitor(visitor_type::create_visitor_init_type(vl_dst, vl_src));
+              queue_visitor(visitor);
+            }
+          }
+          edge++;
+          done_edges = (edge == edge_end);
+        }
+        process_pending_controllers();
+        while(!empty()) {
+          process_pending_controllers();
+          visitor_type this_visitor = pop_top();
+          do_visit(this_visitor);
+          m_termination_detection.inc_completed();
+        }
+        if (done_edges) {
+          m_mailbox.flush_buffers_if_idle();
+        }
+      } while(!done_edges || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
   // For dynamic graph construction
   template <typename request_list_t>
   void dynamic_graphconst(request_list_t* edgelist) {
