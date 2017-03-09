@@ -87,30 +87,35 @@ public:
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
     auto& pattern_indices = std::get<2>(alg_data);
+    auto g = std::get<11>(alg_data);
 
-    auto new_itr_count = itr_count + 1;
-    auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index
-
-    // TODO: pass Graph& g to pre_visit
-    //auto find_vertex = std::get<5>(alg_data).find(g.locator_to_label(vertex));
-    //if (find_vertex == std::get<5>(alg_data).end()) {    
-    //  return false;
-    //}
+    auto find_vertex = std::get<5>(alg_data).find(g->locator_to_label(vertex));
+    if (find_vertex == std::get<5>(alg_data).end()) {    
+      return false;
+    }
     
     if (!do_pass_token && is_init_step && itr_count == 0) {
-    //  if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0])) {
-      if (vertex_data == pattern[0]) {
+      if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
         return true;
       } else {
         return false; 
       } 
     } else if (!is_init_step) {
-       if (vertex_data == pattern[next_pattern_index] && 
-         parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
-         return true; 
+       auto new_itr_count = itr_count + 1;
+       auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index       
+       auto vertex_pattern_index = find_vertex->second.vertex_pattern_index;
+
+       if (vertex_data == pattern[next_pattern_index] &&
+         vertex_pattern_index == pattern_indices[next_pattern_index]) {
+         if (vertex_data == pattern[next_pattern_index] && 
+           parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+           return true; 
+         } else {
+           return false;
+         }    
        } else {
          return false;
-       }    
+       }  
     }
     return true;
   }
@@ -403,7 +408,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   typedef tppm_visitor<TGraph> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
-    edge_metadata);
+    edge_metadata, g);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal_new();
   MPI_Barrier(MPI_COMM_WORLD);
