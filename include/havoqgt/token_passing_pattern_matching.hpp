@@ -84,17 +84,12 @@ public:
 
   template<typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
-    // TODO: pre-visit on local vertices
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
     auto& pattern_indices = std::get<2>(alg_data);
 
     auto new_itr_count = itr_count + 1;
     auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index
-
-    if (vertex_data != pattern[next_pattern_index]) {
-      return false;
-    } 
 
     // TODO: pass Graph& g to pre_visit
     //auto find_vertex = std::get<5>(alg_data).find(g.locator_to_label(vertex));
@@ -104,12 +99,14 @@ public:
     
     if (!do_pass_token && is_init_step && itr_count == 0) {
     //  if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0])) {
-    //    return false;
-    //  } else {
-        return true; 
-    //  } 
+      if (vertex_data == pattern[0]) {
+        return true;
+      } else {
+        return false; 
+      } 
     } else if (!is_init_step) {
-       if (parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+       if (vertex_data == pattern[next_pattern_index] && 
+         parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
          return true; 
        } else {
          return false;
