@@ -1,6 +1,8 @@
 #ifndef HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_HPP_INCLUDED
 #define HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_HPP_INCLUDED
 
+#include <deque>
+
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
@@ -18,11 +20,13 @@ public:
   }
 
   void pop() {
-    data.pop_back();
+    //data.pop_back();
+    data.pop_front();
   }
 
   Visitor const& top() {
-    return data.back();
+    //return data.back();
+    return data.front();
   }
 
   size_t size() const {
@@ -38,8 +42,8 @@ public:
   }
 
 protected:
-  std::vector<Visitor> data;
-
+  //std::vector<Visitor> data;
+  std::deque<Visitor> data;
 };
 
 // token passing pattern matching visitor class
@@ -81,11 +85,36 @@ public:
   template<typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
     // TODO: pre-visit on local vertices
+    auto vertex_data = std::get<0>(alg_data)[vertex];
+    auto& pattern = std::get<1>(alg_data);
+    auto& pattern_indices = std::get<2>(alg_data);
+
+    auto new_itr_count = itr_count + 1;
+    auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index
+
+    if (vertex_data != pattern[next_pattern_index]) {
+      return false;
+    } 
+
     // TODO: pass Graph& g to pre_visit
     //auto find_vertex = std::get<5>(alg_data).find(g.locator_to_label(vertex));
     //if (find_vertex == std::get<5>(alg_data).end()) {    
     //  return false;
-    //} 
+    //}
+    
+    if (!do_pass_token && is_init_step && itr_count == 0) {
+    //  if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0])) {
+    //    return false;
+    //  } else {
+        return true; 
+    //  } 
+    } else if (!is_init_step) {
+       if (parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+         return true; 
+       } else {
+         return false;
+       }    
+    }
     return true;
   }
 
@@ -131,7 +160,7 @@ public:
 //      }
       // Test
 
-      if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0])) {
+      if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
         return false;  
       }
 
@@ -328,16 +357,16 @@ public:
   }
 
   friend inline bool operator>(const tppm_visitor& v1, const tppm_visitor& v2) {
-    return false;
-    //if (v1.itr_count > v2.itr_count) {
-    //  return true;
-    //} else if (v1.itr_count < v2.itr_count) {
-    //  return false; 
-    //}
-    //if (v1.vertex == v2.vertex) {
-    //  return false;
-    //}
-    //return !(v1.vertex < v2.vertex);
+    //return false;
+    if (v1.itr_count > v2.itr_count) {
+      return true;
+    } else if (v1.itr_count < v2.itr_count) {
+      return false; 
+    }
+    if (v1.vertex == v2.vertex) {
+      return false;
+    }
+    return !(v1.vertex < v2.vertex);
   }
 
   //friend inline bool operator<(const tppm_visitor& v1, const tppm_visitor& v2) {
