@@ -92,7 +92,7 @@ public:
 
   template<typename AlgData> 
   bool pre_visit(AlgData& alg_data) const {
-    if (!std::get<4>(alg_data)[vertex]) {
+    if (!std::get<4>(alg_data)[vertex]) { // vertex_active
       return false;
     }
  
@@ -130,7 +130,12 @@ public:
               valid_parent_found = true; 
               break; 
             }
-          } // for  
+          } // for
+ 
+          if (!valid_parent_found) {
+            return false; 
+          }    
+
         } // if            
  
       } // if
@@ -165,7 +170,8 @@ public:
       return false;
     }
 
-    // if the vertex is not in the global map after the first superstep, ignore it
+    // if the vertex is not in the global map after the first superstep 
+    // (first LP iteration of first global step), ignore it
     // std::get<8>(alg_data) - superstep
     // std::get<9>(alg_data) - initstep
     if (std::get<8>(alg_data) > 0 || !std::get<9>(alg_data)) {
@@ -178,13 +184,15 @@ public:
     auto vertex_data = std::get<0>(alg_data)[vertex];
     //auto& pattern = std::get<1>(alg_data);
     //auto& pattern_indices = std::get<2>(alg_data);
-    auto& pattern_graph = std::get<7>(alg_data); 
+    auto& pattern_graph = std::get<7>(alg_data);
+
+    int mpi_rank = havoqgt_env()->world_comm().rank(); 
 
     // does vertex_data match any entry in the query pattern
     bool match_found = false;
 
     // TODO: do you want to compute this every time or store in the memory?
-    std::vector<size_t> vertex_pattern_indices(0); // a vertex label could match to multiple pattern labels
+    std::vector<size_t> vertex_pattern_indices(0); // a vertex label could be a match for multiple pattern labels
     for (size_t vertex_pattern_index = 0; 
       vertex_pattern_index < pattern_graph.vertex_data.size(); 
       vertex_pattern_index++) { 
@@ -205,7 +213,7 @@ public:
 
     //std::cout << g.locator_to_label(vertex) << std::endl; // Test
 
-    if (itr_count == 0 && match_found) {
+    if (itr_count == 0 && match_found) { // int the BSP implementaion, it_count is the message ID 
       // send to all the neighbours
       for(eitr_type eitr = g.edges_begin(vertex); 
         eitr != g.edges_end(vertex); ++eitr) {
@@ -221,6 +229,7 @@ public:
           vis_queue->queue_visitor(new_visitor); 
         } // for
       } // for
+      return true;
     }
 
     // itr_count == 1 as a result of BCAST to out-edges
@@ -263,10 +272,15 @@ public:
           ///  std::cout << g.locator_to_label(vertex) << " | " << vertex_pattern_index << " sending to " << g.locator_to_label(parent) << " " << (itr_count + 1) << std::endl; // Test
 
           match_found = true;
-          if (itr_count == 1) {
+          if (itr_count == 1) { // TODO: an undirected graph should not reply on the back edge
             //match_found = true;
-            lppm_visitor new_visitor(parent, vertex, vertex_data, vertex_pattern_index, itr_count + 1/*next_itr_count*/);
-            vis_queue->queue_visitor(new_visitor);
+            //if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
+            //  return true;
+            //} 
+            //else {
+            //  lppm_visitor new_visitor(parent, vertex, vertex_data, vertex_pattern_index, itr_count + 1/*next_itr_count*/);
+            //  vis_queue->queue_visitor(new_visitor);
+            //}
             //std::cout << " >> Superstep # " << std::get<8>(alg_data) << std::endl; // Test 
           }            
 
@@ -286,7 +300,7 @@ public:
       return false; 
     }
  
-    return true;
+    return true; //true;
   }
 
   friend inline bool operator>(const lppm_visitor& v1, const lppm_visitor& v2) {
@@ -570,7 +584,10 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
   //    << " vertices were removed from the vertex state map, new map size " 
   //    << vertex_state_map.size()
   //    << std::endl; // Test     
-  } 
+  }
+
+  vertex_active.all_max_reduce(); 
+  MPI_Barrier(MPI_COMM_WORLD); 
 }   
 
 template <typename TGraph, typename VertexMetaData, typename VertexData, typename PatternData, 
@@ -608,10 +625,15 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {    
       std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
-    } 
+    }
+
+    vertex_active.all_max_reduce();
+    MPI_Barrier(MPI_COMM_WORLD);
+ 
     verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, 
       vertex_active, vertex_iteration, superstep, global_not_finished);
     //MPI_Barrier(MPI_COMM_WORLD);
+    
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
       std::cout << "Superstep #" << superstep <<  " elapsed time = " << time_end - time_start << std::endl;
@@ -641,7 +663,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 
   } // for 
   // end of BSP execution
-   
+  
   //vertex_rank.all_reduce();
   //vertex_iteration.all_max_reduce();
   //MPI_Barrier(MPI_COMM_WORLD);

@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
 
   typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData;
   typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
-  typedef graph_type::vertex_data<bool, std::allocator<bool> > VertexActive;
+  typedef graph_type::vertex_data<uint8_t, std::allocator<uint8_t> > VertexActive;
   typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration;
 
   typedef vertex_state<uint64_t> VertexState;
@@ -356,7 +356,7 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
 
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching | Global Finished status : "; 
+    std::cout << "Fuzzy Pattern Matching | Global Finished Status : "; 
     if (global_not_finished) { 
       std::cout << "Continue" << std::endl;
     } else {
@@ -364,7 +364,26 @@ int main(int argc, char** argv) {
     } 
   }
 
-  // std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
+  // global verification - if all vertex_state_maps are empty
+  bool global_active_vertex = vertex_state_map.size() < 1 ? false : true;
+  // false - no active vertex left, true - active vertices left   
+  global_active_vertex = havoqgt::mpi::mpi_all_reduce(global_active_vertex, std::greater<uint8_t>(), MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+
+  global_not_finished = global_active_vertex;
+
+  if(mpi_rank == 0) {
+    std::cout << "Fuzzy Pattern Matching | Global Active Vertex Status : ";
+    if (global_active_vertex) {
+      std::cout << "Active vertices left." << std::endl;
+    } else {
+      std::cout << "No active vertex left." << std::endl;
+    }
+  }
+  
+  //if (vertex_state_map.size() < 1) { 
+  //  std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
+  //} // Test
 
   // test print
   uint64_t vertex_active_count = 0;
@@ -424,7 +443,7 @@ int main(int argc, char** argv) {
   // toekn passing
   double token_passing_time_start = MPI_Wtime();   
 
-  if ((token_passing_algo == 0) /*&& global_not_finished*/) { // do token passing ? 
+  if ((token_passing_algo == 0) && global_not_finished) { // do token passing ? 
   global_not_finished = false;  
 
   typedef std::unordered_map<Vertex, bool> TokenSourceMap; 
@@ -466,7 +485,7 @@ int main(int argc, char** argv) {
       << time_end - time_start << "\n";      
   } 
 
-  } // for - loop ove the patterns
+  } // for - loop over the patterns
 
   // pattren found
   havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
@@ -482,33 +501,60 @@ int main(int argc, char** argv) {
 
   // TODO: In the case, a vertex is on multiple cycles/chains (not as the token source)
   // only invalidate it as a token source, but do not remove it from the vertex_state_map 
+  
+  //std::cout << "MPI Rank " << mpi_rank << " vertex_state_map size " << vertex_state_map.size() << std::endl; // Test
+  //std::cout << "MPI Rank " << mpi_rank << " token_source_map size " << token_source_map.size() << std::endl; // Test
 
-  //std::cout << "token_source_map size " << token_source_map.size() << std::endl; // Test
   uint64_t remove_count = 0; 
   for (auto& s : token_source_map) {
+    //auto v_locator = graph->label_to_locator(s.first);
+    //if (v_locator.is_delegate()) {
+    //  continue;    
+    //} 
     if (!s.second) {
-      if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
+//      if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
         // also remove s.first from the token_source_map
-        std::cerr << "Error: failed to remove an element from the map."
-          << std::endl;
-      } else {
-        //std::cout << s.first << " was removed from token_source_map" << std::endl; // Test
-        remove_count++;
+//        std::cerr << "Error: failed to remove an element from the map."
+//          << std::endl;
+//      } else {
+        //std::cout << "MPI Rank " << mpi_rank << " token source " << s.first << " was removed from token_source_map" << std::endl; // Test
+//        remove_count++;
         vertex_active[graph->label_to_locator(s.first)] = false; 
-        if (!global_not_finished) {
-          global_not_finished = true;
-        } 
-      }
+        //if (!global_not_finished) {
+        //  global_not_finished = true;
+        //} 
+//      }
     } else {
-      //std::cout << "token_source_map " << s.first << " is " << s.second << std::endl; // Test
+      //if(mpi_rank == 0) { 
+        //vertex_active[graph->label_to_locator(s.first)] = true;
+        //std::cout << "MPI Rank " << mpi_rank << " token_source_map " << s.first << " is " << s.second << std::endl; // Test
+      //}
     }
   } // for - token_source_map
 
-  if(mpi_rank == 0) {
-    std::cout << "Token Passing | Removed " << remove_count << " vertices."<< std::endl;
+  // gather global vertex_active state
+  vertex_active.all_max_reduce();
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+
+  // remove from vertex_state_map
+  for (auto& s : token_source_map) {
+    auto v_locator = graph->label_to_locator(s.first);
+    if (!vertex_active[v_locator]) {
+      if (vertex_state_map.erase(s.first) < 1) { // v.first is the vertex
+        std::cerr << "Error: failed to remove an element from the map."
+        << std::endl;
+      } else {
+        remove_count++;
+        if (!global_not_finished) {
+          global_not_finished = true;
+        }
+      }  
+    }
   }
 
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+  if(mpi_rank == 0) {
+    std::cout << "[MPI Rank " << mpi_rank << "] " << "Token Passing | Removed " << remove_count << " vertices."<< std::endl;
+  }
 
   // result
   // Important : This may slow down things -only for presenting results
@@ -527,7 +573,9 @@ int main(int argc, char** argv) {
     << active_vertices_count << "\n";    
  
   } else {
-    std::cout << "Fuzzy Pattern Matching | Skipping Token Passing." << std::endl;
+    if(mpi_rank == 0) { 
+      std::cout << "Fuzzy Pattern Matching | Skipping Token Passing." << std::endl;
+    }
   } // do token passing ? 
 
   // verify global termination condition  

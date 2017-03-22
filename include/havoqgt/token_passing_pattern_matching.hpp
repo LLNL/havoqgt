@@ -89,12 +89,20 @@ public:
     auto& pattern_indices = std::get<2>(alg_data);
     auto g = std::get<11>(alg_data);
 
+    //int mpi_rank = havoqgt_env()->world_comm().rank();
+
+    // TODO: use vertex_active
+    // TODO: only start token passing from the controller 
     auto find_vertex = std::get<5>(alg_data).find(g->locator_to_label(vertex));
     if (find_vertex == std::get<5>(alg_data).end()) {    
       return false;
     }
     
     if (!do_pass_token && is_init_step && itr_count == 0) {
+      // TODO: this is probbaly wrong
+//      if (vertex.is_delegate() && (g->master(vertex) != mpi_rank)) {
+//        return false;
+//      }
       if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
         return true;
       } else {
@@ -147,6 +155,8 @@ public:
     //auto& pattern_found = std::get<9>(alg_data);
     //auto& edge_metadata = std::get<10>(alg_data);  
 
+    //int mpi_rank = havoqgt_env()->world_comm().rank();
+
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // create visitors only for the source vertices
        
@@ -161,6 +171,12 @@ public:
 //        vis_queue->queue_visitor(new_visitor);              
 //      }
       // Test
+       
+      // TODO: this is probbaly wrong
+      // for delegate vertices only start token passing from the controller   
+//      if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
+//        return false;
+//      }
 
       if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
         return false;  
@@ -172,7 +188,8 @@ public:
 //      return true;
       
       //std::cout << "Found source vertex " << g.locator_to_label(vertex) << " vertex_data " << vertex_data << std::endl; // Test
-
+      
+      // Important: only the token_source_map on the controller contains the source vertex (wrong I think)
       auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
       if (find_token_source == std::get<6>(alg_data).end()) {
         auto insert_status = std::get<6>(alg_data).insert({g.locator_to_label(vertex), false});
@@ -283,12 +300,19 @@ public:
         if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && expect_target_vertex) {
           // found cycle 
-          //std::cout << "found valid cycle - vertex " <<  " | parent_pattern_index " 
+          //std::cout << "found valid cycle - vertex " << g.locator_to_label(vertex) <<  " | parent_pattern_index " 
           //<<  parent_pattern_index <<  " | " << g.locator_to_label(target_vertex) 
           //<<  " vertex_pattern_index " << vertex_pattern_index << " itr " 
           //<< itr_count << std::endl; // Test
 
           //return false; // TODO: true ?	
+
+          // TODO: this is probbaly wrong
+          // Important: only the token_source_map on the controller contains the source vertex (wrong I think)
+//          if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
+//            std::get<9>(alg_data) = 1; // true; // pattern_found
+//            return true;		        
+//          }  
 
           auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
           if (find_token_source == std::get<6>(alg_data).end()) {
@@ -296,7 +320,7 @@ public:
             //return true; // false ?           
             return false;  
           }
-          find_token_source->second = true;   
+          find_token_source->second = 1; //true;   
  
           std::get<9>(alg_data) = 1; // true; // pattern_found	
 
@@ -315,7 +339,7 @@ public:
           //std::cout << "At " << g.locator_to_label(vertex) <<  ", did not find target " 
           //<< g.locator_to_label(target_vertex) <<  " after " << itr_count 
           //<< " iterations" <<std::endl; // Test
-          return false;  
+          return true;//false;  
         }   
       } else {
         std::cerr << "Error: wrong code branch." << std::endl;    
@@ -359,8 +383,8 @@ public:
   }
 
   friend inline bool operator>(const tppm_visitor& v1, const tppm_visitor& v2) {
-    //return false;
-    if (v1.itr_count > v2.itr_count) {
+    return false;
+    /*if (v1.itr_count > v2.itr_count) {
       return true;
     } else if (v1.itr_count < v2.itr_count) {
       return false; 
@@ -368,7 +392,13 @@ public:
     if (v1.vertex == v2.vertex) {
       return false;
     }
-    return !(v1.vertex < v2.vertex);
+    return !(v1.vertex < v2.vertex);*/
+    
+    /*if (v1.itr_count <= v2.itr_count) {
+      return true;
+    } else {
+      return false;
+    }*/ 
   }
 
   //friend inline bool operator<(const tppm_visitor& v1, const tppm_visitor& v2) {
