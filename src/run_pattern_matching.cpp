@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 
   // application parameters 
   // token passing types
-  size_t token_passing_algo = 0; // TODO: use enum if this stays
+  size_t token_passing_algo = 10; // TODO: use enum if this stays
 
   MPI_Barrier(MPI_COMM_WORLD);
  
@@ -189,6 +189,36 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching Time | Vertex Data DB : " << time_end - time_start << std::endl;
   }
+
+  bool do_output_vertex_data = true;
+
+  if (do_output_vertex_data) {
+    std::string vertex_data_filename = result_dir + "/" +
+    std::to_string(0) + "/all_ranks_vertex_data/vertex_data_" + std::to_string(mpi_rank);
+    std::ofstream vertex_data_file(vertex_data_filename, std::ofstream::out);
+
+    for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
+      ++vitr) {
+      vloc_type vertex = *vitr;
+      vertex_data_file << mpi_rank << ", l, " << graph->locator_to_label(vertex) 
+        << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n";  
+    } 	
+    	
+    for(vitr_type vitr = graph->delegate_vertices_begin();
+      vitr != graph->delegate_vertices_end(); ++vitr) {
+      vloc_type vertex = *vitr;
+
+      if (vertex.is_delegate() && (graph->master(vertex) == mpi_rank)) {
+        vertex_data_file << mpi_rank << ", c, " << graph->locator_to_label(vertex) 
+          << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n";
+      } else {	
+        vertex_data_file << mpi_rank << ", d, " << graph->locator_to_label(vertex) 
+          << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n";  
+      }
+    }
+  
+    vertex_data_file.close();
+  } 
 
   ///////////////////////////////////////////////////////////////////////////// 
 
@@ -576,6 +606,7 @@ int main(int argc, char** argv) {
     if(mpi_rank == 0) { 
       std::cout << "Fuzzy Pattern Matching | Skipping Token Passing." << std::endl;
     }
+    global_not_finished = false;
   } // do token passing ? 
 
   // verify global termination condition  
