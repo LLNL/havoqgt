@@ -661,6 +661,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       << superstep << ", " 
       << active_vertices_count << "\n";
 
+    // TODO: global reduction on global_not_finished before next iteration	
+
   } // for 
   // end of BSP execution
   
