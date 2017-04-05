@@ -242,9 +242,50 @@ public:
           do_visit(this_visitor);
           m_termination_detection.inc_completed();
         }
-        m_mailbox.flush_buffers_if_idle();
+        //m_mailbox.flush_buffers_if_idle();
+        if (citr == m_ptr_graph->controller_end() && vitr == m_ptr_graph->vertices_end() ) {
+          m_mailbox.flush_buffers_if_idle();
+        }
       } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
               || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
+  void init_visitor_traversal_new_alt() {
+    auto citr = m_ptr_graph->controller_begin();
+    auto vitr = m_ptr_graph->vertices_begin();
+
+    do {
+      do {
+        do {
+          if(citr != m_ptr_graph->controller_end()) {
+            visitor_type v(*citr);
+            //if(v.pre_visit(m_alg_data)) {  //RECENTLY ADDED 2013.10.10
+            //  do_visit( v );
+            //  check_mailbox();
+            //}
+            do_init_visit(v);
+            ++citr;
+          }
+          if(vitr != m_ptr_graph->vertices_end()) {
+            visitor_type v(*vitr);
+            //if(v.pre_visit(m_alg_data)) {  //RECENTLY ADDED 2013.10.10
+            //  do_visit( v );
+            //  check_mailbox();
+            //}
+            do_init_visit(v);
+            ++vitr;
+          }
+          process_pending_controllers();
+          while(!empty()) {
+            process_pending_controllers();
+            visitor_type this_visitor = pop_top();
+            do_visit(this_visitor);
+            m_termination_detection.inc_completed();
+          }
+        } while( citr != m_ptr_graph->controller_end() ||  vitr != m_ptr_graph->vertices_end() );
+        m_mailbox.flush_buffers_if_idle();
+      } while( !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }
 

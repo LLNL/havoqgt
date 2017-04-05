@@ -109,6 +109,7 @@ public:
     //auto& pattern = std::get<1>(alg_data);
     //auto& pattern_indices = std::get<2>(alg_data);
     auto& pattern_graph = std::get<7>(alg_data);
+    // std::get<10>(alg_data) - g
 
     bool match_found = false;
     bool valid_parent_found = false;
@@ -174,6 +175,7 @@ public:
     // (first LP iteration of first global step), ignore it
     // std::get<8>(alg_data) - superstep
     // std::get<9>(alg_data) - initstep
+    // std::get<10>(alg_data) - g
     if (std::get<8>(alg_data) > 0 || !std::get<9>(alg_data)) {
       auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
       if (find_vertex == std::get<6>(alg_data).end()) {
@@ -316,7 +318,7 @@ public:
     VisitorQueueHandle vis_queue, AlgData& alg_data, 
     size_t vertex_pattern_index) const {
 
-    typedef vertex_state<uint64_t> VertexState;
+    typedef vertex_state<uint8_t> VertexState;
 
     //auto& pattern = std::get<1>(alg_data);  
     //auto& pattern_indices = std::get<2>(alg_data);
@@ -606,7 +608,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 
   typedef lppm_visitor<TGraph, VertexData> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
-    vertex_active, vertex_iteration, vertex_state_map, pattern_graph, superstep_var, initstep);
+    vertex_active, vertex_iteration, vertex_state_map, pattern_graph, superstep_var, initstep, g);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   // beiginning of BSP execution

@@ -577,13 +577,13 @@ private:
     } else {
       world_dest = (rank * m_shm_size) + m_shm_rank;
     }
-    if(m_isend_count % 5 == 0) {
+//    if(m_isend_count % 5 == 0) {
       //CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
       CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
-    } else {
+//    } else {
       //CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
-      CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
-    }
+//      CHK_MPI( MPI_Isend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
+//    }
     m_isend_count++;
     m_isend_bytes+=size_in_bytes;
 

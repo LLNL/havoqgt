@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -18,8 +19,10 @@
 #include <havoqgt/graph.hpp>
 //#include <havoqgt/label_propagation_pattern_matching.hpp>
 #include <havoqgt/label_propagation_pattern_matching_bsp.hpp> 
+//#include <havoqgt/label_propagation_pattern_matching_iterative.hpp>
 #include <havoqgt/pattern_util.hpp>
 #include <havoqgt/token_passing_pattern_matching.hpp>
+//#include <havoqgt/token_passing_pattern_matching_new.hpp>
 #include <havoqgt/update_edge_state.hpp>
 #include <havoqgt/vertex_data_db.hpp>
 #include <havoqgt/vertex_data_db_degree.hpp>
@@ -84,8 +87,7 @@ int main(int argc, char** argv) {
   }
   //graph_type *graph = segment_manager->
   //  find<graph_type>("graph_obj").first;
-  //assert(graph != nullptr);
-  
+  //assert(graph != nullptr);  
   graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
@@ -112,7 +114,9 @@ int main(int argc, char** argv) {
   }
 
   //graph->print_graph_statistics(); // causes MPI error
-  MPI_Barrier(MPI_COMM_WORLD);  
+  //MPI_Barrier(MPI_COMM_WORLD);  
+
+  /////////////////////////////////////////////////////////////////////////////
 
   // fuzzy pattern matching
   {
@@ -136,11 +140,14 @@ int main(int argc, char** argv) {
 
   typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetaData;
   typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank;
-  typedef graph_type::vertex_data<uint8_t, std::allocator<uint8_t> > VertexActive;
+  typedef graph_type::vertex_data<uint8_t, std::allocator<uint8_t> > VertexActive; // TODO: you are mixing bool and uint!
   typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration;
 
-  typedef vertex_state<uint64_t> VertexState;
+  typedef vertex_state<uint8_t> VertexState;
   typedef std::unordered_map<Vertex, VertexState> VertexStateMap;
+  typedef std::unordered_set<Vertex> VertexSet;
+  
+  typedef graph_type::vertex_data<VertexSet, std::allocator<VertexSet> > VertexSetCollection;  
 
   if(mpi_rank == 0) {
     std::cout << "Distributed fuzzy pattern matching." << std::endl;
@@ -149,24 +156,37 @@ int main(int argc, char** argv) {
   double time_start = MPI_Wtime();
   double time_end = MPI_Wtime();
 
-  // per-rank containers
+  // per-rank containers 
   VertexStateMap vertex_state_map; 
 
-  // vertex containers
+  // vertex containers 
+   
+  // TODO: need a new alloc_inst to use bip/mmap
 //  VertexMetaData vertex_metadata(*graph, alloc_inst);
 //  VertexRank vertex_rank(*graph, alloc_inst);
 //  VertexActive vertex_active(*graph, alloc_inst);
 //  VertexIteration vertex_iteration(*graph, alloc_inst);
-// TODO: need a new alloc_inst to use bip/mmap
  
   VertexMetaData vertex_metadata(*graph); 
-  VertexRank vertex_rank(*graph);
+//  VertexRank vertex_rank(*graph);
+  uint8_t vertex_rank; // TODO: dummy
   VertexActive vertex_active(*graph);
-  VertexIteration vertex_iteration(*graph);
+//  VertexIteration vertex_iteration(*graph);
+  uint8_t vertex_iteration; // TODO: dummy  
+  VertexSetCollection vertex_token_source_set(*graph); // per vertex set
 
-  // application parameters 
+  // application parameters // TODO: commandline input
+
+  // write vertex data to file
+  bool do_output_vertex_data = false;
+
   // token passing types
-  size_t token_passing_algo = 10; // TODO: use enum if this stays
+  // 0 - undircetd / unidirectional cycle
+  // 1 - not an enclosed path
+  // 2 - irregular enclose pattern
+  // 99 - do not do token passing
+  // TODO: read the type form the input file
+  size_t token_passing_algo = 0; // TODO: use enum if this stays
 
   MPI_Barrier(MPI_COMM_WORLD);
  
@@ -189,8 +209,6 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching Time | Vertex Data DB : " << time_end - time_start << std::endl;
   }
-
-  bool do_output_vertex_data = true;
 
   if (do_output_vertex_data) {
     std::string vertex_data_filename = result_dir + "/" +
@@ -220,8 +238,6 @@ int main(int argc, char** argv) {
     vertex_data_file.close();
   } 
 
-  ///////////////////////////////////////////////////////////////////////////// 
-
   // test print
   //if(mpi_rank == 0) {
 /*  int set_mpi_rank = 0;
@@ -244,13 +260,19 @@ int main(int argc, char** argv) {
     return 0;
   }*/
   // test print
-  
+
+  ///////////////////////////////////////////////////////////////////////////// 
+ 
   // result
   std::string pattern_set_result_filename = result_dir + "/result_pattern_set"; 
   std::ofstream pattern_set_result_file(pattern_set_result_filename, std::ofstream::out);
+
+  /////////////////////////////////////////////////////////////////////////////
     
-  // setup pattern set 
-  // a pattern set is collection of directories containing pattern files  
+  // TODO: setup pattern set 
+  // a pattern set is a collection of directories containing pattern files 
+  
+  // TODO: code indentation
    
   // loop over pattern set
   for(size_t ps = 0; ps < 1; ps++) { // TODO: for now only reading from pattern_dir/0 
@@ -261,7 +283,7 @@ int main(int argc, char** argv) {
     std::cout << "Setting up pattern to search ... " << std::endl;
   }
    
-  // setup pattern - sub-graph
+  // setup pattern - for label propagation 
   std::string pattern_input_filename = pattern_dir + "/" + std::to_string(ps) + "/pattern";
 
   typedef ::graph<Vertex, Edge, VertexData> PatternGraph; // TODO: fix graph class name conflict
@@ -290,19 +312,21 @@ int main(int argc, char** argv) {
   // test print
 
   // TODO: remove from here    
-  // setup pattern - token passing
+  // setup pattern - for token passing
   pattern_util<VertexData, Vertex> ptrn_util_two(pattern_input_filename, true);
   auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]);
   auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]);
 
   // initialize containers - per-pattern
   vertex_state_map.clear(); // important
-  vertex_rank.reset(0);
+  //vertex_rank.reset(0);
   vertex_active.reset(true);
-  vertex_iteration.reset(0); // TODO: -1 ?
+  //vertex_iteration.reset(0); // TODO: -1 ?
+  vertex_token_source_set.clear(); // clear all the sets on all the vertices
 
   // std::cout << "Vertex state map size (initially): " << vertex_state_map.size() << std::endl; // Test 
-  
+
+  // initialize application parameters  
   bool global_initstep = true;  
   bool global_not_finished = false;
 
@@ -330,8 +354,9 @@ int main(int argc, char** argv) {
 
   double pattern_time_start = MPI_Wtime();
 
-  // run application
+  /////////////////////////////////////////////////////////////////////////////
 
+  // run application
   do {
 
   global_not_finished = false;
@@ -358,7 +383,7 @@ int main(int argc, char** argv) {
 
   // label propagation pattern matching bsp 
   label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
-    VertexRank, VertexActive, VertexIteration, VertexStateMap, PatternGraph>
+    /*VertexRank*/uint8_t, VertexActive, /*VertexIteration*/uint8_t, VertexStateMap, PatternGraph>
     (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
     vertex_iteration, vertex_state_map, pattern_graph, global_initstep, global_not_finished, 
     global_itr_count, superstep_result_file, active_vertices_count_result_file);
@@ -394,13 +419,21 @@ int main(int argc, char** argv) {
     } 
   }
 
-  // global verification - if all vertex_state_maps are empty
-  bool global_active_vertex = vertex_state_map.size() < 1 ? false : true;
-  // false - no active vertex left, true - active vertices left   
-  global_active_vertex = havoqgt::mpi::mpi_all_reduce(global_active_vertex, std::greater<uint8_t>(), MPI_COMM_WORLD);
+  //if (vertex_state_map.size() > 0 && global_itr_count > 0) { 
+    //std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
+  //} // Test
+
+  // global verification - are all vertex_state_maps empty
+  // false - no active vertex left, true - active vertices left 
+  bool global_active_vertex = true; //vertex_state_map.size() < 1 ? false : true;
+  if (vertex_state_map.size() < 1) {
+//    global_active_vertex = false;
+  }
+	
+  global_active_vertex = havoqgt::mpi::mpi_all_reduce(global_active_vertex, std::greater<uint8_t>(), MPI_COMM_WORLD); // TODO: not working properly - why? // bool does not work
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
 
-  global_not_finished = global_active_vertex;
+//  global_not_finished = global_active_vertex;
 
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching | Global Active Vertex Status : ";
@@ -411,10 +444,10 @@ int main(int argc, char** argv) {
     }
   }
   
-  //if (vertex_state_map.size() < 1) { 
+  //if (vertex_state_map.size() > 0 && global_itr_count > 0) { 
   //  std::cout << "Vertex state map size (finally): " << vertex_state_map.size() << std::endl; // Test 
   //} // Test
-
+/*
   // test print
   uint64_t vertex_active_count = 0;
   uint64_t vertex_inactive_count = 0;
@@ -459,21 +492,21 @@ int main(int argc, char** argv) {
   //  std::cout << mpi_rank << " # vertices reached max-iterations " << vertex_iteration_valid_count << std::endl;
 
   // test print
-  
-  
+   
   // test print
   //for (auto& v : vertex_state_map) {
   //  auto v_locator = graph->label_to_locator(v.first); 
   //  std::cout << v.first << " " << v.second.vertex_pattern_index << " " << vertex_metadata[v_locator] << std::endl; 
   //}
   // test print
- 
+*/ 
   /////////////////////////////////////////////////////////////////////////////
  
   // toekn passing
   double token_passing_time_start = MPI_Wtime();   
 
-  if ((token_passing_algo == 0) && global_not_finished) { // do token passing ? 
+  if ((token_passing_algo == 0) && global_not_finished) { // do token passing ?
+ 
   global_not_finished = false;  
 
   typedef std::unordered_map<Vertex, bool> TokenSourceMap; 
@@ -486,6 +519,8 @@ int main(int argc, char** argv) {
   // loop over the patterns and run token passing
   for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) 
   {
+
+  vertex_token_source_set.clear(); // Important
  
   auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
   auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
@@ -501,7 +536,13 @@ int main(int argc, char** argv) {
 
   token_passing_pattern_matching(graph, vertex_metadata, pattern_tp, 
     pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map, 
-    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl], *edge_data_ptr);
+    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl], *edge_data_ptr, vertex_token_source_set);
+
+  // token_passing_pattern_matching_new.hpp
+  //token_passing_pattern_matching(graph, vertex_metadata, pattern_tp,
+  //  pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
+  //  token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, 
+  //  pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active); 
  
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
   time_end = MPI_Wtime();
@@ -517,7 +558,7 @@ int main(int argc, char** argv) {
 
   } // for - loop over the patterns
 
-  // pattren found
+  // pattren found ?
   havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
   if(mpi_rank == 0) {   
@@ -527,7 +568,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // remove the invalid vertices from the vertex_state_map
+  // remove the invalid (source) vertices from the vertex_state_map
 
   // TODO: In the case, a vertex is on multiple cycles/chains (not as the token source)
   // only invalidate it as a token source, but do not remove it from the vertex_state_map 
@@ -563,7 +604,7 @@ int main(int argc, char** argv) {
   } // for - token_source_map
 
   // gather global vertex_active state
-  vertex_active.all_max_reduce();
+  vertex_active.all_min_reduce();
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
   // remove from vertex_state_map
@@ -607,7 +648,18 @@ int main(int argc, char** argv) {
       std::cout << "Fuzzy Pattern Matching | Skipping Token Passing." << std::endl;
     }
     global_not_finished = false;
-  } // do token passing ? 
+  } // do token passing ?
+ 
+  double token_passing_time_end = MPI_Wtime();
+  if(mpi_rank == 0) {
+    std::cout << "Fuzzy Pattern Matching Time | Token Passing : " 
+      << (token_passing_time_end - token_passing_time_start) << std::endl;
+  }
+
+  if(mpi_rank == 0) {
+    step_result_file << global_itr_count << ", TP, "  
+      << (token_passing_time_end - token_passing_time_start) << "\n"; 
+  }
 
   // verify global termination condition  
   //std::cout << "Fuzzy Pattern Matching | Global Not Finished status (local) : " << global_not_finished << std::endl; // Test
@@ -624,18 +676,8 @@ int main(int argc, char** argv) {
     }
   }
 
-  double token_passing_time_end = MPI_Wtime();
-  if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching Time | Token Passing : " 
-      << (token_passing_time_end - token_passing_time_start) << std::endl;
-  }
-
-  if(mpi_rank == 0) {
-    step_result_file << global_itr_count << ", TP, "  
-      << (token_passing_time_end - token_passing_time_start) << "\n"; 
-  }
-
   /////////////////////////////////////////////////////////////////////////////
+
   double itr_time_end = MPI_Wtime(); 
   if(mpi_rank == 0) { 
     std::cout << "Fuzzy Pattern Matching Time | Iteration [" 
@@ -657,6 +699,8 @@ int main(int argc, char** argv) {
   //MPI_Barrier(MPI_COMM_WORLD);
 
   } while (global_not_finished); // application loop
+ 
+  /////////////////////////////////////////////////////////////////////////////
 
   MPI_Barrier(MPI_COMM_WORLD);  
   double pattern_time_end = MPI_Wtime();
@@ -667,6 +711,8 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching | # Iterations : " << global_itr_count << std::endl;
   }
+ 
+  /////////////////////////////////////////////////////////////////////////////
 
   // result
   if(mpi_rank == 0) {  

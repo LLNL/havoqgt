@@ -65,7 +65,7 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
   typedef T value_type;
   vertex_data() {}
 
-  T&       operator[] (const vertex_locator& locator)
+  T& operator[] (const vertex_locator& locator)
   {
     if(locator.is_delegate()) {
       assert(locator.local_id() < m_delegate_data.size());
@@ -95,6 +95,15 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     }
   }
 
+  void clear() {
+    for(size_t i=0; i<m_owned_vert_data.size(); ++i) {
+      m_owned_vert_data[i].clear();
+    }
+    for(size_t i=0; i<m_delegate_data.size(); ++i) {
+      m_delegate_data[i].clear();
+    } 
+  }
+
   void all_reduce() {
     std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
     std::vector<T> tmp_out(tmp_in.size(), 0);
@@ -106,6 +115,13 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
     std::vector<T> tmp_out(tmp_in.size(), 0);
     mpi_all_reduce(tmp_in, tmp_out, std::greater<T>(), MPI_COMM_WORLD);
+    std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
+  }
+
+  void all_min_reduce() {
+    std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
+    std::vector<T> tmp_out(tmp_in.size(), 0);
+    mpi_all_reduce(tmp_in, tmp_out, std::less<T>(), MPI_COMM_WORLD);
     std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
   }
     
