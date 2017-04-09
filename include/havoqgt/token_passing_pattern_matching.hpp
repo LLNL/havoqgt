@@ -93,7 +93,7 @@ public:
     auto g = std::get<11>(alg_data); // graph
     // std::get<12>(alg_data); // vertex_token_source_set   
 
-    //int mpi_rank = havoqgt_env()->world_comm().rank();
+    int mpi_rank = havoqgt_env()->world_comm().rank();
     
     // verify if this vertex have already forwarded a token from the originating vertex
     if (!is_init_step && max_itr_count > itr_count) {
@@ -105,12 +105,15 @@ public:
     }
  
     // TODO: use vertex_active
-    // TODO: only start token passing from the controller 
+    // TODO: only start token passing from the controller (wrong I think)
+
+    // verify if the vertex in the vertex state map 
     auto find_vertex = std::get<5>(alg_data).find(g->locator_to_label(vertex));
     if (find_vertex == std::get<5>(alg_data).end()) {    
       return false;
     }
-    
+   
+    // initial case (probably never gets here) 
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // TODO: this is probbaly wrong
 //      if (vertex.is_delegate() && (g->master(vertex) != mpi_rank)) {
@@ -121,7 +124,9 @@ public:
       } else {
         return false; 
       } 
-    } else if (!is_init_step) {
+    } else if (do_pass_token && !is_init_step) { // relay token  
+ 
+       // the controller and local vertices always get here
        auto new_itr_count = itr_count + 1;
        auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index       
        auto vertex_pattern_index = find_vertex->second.vertex_pattern_index;
@@ -130,6 +135,31 @@ public:
          vertex_pattern_index == pattern_indices[next_pattern_index]) {
          if (vertex_data == pattern[next_pattern_index] && 
            parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+
+           // if vertex is a delegate  
+           if (vertex.is_delegate() && (g->master(vertex) != mpi_rank)) {
+             return true;        
+           }
+
+           if (max_itr_count > itr_count) {
+	     // OK to forwarded a token from a source, now update vertex_token_source_set	
+             auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g->locator_to_label(target_vertex));
+             if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
+               auto insert_status = std::get<12>(alg_data)[vertex].insert(g->locator_to_label(target_vertex));
+               if(!insert_status.second) {
+                 std::cerr << "Error: failed to add an element to the set." << std::endl;
+                 return false;
+               }
+	       //std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex)
+	       //  << " to the vertex set" << std::endl; // Test
+	     } else {
+               std::cerr << "Error: unexpected item in the set." << std::endl;
+               return false;
+             }	
+           }
+
+           //TODO: max_itr_count == itr_count
+
            return true; 
          } else {
            return false;
@@ -137,8 +167,10 @@ public:
        } else {
          return false;
        }  
+    } else {
+      return false; 
     }
-    return true;
+    return false; //true; // probably never gets here
   }
 
   template<typename VisitorQueueHandle, typename AlgData>
@@ -149,16 +181,23 @@ public:
 
   template<typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    // verify if this vertex have already forwarded a token from the originating vertex
-    if (!is_init_step && max_itr_count > itr_count) {
-      auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
-      if (find_token_source_forwarded != std::get<12>(alg_data)[vertex].end()) {
-        //std::cout << "visit skipping" << std::endl;
-        return false; 
-      } 		
+
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+
+    // if vertex is a delegate 
+    if (!is_init_step && vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {    
+      // verify if this vertex have already forwarded a token from the originating vertex
+      if (!is_init_step && max_itr_count > itr_count) {
+        auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
+        if (find_token_source_forwarded != std::get<12>(alg_data)[vertex].end()) {
+          //std::cout << "visit skipping" << std::endl;
+          return false; 
+        } 		
+      }
     }
 
     // TODO: verify if this vertex is alive
+
     auto find_vertex = std::get<5>(alg_data).find(g.locator_to_label(vertex));
     if (find_vertex == std::get<5>(alg_data).end()) {
       return false;
@@ -341,14 +380,13 @@ public:
           auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
           if (find_token_source == std::get<6>(alg_data).end()) {
             std::cerr << "Error: did not find the expected item in the map." << std::endl;
-            //return true; // false ?           
             return false;  
           }
           find_token_source->second = 1; //true;   
  
           std::get<9>(alg_data) = 1; // true; // pattern_found	
 
-          return true;
+          return false; //true; ?
 
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
@@ -378,6 +416,25 @@ public:
 
       // all good, forward along the token
 
+      // if vertex is a delegate
+      if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
+
+        // forwarded a token from a source, now update vertex_token_source_set 
+        auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
+        if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
+          auto insert_status = std::get<12>(alg_data)[vertex].insert(g.locator_to_label(target_vertex));		
+  	  if(!insert_status.second) {
+            std::cerr << "Error: failed to add an element to the set." << std::endl;
+            return false;
+          }
+          //std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex) 
+          //  << " to the vertex set" << std::endl; // Test 
+        } else {
+          std::cerr << "Error: unexpected item in the set." << std::endl;
+	  return false;
+        }
+      } // if vertex is a delegate
+
       //if (vertex_pattern_index == 2) // Test 
         //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index " 
         //<< vertex_pattern_index << " " << new_itr_count << " forwarding ... " 
@@ -397,21 +454,6 @@ public:
         //}  
         // Test    
       }
-
-      // forwarded a token from a source, now update vertex_token_source_set 
-      auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
-      if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
-        auto insert_status = std::get<12>(alg_data)[vertex].insert(g.locator_to_label(target_vertex));		
-	if(!insert_status.second) {
-          std::cerr << "Error: failed to add an element to the set." << std::endl;
-          return false;
-        }
-        //std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex) 
-        //  << " to the vertex set" << std::endl; // Test 
-      } else {
-        std::cerr << "Error: unexpected item in the set." << std::endl;
-	return false;
-      }  
 	     
       return true;
 
@@ -481,7 +523,8 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
     edge_metadata, g, vertex_token_source_set);
-  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  //auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, tppm_queue>(g, alg_data);
   vq.init_visitor_traversal_new();
   //vq.init_visitor_traversal_new_alt();
   MPI_Barrier(MPI_COMM_WORLD);
