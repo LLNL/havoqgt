@@ -626,7 +626,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     vq.init_visitor_traversal_new(); 
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {    
-      std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
+      std::cout << "Superstep #" << superstep <<  " Synchronizing ... " << std::endl;
     }
 
     vertex_active.all_max_reduce();
@@ -638,7 +638,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
-      std::cout << "Superstep #" << superstep <<  " elapsed time = " << time_end - time_start << std::endl;
+      std::cout << "Superstep #" << superstep <<  " Time : " << time_end - time_start << std::endl;
     }
 
     // result

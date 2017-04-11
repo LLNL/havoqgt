@@ -23,9 +23,12 @@
 #include <havoqgt/pattern_util.hpp>
 #include <havoqgt/token_passing_pattern_matching.hpp>
 //#include <havoqgt/token_passing_pattern_matching_new.hpp>
+//#include <havoqgt/token_passing_pattern_matching_iterative.hpp>
 #include <havoqgt/update_edge_state.hpp>
 #include <havoqgt/vertex_data_db.hpp>
 #include <havoqgt/vertex_data_db_degree.hpp>
+
+#define TP_ORIG
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
@@ -295,7 +298,7 @@ int main(int argc, char** argv) {
 
   // test print
   if(mpi_rank == 0) {
-  std::cout << "Searching pattern : " << std::endl;
+  std::cout << "Searching Pattern : " << std::endl;
   for (auto v = 0; v < pattern_graph.vertex_count; v++) {
     std::cout << v << " : off-set " << pattern_graph.vertices[v] << " vertex_data " 
     << pattern_graph.vertex_data[v] << " vertex_degree " 
@@ -517,9 +520,9 @@ int main(int argc, char** argv) {
   std::vector<uint8_t> pattern_found(ptrn_util_two.input_patterns.size(), 0); 
 
   // loop over the patterns and run token passing
-  for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) 
-  {
+  for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
 
+  token_source_map.clear(); // Important
   vertex_token_source_set.clear(); // Important
  
   auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
@@ -528,17 +531,19 @@ int main(int argc, char** argv) {
   auto pattern_valid_cycle_tp = std::get<3>(ptrn_util_two.input_patterns[pl]); // boolean
   
   if(mpi_rank == 0) {
-    std::cout << "Token Passing [" << pl << "] | Searching pattern: ";
+    std::cout << "Token Passing [" << pl << "] | Searching Pattern: ";
     pattern_util<VertexData>::output_pattern(pattern_tp);
   }
     
   time_start = MPI_Wtime();
 
+  // token_passing_pattern_matching.hpp
   token_passing_pattern_matching(graph, vertex_metadata, pattern_tp, 
     pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map, 
     token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl], *edge_data_ptr, vertex_token_source_set);
 
   // token_passing_pattern_matching_new.hpp
+  // token_passing_pattern_matching_iterative.hpp  // TODO: update global_not_finished
   //token_passing_pattern_matching(graph, vertex_metadata, pattern_tp,
   //  pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
   //  token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, 
@@ -547,7 +552,7 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
   time_end = MPI_Wtime();
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching Time | Token Passing [" << pl << "] : " << time_end - time_start << std::endl;
+    std::cout << "Fuzzy Pattern Matching Time | Token Passing (traversal) [" << pl << "] : " << time_end - time_start << std::endl;
   }
 
   if(mpi_rank == 0) {
@@ -556,17 +561,17 @@ int main(int argc, char** argv) {
       << time_end - time_start << "\n";      
   } 
 
-  } // for - loop over the patterns
+//  } // for - loop over the patterns
 
-  // pattren found ?
-  havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
-  if(mpi_rank == 0) {   
-    for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
-      std::string s = pattern_found[pl] == 1 ? "true" : "false";
-      std::cout << "Token Passing [" << pl << "] | Found pattern : " << s << std::endl;
-    }
-  }
+  // pattren found ? // TODO: update for the new token passing loop
+//  havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
+//  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
+//  if(mpi_rank == 0) {   
+//    for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
+//      std::string s = pattern_found[pl] == 1 ? "true" : "false";
+//      std::cout << "Token Passing [" << pl << "] | Found pattern : " << s << std::endl;
+//    }
+//  }
 
   // remove the invalid (source) vertices from the vertex_state_map
 
@@ -575,7 +580,7 @@ int main(int argc, char** argv) {
   
   //std::cout << "MPI Rank " << mpi_rank << " vertex_state_map size " << vertex_state_map.size() << std::endl; // Test
   //std::cout << "MPI Rank " << mpi_rank << " token_source_map size " << token_source_map.size() << std::endl; // Test
-
+#ifdef TP_ORIG
   uint64_t remove_count = 0; 
   for (auto& s : token_source_map) {
     //auto v_locator = graph->label_to_locator(s.first);
@@ -604,7 +609,7 @@ int main(int argc, char** argv) {
   } // for - token_source_map
 
   // gather global vertex_active state
-  vertex_active.all_min_reduce();
+  vertex_active.all_min_reduce(); 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
   // remove from vertex_state_map
@@ -626,6 +631,25 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "[MPI Rank " << mpi_rank << "] " << "Token Passing | Removed " << remove_count << " vertices."<< std::endl;
   }
+#endif
+  time_end = MPI_Wtime();
+  if(mpi_rank == 0) {
+    std::cout << "Fuzzy Pattern Matching Time | Token Passing [" << pl << "] : " << time_end - time_start << std::endl;
+  }
+
+  } // for - loop over the patterns 
+
+  // pattren found ? 
+  havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
+  if(mpi_rank == 0) {   
+    for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
+      std::string s = pattern_found[pl] == 1 ? "True" : "False";
+      std::cout << "Token Passing [" << pl << "] | Found pattern : " << s << std::endl;
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
 
   // result
   // Important : This may slow down things -only for presenting results
@@ -649,7 +673,10 @@ int main(int argc, char** argv) {
     }
     global_not_finished = false;
   } // do token passing ?
- 
+
+  /////////////////////////////////////////////////////////////////////////////
+
+  // done token passing 
   double token_passing_time_end = MPI_Wtime();
   if(mpi_rank == 0) {
     std::cout << "Fuzzy Pattern Matching Time | Token Passing : " 
@@ -668,7 +695,7 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
 
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching | Global Finished status : ";
+    std::cout << "Fuzzy Pattern Matching | Global Finished Status : ";
     if (global_not_finished) {
       std::cout << "Continue" << std::endl;
     } else {
@@ -681,7 +708,7 @@ int main(int argc, char** argv) {
   double itr_time_end = MPI_Wtime(); 
   if(mpi_rank == 0) { 
     std::cout << "Fuzzy Pattern Matching Time | Iteration [" 
-      << global_itr_count << "] " << itr_time_end - itr_time_start << std::endl;  
+      << global_itr_count << "] : " << itr_time_end - itr_time_start << std::endl;  
   }
   
   if(mpi_rank == 0) {
@@ -693,7 +720,7 @@ int main(int argc, char** argv) {
   global_itr_count++;
 
   // verify global termination condition
-  //if (global_itr_count >= 2) { // Test
+  //if (global_itr_count > 0) { // Test
   //  global_not_finished = false;
   //}
   //MPI_Barrier(MPI_COMM_WORLD);

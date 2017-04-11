@@ -170,7 +170,7 @@ public:
     } else {
       return false; 
     }
-    return false; //true; // probably never gets here
+    return true; // probably never gets here
   }
 
   template<typename VisitorQueueHandle, typename AlgData>
@@ -386,7 +386,7 @@ public:
  
           std::get<9>(alg_data) = 1; // true; // pattern_found	
 
-          return false; //true; ?
+          return true; // Important: must return true to handel delegates
 
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
@@ -461,7 +461,7 @@ public:
     } else {
       return false;
     }
-    return false;		 
+    return true;		 
   }
 
   friend inline bool operator>(const tppm_visitor& v1, const tppm_visitor& v2) {
