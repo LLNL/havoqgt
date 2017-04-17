@@ -11,12 +11,11 @@ class vertex_state {
 public:
   vertex_state() :
   is_active(false),
-  vertex_pattern_index(0)
-  {}
+  vertex_pattern_index(0) {}
 
   bool is_active;
   size_t vertex_pattern_index; // TODO: change type
-  std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; // TODO: not itr_count anymore, more like a true false 
+  std::unordered_map<size_t, IntegralType> pattern_vertex_itr_count_map; // TODO: not itr_count anymore, more like true / false 
 };
 
 template<typename Visitor>
@@ -63,20 +62,17 @@ public:
   typedef typename Graph::edge_iterator eitr_type;
 
   lppm_visitor() : 
-    msg_type(0)
-    {}
+    msg_type(0) {}
 
   lppm_visitor(vertex_locator _vertex, uint8_t _msg_type = 0) : 
     vertex(_vertex), 
-    msg_type(_msg_type) 
-    {}
+    msg_type(_msg_type) {}
 
   lppm_visitor(vertex_locator _vertex, size_t _parent_pattern_index,
     uint8_t _msg_type) :
     vertex(_vertex),
     parent_pattern_index(_parent_pattern_index),
-    msg_type(_msg_type)
-    {}
+    msg_type(_msg_type) {}
 
   ~lppm_visitor() {}
 
@@ -145,7 +141,7 @@ public:
 
         if (!match_found) {
           std::get<4>(alg_data)[vertex] = false; 
-          return false;
+          return true; // false // send to the controller
         } else {
           return true; // send to the controller
         } 
@@ -167,6 +163,9 @@ public:
 
         if (!match_found) { // TODO: controller return true?
           std::get<4>(alg_data)[vertex] = false;
+          if (vertex.is_delegate() && g->master(vertex) == mpi_rank) { // controller
+            return true; // to invalidate the delegates
+          }           
           return false; 
         }
       }
@@ -201,14 +200,20 @@ public:
       return false;
     }
 
-    // if the vertex is not in the global map after the first LP superstep 
-    // of the first iteration, ignore it
-    if (std::get<8>(alg_data) > 0 || !std::get<9>(alg_data)) {
-      auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
-      if (find_vertex == std::get<6>(alg_data).end()) {
-        return false; 
-      }
-    } 
+    int mpi_rank = havoqgt_env()->world_comm().rank(); 
+
+    // Important : skip this verification for the delegates as the 
+    // vertex_state is only maintained on the contrller
+    if (!(vertex.is_delegate() && g.master(vertex) != mpi_rank)) {
+      // if the vertex is not in the global map after the first LP superstep 
+      // of the first iteration, ignore it
+      if (std::get<8>(alg_data) > 0 || !std::get<9>(alg_data)) {
+        auto find_vertex = std::get<6>(alg_data).find(g.locator_to_label(vertex));
+        if (find_vertex == std::get<6>(alg_data).end()) {
+          return false; 
+        }
+      } 
+    }
 
     auto vertex_data = std::get<0>(alg_data)[vertex];
     //auto& pattern = std::get<1>(alg_data);
@@ -218,8 +223,6 @@ public:
     // std::get<8>(alg_data) - superstep
     // std::get<9>(alg_data) - initstep
     // std::get<10>(alg_data) - g
-
-    //int mpi_rank = havoqgt_env()->world_comm().rank(); 
 
     // does vertex_data match an entry in the query pattern
     bool match_found = false;
@@ -255,12 +258,12 @@ public:
         for (auto vertex_pattern_index : vertex_pattern_indices) {
           // do this for all the pattern indices for this vertex
           lppm_visitor new_visitor(neighbor, vertex_pattern_index, 1);
-          vis_queue->queue_visitor(new_visitor); 
+          vis_queue->queue_visitor(new_visitor);
         } // for
       } // for
       return true;
-    } else if (msg_type == 1 && match_found) {
-      // must go all the way to the controller
+    } else if (msg_type == 1 && match_found) {        
+      // must go all the way to the controller 
       return true; // false?
     } else {
       return false; 
@@ -377,7 +380,7 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
   //std::vector<decltype(vertex_temp)> vertex_remove_from_map_list(0); // hack
   std::vector<uint64_t> vertex_remove_from_map_list; // TODO: use Vertex type
 
-  for (auto& v : vertex_state_map) {
+  for (auto& v : vertex_state_map) { // TODO: use C++11 to remove item from map
     auto v_locator = g->label_to_locator(v.first);
     
     for (auto& p : v.second.pattern_vertex_itr_count_map) {
@@ -439,7 +442,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     vq.init_visitor_traversal_new(); 
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {    
-      std::cout << "Superstep #" << superstep <<  " synchronizing ... " << std::endl;
+      std::cout << "Superstep #" << superstep <<  " Synchronizing ... " << std::endl;
     }
 
     //vertex_active.all_min_reduce(); // don't need this here
@@ -451,7 +454,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
-      std::cout << "Superstep #" << superstep <<  " elapsed time = " << time_end - time_start << std::endl;
+      std::cout << "Superstep #" << superstep <<  " Time " << time_end - time_start << std::endl;
     }
 
     // result
@@ -476,11 +479,33 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       << superstep << ", " 
       << active_vertices_count << "\n";
 
+    // Test
+    if (superstep == 1) {
+      std::string active_vertices_result_filename = "/p/lscratchf/havoqgtu/reza2_tmp/rmat_tmp_result/0/all_ranks_active_vertices_lp/active_vertices_" + std::to_string(mpi_rank);
+      std::ofstream active_vertices_result_file(active_vertices_result_filename, std::ofstream::out);
+      for (auto& v : vertex_state_map) {
+        auto v_locator = g->label_to_locator(v.first);
+        if (v_locator.is_delegate() && (g->master(v_locator) == mpi_rank)) {
+          active_vertices_result_file << mpi_rank << ", c, " << vertex_metadata[v_locator] << ", "
+            << v.first << ", " 
+            << v.second.vertex_pattern_index << "\n";
+        } else if (v_locator.is_delegate() && (g->master(v_locator) != mpi_rank)) {
+          //active_vertices_result_file << mpi_rank << ", d, "
+          // << v.first << ", "
+          // << v.second.vertex_pattern_index << "\n"; 
+        } else if (!v_locator.is_delegate()) {
+          active_vertices_result_file << mpi_rank << ", l, " << vertex_metadata[v_locator] << ", "
+            << v.first << ", "
+            << v.second.vertex_pattern_index << "\n";
+        }
+      }		   
+    }
+    // Test
+
     // TODO: global reduction on global_not_finished before next iteration
 
   } // for 
-  // end of BSP execution
-  
+  // end of BSP execution  
 }  
 
 }} //end namespace havoqgt::mpi
