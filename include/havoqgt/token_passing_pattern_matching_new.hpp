@@ -117,14 +117,14 @@ public:
       return false;
     }
 */    
-    if (!do_pass_token && is_init_step && itr_count == 0) {
+    if (!do_pass_token && is_init_step && itr_count == 0) { // probably it never gets here
       // TODO: this is probbaly wrong
 //      if (vertex.is_delegate() && (g->master(vertex) != mpi_rank)) {
 //        return false;
 //      }
 
 //      if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
-      if(vertex_data != pattern[0]) { 
+      if(vertex_data == pattern[0]) { 
         return true;
       } else {
         return false; 
@@ -244,7 +244,8 @@ public:
       //std::cout << "Found source vertex " << g.locator_to_label(vertex) << " vertex_data " << vertex_data << std::endl; // Test
       
       // Important: only the token_source_map on the controller contains the source vertex (wrong I think)
-      if (!(vertex.is_delegate() && g.master(vertex) != mpi_rank)) {
+//      if (!(vertex.is_delegate() && g.master(vertex) != mpi_rank)) {
+      // local, controller and delegates are added to the token_source_map    
       auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
       if (find_token_source == std::get<6>(alg_data).end()) {
         auto insert_status = std::get<6>(alg_data).insert({g.locator_to_label(vertex), false});
@@ -253,7 +254,7 @@ public:
           return false;   
         } 
       }	
-      }
+//      }
 
       // initiate token passing from the source vertex
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
@@ -385,19 +386,19 @@ public:
 //            std::get<9>(alg_data) = 1; // true; // pattern_found
 //            return true;		        
 //          }  
-          if (!(vertex.is_delegate() && g.master(vertex) != mpi_rank)) {
+//          if (!(vertex.is_delegate() && g.master(vertex) != mpi_rank)) {
           auto find_token_source = std::get<6>(alg_data).find(g.locator_to_label(vertex)); // token_source_map
           if (find_token_source == std::get<6>(alg_data).end()) {
             std::cerr << "Error: did not find the expected item in the map." << std::endl;
             //return true; // false ?           
-            return false;  
+            return false;
           }
           find_token_source->second = 1; //true;   
-          }
+//          }
  
           std::get<9>(alg_data) = 1; // true; // pattern_found	
 
-          return true;
+          return true; // Important : must return true to handle delegates
 
         } else if (g.locator_to_label(vertex) == g.locator_to_label(target_vertex) 
           && match_found && !expect_target_vertex) {
@@ -530,7 +531,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
     edge_metadata, g, vertex_token_source_set, vertex_active);
-  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
   vq.init_visitor_traversal_new();
   //vq.init_visitor_traversal_new_alt();
   MPI_Barrier(MPI_COMM_WORLD);
