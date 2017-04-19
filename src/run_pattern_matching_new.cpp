@@ -148,6 +148,7 @@ int main(int argc, char** argv) {
   typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration;
 
   typedef vertex_state<uint8_t> VertexState;
+
   typedef std::unordered_map<Vertex, VertexState> VertexStateMap;
   typedef std::unordered_set<Vertex> VertexSet;
   
@@ -422,6 +423,44 @@ int main(int argc, char** argv) {
       std::cout << "No active vertex left." << std::endl;
     }
   }
+
+  // Test
+/*   uint64_t vertex_active_count = 0;
+   uint64_t vertex_inactive_count = 0;
+   for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
+      ++vitr) {
+      vloc_type vertex = *vitr;
+      if (vertex_active[vertex]) {
+        //std::cout << mpi_rank << ", l, " << graph->locator_to_label(vertex) 
+        //  << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n";  
+        //  vertex_active_count++;
+      } else { 
+        vertex_inactive_count++;
+      }  
+    } 	
+    	
+    for(vitr_type vitr = graph->delegate_vertices_begin();
+      vitr != graph->delegate_vertices_end(); ++vitr) {
+      vloc_type vertex = *vitr;
+      if (vertex_active[vertex]) {  
+        if (vertex.is_delegate() && (graph->master(vertex) == mpi_rank)) {
+          //std::cout << mpi_rank << ", c, " << graph->locator_to_label(vertex) 
+          //  << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n";
+        } else {	
+          //std::cout << mpi_rank << ", d, " << graph->locator_to_label(vertex) 
+          //  << ", " << graph->degree(vertex) << ", " << vertex_metadata[vertex] << "\n"; 
+        }
+        vertex_active_count++; 
+      } else {
+        vertex_inactive_count++;
+      } 
+    }
+
+    //std::cout << mpi_rank << " vertex_active_count " << vertex_active_count << std::endl; 
+    //std::cout << mpi_rank << " vertex_inactive_count " << vertex_inactive_count << std::endl;
+    //std::cout << mpi_rank << " vertex_state_map size " << vertex_state_map.size() << std::endl;      
+*/
+  // Test
   
   /////////////////////////////////////////////////////////////////////////////
  
@@ -504,10 +543,13 @@ int main(int argc, char** argv) {
   uint64_t remove_count = 0; 
   for (auto& s : token_source_map) {
     if (!s.second) {
-        vertex_active[graph->label_to_locator(s.first)] = false; 
-        if (!global_not_finished) {
-          global_not_finished = true;
-        }
+      //if (pl == 2) { // Test
+      //std::cout << " >>>>>> " << pl << " " << mpi_rank << " " << s.first << " " << s.second << " " << global_not_finished << std::endl;
+      //} 
+      vertex_active[graph->label_to_locator(s.first)] = false; 
+      if (!global_not_finished) {
+        global_not_finished = true;
+      }
     }
   } // for - token_source_map
 
@@ -528,9 +570,9 @@ int main(int argc, char** argv) {
           << std::endl;
         } else {
           remove_count++;
-          if (!global_not_finished) {
-            global_not_finished = true;
-          }
+          //if (!global_not_finished) {
+          //  global_not_finished = true;
+          //}
         }  
  
       }
@@ -637,10 +679,10 @@ int main(int argc, char** argv) {
 
   // verify global termination condition
   // Test
-  if (global_itr_count > 0) {
-    //global_not_finished = false;
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
+  //if (global_itr_count > 0) {
+  //  global_not_finished = false;
+  //}
+  //MPI_Barrier(MPI_COMM_WORLD);
   // Test
 
   } while (global_not_finished); // application loop

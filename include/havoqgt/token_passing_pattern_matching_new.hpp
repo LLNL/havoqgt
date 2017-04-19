@@ -105,7 +105,6 @@ public:
     if (!is_init_step && max_itr_count > itr_count) {
       auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g->locator_to_label(target_vertex));
       if (find_token_source_forwarded != std::get<12>(alg_data)[vertex].end()) {
-	//std::cout << "pre-visit skipping" << std::endl; // Test
         return false;
       }
     }
@@ -129,7 +128,7 @@ public:
       } else {
         return false; 
       } 
-    } else if (!is_init_step) {
+    } else if (!is_init_step) { // relay token
        auto new_itr_count = itr_count + 1;
        auto next_pattern_index = source_index_pattern_indices + new_itr_count; // expected next pattern_index       
        auto vertex_pattern_index = 0; //find_vertex->second.vertex_pattern_index;
@@ -152,6 +151,30 @@ public:
          vertex_pattern_index == pattern_indices[next_pattern_index]) {
          if (vertex_data == pattern[next_pattern_index] && 
            parent_pattern_index == pattern_indices[next_pattern_index - 1]) {
+
+           if (vertex.is_delegate() && g->master(vertex) != mpi_rank) { // delegate but not the controller
+             return true;
+           }  
+
+           if (max_itr_count > itr_count) {
+             // OK to forwarded a token from a source, now update vertex_token_source_set
+             auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g->locator_to_label(target_vertex));
+             if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
+               auto insert_status = std::get<12>(alg_data)[vertex].insert(g->locator_to_label(target_vertex));
+               if(!insert_status.second) {
+                 std::cerr << "Error: failed to add an element to the set." << std::endl;
+                 return false;
+               }
+               // std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex)
+	       //  << " to the vertex set" << std::endl; // Test     
+	     } else {
+               std::cerr << "Error: unexpected item in the set." << std::endl;
+               return false;
+             }
+           } 
+
+           //TODO: max_itr_count == itr_count 
+  
            return true; 
          } else {
            return false;
@@ -159,6 +182,8 @@ public:
        } else {
          return false;
        }  
+    } else {
+      return false;  
     }
     return true;
   }
@@ -174,14 +199,18 @@ public:
     if(!std::get<13>(alg_data)[vertex]) {
       return false;
     }
-  
-    // verify if this vertex have already forwarded a token from the originating vertex
-    if (!is_init_step && max_itr_count > itr_count) {
-      auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
-      if (find_token_source_forwarded != std::get<12>(alg_data)[vertex].end()) {
-        //std::cout << "visit skipping" << std::endl;
-        return false; 
-      } 		
+
+    int mpi_rank = havoqgt_env()->world_comm().rank();
+
+    // if vertex is a delegate  
+    if (!is_init_step && vertex.is_delegate() && (g.master(vertex) != mpi_rank)) { 
+      // verify if this vertex have already forwarded a token from the originating vertex
+      if (!is_init_step && max_itr_count > itr_count) {
+        auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
+        if (find_token_source_forwarded != std::get<12>(alg_data)[vertex].end()) {
+          return false; 
+        } 		
+      }
     }
 /*
     // TODO: verify if this vertex is alive
@@ -206,7 +235,6 @@ public:
     // std::get<12>(alg_data); // vertex_token_source_set
     // std::get<13>(alg_data); // vertex_active 
 
-    int mpi_rank = havoqgt_env()->world_comm().rank();
 
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // create visitors only for the source vertices
@@ -424,6 +452,24 @@ public:
       //} 
 
       // all good, forward along the token
+      
+      // if vertex is a delegate
+      if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
+        // forwarded a token from a source, now update vertex_token_source_set 
+        auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
+        if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
+          auto insert_status = std::get<12>(alg_data)[vertex].insert(g.locator_to_label(target_vertex));		
+	  if(!insert_status.second) {
+            std::cerr << "Error: failed to add an element to the set." << std::endl;
+            return false;
+          }
+          //std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex) 
+          //  << " to the vertex set" << std::endl; // Test 
+        } else {
+          std::cerr << "Error: unexpected item in the set." << std::endl;
+	  return false;
+        }        
+      } // if vertex is a delegate
 
       //if (vertex_pattern_index == 2) // Test 
         //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index " 
@@ -444,21 +490,6 @@ public:
         //}  
         // Test    
       }
-
-      // forwarded a token from a source, now update vertex_token_source_set 
-      auto find_token_source_forwarded = std::get<12>(alg_data)[vertex].find(g.locator_to_label(target_vertex));
-      if (find_token_source_forwarded == std::get<12>(alg_data)[vertex].end()) {
-        auto insert_status = std::get<12>(alg_data)[vertex].insert(g.locator_to_label(target_vertex));		
-	if(!insert_status.second) {
-          std::cerr << "Error: failed to add an element to the set." << std::endl;
-          return false;
-        }
-        //std::cout << g.locator_to_label(vertex) << " adding " << g.locator_to_label(target_vertex) 
-        //  << " to the vertex set" << std::endl; // Test 
-      } else {
-        std::cerr << "Error: unexpected item in the set." << std::endl;
-	return false;
-      }  
 	     
       return true;
 

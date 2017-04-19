@@ -375,9 +375,39 @@ template <typename TGraph, typename AlgData, typename VertexStateMap,
 void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data, 
   VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
   VertexActive& vertex_active, 
-  VertexIteration& vertex_iteration, uint64_t superstep, bool& global_not_finished) {
+  VertexIteration& vertex_iteration, uint64_t superstep, bool initstep, bool& global_not_finished) {
 
+  typedef typename TGraph::vertex_iterator vertex_iterator;
   typedef typename TGraph::vertex_locator vertex_locator;
+
+  int mpi_rank = havoqgt_env()->world_comm().rank();
+
+  // Important : invalidate vertices that have valid labels but were not added 
+  // to the vertex_state_map
+  if (superstep == 0 && initstep) { // Important
+    for (vertex_iterator vitr = g->vertices_begin(); 
+      vitr != g->vertices_end(); ++vitr) {  
+      vertex_locator vertex = *vitr; 
+      if (vertex_active[vertex]) {
+        auto find_vertex = vertex_state_map.find(g->locator_to_label(vertex));
+        if (find_vertex == vertex_state_map.end()) { 
+          vertex_active[vertex] = false;     
+        } 
+      }  
+    }
+
+    for(vertex_iterator vitr = g->delegate_vertices_begin();
+      vitr != g->delegate_vertices_end(); ++vitr) {
+      vertex_locator vertex = *vitr;
+      if (vertex.is_delegate() && (g->master(vertex) == mpi_rank)) {
+        auto find_vertex = vertex_state_map.find(g->locator_to_label(vertex));
+        if (find_vertex == vertex_state_map.end()) {
+          vertex_active[vertex] = false;
+        }
+      }
+      // skip the delegates, reduction on vertex_active will take care of them 
+    }
+  }
 
   //auto vertex_temp = vertex_state_map.begin()->first;
   //std::vector<decltype(vertex_temp)> vertex_remove_from_map_list(0); // hack
@@ -454,7 +484,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     ///MPI_Barrier(MPI_COMM_WORLD);
  
     verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, 
-      vertex_active, vertex_iteration, superstep, global_not_finished);
+      vertex_active, vertex_iteration, superstep, initstep, global_not_finished);
     //MPI_Barrier(MPI_COMM_WORLD);
     
     double time_end = MPI_Wtime();
