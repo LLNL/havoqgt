@@ -663,6 +663,29 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       << superstep << ", " 
       << active_vertices_count << "\n";
 
+    // Test
+    /*if (superstep == 1) {
+      std::string active_vertices_result_filename = "/p/lscratchf/havoqgtu/reza2_tmp/rmat_tmp_result/0/all_ranks_active_vertices_lp/active_vertices_" + std::to_string(mpi_rank);
+      std::ofstream active_vertices_result_file(active_vertices_result_filename, std::ofstream::out);
+      for (auto& v : vertex_state_map) {
+        auto v_locator = g->label_to_locator(v.first);
+        if (v_locator.is_delegate() && (g->master(v_locator) == mpi_rank)) {
+          active_vertices_result_file << mpi_rank << ", c, " << vertex_metadata[v_locator] << ", " 
+            << v.first << ", "
+            << v.second.vertex_pattern_index << "\n";
+        } else if (v_locator.is_delegate() && (g->master(v_locator) != mpi_rank)) {
+          active_vertices_result_file << mpi_rank << ", d, " << vertex_metadata[v_locator] << ", "
+            << v.first << ", "
+            << v.second.vertex_pattern_index << "\n";
+        } else if (!v_locator.is_delegate()) {
+          active_vertices_result_file << mpi_rank << ", l, " << vertex_metadata[v_locator] << ", "
+            << v.first << ", "
+            << v.second.vertex_pattern_index << "\n";
+        }
+      }
+    }*/
+    // Test
+    
     // TODO: global reduction on global_not_finished before next iteration	
 
   } // for 
