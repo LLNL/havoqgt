@@ -94,7 +94,7 @@ public:
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
     auto& pattern_indices = std::get<2>(alg_data);
-    auto& pattern_graph = std::get<4>(alg_data);
+    //auto& pattern_graph = std::get<4>(alg_data);
     auto g = std::get<11>(alg_data); // graph
     // std::get<12>(alg_data); // vertex_token_source_set   
     // std::get<13>(alg_data); // vertex_active
@@ -135,12 +135,10 @@ public:
        auto vertex_pattern_index = 0; //find_vertex->second.vertex_pattern_index;
       
        if (vertex.is_delegate() && g->master(vertex) != mpi_rank) { // delegate but not the controller
-         for (vertex_pattern_index = 0;
-           vertex_pattern_index < pattern_graph.vertex_data.size();
-           vertex_pattern_index++) {
-           if (pattern_graph.vertex_data[vertex_pattern_index] == vertex_data) {
-             break;
-           }
+         if (vertex_data == pattern[next_pattern_index]) {
+           vertex_pattern_index = pattern_indices[next_pattern_index];
+         } else {
+           return false;
          } 
        } else {
          auto find_vertex = std::get<5>(alg_data).find(g->locator_to_label(vertex));
@@ -198,7 +196,7 @@ public:
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
     auto& pattern_indices = std::get<2>(alg_data);   
-    auto& pattern_graph = std::get<4>(alg_data);
+    //auto& pattern_graph = std::get<4>(alg_data);
 
     auto pattern_cycle_length = std::get<7>(alg_data);   
     auto pattern_valid_cycle = std::get<8>(alg_data);
@@ -232,7 +230,7 @@ public:
 //      }
 
       //if (!(find_vertex->second.vertex_pattern_index == pattern_indices[0] && vertex_data == pattern[0])) {
-      if (vertex_data =! pattern[0]) { 
+      if (vertex_data != pattern[0]) { 
         return false;  
       }
 
@@ -253,6 +251,7 @@ public:
           std::cerr << "Error: failed to add an element to the map." << std::endl;
           return false;   
         } 
+        //std::cout << "Instrting " << vertex_data << " to token_source_map" << std::endl; // Test    
       }	
 //      }
 
@@ -303,13 +302,11 @@ public:
       //auto vertex_pattern_index = pattern_indices[source_index_pattern_indices + new_itr_count]; // TODO: read from the map
 
       if (vertex.is_delegate() && g.master(vertex) != mpi_rank) { // delegate but not the controller
-        for (vertex_pattern_index = 0;
-          vertex_pattern_index < pattern_graph.vertex_data.size();
-          vertex_pattern_index++) {
-          if (pattern_graph.vertex_data[vertex_pattern_index] == vertex_data) {
-            break;
-          }
-        }
+        if (vertex_data == pattern[next_pattern_index]) {
+          vertex_pattern_index = pattern_indices[next_pattern_index];  
+        } else {
+          return false;  
+        }  
       } else {
         auto find_vertex = std::get<5>(alg_data).find(g.locator_to_label(vertex));
         if (find_vertex == std::get<5>(alg_data).end()) {

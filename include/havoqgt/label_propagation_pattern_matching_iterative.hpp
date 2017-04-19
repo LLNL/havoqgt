@@ -141,7 +141,8 @@ public:
 
         if (!match_found) {
           std::get<4>(alg_data)[vertex] = false; 
-          return true; // false // send to the controller
+          //return true; // send to the controller
+          return false;
         } else {
           return true; // send to the controller
         } 
@@ -164,7 +165,8 @@ public:
         if (!match_found) { // TODO: controller return true?
           std::get<4>(alg_data)[vertex] = false;
           if (vertex.is_delegate() && g->master(vertex) == mpi_rank) { // controller
-            return true; // to invalidate the delegates
+            //return true; // to invalidate the delegates
+            return false;
           }           
           return false; 
         }
@@ -227,7 +229,7 @@ public:
     // does vertex_data match an entry in the query pattern
     bool match_found = false;
 
-    // TODO: do you want to compute this every time or store in the memory?
+    // TODO: do you want to compute this every time or store in the memory? Overhead is not noticable though.
     std::vector<size_t> vertex_pattern_indices(0); // a vertex label could be a match for multiple pattern labels
     for (size_t vertex_pattern_index = 0; 
       vertex_pattern_index < pattern_graph.vertex_data.size(); 
@@ -243,8 +245,8 @@ public:
 
     if (!match_found) {
       std::get<4>(alg_data)[vertex] = false;
-      //return false;
-      return true; // TODO: ask Roger?
+      return false;
+      //return true; // TODO: ask Roger?
     } 
 
     if (msg_type == 0 && match_found) {
@@ -264,7 +266,8 @@ public:
       return true;
     } else if (msg_type == 1 && match_found) {        
       // must go all the way to the controller 
-      return true; // false?
+      //return true; // false?
+      return false; // TODO: ask Roger?
     } else {
       return false; 
     } 
@@ -380,7 +383,7 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
   //std::vector<decltype(vertex_temp)> vertex_remove_from_map_list(0); // hack
   std::vector<uint64_t> vertex_remove_from_map_list; // TODO: use Vertex type
 
-  for (auto& v : vertex_state_map) { // TODO: use C++11 to remove item from map
+  for (auto& v : vertex_state_map) { // TODO: use C++11 approach to remove item from map
     auto v_locator = g->label_to_locator(v.first);
     
     for (auto& p : v.second.pattern_vertex_itr_count_map) {
@@ -434,7 +437,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
-      std::cout << "Superstep #" << superstep << std::endl;
+      //std::cout << "Superstep #" << superstep << std::endl;
+      std::cout << "Label Propagation | Superstep #" << superstep;
     }
 
     //MPI_Barrier(MPI_COMM_WORLD); 
@@ -442,10 +446,11 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     vq.init_visitor_traversal_new(); 
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {    
-      std::cout << "Superstep #" << superstep <<  " Synchronizing ... " << std::endl;
+      //std::cout << "Superstep #" << superstep <<  " Synchronizing ... " << std::endl;
+      std::cout <<  " | Synchronizing ...";
     }
 
-    //vertex_active.all_min_reduce(); // don't need this here
+    //vertex_active.all_min_reduce(); // do not need this here
     ///MPI_Barrier(MPI_COMM_WORLD);
  
     verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, 
@@ -454,7 +459,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
-      std::cout << "Superstep #" << superstep <<  " Time " << time_end - time_start << std::endl;
+      //std::cout << "Superstep #" << superstep <<  " Time " << time_end - time_start << std::endl;
+      std::cout << " | Time : " << time_end - time_start << std::endl;
     }
 
     // result
@@ -480,7 +486,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       << active_vertices_count << "\n";
 
     // Test
-    if (superstep == 1) {
+/*    if (superstep == 1) {
       std::string active_vertices_result_filename = "/p/lscratchf/havoqgtu/reza2_tmp/rmat_tmp_result/0/all_ranks_active_vertices_lp/active_vertices_" + std::to_string(mpi_rank);
       std::ofstream active_vertices_result_file(active_vertices_result_filename, std::ofstream::out);
       for (auto& v : vertex_state_map) {
@@ -499,7 +505,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
             << v.second.vertex_pattern_index << "\n";
         }
       }		   
-    }
+    }*/
     // Test
 
     // TODO: global reduction on global_not_finished before next iteration
