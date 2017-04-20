@@ -4,6 +4,8 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
+# define output_result
+
 namespace havoqgt { namespace mpi {
 
 template<typename IntegralType>
@@ -493,6 +495,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       std::cout << " | Time : " << time_end - time_start << std::endl;
     }
 
+#ifdef output_result
     // result
     if (mpi_rank == 0) { 
       superstep_result_file << global_itr_count << ", LP, "
@@ -514,6 +517,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     active_vertices_count_result_file << global_itr_count << ", LP, "
       << superstep << ", " 
       << active_vertices_count << "\n";
+#endif
 
     // TODO: global reduction on global_not_finished before next iteration
 
