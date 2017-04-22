@@ -349,6 +349,27 @@ public:
   }
 
 
+  // Note: similar to below, but uses graphstore iterator and no delegates. With src start.
+  void init_dynamic_test_traversal_src(vertex_locator _source_v) {
+    if(0 == m_mailbox.comm_rank()) {
+      visitor_type visitor(_source_v);
+      queue_visitor(visitor);
+    }
+    
+    do {
+      do {
+      process_pending_controllers();
+      while(!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+        m_termination_detection.inc_completed();
+      }
+      m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+    } while(!m_termination_detection.test_for_termination());
+  }
+
   void init_visitor_traversal() {
     typename TGraph::controller_iterator citr = m_ptr_graph->controller_begin();
     for(; citr != m_ptr_graph->controller_end(); ++citr) {

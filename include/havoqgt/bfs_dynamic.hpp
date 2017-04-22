@@ -99,6 +99,62 @@ class fifo_queue {
   }
 };
 
+template <typename Visitor>
+class bfs_queue {
+public:
+  typedef uint32_t level_number_type;
+  typedef typename boost::container::deque<Visitor>::size_type size_type;
+
+protected:
+  std::vector<boost::container::deque<Visitor> > m_vec_bfs_level_stack;
+  level_number_type m_cur_min_level;
+  size_type m_size;
+public:
+  bfs_queue() : m_vec_bfs_level_stack(20), m_cur_min_level(std::numeric_limits<level_number_type>::max()), m_size(0) { }
+
+  bool push(Visitor const & task) {
+    while(task.level() >= m_vec_bfs_level_stack.size()) {
+      m_vec_bfs_level_stack.push_back(boost::container::deque<Visitor>());
+    }
+    m_vec_bfs_level_stack[task.level()].push_back(task);
+    ++m_size;
+    m_cur_min_level = std::min(m_cur_min_level, (uint32_t)task.level());
+    return true;
+  }
+
+  void pop() {
+    m_vec_bfs_level_stack[m_cur_min_level].pop_back();
+    --m_size;
+    if(m_vec_bfs_level_stack[m_cur_min_level].empty()) {
+      //if now empty, find next level;
+      for(;m_cur_min_level < m_vec_bfs_level_stack.size(); ++m_cur_min_level) {
+        if(!m_vec_bfs_level_stack[m_cur_min_level].empty()) break;
+      }
+    }
+  }
+
+  Visitor const & top() {
+    return m_vec_bfs_level_stack[m_cur_min_level].back();
+  }
+
+  size_type size() const {
+    return m_size;
+  }
+
+  bool empty() const {
+    return (m_size == 0);
+  }
+
+  void clear() {
+     for(typename std::vector<boost::container::deque<Visitor> >::iterator itr = m_vec_bfs_level_stack.begin();
+       itr != m_vec_bfs_level_stack.end(); ++itr) {
+       itr->clear();
+     }
+     m_size = 0;
+     m_cur_min_level = std::numeric_limits<level_number_type>::max();
+   }
+};
+
 
 
 template<typename Graph, typename prop_t>
@@ -368,6 +424,152 @@ class bfs_dynamic_tester {
 
 
 
+// Static BFS in the dynamic world. To be run on a graph that is already constructed / construction is paused.
+template<typename Graph, typename prop_t>
+class bfs_static {
+ public:
+  typedef typename Graph::vertex_locator vertex_locator;
+  // Default constructor.
+  bfs_static() :
+      vertex(), caller(), vis_type(BAD) {  }
+
+  // Baseline constructor -- INIT?
+  explicit bfs_static(vertex_locator _vertex) :
+      vertex(_vertex), caller(_vertex), caller_level(0), vis_type(INIT) {  }
+
+  // Who I am, who notified me, the incoming level, and what visit type it is.
+  bfs_static(vertex_locator _vertex, vertex_locator _caller, prop_t _level, visit_t type) :
+      vertex(_vertex), caller(_caller), caller_level(_level), vis_type(type) {  }
+  
+  // For init
+  static bfs_static<Graph, prop_t> create_visitor_init_type(vertex_locator vl_src, vertex_locator vl_dst) {
+    return bfs_static(vl_src, vl_dst, 0, INIT);
+  }
+
+
+  bool pre_visit() {
+    if (vis_type == INIT) {
+      prop_t* our_level = &(graph_ref()->vertex_property_data(vertex));
+      *our_level = 1;
+      return true;
+    } else if (vis_type == CHK) {
+      if (vertex.id() == caller.id()) {  return false;  }
+      prop_t* our_level = &(graph_ref()->vertex_property_data(vertex));
+
+      // Check if they have a lower level. (hop away offset)
+      if (*our_level > caller_level + 1) {
+        *our_level = caller_level + 1;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
+    prop_t* our_level = &(graph.vertex_property_data(vertex));
+    if (*our_level == caller_level + 1) {
+      
+      // Send to all nbrs our level.
+      for (auto nbr  = graph.adjacent_edge_begin(vertex);
+                nbr != graph.adjacent_edge_end(vertex); nbr++) {
+        auto edge = nbr.target_vertex();
+        vertex_locator vl_nbr = vertex_locator(edge);
+      
+        // Send the neighbour a visitor with our level.
+        bfs_static new_visitor(vl_nbr, vertex, *our_level, CHK);
+        vis_queue->queue_visitor(new_visitor);
+      }
+      return false;
+    }
+  }
+
+
+  uint64_t level() const {  return caller_level; }
+
+  friend inline bool operator > (const bfs_static& v1,
+                                 const bfs_static& v2) {
+    if(v1.level() > v2.level()) {
+      return true;
+    } else if (v1.level() < v2.level()) {
+      return false;
+    }
+    return !(v1.vertex < v2.vertex);
+  }
+
+
+  // Static graph reference.
+  static void set_graph_ref(Graph* _graph_ref) {
+    graph_ref() = _graph_ref;
+  }
+  static Graph*& graph_ref() {
+    static Graph* _graph_ref;
+    return _graph_ref;
+  }
+
+
+  // Instance variables.
+  vertex_locator vertex;
+  vertex_locator caller;
+  prop_t         caller_level;
+  visit_t        vis_type;
+} __attribute__((packed));
+
+
+// Resets vertex_property_data to MAX
+template<typename Graph, typename prop_t>
+class reset_vertex_prop {
+ public:
+  typedef typename Graph::vertex_locator vertex_locator;
+  // Default constructor.
+  reset_vertex_prop() :
+      vertex(), caller(), vis_type(BAD) {  }
+
+  // Baseline constructor
+  explicit reset_vertex_prop(vertex_locator _vertex) :
+      vertex(_vertex), caller(_vertex), caller_level(0), vis_type(INIT) {  }
+
+  // Who I am, who notified me, the incoming level, and what visit type it is.
+  reset_vertex_prop(vertex_locator _vertex, vertex_locator _caller, prop_t _level, visit_t type) :
+      vertex(_vertex), caller(_caller), caller_level(_level), vis_type(type) {  }
+
+
+  bool pre_visit() {
+    return true;
+  }
+
+  template<typename VisitorQueueHandle>
+  bool visit(Graph& graph, VisitorQueueHandle vis_queue) const {
+    prop_t* our_level = &(graph_ref()->vertex_property_data(vertex));
+    *our_level = std::numeric_limits<prop_t>::max();
+    return false;
+  }
+
+
+  friend inline bool operator > (const reset_vertex_prop& v1,
+                                 const reset_vertex_prop& v2) {
+    return false;
+  }
+
+
+  // Static graph reference.
+  static void set_graph_ref(Graph* _graph_ref) {
+    graph_ref() = _graph_ref;
+  }
+  static Graph*& graph_ref() {
+    static Graph* _graph_ref;
+    return _graph_ref;
+  }
+
+
+  // Instance variables.
+  vertex_locator vertex;
+  vertex_locator caller;
+  prop_t         caller_level;
+  visit_t        vis_type;
+} __attribute__((packed));
+
+
 // Launch point for dynamic bfs.
 template <typename TGraph, typename edgelist_t, typename prop_t>
 void breadth_first_search_dynamic(TGraph* graph, edgelist_t* edgelist, typename TGraph::vertex_locator src, bool test_result) {
@@ -388,9 +590,10 @@ void breadth_first_search_dynamic(TGraph* graph, edgelist_t* edgelist, typename 
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   if (mpi_rank == 0) {
-    std::cout << "BFS time = " << time_end - time_start << std::endl;
+    std::cout << "Dynamic BFS time = " << time_end - time_start << std::endl;
   }
 
+  {
   // Finished computing, now test.
   if (test_result) {
     if (mpi_rank == 0) {  std::cout << "Verifying...\n";  }
@@ -404,6 +607,38 @@ void breadth_first_search_dynamic(TGraph* graph, edgelist_t* edgelist, typename 
     // Begin traversal.
     tester.init_dynamic_test_traversal();
     if (mpi_rank == 0) {  std::cout << "Valid.\n";  }
+  }
+  }
+
+  // reset
+  {
+    if (mpi_rank == 0) {  std::cout << "Resetting vertex properties...\n";  }
+    typedef reset_vertex_prop<TGraph, prop_t> reset_t;
+    reset_t::set_graph_ref(graph);
+    typedef visitor_queue<reset_t, fifo_queue, TGraph> reset_queue_t;
+    reset_queue_t reset(graph);
+    reset.init_dynamic_test_traversal();
+    if (mpi_rank == 0) {  std::cout << "Reset.\n";  }
+  }
+  
+  // static bfs
+  double time_start_s = MPI_Wtime();
+  {
+    if (mpi_rank == 0) {  std::cout << "Init static...\n";  }
+    typedef bfs_static<TGraph, prop_t> bfs_static_t;
+    bfs_static_t::set_graph_ref(graph);
+    typedef visitor_queue<bfs_static_t, detail::visitor_priority_queue, TGraph> bfs_static_queue_t;
+    bfs_static_queue_t bfs_s(graph);
+    bfs_s.init_dynamic_test_traversal_src(src);
+    if (mpi_rank == 0) {  std::cout << "Done static...\n";  }
+  }
+  
+  MPI_Barrier(MPI_COMM_WORLD);
+  double time_end_s = MPI_Wtime();
+  int mpi_rank_s(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_s));
+  if (mpi_rank_s == 0) {
+    std::cout << "Static BFS time = " << time_end_s - time_start_s << std::endl;
   }
 }
 
