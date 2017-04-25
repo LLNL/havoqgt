@@ -127,7 +127,9 @@ template<typename Graph, typename LevelData, typename ParentData>
 class bfs_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
+  #pragma GCC diagnostic ignored "-Woverflow"   /// NOTE:  is there a better way to clean these overflows?
   bfs_visitor(): m_level(std::numeric_limits<uint64_t>::max())  { }
+  #pragma GCC diagnostic pop
   bfs_visitor(vertex_locator _vertex, uint64_t _level, vertex_locator _parent)
     : vertex(_vertex)
     , m_parent(_parent)

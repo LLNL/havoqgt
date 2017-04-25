@@ -65,14 +65,18 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     m_is_delegate  = 0;
     m_is_bcast     = 0;
     m_is_intercept = 0;
+    #pragma GCC diagnostic ignored "-Woverflow"   /// NOTE:  is there a better way to clean these overflows?
     m_owner_dest   = std::numeric_limits<uint32_t>::max();
     m_local_id     = std::numeric_limits<uint64_t>::max();
+    #pragma GCC diagnostic pop
   }
 
   bool is_valid() const {
     delegate_partitioned_graph<SegementManager>::vertex_locator conv;
+    #pragma GCC diagnostic ignored "-Woverflow"   /// NOTE:  is there a better way to clean these overflows?
     conv.m_local_id = std::numeric_limits<uint64_t>::max();
     conv.m_owner_dest = std::numeric_limits<uint64_t>::max();
+    #pragma GCC diagnostic pop
 
 
     return (m_local_id != conv.m_local_id || m_owner_dest != conv.m_owner_dest);

@@ -63,6 +63,7 @@
 
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <stdlib.h>
 
 #include <sys/types.h>
