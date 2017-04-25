@@ -58,7 +58,7 @@
 
 namespace havoqgt { namespace mpi {
 
-template<typename Graph, typename CCData>
+template<typename Graph>
 class cc_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
@@ -71,23 +71,23 @@ public:
     : vertex(_vertex)
     , m_cc(_vertex) { }
 
-
-  bool pre_visit() const {
-    if(m_cc < (*cc_data)[vertex]) {
-      (*cc_data)[vertex] = m_cc;
+  template<typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    if(m_cc < (*alg_data)[vertex]) { 
+      (*alg_data)[vertex] = m_cc; 
       return true;
     }
     return false;
   }
   
-  template<typename VisitorQueueHandle>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    return visit(g,vis_queue);
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    return visit(g, vis_queue, alg_data);
   }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    if((*cc_data)[vertex] == m_cc) {
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    if((*alg_data)[vertex] == m_cc) {
       for(auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         auto neighbor = eitr.target();
         if(m_cc < neighbor) {
@@ -113,24 +113,15 @@ public:
     return !(v1.vertex < v2.vertex);
   }
 
-  
-  static CCData*  cc_data;
-  
   vertex_locator   vertex;
   vertex_locator  m_cc;
 };
 
-template<typename Graph, typename CCData>
-CCData* cc_visitor<Graph,CCData>::cc_data = nullptr;
-
-
-
 template <typename TGraph, typename CCData>
 void connected_components(TGraph* g, CCData& cc_data) {
 
-  typedef  cc_visitor<TGraph, CCData>    visitor_type;
-  visitor_type::cc_data = &cc_data;
-  
+  typedef  cc_visitor<TGraph>    visitor_type;
+ 
   for(auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
     cc_data[*vitr] = *vitr;
   }
@@ -138,8 +129,8 @@ void connected_components(TGraph* g, CCData& cc_data) {
     cc_data[*citr] = *citr;
   } 
   
-  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
-  visitor_queue_type vq(g);
+  auto alg_data = &cc_data;
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data); 
   vq.init_visitor_traversal_new();
 }
 

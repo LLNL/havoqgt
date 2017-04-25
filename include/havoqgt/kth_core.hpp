@@ -77,38 +77,40 @@ private:
 };
 
 /// This is the kth-core visitor
-template<typename Graph, typename KCoreData>
+template<typename Graph>
 class kth_core_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
-  typedef kth_core_visitor<Graph, KCoreData>    my_type;
+  typedef kth_core_visitor<Graph>    my_type;
 
   kth_core_visitor() {}
   kth_core_visitor(vertex_locator _vertex):vertex(_vertex) { }
 
-  bool pre_visit() const {
-    if((*k_core_data)[vertex].get_alive()) {
-      (*k_core_data)[vertex].set_core_bound( (*k_core_data)[vertex].get_core_bound() - 1);
-      if((*k_core_data)[vertex].get_core_bound() < kth_core) {
-        (*k_core_data)[vertex].set_alive(false);
+  template<typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    if(std::get<0>(alg_data)[vertex].get_alive()) {
+      std::get<0>(alg_data)[vertex].set_core_bound( std::get<0>(alg_data)[vertex].get_core_bound() - 1);
+      if(std::get<0>(alg_data)[vertex].get_core_bound() < std::get<1>(alg_data)) {
+        std::get<0>(alg_data)[vertex].set_alive(false);
         return true;
       }
     }
     return false;
   }
   
-  template<typename VisitorQueueHandle>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    if((*k_core_data)[vertex].get_alive() && (*k_core_data)[vertex].get_core_bound() < kth_core) {
-      (*k_core_data)[vertex].set_alive(false);
-      return visit(g, vis_queue);
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    if(std::get<0>(alg_data)[vertex].get_alive() && 
+       std::get<0>(alg_data)[vertex].get_core_bound() < std::get<1>(alg_data)) {
+      std::get<0>(alg_data)[vertex].set_alive(false);
+      return visit(g, vis_queue, alg_data);
     }
     return false;
   }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    //(*k_core_data)[vertex].set_alive(false);
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    //std::get<0>(alg_data)[vertex].set_alive(false);
     typedef typename Graph::edge_iterator eitr_type;
     for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
       vis_queue->queue_visitor( my_type(eitr.target()));
@@ -122,24 +124,16 @@ public:
   }
 
   vertex_locator vertex;
-  static uint32_t kth_core;
-  static KCoreData* k_core_data;
 };
-
-template<typename Graph, typename KCoreData>
-uint32_t kth_core_visitor<Graph, KCoreData>::kth_core;
-
-template<typename Graph, typename KCoreData>
-KCoreData* kth_core_visitor<Graph,KCoreData>::k_core_data;
-
 
 template <typename TGraph, typename KCoreData>
 void kth_core(TGraph& graph, KCoreData& k_core_data) {
   
   uint64_t to_return(0);
-  typedef kth_core_visitor<TGraph, KCoreData>           visitor_type;
-  visitor_type::kth_core = 0;
-  visitor_type::k_core_data = &k_core_data;
+  typedef kth_core_visitor<TGraph>           visitor_type;
+  int32_t kth_core_count = 0;
+  
+  auto alg_data = std::forward_as_tuple(k_core_data, kth_core_count); 
 
   //reset graph data
   for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
@@ -151,9 +145,7 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     k_core_data[*citr].set_core_bound(graph.degree(*citr));
   } 
 
-  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
-
-  visitor_queue_type vq(&graph);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(&graph, alg_data);
   uint64_t count_alive = 0;
   do {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -170,9 +162,9 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
     }
     count_alive = mpi_all_reduce(local_alive,std::plus<uint64_t>(), MPI_COMM_WORLD);
     if(havoqgt_env()->world_comm().rank() == 0) {
-      std::cout << "Core " << visitor_type::kth_core << ", size = " << count_alive << ", time = " << time_end-time_start << std::endl;
+      std::cout << "Core " << std::get<1>(alg_data) << ", size = " << count_alive << ", time = " << time_end-time_start << std::endl;
     }
-  } while(count_alive && ++(visitor_type::kth_core) < 50);
+  } while(count_alive && ++std::get<1>(alg_data) < 50);
   
   //
   // for(auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {

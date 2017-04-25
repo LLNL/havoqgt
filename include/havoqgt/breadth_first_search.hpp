@@ -123,7 +123,7 @@ public:
 
 
 
-template<typename Graph, typename LevelData, typename ParentData>
+template<typename Graph>
 class bfs_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
@@ -140,20 +140,20 @@ public:
     , m_parent(_vertex)
     , m_level(0) { }
 
-
-  bool pre_visit() const {
-    bool do_visit  = (*level_data())[vertex] > level();
+  template<typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    bool do_visit = std::get<0>(alg_data)[vertex] > level();
     if(do_visit) {
-      (*level_data())[vertex] = level();
+      std::get<0>(alg_data)[vertex] = level(); 
     }
     return do_visit;
   }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    if(level() <= (*level_data())[vertex]) {
-      (*level_data())[vertex] = level();
-      (*parent_data())[vertex] = parent();
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {    
+    if(level() <= std::get<0>(alg_data)[vertex]) {
+      std::get<0>(alg_data)[vertex] = level();
+      std::get<1>(alg_data)[vertex] = parent();       
 
       typedef typename Graph::edge_iterator eitr_type;
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
@@ -187,18 +187,6 @@ public:
   //   return v1.level() < v2.level();
   // }
 
-  static void set_level_data(LevelData* _data) { level_data() = _data; }
-
-  static LevelData*& level_data() {
-    static LevelData* data;
-    return data;
-  }
-
-  static void set_parent_data(ParentData* _data) { parent_data() = _data; }
-  static ParentData*& parent_data() {
-    static ParentData* data;
-    return data;
-  }
   vertex_locator   vertex;
   //uint64_t         m_parent : 40;
   vertex_locator  m_parent;
@@ -211,13 +199,9 @@ void breadth_first_search(TGraph* g,
                           LevelData& level_data,
                           ParentData& parent_data,
                           typename TGraph::vertex_locator s) {
-
-  typedef  bfs_visitor<TGraph, LevelData, ParentData>    visitor_type;
-  visitor_type::set_level_data(&level_data);
-  visitor_type::set_parent_data(&parent_data);
-  typedef visitor_queue< visitor_type, detail::visitor_priority_queue, TGraph >    visitor_queue_type;
-
-  visitor_queue_type vq(g);
+  typedef  bfs_visitor<TGraph>    visitor_type;
+  auto alg_data = std::forward_as_tuple(level_data, parent_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal(s);
 }
 
