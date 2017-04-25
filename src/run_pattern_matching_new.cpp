@@ -23,13 +23,15 @@
 #include <havoqgt/label_propagation_pattern_matching_iterative.hpp>
 #include <havoqgt/pattern_util.hpp>
 //#include <havoqgt/token_passing_pattern_matching.hpp>
-#include <havoqgt/token_passing_pattern_matching_new.hpp>
+#include <havoqgt/token_passing_pattern_matching_batch.hpp>
+//#include <havoqgt/token_passing_pattern_matching_new.hpp>
 //#include <havoqgt/token_passing_pattern_matching_iterative.hpp>
 #include <havoqgt/update_edge_state.hpp>
 #include <havoqgt/vertex_data_db.hpp>
 #include <havoqgt/vertex_data_db_degree.hpp>
 
-#define TP_ORIG
+//#define TP_ASYNC
+#define TP_BATCH
 
 namespace hmpi = havoqgt::mpi;
 using namespace havoqgt::mpi;
@@ -110,7 +112,7 @@ int main(int argc, char** argv) {
 
   edge_data_t* edge_data_ptr = ddb.get_segment_manager()->
     find<edge_data_t>("graph_edge_data_obj").first;
-  assert(edge_data_ptr != nullptr); 
+//  assert(edge_data_ptr != nullptr); 
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) {
@@ -198,7 +200,6 @@ int main(int argc, char** argv) {
   ///////////////////////////////////////////////////////////////////////////// 
 
   // build the distributed vertex data db
-  // each rank reads 10K lines at a time
   time_start = MPI_Wtime();
 
   if (use_degree_as_vertex_data) {
@@ -207,12 +208,14 @@ int main(int argc, char** argv) {
   } else { 
     vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
       (graph, vertex_metadata, vertex_data_input_filename, 10000);
+      // each rank reads 10K lines from file at a time
   }
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this?
   time_end = MPI_Wtime();
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching Time | Vertex Data DB : " << time_end - time_start << std::endl;
+    std::cout << "Fuzzy Pattern Matching Time | Vertex Data DB : " 
+      << time_end - time_start << std::endl;
   }
 
   if (do_output_vertex_data) {
@@ -352,7 +355,8 @@ int main(int argc, char** argv) {
   //update_edge_state();
 
   /////////////////////////////////////////////////////////////////////////////
-   
+
+  // label propagation   
   double label_propagation_time_start = MPI_Wtime();
 
   // clone pattern matchng
@@ -483,7 +487,8 @@ int main(int argc, char** argv) {
 
   token_source_map.clear(); // Important
   vertex_token_source_set.clear(); // Important
- 
+
+  // setup pattern 
   auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
   auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
   auto pattern_cycle_length_tp = std::get<2>(ptrn_util_two.input_patterns[pl]); // uint
@@ -501,17 +506,28 @@ int main(int argc, char** argv) {
   //  pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map, 
   //  token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, pattern_found[pl], *edge_data_ptr, vertex_token_source_set);
 
+#ifdef TP_ASYNC
   // token_passing_pattern_matching_new.hpp
-  // token_passing_pattern_matching_iterative.hpp  // TODO: update global_not_finished
   token_passing_pattern_matching(graph, vertex_metadata, pattern_tp,
     pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
     token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp, 
     pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active); 
+#endif
+
+#ifdef TP_BATCH
+  // token_passing_pattern_matching_batch.hpp
+  token_passing_pattern_matching(graph, vertex_metadata, pattern_tp,
+    pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
+    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp,
+    pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active, 
+    global_not_finished); 
+#endif 
  
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
   time_end = MPI_Wtime();
   if(mpi_rank == 0) {
-    std::cout << "Fuzzy Pattern Matching Time | Token Passing (traversal) [" << pl << "] : " << time_end - time_start << std::endl;
+    std::cout << "Fuzzy Pattern Matching Time | Token Passing (traversal) [" 
+      << pl << "] : " << time_end - time_start << std::endl;
   }
 
   // result
@@ -533,25 +549,28 @@ int main(int argc, char** argv) {
 //    }
 //  }
 
-  // remove the invalid (source) vertices from the vertex_state_map
+#ifdef TP_ASYNC
+
+  // remove the invalid (token source) vertices from the vertex_state_map
+  // for delegates, set vertex_active to false
 
   // TODO: In the case, a vertex is on multiple cycles/chains (not as the token source)
   // only invalidate it as a token source, but do not remove it from the vertex_state_map
- 
-#ifdef TP_ORIG
 
   uint64_t remove_count = 0; 
+
   for (auto& s : token_source_map) {
     if (!s.second) {
       //if (pl == 2) { // Test
-      //std::cout << " >>>>>> " << pl << " " << mpi_rank << " " << s.first << " " << s.second << " " << global_not_finished << std::endl;
-      //} 
+      //std::cout << " >>>>>> " << pl << " " << mpi_rank << " " << s.first 
+      //  << " " << s.second << " " << global_not_finished << std::endl;
+      //} // Test 
       vertex_active[graph->label_to_locator(s.first)] = false; 
       if (!global_not_finished) {
         global_not_finished = true;
       }
     }
-  } // for - token_source_map
+  }
 
   vertex_active.all_min_reduce(); 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
@@ -565,7 +584,7 @@ int main(int argc, char** argv) {
  
       if (find_vertex != vertex_state_map.end()) { 
       
-        if (vertex_state_map.erase(s.first) < 1) { // v.first is the vertex
+        if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
           std::cerr << "Error: failed to remove an element from the map."
           << std::endl;
         } else {
@@ -592,9 +611,9 @@ int main(int argc, char** argv) {
       << "] : " << time_end - time_start << std::endl;
   }
 
-  } // for - loop over the patterns 
+  } // for - loop over the patterns for token passing 
 
-  // pattren found ? 
+  // pattren found ? // TODO: write output to file 
   havoqgt::mpi::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
   if(mpi_rank == 0) {   
@@ -677,7 +696,7 @@ int main(int argc, char** argv) {
 
   global_itr_count++;
 
-  // verify global termination condition
+  // global termination
   // Test
   //if (global_itr_count > 0) {
   //  global_not_finished = false;
