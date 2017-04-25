@@ -8,13 +8,10 @@ rm CMakeCache.txt
 
 cmake ../../ \
   -DHAVOQGT_BUILD_TEST=TRUE \
-  -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-1.1/root/usr/bin/g++ \
-  -DCMAKE_C_COMPILER=/usr/local/tools/gcc-4.6.1/bin//gcc \
   -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
   -DCMAKE_BUILD_TYPE=Release \
-  -DMPI_C_COMPILER=/usr/local/tools/mvapich2-gnu-1.9/bin/mpicc \
-  -DMPI_CXX_COMPILER=/usr/local/tools/mvapich2-gnu-1.9/bin/mpicxx \
-  -DBOOST_ROOT=/usr/local/tools/boost-1.57.0/ \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -lrt" \
-  #-DCMAKE_CXX_FLAGS="-std=c++11 -DPROCESSES_PER_NODE=16 -DEDGE_PASS_PARTITIONS=4" \
-  #-DBOOST_ROOT=/usr/gapps/dst/opt/boost_stages/boost_1_56_0/ \
+  -DMPI_C_COMPILER=/usr/tce/packages/openmpi/openmpi-2.0.0-gcc-4.9.3/bin/mpicc \
+  -DMPI_CXX_COMPILER=/usr/tce/packages/openmpi/openmpi-2.0.0-gcc-4.9.3/bin/mpicxx \
+  -DBOOST_ROOT=/g/g90/reza2/boost_1_57_0/ \
+  -DCMAKE_CXX_FLAGS="-std=c++11 -lrt -lpthread -lm" \
+

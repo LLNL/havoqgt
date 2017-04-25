@@ -77,6 +77,8 @@ using namespace havoqgt::mpi;
 typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 
+typedef double edge_data_type;
+  
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
@@ -111,7 +113,6 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-
   
   char c;
   bool prn_help = false;
@@ -168,6 +169,7 @@ int main(int argc, char** argv) {
   {
     std::string                output_filename;
     std::string                backup_filename;
+ 
     { // Build Distributed_DB
     int mpi_rank = havoqgt_env()->world_comm().rank();
     int mpi_size = havoqgt_env()->world_comm().size();
@@ -185,7 +187,7 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-    
+   
     parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
@@ -197,24 +199,31 @@ int main(int argc, char** argv) {
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-    //Setup edge list reader
-    havoqgt::parallel_edge_list_reader pelr(input_filenames, undirected);
+    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
 
+    //Setup edge list reader
+    havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
+    bool has_edge_data = pelr.has_edge_data(); 
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size);
-
+        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
+         edge_data); 
+    
+    if (has_edge_data) {
+      graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
+      = segment_manager->construct<graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>>
+          ("graph_edge_data_obj")
+          (edge_data);
+    }
 
     havoqgt_env()->world_comm().barrier();
     if (mpi_rank == 0) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
-
-
 
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
@@ -226,22 +235,21 @@ int main(int argc, char** argv) {
       havoqgt_env()->world_comm().barrier();
     }
 
-    graph->print_graph_statistics();
-
+//    graph->print_graph_statistics();
 
     //
     // Calculate max degree
-    uint64_t max_degree(0);
-    for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
-      max_degree = std::max(max_degree, graph->degree(*citr));
-    }
+//    uint64_t max_degree(0);
+//    for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
+//      max_degree = std::max(max_degree, graph->degree(*citr));
+//    }
 
-    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+//    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
     havoqgt_env()->world_comm().barrier();
 
     if (mpi_rank == 0) {
-      std::cout << "Max Degree = " << global_max_degree << std::endl;
+//      std::cout << "Max Degree = " << global_max_degree << std::endl;
     }
 
     havoqgt_env()->world_comm().barrier();

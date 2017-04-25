@@ -52,7 +52,6 @@
 #ifndef HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 #define HAVOQGT_MPI_DELEGATE_PARTITIONED_GRAPH_HPP_INCLUDED
 
-
 #include <limits>
 #include <utility>
 #include <stdint.h>
@@ -97,6 +96,7 @@ namespace bip = boost::interprocess;
 template <typename SegementManager>
 class delegate_partitioned_graph {
  public:
+
    template<typename T>
    using SegmentAllocator = bip::allocator<T, SegementManager>;
 
@@ -113,7 +113,7 @@ class delegate_partitioned_graph {
   template <typename T, typename Allocator>
   class vertex_data;
   /// Edge Data storage
-  template <typename T, typename SegManagerOther>
+  template <typename T, typename Allocator>
   class edge_data;
   /// Stores information about owned vertices
   class vert_info;
@@ -125,18 +125,34 @@ class delegate_partitioned_graph {
   // Public Member Functions
   //////////////////////////////////////////////////////////////////////////////
   /// Constructor that initializes given and unsorted sequence of edges
+
   template <typename Container>
   delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
                              MPI_Comm mpi_comm,
-                             Container& edges, uint64_t max_vertex,
+                             Container& edges, 
+                             uint64_t max_vertex,
                              uint64_t delegate_degree_threshold,
                              uint64_t _node_partitions,
                              uint64_t chunk_size,
-                             ConstructionState stop_after = GraphReady);
+                             ConstructionState stop_after = GraphReady
+                             );
 
-  template <typename Container>
+  template <typename Container, typename edge_data_type>  
+  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+                             MPI_Comm mpi_comm,
+                             Container& edges, 
+                             uint64_t max_vertex,
+                             uint64_t delegate_degree_threshold,
+                             uint64_t _node_partitions,
+                             uint64_t chunk_size,
+                             edge_data_type& _edge_data,  
+                             bool _has_edge_data = true,
+                             ConstructionState stop_after = GraphReady
+                             );
+
+  template <typename Container, typename edge_data_type>
   void complete_construction(const SegmentAllocator<void>& seg_allocator,
-    MPI_Comm mpi_comm, Container& edges);
+    MPI_Comm mpi_comm, Container& edges, edge_data_type& _edge_data);
   void print_graph_statistics();
 
   /// Converts a vertex_locator to the vertex label
@@ -162,6 +178,12 @@ class delegate_partitioned_graph {
 
   /// Returns an end iterator for all local vertices
   vertex_iterator vertices_end() const;
+
+  /// Returns a begin iterator for all delegate vertices
+  vertex_iterator delegate_vertices_begin() const;
+
+  /// Returns an end iterator for all delegate vertices
+  vertex_iterator delegate_vertices_end() const;
 
   /// Tests if vertex label is a delegate
   bool is_label_delegate(uint64_t label) const;
@@ -201,7 +223,6 @@ class delegate_partitioned_graph {
   uint64_t max_local_vertex_id() {
     return m_max_vertex;
   }
-
 
   size_t num_delegates() const {
     return m_delegate_degree.size();
@@ -277,8 +298,8 @@ class delegate_partitioned_graph {
 
   void initialize_edge_storage(const SegmentAllocator<void>& seg_allocator);
 
-  template <typename Container>
-  void partition_low_degree(Container& unsorted_edges);
+  template <typename Container, typename edge_data_type>
+  void partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data);
 
   template <typename InputIterator>
   void count_high_degree_edges(InputIterator unsorted_itr,
@@ -286,10 +307,10 @@ class delegate_partitioned_graph {
                  boost::unordered_set<uint64_t>& global_hub_set);
 
 
-  template <typename Container>
+  template <typename Container, typename edge_data_type>
   void partition_high_degree(Container& unsorted_edges,
-    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info);
-
+    std::map< uint64_t, std::deque<OverflowSendInfo> > &transfer_info, 
+    edge_data_type& _edge_data);
 
   template <typename InputIterator>
   void count_edge_degrees(InputIterator unsorted_itr,
@@ -364,10 +385,14 @@ class delegate_partitioned_graph {
       SegmentAllocator< std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
   */
+
   bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
 
   bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
     m_controller_locators;
+
+  bool m_has_edge_data;
+
 };  // class delegate_partitioned_graph
 
 
