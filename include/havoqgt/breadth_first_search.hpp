@@ -201,7 +201,7 @@ void breadth_first_search(TGraph* g,
                           typename TGraph::vertex_locator s) {
   typedef  bfs_visitor<TGraph>    visitor_type;
   auto alg_data = std::forward_as_tuple(level_data, parent_data);
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal(s);
 }
 
