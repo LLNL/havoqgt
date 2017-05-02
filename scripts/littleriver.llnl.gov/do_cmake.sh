@@ -15,6 +15,5 @@ cmake ../../ \
   -DMPI_CXX_COMPILER=${MACPORTS_PATH}/bin/mpicxx-mpich-gcc49 \
   -DBOOST_ROOT=${MACPORTS_PATH}/include \
   -DHAVOQGT_BUILD_TEST="ON" \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -O3" \
-  -DMPIEXEC_PREFLAGS="-hosts;localhost"
+  -DCMAKE_CXX_FLAGS="-std=c++11 -O3"
 
