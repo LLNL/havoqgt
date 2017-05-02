@@ -69,8 +69,6 @@
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
 using namespace havoqgt;
 
 void usage()  {
@@ -121,7 +119,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -163,14 +161,14 @@ int main(int argc, char** argv) {
   //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
  
-  graph_type::vertex_data<mpi::kth_core_data, std::allocator<mpi::kth_core_data> >  vert_kcore_data(*graph);
+  graph_type::vertex_data<kth_core_data, std::allocator<kth_core_data> >  vert_kcore_data(*graph);
 
   // uint64_t count_alive = 0;
   // uint64_t core = 0;
   // do {
   //   MPI_Barrier(MPI_COMM_WORLD);
   //   double time_start = MPI_Wtime();
-  //   count_alive = mpi::kth_core(*graph, vert_kcore_data, core++);
+  //   count_alive = kth_core(*graph, vert_kcore_data, core++);
   //   MPI_Barrier(MPI_COMM_WORLD);
   //   double time_end = MPI_Wtime();
   //
@@ -180,7 +178,7 @@ int main(int argc, char** argv) {
   // } while(count_alive);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_start = MPI_Wtime();
-    mpi::kth_core(*graph, vert_kcore_data);
+    kth_core(*graph, vert_kcore_data);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
     if(mpi_rank == 0){

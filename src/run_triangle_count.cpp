@@ -68,12 +68,11 @@
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
+using namespace havoqgt;
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 

@@ -65,7 +65,7 @@
 #include <stdint.h>
 #include <boost/tuple/tuple.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 
@@ -577,7 +577,7 @@ private:
 };
 
 
-}} //namespace havoqgt { namespace mpi {
+} //namespace havoqgt { 
 
 
 

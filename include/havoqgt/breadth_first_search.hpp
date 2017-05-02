@@ -56,7 +56,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt { 
 
 template <typename Visitor>
 class bfs_queue
@@ -207,7 +207,7 @@ void breadth_first_search(TGraph* g,
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 

@@ -177,7 +177,7 @@ public:
       }
     }
 
-    size_t global_num_files = mpi::mpi_all_reduce(m_local_filenames.size(), std::plus<size_t>(), MPI_COMM_WORLD);
+    size_t global_num_files = mpi_all_reduce(m_local_filenames.size(), std::plus<size_t>(), MPI_COMM_WORLD);
     if(havoqgt_env()->world_comm().rank() == 0) {
       std::cout << "Ingesting from " << global_num_files << " files." << std::endl;   
 
@@ -195,7 +195,7 @@ public:
     }
 
     // broadcast if edge data exists
-    mpi::mpi_bcast(m_has_edge_data, 0, MPI_COMM_WORLD);
+    mpi_bcast(m_has_edge_data, 0, MPI_COMM_WORLD);
 
     // First pass to calc max vertex and count edges.
     open_files();
@@ -208,7 +208,7 @@ public:
       local_max_vertex = std::max(std::get<0>(edge), local_max_vertex);
       local_max_vertex = std::max(std::get<1>(edge), local_max_vertex);
     }
-    m_global_max_vertex = mpi::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+    m_global_max_vertex = mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
   }
 
 

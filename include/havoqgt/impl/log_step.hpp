@@ -54,7 +54,6 @@
 #include <havoqgt/environment.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 class LogStep {
  public:
@@ -111,7 +110,6 @@ class LogStep {
 };
 
 
-}  // namespace mpi
 }  // namespace havoqgt
 
 #endif  // __HAVOQGT_IMP_LOG_STEP_HPP__

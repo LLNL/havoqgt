@@ -56,7 +56,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 template <typename T, typename Allocator >
@@ -126,6 +125,5 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
   bip::vector<T, Allocator > m_delegate_data;
 };
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_VERTEX_DATA_HPP_

@@ -71,11 +71,9 @@
 // Make one vert per rank a hub.
 
 using namespace havoqgt;
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
 
 typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
 typedef double edge_data_type;
   
@@ -244,7 +242,7 @@ int main(int argc, char** argv) {
 //      max_degree = std::max(max_degree, graph->degree(*citr));
 //    }
 
-//    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+//    uint64_t global_max_degree = havoqgt_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
     havoqgt_env()->world_comm().barrier();
 

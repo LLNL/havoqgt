@@ -75,7 +75,7 @@
                      } }
 
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 inline MPI_Datatype mpi_typeof(char) {return MPI_CHAR;}
 inline MPI_Datatype mpi_typeof(signed short) {return MPI_SHORT;}
@@ -597,7 +597,6 @@ inline int mpi_comm_size() {
 }
 
 
-} //end namespace mpi
 
 ///
 /// Start "new" communicator here

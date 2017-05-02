@@ -55,7 +55,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 template <typename T, typename Allocator>
@@ -183,6 +182,5 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
 //   return m_owned_edge_data[itr.m_edge_offset];
 // }
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_EDGE_DATA_HPP_

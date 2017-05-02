@@ -53,7 +53,6 @@
 #define HAVOQGT_MPI_UTILIES_HPP_
 
 namespace havoqgt {
-namespace mpi {
 
 /// Frees the container of edges
 template <typename Container>
@@ -67,5 +66,4 @@ void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vect
 
 #endif // HAVOQGT_MPI_UTILIES_HPP_
 
-} // namespace mpi
 } // namespace havoqgt

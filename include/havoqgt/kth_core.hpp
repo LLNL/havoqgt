@@ -56,7 +56,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 /// This is the kth-core data stored per vertex in the Graph
@@ -176,7 +176,7 @@ void kth_core(TGraph& graph, KCoreData& k_core_data) {
   // return mpi_all_reduce(to_return,std::plus<uint64_t>(), MPI_COMM_WORLD);
 }
 
-} } // end havoqgt::mpi
+} // end havoqgt
 
 
 #endif //HAVOQGT_MPI_KTH_CORE_HPP_INCLUDED

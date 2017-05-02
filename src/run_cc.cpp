@@ -68,8 +68,6 @@
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
 using namespace havoqgt;
 
 void usage()  {
@@ -120,7 +118,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -166,7 +164,7 @@ int main(int argc, char** argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
     double time_start = MPI_Wtime();
-    mpi::connected_components(graph, cc_data);
+    connected_components(graph, cc_data);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
     

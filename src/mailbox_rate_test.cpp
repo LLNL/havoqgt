@@ -124,7 +124,7 @@ uint32_t msg_hopper::s_mpi_size;
 class receive_iterator
       : public std::iterator<std::output_iterator_tag, void, void, void, void> {
 public:
-  receive_iterator(mpi::termination_detection<uint64_t>* _td, std::vector<msg_hopper>* _p) 
+  receive_iterator(termination_detection<uint64_t>* _td, std::vector<msg_hopper>* _p) 
     :  ptd(_td)
     ,  ppending(_p) { }
 
@@ -149,7 +149,7 @@ public:
 
   receive_iterator operator++(int) { return *this; }
 
-  mpi::termination_detection<uint64_t>* ptd;
+  termination_detection<uint64_t>* ptd;
   std::vector<msg_hopper>* ppending;
 };
 
@@ -179,8 +179,8 @@ int main(int argc, char** argv) {
     std::cout << "Hop Limit = " << msg_hopper::s_hop_limit << std::endl;
     }
 
-    mpi::mailbox_routed<msg_hopper> mailbox(1);
-    mpi::termination_detection<uint64_t> td(MPI_COMM_WORLD);
+    mailbox_routed<msg_hopper> mailbox(1);
+    termination_detection<uint64_t> td(MPI_COMM_WORLD);
     std::vector<msg_hopper> pending;
 
     uint64_t count_per_rank = count / uint64_t(mpi_size);

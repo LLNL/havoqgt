@@ -56,7 +56,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt { 
 
 template<typename Graph>
 class cc_visitor {
@@ -136,7 +136,7 @@ void connected_components(TGraph* g, CCData& cc_data) {
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 

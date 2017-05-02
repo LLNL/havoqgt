@@ -79,7 +79,6 @@
 #endif
 
 namespace havoqgt {
-namespace mpi {
 
 namespace bip = boost::interprocess;
 
@@ -397,7 +396,6 @@ class delegate_partitioned_graph {
 
 
 
-} // namespace mpi
 } // namespace havoqgt
 
 

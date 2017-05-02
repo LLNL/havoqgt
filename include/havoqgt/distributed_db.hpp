@@ -229,7 +229,7 @@ public:
     if(mpi_rank == 0) {
       phead->uuid = boost::uuids::random_generator()();
     }
-    mpi::mpi_bcast(phead->uuid,0,havoqgt_env()->world_comm().comm());
+    mpi_bcast(phead->uuid,0,havoqgt_env()->world_comm().comm());
     //std::cout << "Rank = " << mpi_rank << ", UUID = " << phead->uuid << std::endl;
     phead->comm_rank = mpi_rank;
     phead->comm_size = mpi_size;
@@ -269,7 +269,7 @@ public:
     if(mpi_rank == 0) {
       uuid = ret.first->uuid;
     }
-    mpi::mpi_bcast(uuid,0,havoqgt_env()->world_comm().comm());
+    mpi_bcast(uuid,0,havoqgt_env()->world_comm().comm());
     if(uuid != ret.first->uuid)
     {
       std::stringstream error;

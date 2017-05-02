@@ -56,7 +56,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::vertex_locator {
@@ -173,6 +172,5 @@ is_equal(const typename delegate_partitioned_graph<SegmentManager>::vertex_locat
 }
 
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_VERTEX_LOCATOR_HPP_

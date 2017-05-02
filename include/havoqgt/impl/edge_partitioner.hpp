@@ -56,7 +56,6 @@
 #include <deque>
 
 namespace havoqgt {
-namespace mpi {
 
 /**
  * @class delegate_partitioned_graph
@@ -209,7 +208,6 @@ class dest_pair_partitioner {
 
 
 
-}  // namespace mpi
 }  // namespace havoqgt
    //
 #endif  // __HAVOQGT_IMP_EDGE_PARTITIONER_HPP__

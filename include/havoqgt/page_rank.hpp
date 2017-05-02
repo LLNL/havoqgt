@@ -59,7 +59,7 @@
 #include <boost/container/deque.hpp>
 #include <vector>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 template <typename Visitor>
 class pr_queue
@@ -179,7 +179,7 @@ void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 

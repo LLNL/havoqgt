@@ -56,7 +56,7 @@
 #include <boost/container/deque.hpp>
 
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 template <typename Visitor>
@@ -195,7 +195,7 @@ public:
 template <typename TGraph>
 uint64_t triangle_count(TGraph& g, typename TGraph::vertex_locator s) {
   typedef TGraph                                             graph_type;
-  typedef typename mpi::triangle_count_visitor<TGraph>             visitor_type;
+  typedef triangle_count_visitor<TGraph>             visitor_type;
   typename graph_type::template vertex_data<uint64_t, std::allocator<uint64_t> >   tc_data(g);
   auto alg_data = std::forward_as_tuple(g, tc_data);
   auto vq = create_visitor_queue<visitor_type, triangle_priority_queue>(&g, alg_data);
@@ -203,6 +203,6 @@ uint64_t triangle_count(TGraph& g, typename TGraph::vertex_locator s) {
   return tc_data.global_accumulate();  
 }
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 #endif //HAVOQGT_MPI_TRIANGLE_COUNT_HPP_INCLUDED

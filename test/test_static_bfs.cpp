@@ -17,11 +17,9 @@
 namespace havoqgt { namespace test {
 
   using namespace havoqgt;
-  namespace hmpi = havoqgt::mpi;
-  using namespace havoqgt::mpi;
 
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
 TEST(test_static_bfs, test_static_bfs) {
   MPI_Barrier(MPI_COMM_WORLD);  
@@ -53,7 +51,7 @@ TEST(test_static_bfs, test_static_bfs) {
   graph_type::vertex_locator source = graph->label_to_locator(0);
   
   MPI_Barrier(MPI_COMM_WORLD);
-  hmpi::breadth_first_search(graph, bfs_level_data, bfs_parent_data, source);
+  havoqgt::breadth_first_search(graph, bfs_level_data, bfs_parent_data, source);
   
   MPI_Barrier(MPI_COMM_WORLD);
   

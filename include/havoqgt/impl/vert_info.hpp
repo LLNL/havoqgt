@@ -55,7 +55,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::vert_info {
@@ -95,6 +94,5 @@ vert_info(bool in_is_delegate, uint64_t in_delegate_id, uint64_t in_low_csr_idx)
   assert(sizeof(vert_info) == 8);
 }
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_VERT_INFO_HPP_

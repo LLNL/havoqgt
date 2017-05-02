@@ -56,7 +56,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::edge_iterator {
@@ -184,6 +183,5 @@ delegate_partitioned_graph<SegmentManager>::edge_iterator::target() const {
 //  return m_ptr_graph->m_edge_data.m_owned_edge_data[m_edge_offset];
 //`}
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_EDGE_ITERATOR_HPP_

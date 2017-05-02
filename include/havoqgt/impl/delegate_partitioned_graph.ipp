@@ -57,7 +57,6 @@
 #define HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED
 
 namespace havoqgt {
-namespace mpi {
 /**
  * Builds a delegate_partitioned_graph with from and unsorted sequence of edges.
  *
@@ -1977,7 +1976,6 @@ print_graph_statistics() {
       << std::flush;
   }
 }
-}  // namespace mpi
 }  // namespace havoqgt
 
 #endif  // HAVOQGT_MPI_IMPL_DELEGATE_PARTITIONED_GRAPH_IPP_INCLUDED

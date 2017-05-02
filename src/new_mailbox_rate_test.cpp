@@ -125,7 +125,7 @@ uint64_t count_finished, count_fwd;
 class receive_iterator
       : public std::iterator<std::output_iterator_tag, void, void, void, void> {
 public:
-  receive_iterator(mpi::termination_detection<uint64_t>* _td, std::vector<msg_hopper>* _p) 
+  receive_iterator(termination_detection<uint64_t>* _td, std::vector<msg_hopper>* _p) 
     :  ptd(_td)
     ,  ppending(_p) { }
 
@@ -155,7 +155,7 @@ public:
 
   receive_iterator operator++(int) { return *this; }
 
-  mpi::termination_detection<uint64_t>* ptd;
+  termination_detection<uint64_t>* ptd;
   std::vector<msg_hopper>* ppending;
 };
 
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
 
   
     mailbox<msg_hopper> mailbox(/*havoqgt_env()->world_comm().comm(),*/ 1);
-    mpi::termination_detection<uint64_t> td(MPI_COMM_WORLD);
+    termination_detection<uint64_t> td(MPI_COMM_WORLD);
     std::vector<msg_hopper> pending;
 
     uint64_t count_per_rank = count / uint64_t(mpi_size);

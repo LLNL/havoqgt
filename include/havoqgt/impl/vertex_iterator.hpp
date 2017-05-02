@@ -56,7 +56,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::vertex_iterator
@@ -182,6 +181,5 @@ update_locator() {
   }
 }
 
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_VERTEX_ITERATOR_HPP_

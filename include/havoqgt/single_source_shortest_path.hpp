@@ -57,7 +57,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <queue>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 template <typename Visitor>
@@ -185,7 +185,7 @@ void single_source_shortest_path(TGraph& g,
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 

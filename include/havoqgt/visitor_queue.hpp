@@ -61,7 +61,7 @@
 #include <iterator>
 #include <sched.h>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 class oned_blocked_partitioned_t { };
 class el_partitioned_t { };
@@ -468,6 +468,6 @@ visitor_queue< TVisitor, Queue, TGraph, AlgData >
     return vq;
 }
 
-}} //namespace havoqgt::mpi
+} //namespace havoqgt
 
 #endif //HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
