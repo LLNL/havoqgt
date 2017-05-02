@@ -156,7 +156,7 @@ TEST(my_test, test_Delegate_Graph_Weighted_Edges_Verify_Delegates) {
 //mpi main for gteset
 GTEST_API_ int main(int argc, char **argv) {
   // set up environment
-  int mpi_rank(0), mpi_size(0);
+  int mpi_rank(0), mpi_size(0), to_return;
   havoqgt::havoqgt_init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -172,12 +172,12 @@ GTEST_API_ int main(int argc, char **argv) {
    
   // execute tests
   testing::InitGoogleTest(&argc, argv);
-  int to_return RUN_ALL_TESTS();
+  to_return =  RUN_ALL_TESTS();
   }
 
   // delete the generated files
 
   havoqgt::havoqgt_finalize();
 
-  //return to_return;
+  return to_return;
 }
