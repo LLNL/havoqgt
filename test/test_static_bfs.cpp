@@ -72,7 +72,7 @@ TEST(test_static_bfs, test_static_bfs) {
 
 
 
-}} //end namespace apgaf::test
+}} //end namespace havoqgt::test
 
 //mpi main for gteset
 GTEST_API_ int main(int argc, char **argv) {

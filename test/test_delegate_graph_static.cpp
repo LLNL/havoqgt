@@ -151,7 +151,7 @@ TEST(my_test, test_Delegate_Graph_Weighted_Edges_Verify_Delegates) {
               delegate_vertices.begin()));
 }
 
-}} //end namespace apgaf::test
+}} //end namespace havoqgt::test
 
 //mpi main for gteset
 GTEST_API_ int main(int argc, char **argv) {
