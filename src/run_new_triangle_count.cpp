@@ -95,7 +95,8 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
 
 
-  std::string graph_input;
+/*  std::string graph_input;
+  std::string graph_backup
 
   if (argc < 2) {
     std::cerr << "usage: <graph input file name>"
@@ -105,11 +106,16 @@ int main(int argc, char** argv) {
     int pos = 1;
     graph_input = argv[pos++];
   }
-
+*/
 
   MPI_Barrier(MPI_COMM_WORLD);
+  if(mpi_rank == 0) {
+    std::cout << "Transfering " << argv[2] << " to " << argv[1] << std::endl;
+    std::cout << "Outputing degree distributions to " << argv[3] << std::endl;
+  }
 
-  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+  distributed_db::transfer(argv[2], argv[1]);
+  havoqgt::distributed_db ddb(havoqgt::db_open(), argv[1]);
 
   graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
@@ -121,9 +127,9 @@ int main(int argc, char** argv) {
   }
   //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
- 
+
 //  for(int i=0; i<100; ++i) {
-    uint64_t count = new_triangle_count(*graph);
+    uint64_t count = new_triangle_count(*graph, argv[3]);
     if(mpi_rank == 0) {
       std::cout << "Graph has " << count <<  " triangles." << std::endl;
     }

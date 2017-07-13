@@ -80,8 +80,8 @@ class visitor_queue {
 #ifdef __bgp__
   typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
-  //typedef mailbox_routed<visitor_type> mailbox_type;
-  typedef mailbox<visitor_type> mailbox_type;
+  typedef mailbox_routed<visitor_type> mailbox_type;
+  //typedef mailbox<visitor_type> mailbox_type;
 #endif
 
 
@@ -89,7 +89,7 @@ public:
   visitor_queue(TGraph* _graph, AlgData& _alg_data)
     : m_mailbox(/*MPI_COMM_WORLD,*/ 0)
     , m_termination_detection(MPI_COMM_WORLD, 2, 2, 3, 4)
-    , m_ptr_graph(_graph) 
+    , m_ptr_graph(_graph)
     , m_alg_data(_alg_data) {
     //m_localqueue_owned.reserve(_graph->num_local_vertices());
     //m_localqueue_delegates.reserve(_graph->num_delegates() * 4);
@@ -177,7 +177,7 @@ public:
       m_termination_detection.inc_queued(m_mailbox.comm_size());
     }
   }
-  
+
   void do_init_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
     bool ret = this_visitor.init_visit(*m_ptr_graph, this, m_alg_data);
@@ -218,7 +218,7 @@ public:
       } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }
-  
+
   void init_visitor_traversal_new() {
     auto citr = m_ptr_graph->controller_begin();
     auto vitr = m_ptr_graph->vertices_begin();
@@ -242,8 +242,10 @@ public:
           do_visit(this_visitor);
           m_termination_detection.inc_completed();
         }
-        m_mailbox.flush_buffers_if_idle();
-      } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end() 
+        if(citr == m_ptr_graph->controller_end() && vitr == m_ptr_graph->vertices_end()) {
+          m_mailbox.flush_buffers_if_idle();
+        }
+      } while(citr != m_ptr_graph->controller_end() || vitr != m_ptr_graph->vertices_end()
               || !empty() || !m_local_controller_queue.empty() || !m_mailbox.is_idle() );
     } while(!m_termination_detection.test_for_termination());
   }
@@ -459,12 +461,12 @@ private:
   AlgData& 		 m_alg_data;
 };
 
-template <typename TVisitor, template<typename T> class Queue, typename TGraph, 
-  typename AlgData>  
-visitor_queue< TVisitor, Queue, TGraph, AlgData > 
-  create_visitor_queue(TGraph* g, AlgData& alg_data) {    
+template <typename TVisitor, template<typename T> class Queue, typename TGraph,
+  typename AlgData>
+visitor_queue< TVisitor, Queue, TGraph, AlgData >
+  create_visitor_queue(TGraph* g, AlgData& alg_data) {
     typedef visitor_queue< TVisitor, Queue, TGraph, AlgData > visitor_queue_type;
-    visitor_queue_type vq(g, alg_data);      
+    visitor_queue_type vq(g, alg_data);
     return vq;
 }
 

@@ -80,6 +80,10 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
 
     return (m_local_id != conv.m_local_id || m_owner_dest != conv.m_owner_dest);
   }
+  bool is_delegate_master() const {
+     return (is_delegate() && ((m_local_id % havoqgt_env()->world_comm().size())
+                               == havoqgt_env()->world_comm().rank()));
+  }
 
   bool is_delegate() const { return m_is_delegate == 1;}
   uint32_t owner() const { return m_owner_dest; }
