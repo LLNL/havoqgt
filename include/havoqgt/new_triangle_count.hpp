@@ -427,6 +427,7 @@ public:
             (pair_a.second == pair_b.second && pair_a.first < pair_b.first)) {
               my_type new_visitor(g.label_to_locator(pair_a.first), pair_b.first);
               vis_queue->queue_visitor(new_visitor);
+              ++std::get<3>(alg_data); // To count generated #wedges
             }
         }
       }
@@ -610,18 +611,40 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
 
   //
   // 3)  Build wedges & count
-  uint64_t local_triangle_count(0), local_wedge_count(0);
+  uint64_t local_triangle_count(0), local_checked_wedge_count(0), local_generated_wedge_count(0);
   start_time = MPI_Wtime();
   {
-    auto alg_data = std::forward_as_tuple(core2_directed, local_triangle_count, local_wedge_count);
+    auto alg_data = std::forward_as_tuple(core2_directed, local_triangle_count, local_checked_wedge_count, local_generated_wedge_count);
     auto vq = create_visitor_queue<core2_wedges<graph_type>, detail::visitor_priority_queue>(&g, alg_data);
     vq.init_visitor_traversal_new();
   }
   end_time = MPI_Wtime();
-  uint64_t global_wedge_count = mpi_all_reduce(local_wedge_count,std::plus<uint64_t>(), MPI_COMM_WORLD);
+
+//  for (int i = 0; i < mpi_size; ++i) {
+//    if (i == mpi_rank) {
+//      std::cout << "Rank " << mpi_rank << " Local wedges checked = " << local_checked_wedge_count << std::endl;
+//      std::cout << "Rank " << mpi_rank << " Local wedges generated = " << local_generated_wedge_count << std::endl;
+//    }
+//    MPI_Barrier(MPI_COMM_WORLD);
+//  }
+
+  uint64_t global_checked_wedge_count = mpi_all_reduce(local_checked_wedge_count,std::plus<uint64_t>(), MPI_COMM_WORLD);
+
+  uint64_t global_min_checked_wedge_count = mpi_all_reduce(local_checked_wedge_count,std::less<uint64_t>(), MPI_COMM_WORLD);
+  uint64_t global_min_generated_wedge_count = mpi_all_reduce(local_generated_wedge_count,std::less<uint64_t>(), MPI_COMM_WORLD);
+
+  uint64_t global_max_checked_wedge_count = mpi_all_reduce(local_checked_wedge_count,std::greater<uint64_t>(), MPI_COMM_WORLD);
+  uint64_t global_max_generated_wedge_count = mpi_all_reduce(local_generated_wedge_count,std::greater<uint64_t>(), MPI_COMM_WORLD);
+
   if(mpi_rank == 0) {
     std::cout << "TC on directed 2core time = " << end_time - start_time << std::endl;
-    std::cout << "Total wedges checked = " << global_wedge_count << std::endl;
+    std::cout << "Total wedges checked = " << global_checked_wedge_count << std::endl;
+    std::cout << "Average wedges checked = " << (double)global_checked_wedge_count / mpi_size << std::endl;
+    std::cout << "Min wedges checked = " << global_min_checked_wedge_count << std::endl;
+    std::cout << "Min wedges generated = " << global_min_generated_wedge_count << std::endl;
+    std::cout << "Max wedges checked = " << global_max_checked_wedge_count << std::endl;
+    std::cout << "Max wedges generated = " << global_max_generated_wedge_count << std::endl;
+
   }
 
 
