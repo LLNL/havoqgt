@@ -4,7 +4,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-# define output_result
+# define OUTPUT_RESULT
 
 namespace havoqgt { namespace mpi {
 
@@ -377,7 +377,8 @@ template <typename TGraph, typename AlgData, typename VertexStateMap,
 void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data, 
   VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
   VertexActive& vertex_active, 
-  VertexIteration& vertex_iteration, uint64_t superstep, bool initstep, bool& global_not_finished) {
+  VertexIteration& vertex_iteration, uint64_t superstep, bool initstep, 
+  bool& global_not_finished, bool& not_finished) {
 
   typedef typename TGraph::vertex_iterator vertex_iterator;
   typedef typename TGraph::vertex_locator vertex_locator;
@@ -430,7 +431,13 @@ void verify_and_update_vertex_state_map(TGraph* g, AlgData& alg_data,
   } // for
 
   if (vertex_remove_from_map_list.size() > 0) {
-    global_not_finished = true;
+    if (!global_not_finished) {
+      global_not_finished = true;
+    }
+
+    if (!not_finished) {
+      not_finished = true;
+    }
   }
 
   for (auto v : vertex_remove_from_map_list) {
@@ -463,15 +470,14 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   // beiginning of BSP execution
-  // TODO: change for loop to use a local termination detection at the end of a seperstep
-  //bool not_finished = false;
- 
   for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       //std::cout << "Superstep #" << superstep << std::endl;
       std::cout << "Label Propagation | Superstep #" << superstep;
     }
+
+    bool not_finished = false; // local not finished flag 
 
     //MPI_Barrier(MPI_COMM_WORLD); 
     double time_start = MPI_Wtime();
@@ -486,8 +492,12 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     ///MPI_Barrier(MPI_COMM_WORLD);
  
     verify_and_update_vertex_state_map(g, alg_data, vertex_state_map, pattern_graph, 
-      vertex_active, vertex_iteration, superstep, initstep, global_not_finished);
+      vertex_active, vertex_iteration, superstep, initstep, global_not_finished, not_finished);
     //MPI_Barrier(MPI_COMM_WORLD);
+
+    // verify local terminatiion detection
+    not_finished = havoqgt::mpi::mpi_all_reduce(not_finished, std::greater<uint8_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
     
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
@@ -495,7 +505,16 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       std::cout << " | Time : " << time_end - time_start << std::endl;
     }
 
-#ifdef output_result
+    if (mpi_rank == 0) {
+      std::cout << "Label Propagation | Local Finished Status : ";
+      if (not_finished) {
+        std::cout << "Continue" << std::endl;
+      } else {
+        std::cout << "Stop" << std::endl;
+      }
+    }
+
+#ifdef OUTPUT_RESULT
     // result
     if (mpi_rank == 0) { 
       superstep_result_file << global_itr_count << ", LP, "
@@ -519,7 +538,9 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       << active_vertices_count << "\n";
 #endif
 
-    // TODO: global reduction on global_not_finished before next iteration
+    if (!not_finished) { // Important : this must come after output/file write  
+      break;        
+    }
 
   } // for 
   // end of BSP execution  
