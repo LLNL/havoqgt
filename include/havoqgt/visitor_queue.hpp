@@ -167,6 +167,31 @@ public:
     } while(!m_termination_detection.test_for_termination());
   }
 
+  void init_visitor_traversal_multiple_source(std::vector<vertex_locator> _source_v_list) {
+    if(0 /*_source_v.owner()*/ == m_mailbox.comm_rank()) {
+      for (const auto source_v : _source_v_list) {
+        queue_visitor(visitor_type(source_v));
+      }
+    }
+    do {
+      do {
+        process_pending_controllers();
+        while(!empty()) {
+          process_pending_controllers();
+          visitor_type this_visitor = pop_top();
+          vertex_locator v = this_visitor.vertex;
+          bool ret = this_visitor.visit(*m_ptr_graph, this, m_alg_data);
+          if(ret && v.is_delegate() && m_ptr_graph->master(v) == m_mailbox.comm_rank()) {
+            m_mailbox.bcast(this_visitor, visitor_queue_inserter(this));
+            m_termination_detection.inc_queued(m_mailbox.comm_size());
+          }
+          m_termination_detection.inc_completed();
+        }
+        m_mailbox.flush_buffers_if_idle();
+      } while(!m_local_controller_queue.empty() || !m_mailbox.is_idle() );
+      sched_yield();
+    } while(!m_termination_detection.test_for_termination());
+  }
 
   void do_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
