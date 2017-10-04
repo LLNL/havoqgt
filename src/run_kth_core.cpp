@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
   //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
  
-  graph_type::vertex_data<kth_core_data, std::allocator<kth_core_data> >  vert_kcore_data(*graph);
+  //graph_type::vertex_data<kth_core_data, std::allocator<kth_core_data> >  vert_kcore_data(*graph);
 
   // uint64_t count_alive = 0;
   // uint64_t core = 0;
@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
   // } while(count_alive);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_start = MPI_Wtime();
-    kth_core(*graph, vert_kcore_data);
+    kth_core(*graph);
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
     if(mpi_rank == 0){
