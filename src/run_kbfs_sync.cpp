@@ -51,7 +51,7 @@
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/k_breadth_first_search.hpp>
+#include <havoqgt/k_breadth_first_search_sync.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/fixed_size_unordered_map.hpp>
@@ -134,7 +134,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
         break;
     }
   }
-  if (prn_help || !found_input_filename) {
+  if (prn_help || !found_input_filename || (source_vertex_list.size() != k_num_sources)) {
     usage();
     exit(-1);
   }
@@ -192,7 +192,10 @@ int main(int argc, char** argv) {
     // BFS Experiments
     {
 
-      graph_type::vertex_data<std::vector<uint16_t>, std::allocator<std::vector<uint16_t>> > bfs_level_data(*graph);
+      graph_type::vertex_data<uint16_t, std::allocator<uint16_t>> bfs_max_level_data(*graph);
+      graph_type::vertex_data<k_visit_bitmap, std::allocator<k_visit_bitmap>> bfs_visit_bitmap(*graph);
+      graph_type::vertex_data<bool, std::allocator<bool>> bfs_visit_flag(*graph);
+
       MPI_Barrier(MPI_COMM_WORLD);
       if (mpi_rank == 0) {
         std::cout << "BFS data allocated.  Starting BFS from vertex: ";
@@ -238,116 +241,83 @@ int main(int argc, char** argv) {
         source_list.push_back(source);
       }
 
-      bfs_level_data.reset(std::vector<uint16_t>(source_list.size(), std::numeric_limits<uint16_t>::max()));
+      bfs_max_level_data.reset(std::numeric_limits<uint16_t>::min());
+      bfs_visit_bitmap.reset(k_visit_bitmap());
+      bfs_visit_flag.reset(false);
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      havoqgt::k_breadth_first_search(graph, bfs_level_data, source_list);
+      havoqgt::k_breadth_first_search(graph, bfs_max_level_data, bfs_visit_bitmap, bfs_visit_flag, source_list);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
 
       uint64_t visited_total(0);
-      for (int i = 0; i < source_vertex_list.size(); ++i) {
-        if (mpi_rank == 0) {
-          std::cout << "\nSource = " << source_vertex_list[i] << std::endl;
+      // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
+      for (uint64_t level = 0; level < 10; ++level) {
+        uint64_t local_count(0);
+        graph_type::vertex_iterator vitr;
+        for (vitr = graph->vertices_begin();
+             vitr != graph->vertices_end();
+             ++vitr) {
+          if (bfs_max_level_data[*vitr] == level) {
+            ++local_count;
+          }
         }
 
-        for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-          uint64_t local_count(0);
-          graph_type::vertex_iterator vitr;
-          for (vitr = graph->vertices_begin();
-               vitr != graph->vertices_end();
-               ++vitr) {
-            if (bfs_level_data[*vitr][i] == level) {
-              ++local_count;
-            }
+        // Count the controllers!
+        graph_type::controller_iterator citr;
+        for (citr = graph->controller_begin();
+             citr != graph->controller_end();
+             ++citr) {
+          if (bfs_max_level_data[*citr] == level) {
+            ++local_count;
           }
+        }
 
-          // Count the controllers!
-          graph_type::controller_iterator citr;
-          for (citr = graph->controller_begin();
-               citr != graph->controller_end();
-               ++citr) {
-            if (bfs_level_data[*citr][i] == level) {
-              ++local_count;
-            }
-          }
-
-          uint64_t global_count = mpi_all_reduce(local_count,
-                                                 std::plus<uint64_t>(), MPI_COMM_WORLD);
-          visited_total += global_count;
-          if (mpi_rank == 0 && global_count > 0) {
-            std::cout << "Level " << level << ": " << global_count << std::endl;
-          }
-          if (global_count == 0) {
-            break;
-          }
-        }  // end for level
-      } // End for single source
+        uint64_t global_count = mpi_all_reduce(local_count,
+                                               std::plus<uint64_t>(), MPI_COMM_WORLD);
+        visited_total += global_count;
+        if (mpi_rank == 0 && global_count > 0) {
+          std::cout << "Level " << level << ": " << global_count << std::endl;
+        }
+        // if (global_count == 0) {
+        //   break;
+        // }
+      }  // end for level
 
       if (mpi_rank == 0) {
-        std::cout
-          << "Visited total (per source) = " << visited_total / source_list.size() << std::endl
-          << "BFS Time = " << time_end - time_start << std::endl;
-      }
-
-      for (int i = 0; i < source_vertex_list.size(); ++i) {
-        if (mpi_rank == 0) {
-          std::cout << "\nSource = " << source_vertex_list[i] << std::endl;
-        }
-
-        for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-          uint64_t local_count(0);
-          graph_type::vertex_iterator vitr;
-          for (vitr = graph->vertices_begin();
-               vitr != graph->vertices_end();
-               ++vitr) {
-            if (bfs_level_data[*vitr][i] == level) {
-              ++local_count;
-            }
-          }
-
-          // Count the controllers!
-          graph_type::controller_iterator citr;
-          for (citr = graph->controller_begin();
-               citr != graph->controller_end();
-               ++citr) {
-            if (bfs_level_data[*citr][i] == level) {
-              ++local_count;
-            }
-          }
-
-          uint64_t global_count = mpi_all_reduce(local_count,
-                                                 std::plus<uint64_t>(), MPI_COMM_WORLD);
-          visited_total += global_count;
-          if (mpi_rank == 0 && global_count > 0) {
-            std::cout << "Level " << level << ": " << global_count << std::endl;
-          }
-          if (global_count == 0) {
-            break;
-          }
-        }  // end for level
-      } // End for single source
-
-      {
-        std::vector<size_t> local_count(100, 0);
-        for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
-          auto vector = bfs_level_data[*vitr];
-          std::sort(vector.begin(), vector.end());
-          auto itr = std::unique(vector.begin(), vector.end());
-          if (vector[0] == std::numeric_limits<uint16_t>::max()) continue;
-          ++local_count[std::distance(vector.begin(), itr)];
-        }
-
-        if (mpi_rank == 0) std::cout << "num_appearance\tcount" << std::endl;
-        for (uint16_t i = 0; i < local_count.size(); ++i) {
-          uint64_t global_sum = mpi_all_reduce(local_count[i], std::plus<uint64_t>(), MPI_COMM_WORLD);
-          if (mpi_rank == 0) {
-            std::cout << i << "\t" << global_sum << std::endl;
-          }
+        if (visited_total > 1) {
+          std::cout
+            << "Visited total = " << visited_total << std::endl
+            << "BFS Time = " << time_end - time_start << std::endl;
+          time += time_end - time_start;
+          ++count;
         }
       }
+      if (mpi_rank == 0) {
+        std::cout << "Count BFS = " << count << std::endl;
+        std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;
+      }
+//
+//      {
+//        std::vector<size_t> local_count(100, 0);
+//        for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
+//          auto vector = bfs_max_level_data[*vitr];
+//          std::sort(vector.begin(), vector.end());
+//          auto itr = std::unique(vector.begin(), vector.end());
+//          if (vector[0] == std::numeric_limits<uint16_t>::max()) continue;
+//          ++local_count[std::distance(vector.begin(), itr)];
+//        }
+//
+//        if (mpi_rank == 0) std::cout << "num_appearance\tcount" << std::endl;
+//        for (uint16_t i = 0; i < local_count.size(); ++i) {
+//          uint64_t global_sum = mpi_all_reduce(local_count[i], std::plus<uint64_t>(), MPI_COMM_WORLD);
+//          if (mpi_rank == 0) {
+//            std::cout << i << "\t" << global_sum << std::endl;
+//          }
+//        }
+//      }
 
     }  // End BFS Test
   }  // END Main MPI
