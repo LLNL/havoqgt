@@ -193,8 +193,11 @@ int main(int argc, char** argv) {
     {
 
       graph_type::vertex_data<uint16_t, std::allocator<uint16_t>> bfs_max_level_data(*graph);
+      graph_type::vertex_data<uint16_t, std::allocator<uint16_t>> next_bfs_max_level_data(*graph);
       graph_type::vertex_data<k_visit_bitmap, std::allocator<k_visit_bitmap>> bfs_visit_bitmap(*graph);
+      graph_type::vertex_data<k_visit_bitmap, std::allocator<k_visit_bitmap>> next_bfs_visit_bitmap(*graph);
       graph_type::vertex_data<bool, std::allocator<bool>> bfs_visit_flag(*graph);
+      graph_type::vertex_data<bool, std::allocator<bool>> next_bfs_visit_flag(*graph);
 
       MPI_Barrier(MPI_COMM_WORLD);
       if (mpi_rank == 0) {
@@ -241,27 +244,34 @@ int main(int argc, char** argv) {
         source_list.push_back(source);
       }
 
-      bfs_max_level_data.reset(std::numeric_limits<uint16_t>::min());
+      bfs_max_level_data.reset(0);
+      next_bfs_max_level_data.reset(0);
       bfs_visit_bitmap.reset(k_visit_bitmap());
+      next_bfs_visit_bitmap.reset(k_visit_bitmap());
       bfs_visit_flag.reset(false);
+      next_bfs_visit_flag.reset(false);
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      havoqgt::k_breadth_first_search(graph, bfs_max_level_data, bfs_visit_bitmap, bfs_visit_flag, source_list);
+      havoqgt::k_breadth_first_search(graph,
+                                      bfs_max_level_data, next_bfs_max_level_data,
+                                      bfs_visit_bitmap, next_bfs_visit_bitmap,
+                                      bfs_visit_flag, next_bfs_visit_flag,
+                                      source_list);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
 
       uint64_t visited_total(0);
       // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-      for (uint64_t level = 0; level < 10; ++level) {
+      for (uint64_t level = 0; level < 20; ++level) {
         uint64_t local_count(0);
         graph_type::vertex_iterator vitr;
         for (vitr = graph->vertices_begin();
              vitr != graph->vertices_end();
              ++vitr) {
           if (bfs_max_level_data[*vitr] == level) {
-            ++local_count;
+            if (graph->degree(*vitr) > 0) ++local_count;
           }
         }
 
@@ -271,7 +281,7 @@ int main(int argc, char** argv) {
              citr != graph->controller_end();
              ++citr) {
           if (bfs_max_level_data[*citr] == level) {
-            ++local_count;
+            if (graph->degree(*citr) > 0) ++local_count;
           }
         }
 

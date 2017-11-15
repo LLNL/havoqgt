@@ -14,7 +14,7 @@ using bitmap_base_type = uint64_t;
 inline constexpr size_t bitmap_size (const size_t size)
 {
   return (size == 0) ? 0 :
-         (size - 1ULL) / (sizeof(uint64_t) * 8ULL) + 1ULL;
+         (size - 1ULL) / (sizeof(bitmap_base_type) * 8ULL) + 1ULL;
 }
 
 /// examples
