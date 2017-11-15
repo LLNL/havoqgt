@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
 
       uint64_t visited_total(0);
       // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-      for (uint64_t level = 0; level < 20; ++level) {
+      for (uint64_t level = 0; level < 1ULL << 64; ++level) {
         uint64_t local_count(0);
         graph_type::vertex_iterator vitr;
         for (vitr = graph->vertices_begin();

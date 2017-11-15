@@ -59,10 +59,14 @@
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 #include <havoqgt/bitmap.hpp>
 
+
 namespace havoqgt
 {
-constexpr int k_num_sources = 1024;
-
+#ifdef NUM_SOURCES
+constexpr int k_num_sources = NUM_SOURCES;
+#else
+constexpr int k_num_sources = 64;
+#endif
 
 struct k_visit_bitmap
 {
@@ -302,7 +306,7 @@ void k_breadth_first_search(TGraph* g,
   // Set (pre_visit) BFS sources
   int mpi_rank = 0;
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  for (int i = 0; i < source_list.size(); ++i) {
+  for (uint16_t i = 0; i < source_list.size(); ++i) {
     if (source_list[i].owner() == mpi_rank) {
       vq.queue_visitor(visitor_type(source_list[i], i)); // -> call pre_visit
       level_data[source_list[i]] = next_level_data[source_list[i]];
@@ -313,7 +317,7 @@ void k_breadth_first_search(TGraph* g,
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  for (int i = 0; i < 10; ++i) {// level
+  for (int i = 0; i < std::numeric_limits<uint16_t>::max(); ++i) {// level
     if (mpi_rank == 0) std::cout << "==================== " << i + 1 << " ====================" << std::endl;
 
     vq.init_visitor_traversal_new(); // init_visit -> queue
