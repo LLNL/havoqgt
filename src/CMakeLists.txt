@@ -11,7 +11,7 @@ function(add_exe source)
 endfunction()
 
 #add_exe( generate_rmat )
-#add_exe( ingest_edge_list )
+add_exe( ingest_edge_list )
 add_exe( run_bfs )
 add_exe( run_kbfs_sync )
 #add_exe( run_cc )
