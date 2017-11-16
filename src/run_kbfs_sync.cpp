@@ -146,6 +146,7 @@ int main(int argc, char** argv) {
 
   int mpi_rank(0), mpi_size(0);
 
+
   havoqgt::havoqgt_init(&argc, &argv);
   {
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -155,6 +156,7 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
       havoqgt::get_environment().print();
+      std::cout << "k_num_sources " << k_num_sources << std::endl;
       //print_system_info(false);
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -264,7 +266,7 @@ int main(int argc, char** argv) {
 
       uint64_t visited_total(0);
       // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-      for (uint64_t level = 0; level < 1ULL << 64; ++level) {
+      for (uint16_t level = 0; level < 1024; ++level) {
         uint64_t local_count(0);
         graph_type::vertex_iterator vitr;
         for (vitr = graph->vertices_begin();

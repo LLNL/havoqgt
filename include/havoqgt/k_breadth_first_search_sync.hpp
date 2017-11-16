@@ -71,7 +71,8 @@ constexpr int k_num_sources = 64;
 struct k_visit_bitmap
 {
 
-  static constexpr size_t size = bitmap_size(k_num_sources);
+  using bitmap_base_type = uint64_t;
+  static constexpr size_t size = bitmap_size<bitmap_base_type>(k_num_sources);
   bitmap_base_type bitmap[size] = {0};
 
   inline bool equal(const k_visit_bitmap &rhs) const
@@ -244,7 +245,6 @@ class bfs_visitor {
       vis_queue->queue_visitor(new_visitor);
     }
 
-    // std::get<index_visit_flag>(alg_data)[vertex] = false;
     return true;
   }
 
@@ -317,7 +317,7 @@ void k_breadth_first_search(TGraph* g,
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  for (int i = 0; i < std::numeric_limits<uint16_t>::max(); ++i) {// level
+  for (uint16_t i = 0; i < std::numeric_limits<uint16_t>::max(); ++i) { // level
     if (mpi_rank == 0) std::cout << "==================== " << i + 1 << " ====================" << std::endl;
 
     vq.init_visitor_traversal_new(); // init_visit -> queue
@@ -339,8 +339,11 @@ void k_breadth_first_search(TGraph* g,
       visit_flag[*citr] = next_visit_flag[*citr];
       next_visit_flag[*citr] = false;
     }
-    // MPI_Barrier(MPI_COMM_WORLD);
-    const bool global = mpi_all_reduce(visited_next_vertex, std::plus<bool>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // MPI_LOR is not supporting bool variable?
+    const char wk = static_cast<char>(visited_next_vertex);
+    const char global = mpi_all_reduce(wk, std::logical_or<char>(), MPI_COMM_WORLD);
     if (!global) break;
   }
 
