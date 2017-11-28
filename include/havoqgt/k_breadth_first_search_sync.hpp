@@ -60,8 +60,7 @@
 #include <havoqgt/bitmap.hpp>
 
 
-namespace havoqgt
-{
+
 #ifdef NUM_SOURCES
 constexpr int k_num_sources = NUM_SOURCES;
 #else
@@ -71,9 +70,9 @@ constexpr int k_num_sources = 64;
 struct k_visit_bitmap
 {
 
-  using bitmap_base_type = uint64_t;
-  static constexpr size_t size = bitmap_size<bitmap_base_type>(k_num_sources);
-  bitmap_base_type bitmap[size] = {0};
+  using bitmap_base_t = havoqgt::bitmap_base_type<k_num_sources>;
+  static constexpr size_t size = havoqgt::bitmap_size<bitmap_base_t>(k_num_sources);
+  bitmap_base_t bitmap[size] = {0};
 
   inline bool equal(const k_visit_bitmap &rhs) const
   {
@@ -93,12 +92,12 @@ struct k_visit_bitmap
 
   bool get(const size_t pos) const
   {
-    return get_bit(bitmap, pos);
+    return havoqgt::get_bit(bitmap, pos);
   }
 
   void set(const size_t pos)
   {
-    set_bit(bitmap, pos);
+    havoqgt::set_bit(bitmap, pos);
   }
 } __attribute__ ((packed));
 
@@ -119,8 +118,6 @@ bool is_contain(const k_visit_bitmap &lhs, const k_visit_bitmap &rhs)
     if((lhs.bitmap[i] | rhs.bitmap[i]) > lhs.bitmap[i]) return false;
   }
   return true;
-}
-
 }
 
 namespace havoqgt {
@@ -314,7 +311,6 @@ void k_breadth_first_search(TGraph* g,
       visit_flag[source_list[i]] = true;
     }
   }
-
   MPI_Barrier(MPI_COMM_WORLD);
 
   for (uint16_t i = 0; i < std::numeric_limits<uint16_t>::max(); ++i) { // level
@@ -345,6 +341,7 @@ void k_breadth_first_search(TGraph* g,
     const char wk = static_cast<char>(visited_next_vertex);
     const char global = mpi_all_reduce(wk, std::logical_or<char>(), MPI_COMM_WORLD);
     if (!global) break;
+    MPI_Barrier(MPI_COMM_WORLD); // Just in case
   }
 
 }

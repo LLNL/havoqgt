@@ -5,6 +5,8 @@
 #ifndef HAVOQGT_BITMAP_HPP
 #define HAVOQGT_BITMAP_HPP
 
+#include <type_traits>
+
 namespace havoqgt {
 
 namespace detail {
@@ -32,6 +34,24 @@ inline constexpr size_t bitmap_local_pos(const size_t pos)
 }
 }
 
+/// \brief define a proper bitmap underling type based on the number of bits needed
+/// \example
+/// 0 ~ 8   bits -> uint8_t
+/// 9 ~ 16  bits -> uint16_t
+/// 17 ~ 32 bits -> uint32_t
+/// 33~     bits -> uint64_t
+template <size_t num_bits>
+using bitmap_base_type =
+typename std::conditional<num_bits <= 8,
+                          uint8_t,
+                          typename std::conditional<num_bits <= 16,
+                                                   uint16_t,
+                                                   typename std::conditional<num_bits <= 32,
+                                                                            uint32_t,
+                                                                            uint64_t
+                                                   >::type
+                          >::type
+>::type;
 
 /// exapmles: bitmap_base_type = uint64_t
 /// input 1 ~ 64 -> return 1;  input 65 ~ 128 -> return 2
