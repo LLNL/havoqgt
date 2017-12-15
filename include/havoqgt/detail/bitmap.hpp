@@ -32,7 +32,7 @@ inline constexpr size_t bitmap_local_pos(const size_t pos)
 {
   return pos & (sizeof(bitmap_base_type) * 8 - 1);
 }
-}
+
 
 /// \brief define a proper bitmap underling type based on the number of bits needed
 /// \example
@@ -64,16 +64,17 @@ inline constexpr size_t bitmap_size(const size_t size)
 template <typename bitmap_base_type>
 inline constexpr bool get_bit(const bitmap_base_type* const bitmap, const size_t pos)
 {
-  return bitmap[detail::bitmap_global_pos<bitmap_base_type>(pos)]
-         & (0x1ULL << detail::bitmap_local_pos<bitmap_base_type>(pos));
+  return bitmap[bitmap_global_pos<bitmap_base_type>(pos)]
+         & (0x1ULL << bitmap_local_pos<bitmap_base_type>(pos));
 }
 
 template <typename bitmap_base_type>
 inline void set_bit(bitmap_base_type* const bitmap, const size_t pos)
 {
-  bitmap[detail::bitmap_global_pos<bitmap_base_type>(pos)]
-    |= (0x1ULL << detail::bitmap_local_pos<bitmap_base_type>(pos));
+  bitmap[bitmap_global_pos<bitmap_base_type>(pos)]
+    |= (0x1ULL << bitmap_local_pos<bitmap_base_type>(pos));
 }
 
-} // end namespace havoqgt
+} // namespace detail
+} // namespace havoqgt
 #endif //HAVOQGT_BITMAP_HPP
