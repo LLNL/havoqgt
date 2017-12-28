@@ -72,14 +72,81 @@
 #include <functional>
 #include <unordered_map>
 #include <array>
+#include <chrono>
+#include <random>
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
+// -------------------------------------------------------------------------------------------------------------- //
+// Types
+// -------------------------------------------------------------------------------------------------------------- //
 using namespace havoqgt;
 
-using level_t = uint16_t;
-using level_array = std::array<level_t, k_num_sources>;
+using segment_manager_t = havoqgt::distributed_db::segment_manager_type ;
 
+using graph_t                       = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+using level_t                       = uint16_t;
+using k_level_t                     = std::array<level_t, k_num_sources>;
+
+// -------------------------------------------------------------------------------------------------------------- //
+// Data structure
+// -------------------------------------------------------------------------------------------------------------- //
+struct kbfs_vertex_data_t
+{
+  using vertex_data_k_level_t         = typename graph_t::vertex_data<k_level_t, std::allocator<k_level_t>>;
+  using vertex_data_k_visit_bitmap_t  = typename graph_t::vertex_data<visit_bitmap_t, std::allocator<visit_bitmap_t>>;
+  using vertex_data_visit_flag_t      = typename graph_t::vertex_data<bool, std::allocator<bool>>;
+
+  kbfs_vertex_data_t(const graph_t& graph)
+    : level(graph),
+      visit_bitmap(graph),
+      next_visit_bitmap(graph),
+      visit_flag(graph),
+      next_visit_flag(graph) { }
+
+  void init()
+  {
+    k_level_t zero_initialied;
+    zero_initialied.fill(0);
+    level.reset(zero_initialied);
+
+    visit_bitmap.reset(visit_bitmap_t());
+    next_visit_bitmap.reset(visit_bitmap_t());
+
+    visit_flag.reset(false);
+    next_visit_flag.reset(false);
+  }
+
+  vertex_data_k_level_t level;
+  vertex_data_k_visit_bitmap_t visit_bitmap;
+  vertex_data_k_visit_bitmap_t next_visit_bitmap;
+  vertex_data_visit_flag_t visit_flag; // whether visited at the previous level
+  vertex_data_visit_flag_t next_visit_flag;
+};
+
+
+struct ecc_vertex_data_t
+{
+  using vertex_data_ecc_t = typename graph_t::vertex_data<level_t, std::allocator<level_t>>;
+
+  ecc_vertex_data_t(const graph_t &graph)
+    : lower(graph),
+      upper(graph) { }
+
+  void init()
+  {
+    lower.reset(std::numeric_limits<level_t>::min());
+    upper.reset(std::numeric_limits<level_t>::max());
+  }
+
+  vertex_data_ecc_t lower;
+  vertex_data_ecc_t upper;
+};
+
+
+// -------------------------------------------------------------------------------------------------------------- //
+// Parse command line
+// -------------------------------------------------------------------------------------------------------------- //
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
@@ -90,7 +157,9 @@ void usage()  {
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, std::vector<uint64_t>& source_vertex_list) {
+void parse_cmd_line(int argc, char** argv, std::string& input_filename,
+                    std::string& backup_filename,
+                    std::vector<uint64_t>& source_id_list) {
   if(havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -100,7 +169,6 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
   }
 
   bool found_input_filename = false;
-  source_vertex_list.clear();
 
   char c;
   bool prn_help = false;
@@ -114,7 +182,8 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
         std::string buf;
         std::stringstream sstrm(optarg);
         while (std::getline(sstrm, buf, ':'))
-          source_vertex_list.push_back(atoll(buf.c_str()));
+          source_id_list.push_back(std::stoull(buf.c_str()));
+        assert(source_id_list.size() == k_num_sources);
         break;
       }
       case 'i':
@@ -130,15 +199,111 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
         break;
     }
   }
-  if (prn_help || !found_input_filename || (source_vertex_list.size() != k_num_sources)) {
+  if (prn_help || !found_input_filename) {
     usage();
     exit(-1);
   }
 }
 
+
+// -------------------------------------------------------------------------------------------------------------- //
+// select_source
+// -------------------------------------------------------------------------------------------------------------- //
+void select_source(const graph_t *const graph, std::vector<uint64_t> &source_id_list)
+{
+
+  std::vector<uint64_t> global_source_id_list;
+  havoqgt::mpi_all_gather(source_id_list, global_source_id_list, MPI_COMM_WORLD);
+
+  std::mt19937 generator(123);
+  std::uniform_int_distribution<size_t> dist(0, global_source_id_list.size());
+  std::random_shuffle(global_source_id_list.begin(), global_source_id_list.end(), [&](size_t i) {
+    return dist(generator);
+  });
+  if (global_source_id_list.size() >= k_num_sources) global_source_id_list.resize(k_num_sources); // discard candidates
+
+  source_id_list = std::move(global_source_id_list);
+}
+
+// -------------------------------------------------------------------------------------------------------------- //
+// compute_ecc_k_source
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename iterator_t>
+void compute_ecc_k_source(iterator_t vitr, iterator_t end,
+                          const kbfs_vertex_data_t &kbfs_vertex_data,
+                          k_level_t &k_source_ecc)
+{
+  for (; vitr != end; ++vitr) {
+    for (size_t i = 0; i < k_num_sources; ++i) {
+      k_source_ecc[i] = std::max(kbfs_vertex_data.level[*vitr][i], k_source_ecc[i]);
+    }
+  }
+}
+
+
+// -------------------------------------------------------------------------------------------------------------- //
+// bound_ecc
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename iterator_t>
+std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
+                                    iterator_t vitr,
+                                    iterator_t end,
+                                    const kbfs_vertex_data_t &kbfs_vertex_data,
+                                    const k_level_t &k_source_ecc,
+                                    ecc_vertex_data_t &ecc_vertex_data,
+                                    std::vector<uint64_t>& source_candidate_id_list)
+{
+  size_t num_completed_vertices(0);
+  size_t num_non_completed_vertices(0);
+
+  for (; vitr != end; ++vitr) {
+    if (!(kbfs_vertex_data.visit_bitmap[*vitr].has_bit())) continue;
+
+    auto& current_lower = ecc_vertex_data.lower[*vitr];
+    auto& current_upper = ecc_vertex_data.upper[*vitr];
+    if (current_lower == current_upper) continue; // Exact ecc has been already found
+
+    bool completed = false;
+    for (size_t k = 0; k < k_num_sources; ++k) {
+      auto& level = kbfs_vertex_data.level[*vitr][k];
+
+      current_lower = std::max(std::max(current_lower, static_cast<uint16_t>(k_source_ecc[k] - level)), level);
+      current_upper = std::min(current_upper, static_cast<uint16_t>(k_source_ecc[k] + level));
+
+      if (current_lower == current_upper) {
+        completed = true;
+        break;
+      }
+    }
+    num_completed_vertices += completed;
+    num_non_completed_vertices += !completed;
+
+    // While updating ecc boundly, correct the candidate of next BFS sources
+    if (!completed && source_candidate_id_list.size() < k_num_sources) {
+      source_candidate_id_list.push_back(graph->locator_to_label(*vitr));
+    }
+  }
+
+  return std::make_pair(num_completed_vertices, num_non_completed_vertices);
+}
+
+// -------------------------------------------------------------------------------------------------------------- //
+// find_max_ecc
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename iterator_t>
+level_t find_max_ecc(iterator_t vitr, iterator_t end, ecc_vertex_data_t &ecc_vertex_data)
+{
+  level_t max_ecc = std::numeric_limits<level_t>::min();
+  for (; vitr != end; ++vitr) {
+    max_ecc = std::max(max_ecc, ecc_vertex_data.lower[*vitr]);
+  }
+  return max_ecc;
+}
+
+// -------------------------------------------------------------------------------------------------------------- //
+// Main
+// -------------------------------------------------------------------------------------------------------------- //
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -157,26 +322,23 @@ int main(int argc, char** argv) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-
+    // ---------------------------------------- Parsing options ---------------------------------------- //
     std::string graph_input;
     std::string backup_filename;
-    std::vector<uint64_t> source_vertex_list;
+    std::vector<uint64_t> source_id_list;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, source_vertex_list);
-
-    if (source_vertex_list.empty()) {
-      source_vertex_list.push_back(0);
-    }
+    parse_cmd_line(argc, argv, graph_input, backup_filename, source_id_list);
 
     MPI_Barrier(MPI_COMM_WORLD);
+
+    // ---------------------------------------- Prepare graph ---------------------------------------- //
     if(backup_filename.size() > 0) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
     havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
-    graph_type *graph = ddb.get_segment_manager()->
-      find<graph_type>("graph_obj").first;
+    graph_t *graph = ddb.get_segment_manager()->find<graph_t>("graph_obj").first;
     assert(graph != nullptr);
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -186,125 +348,146 @@ int main(int argc, char** argv) {
     //graph->print_graph_statistics();
     MPI_Barrier(MPI_COMM_WORLD);
 
+    const double total_start_time = MPI_Wtime();
+    // ---------------------------------------- Compute diameter ---------------------------------------- //
+    kbfs_vertex_data_t kbfs_vertex_data(*graph);
+    ecc_vertex_data_t ecc_vertex_data(*graph);
 
-    // BFS Experiments
+    // ------------------------------ Init vertex data ------------------------------ //
     {
-
-      graph_type::vertex_data<level_array, std::allocator<level_array>> bfs_level_data(*graph);
-      graph_type::vertex_data<level_array, std::allocator<level_array>> next_bfs_level_data(*graph);
-      graph_type::vertex_data<visit_bitmap_t, std::allocator<visit_bitmap_t>> bfs_visit_bitmap(*graph);
-      graph_type::vertex_data<visit_bitmap_t, std::allocator<visit_bitmap_t>> next_bfs_visit_bitmap(*graph);
-      graph_type::vertex_data<bool, std::allocator<bool>> bfs_visit_flag(*graph);
-      graph_type::vertex_data<bool, std::allocator<bool>> next_bfs_visit_flag(*graph);
-
+      const double time_start = MPI_Wtime();
+      ecc_vertex_data.init();
       MPI_Barrier(MPI_COMM_WORLD);
-      if (mpi_rank == 0) {
-        std::cout << "BFS data allocated.  Starting BFS from vertex: ";
-        for (const auto& s : source_vertex_list) {
-          std::cout << " " << s;
+      if (mpi_rank == 0) std::cout << "Allocated vertex data" << std::endl;
+      const double time_end = MPI_Wtime();
+      if (mpi_rank == 0) std::cout << "Init vertex data " << time_end - time_start << std::endl;
+    }
+
+    size_t current_iteration_number(0);
+    while (true) {
+      if (mpi_rank == 0) std::cout << "\n==================== " << current_iteration_number << " ====================" << std::endl;
+
+      // ------------------------------ Init BFS ------------------------------ //
+      {
+        const double time_start = MPI_Wtime();
+        kbfs_vertex_data.init();
+        MPI_Barrier(MPI_COMM_WORLD);
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) std::cout << "BFS initialization " << time_end - time_start << std::endl;
+      }
+
+      // ------------------------------ Select sources ------------------------------ //
+      std::vector<typename graph_t::vertex_locator> source_locator_list;
+      {
+        const double time_start = MPI_Wtime();
+        if (current_iteration_number > 0) {
+          select_source(graph, source_id_list);
         }
-        std::cout << std::endl;
-      }
-
-      //  Run BFS experiments
-      double time(0);
-      int count(0);
-      std::vector<graph_type::vertex_locator> source_list;
-      for (auto& source_vertex : source_vertex_list) {
-        uint64_t isource = source_vertex;
-        graph_type::vertex_locator source = graph->label_to_locator(isource);
-        uint64_t global_degree(0);
-        do {
-          uint64_t local_degree = 0;
-          source = graph->label_to_locator(isource);
-          if (source.is_delegate()) {
-            break;
-          }
-          if (uint32_t(mpi_rank) == source.owner()) {
-            local_degree = graph->degree(source);
-          }
-          global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(),
-                                         MPI_COMM_WORLD);
-          if (global_degree == 0) ++isource;
-        } while (global_degree == 0);
-        if (uint32_t(mpi_rank) == source.owner()) {
-          if (isource != source_vertex) {
-            std::cout << "\nVertex " << source_vertex << " has a degree of 0.   New source vertex = " << isource
-                      << std::endl;
-          } else {
-            std::cout << "\nStarting vertex = " << isource << std::endl;
-          }
-          std::cout << "delegate? = " << source.is_delegate() << std::endl;
-          std::cout << "local_id = " << source.local_id() << std::endl;
-          std::cout << "degree = " << graph->degree(source) << std::endl;
+        for (auto& source_id : source_id_list) {
+          source_locator_list.push_back(graph->label_to_locator(source_id));
         }
-        source_vertex = isource;
-        source_list.push_back(source);
+        MPI_Barrier(MPI_COMM_WORLD);
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) std::cout << "Select sources " << time_end - time_start << std::endl;
       }
 
-      level_array zero_initialied;
-      zero_initialied.fill(0);
-      bfs_level_data.reset(zero_initialied);
-      next_bfs_level_data.reset(zero_initialied);
-      bfs_visit_bitmap.reset(visit_bitmap_t());
-      next_bfs_visit_bitmap.reset(visit_bitmap_t());
-      bfs_visit_flag.reset(false);
-      next_bfs_visit_flag.reset(false);
+      // ------------------------------ KBFS ------------------------------ //
+      {
+        const double time_start = MPI_Wtime();
+        const level_t max_level = havoqgt::k_breadth_first_search_level_per_source(graph,
+                                                                                   kbfs_vertex_data.level,
+                                                                                   kbfs_vertex_data.visit_bitmap,
+                                                                                   kbfs_vertex_data.next_visit_bitmap,
+                                                                                   kbfs_vertex_data.visit_flag,
+                                                                                   kbfs_vertex_data.next_visit_flag,
+                                                                                   source_locator_list);
+        MPI_Barrier(MPI_COMM_WORLD);
+        const double time_end = MPI_Wtime();
 
-      MPI_Barrier(MPI_COMM_WORLD);
-      double time_start = MPI_Wtime();
-      const level_t max_level = havoqgt::k_breadth_first_search_level_per_source(graph,
-                                                                                 bfs_level_data,
-                                                                                 next_bfs_level_data,
-                                                                                 bfs_visit_bitmap,
-                                                                                 next_bfs_visit_bitmap,
-                                                                                 bfs_visit_flag,
-                                                                                 next_bfs_visit_flag,
-                                                                                 source_list);
-      MPI_Barrier(MPI_COMM_WORLD);
-      double time_end = MPI_Wtime();
+        if (mpi_rank == 0) std::cout << "BFS Time = " << time_end - time_start << std::endl;
+      }
 
+      // ------------------------------ Find ECC for k sources ------------------------------ //
+      k_level_t k_source_ecc;
+      {
+        const double time_start = MPI_Wtime();
+        k_source_ecc.fill(0);
 
-      uint64_t visited_total(0);
-//      // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-//      for (level_t level = 0; level <= max_level; ++level) {
-//        uint64_t local_count(0);
-//        graph_type::vertex_iterator vitr;
-//        for (vitr = graph->vertices_begin();
-//             vitr != graph->vertices_end();
-//             ++vitr) {
-//          if (bfs_max_level_data[*vitr] == level) {
-//            if (graph->degree(*vitr) > 0) ++local_count;
-//          }
-//        }
-//
-//        // Count the controllers!
-//        graph_type::controller_iterator citr;
-//        for (citr = graph->controller_begin();
-//             citr != graph->controller_end();
-//             ++citr) {
-//          if (bfs_max_level_data[*citr] == level) {
-//            if (graph->degree(*citr) > 0) ++local_count;
-//          }
-//        }
-//
-//        uint64_t global_count = mpi_all_reduce(local_count,
-//                                               std::plus<uint64_t>(), MPI_COMM_WORLD);
-//        visited_total += global_count;
-//        if (mpi_rank == 0 && global_count > 0) {
-//          std::cout << "Level " << level << ": " << global_count << std::endl;
-//        }
-//        // if (global_count == 0) {
-//        //   break;
-//        // }
-//      }  // end for level
+        compute_ecc_k_source(graph->vertices_begin(), graph->vertices_end(), kbfs_vertex_data, k_source_ecc);
+        compute_ecc_k_source(graph->controller_begin(), graph->controller_end(), kbfs_vertex_data, k_source_ecc);
+        for (size_t k = 0; k < source_id_list.size(); ++k) {
+          if (source_locator_list[k].owner() == mpi_rank) {
+            ecc_vertex_data.lower[source_locator_list[k]] = ecc_vertex_data.upper[source_locator_list[k]] = k_source_ecc[k];
+          }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) std::cout << "Find ECC for k sources = " << time_end - time_start << std::endl;
+      }
+
+      // ------------------------------ Bound ECC ------------------------------ //
+      size_t num_completed_vertices = 0;
+      size_t num_non_completed_vertices = 0;
+      {
+        const double time_start = MPI_Wtime();
+        source_id_list.clear();
+
+        {
+          auto ret = bound_ecc(graph,
+                               graph->vertices_begin(),
+                               graph->vertices_end(),
+                               kbfs_vertex_data,
+                               k_source_ecc,
+                               ecc_vertex_data,
+                               source_id_list);
+          num_completed_vertices += ret.first;
+          num_non_completed_vertices += ret.second;
+        }
+
+        {
+          auto ret = bound_ecc(graph,
+                               graph->controller_begin(),
+                               graph->controller_end(),
+                               kbfs_vertex_data,
+                               k_source_ecc,
+                               ecc_vertex_data,
+                               source_id_list);
+          num_completed_vertices += ret.first;
+          num_non_completed_vertices += ret.second;
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) std::cout << "Update ECC bounds = " << time_end - time_start << std::endl;
+      }
+
+      // ---------------------------------------- Check termination ---------------------------------------- //
+      {
+        const char wk = static_cast<char>(source_id_list.size() > 0);
+        const char global = mpi_all_reduce(wk, std::logical_or<char>(), MPI_COMM_WORLD);
+        if (!global) break;
+        MPI_Barrier(MPI_COMM_WORLD); // Just in case
+      }
+      ++current_iteration_number;
+    } // End Exact ECC
+
+    // ------------------------------ Compute diameter ------------------------------ //
+    {
+      const double time_start = MPI_Wtime();
+      level_t max_ecc1 = find_max_ecc(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data);
+      level_t max_ecc2 = find_max_ecc(graph->controller_begin(), graph->controller_end(), ecc_vertex_data);
+      const level_t max_ecc = std::max(max_ecc1, max_ecc2);
+      const level_t diameter = mpi_all_reduce(max_ecc, std::greater<level_t>(), MPI_COMM_WORLD);
+      const double time_end = MPI_Wtime();
 
       if (mpi_rank == 0) {
-          std::cout << "Visited total = " << visited_total << std::endl
-                    << "BFS Time = " << time_end - time_start << std::endl;
-          time += time_end - time_start;
+        std::cout << "\nCompute diameter = " << time_end - time_start << std::endl;
+        std::cout << "Diameter = " << diameter << std::endl;
       }
-    }  // End BFS Test
+    } // End Compute diameter
+
+    const double total_end_time = MPI_Wtime();
+    if (mpi_rank == 0) std::cout << "Total execution time = " << total_end_time - total_start_time << std::endl;
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 

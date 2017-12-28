@@ -6,3 +6,6 @@ Makefile
 build/*
 *.cobaltlog
 *.error
+cmake-build-debug
+.idea
+.idea/*

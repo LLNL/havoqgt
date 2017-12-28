@@ -67,6 +67,15 @@ constexpr int k_num_sources = 64;
 
 using visit_bitmap_t = typename havoqgt::k_visit_bitmap<k_num_sources>;
 
+template <size_t num_sources>
+bool is_contain(const visit_bitmap_t &lhs, const visit_bitmap_t &rhs)
+{
+  for (size_t i = 0; i < visit_bitmap_t::size; ++i) {
+    if ((lhs.bitmap[i] | rhs.bitmap[i]) > lhs.bitmap[i]) return false;
+  }
+  return true;
+}
+
 namespace havoqgt {
 
 template<typename Graph, typename VisitBitmap>

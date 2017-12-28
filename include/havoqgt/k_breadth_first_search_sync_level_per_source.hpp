@@ -63,41 +63,40 @@
 #ifdef NUM_SOURCES
 constexpr int k_num_sources = NUM_SOURCES;
 #else
-constexpr int k_num_sources = 64;
+constexpr int k_num_sources = 8;
 #endif
 
 using visit_bitmap_t = typename havoqgt::k_visit_bitmap<k_num_sources>;
 
 // Should add to graph object?
-uint16_t current_level;
+uint16_t g_current_level;
 
 namespace havoqgt {
 
 template<typename Graph, typename VisitBitmap>
-class bfs_visitor {
+class kbfs_visitor {
  private:
   static constexpr int index_level = 0;
-  static constexpr int index_next_level = 1;
-  static constexpr int index_bitmap = 2;
-  static constexpr int index_next_bitmap = 3;
-  static constexpr int index_visit_flag = 4;
-  static constexpr int index_next_visit_flag = 5;
+  static constexpr int index_bitmap = 1;
+  static constexpr int index_next_bitmap = 2;
+  static constexpr int index_visit_flag = 3;
+  static constexpr int index_next_visit_flag = 4;
 
  public:
   typedef typename Graph::vertex_locator                 vertex_locator;
 
-  bfs_visitor()
+  kbfs_visitor()
     : vertex(),
       // m_level(0),
       m_visit_bitmap() { }
 
-  explicit bfs_visitor(vertex_locator _vertex)
+  explicit kbfs_visitor(vertex_locator _vertex)
     : vertex(_vertex),
       // m_level(0),
       m_visit_bitmap()
   { }
 
-  bfs_visitor(vertex_locator _vertex, uint16_t _source_no)
+  kbfs_visitor(vertex_locator _vertex, uint16_t _source_no)
     : vertex(_vertex),
       // m_level(0),
       m_visit_bitmap()
@@ -106,8 +105,8 @@ class bfs_visitor {
   }
 
 #pragma GCC diagnostic pop
-  bfs_visitor(vertex_locator _vertex, visit_bitmap_t _visit_bitmap)
-  // bfs_visitor(vertex_locator _vertex, uint16_t _level, visit_bitmap_t _visit_bitmap)
+  kbfs_visitor(vertex_locator _vertex, visit_bitmap_t _visit_bitmap)
+  // kbfs_visitor(vertex_locator _vertex, uint16_t _level, visit_bitmap_t _visit_bitmap)
     : vertex(_vertex),
       // m_level(_level),
       m_visit_bitmap(_visit_bitmap) { }
@@ -120,13 +119,13 @@ class bfs_visitor {
 
     if (!std::get<index_visit_flag>(alg_data)[vertex]) return false;
 
-    // const auto current_level = std::get<index_level>(alg_data)[vertex];
+    // const auto g_current_level = std::get<index_level>(alg_data)[vertex];
     const auto& current_bitmap = std::get<index_bitmap>(alg_data)[vertex];
     typedef typename Graph::edge_iterator eitr_type;
     for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
       vertex_locator neighbor = eitr.target();
-      bfs_visitor new_visitor(neighbor, current_bitmap);
-      // bfs_visitor new_visitor(neighbor, current_level + 1, current_bitmap);
+      kbfs_visitor new_visitor(neighbor, current_bitmap);
+      // kbfs_visitor new_visitor(neighbor, g_current_level + 1, current_bitmap);
       vis_queue->queue_visitor(new_visitor);
     }
 
@@ -141,12 +140,12 @@ class bfs_visitor {
 
     visit_bitmap_t& next_visit_bitmap = std::get<index_next_bitmap>(alg_data)[vertex];
 
-    for (size_t i = 0; i < visit_bitmap_t::num_sources; ++i) {
+    for (size_t i = 0; i < visit_bitmap_t::num_bit; ++i) {
       bool next_visited_bit = next_visit_bitmap.get(i);
       if (!next_visited_bit && m_visit_bitmap.get(i)) {
         next_visit_bitmap.set(i);
         std::get<index_next_visit_flag>(alg_data)[vertex] = true;
-        std::get<index_next_level>(alg_data)[vertex][i] = current_level + 1;
+        std::get<index_level>(alg_data)[vertex][i] = g_current_level + 1;
       }
     }
     return false;
@@ -160,11 +159,11 @@ class bfs_visitor {
   // uint16_t level() const {  return m_level; }
   typename VisitBitmap::value_type visit_bitmap() const {  return m_visit_bitmap; }
 
-  friend inline bool operator>(const bfs_visitor& v1, const bfs_visitor& v2) {
+  friend inline bool operator>(const kbfs_visitor& v1, const kbfs_visitor& v2) {
     return v1.vertex < v2.vertex; // or source?
   }
 
-  friend inline bool operator<(const bfs_visitor &v1, const bfs_visitor &v2) {
+  friend inline bool operator<(const kbfs_visitor &v1, const kbfs_visitor &v2) {
     return v1.vertex < v2.vertex; // or source?
   }
 
@@ -177,20 +176,17 @@ class bfs_visitor {
 template <typename TGraph, typename LevelData, typename VisitBitmapData, typename VisitFlagData>
 uint16_t k_breadth_first_search_level_per_source(TGraph *g,
                                                  LevelData &level_data,
-                                                 LevelData &next_level_data,
                                                  VisitBitmapData &visit_bitmap,
                                                  VisitBitmapData &next_visit_bitmap,
                                                  VisitFlagData &visit_flag,
                                                  VisitFlagData &next_visit_flag,
                                                  std::vector<typename TGraph::vertex_locator> source_list)
 {
-  typedef  bfs_visitor<TGraph, VisitBitmapData>    visitor_type;
-  auto alg_data = std::forward_as_tuple(level_data, next_level_data,
-                                        visit_bitmap, next_visit_bitmap,
-                                        visit_flag, next_visit_flag);
+  typedef  kbfs_visitor<TGraph, VisitBitmapData>    visitor_type;
+  auto alg_data = std::forward_as_tuple(level_data, visit_bitmap, next_visit_bitmap, visit_flag, next_visit_flag);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
-  current_level = 0;
+  g_current_level = 0;
 
   // Set (pre_visit) BFS sources
   int mpi_rank = 0;
@@ -198,50 +194,46 @@ uint16_t k_breadth_first_search_level_per_source(TGraph *g,
   for (uint16_t i = 0; i < source_list.size(); ++i) {
     if (source_list[i].owner() == mpi_rank) {
       vq.queue_visitor(visitor_type(source_list[i], i)); // -> call pre_visit
-      level_data[source_list[i]] = next_level_data[source_list[i]];
       visit_bitmap[source_list[i]] = next_visit_bitmap[source_list[i]];
       visit_flag[source_list[i]] = true;
     }
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
-  ++current_level;
-  while (current_level < std::numeric_limits<uint16_t>::max()) { // level
-    if (mpi_rank == 0) std::cout << "==================== " << current_level << " ====================" << std::endl;
-
+  ++g_current_level;
+  while (g_current_level < std::numeric_limits<uint16_t>::max()) { // level
     vq.init_visitor_traversal_new(); // init_visit -> queue
 
-    bool visited_next_vertex = false;
+    size_t num_visited_vertices = 0;
     for (auto vitr = g->vertices_begin(), end = g->vertices_end(); vitr != end; ++vitr) {
-      level_data[*vitr] = next_level_data[*vitr];
       visit_bitmap[*vitr] = next_visit_bitmap[*vitr];
-      visited_next_vertex |= next_visit_flag[*vitr];
+      num_visited_vertices += next_visit_flag[*vitr];
       visit_flag[*vitr] = next_visit_flag[*vitr];
       next_visit_flag[*vitr] = false;
     }
 
     // Count the controllers!
     for (auto citr = g->controller_begin(), end = g->controller_end(); citr != end; ++citr) {
-      level_data[*citr] = next_level_data[*citr];
       visit_bitmap[*citr] = next_visit_bitmap[*citr];
-      visited_next_vertex |= next_visit_flag[*citr];
+      num_visited_vertices += next_visit_flag[*citr];
       visit_flag[*citr] = next_visit_flag[*citr];
       next_visit_flag[*citr] = false;
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    const char wk = static_cast<char>(visited_next_vertex);
-    const char global = mpi_all_reduce(wk, std::logical_or<char>(), MPI_COMM_WORLD);
-    if (!global) break;
+    const size_t global = mpi_all_reduce(num_visited_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
+    if (global == 0) break;
+
+    if (mpi_rank == 0) {
+      std::cout << "Level: " << g_current_level << std::endl;
+      std::cout << "# visited vertices: " << global << std::endl;
+    }
     MPI_Barrier(MPI_COMM_WORLD); // Just in case
-    ++current_level;
+    ++g_current_level;
   }
 
-  return current_level;
+  return g_current_level;
 }
-
-
-
 } //end namespace havoqgt
 
 #endif //HAVOQGT_K_BREADTH_FIRST_SEARCH_SYNC_LEVEL_PER_SOURCE_HPP
