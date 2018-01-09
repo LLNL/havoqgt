@@ -85,7 +85,6 @@ using namespace havoqgt;
 using segment_manager_t = havoqgt::distributed_db::segment_manager_type ;
 
 using graph_t                       = havoqgt::delegate_partitioned_graph<segment_manager_t>;
-using level_t                       = uint16_t;
 using k_level_t                     = std::array<level_t, k_num_sources>;
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -267,7 +266,7 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
     for (size_t k = 0; k < k_num_sources; ++k) {
       auto& level = kbfs_vertex_data.level[*vitr][k];
 
-      current_lower = std::max(std::max(current_lower, static_cast<uint16_t>(k_source_ecc[k] - level)), level);
+      current_lower = std::max(current_lower, std::max(level, static_cast<uint16_t>(k_source_ecc[k] - level)));
       current_upper = std::min(current_upper, static_cast<uint16_t>(k_source_ecc[k] + level));
 
       if (current_lower == current_upper) {
@@ -278,7 +277,7 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
     num_completed_vertices += completed;
     num_non_completed_vertices += !completed;
 
-    // While updating ecc boundly, correct the candidate of next BFS sources
+    // While updating ecc boundary, correct the candidate of next BFS sources
     if (!completed && source_candidate_id_list.size() < k_num_sources) {
       source_candidate_id_list.push_back(graph->locator_to_label(*vitr));
     }
@@ -352,15 +351,15 @@ int main(int argc, char** argv) {
     // ---------------------------------------- Compute diameter ---------------------------------------- //
     kbfs_vertex_data_t kbfs_vertex_data(*graph);
     ecc_vertex_data_t ecc_vertex_data(*graph);
+    if (mpi_rank == 0) std::cout << "Allocated vertex data: " << std::endl;
 
     // ------------------------------ Init vertex data ------------------------------ //
     {
       const double time_start = MPI_Wtime();
       ecc_vertex_data.init();
       MPI_Barrier(MPI_COMM_WORLD);
-      if (mpi_rank == 0) std::cout << "Allocated vertex data" << std::endl;
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << "Init vertex data " << time_end - time_start << std::endl;
+      if (mpi_rank == 0) std::cout << "Init vertex data: " << time_end - time_start << std::endl;
     }
 
     size_t current_iteration_number(0);
@@ -373,7 +372,7 @@ int main(int argc, char** argv) {
         kbfs_vertex_data.init();
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "BFS initialization " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << "BFS initialization: " << time_end - time_start << std::endl;
       }
 
       // ------------------------------ Select sources ------------------------------ //
@@ -388,23 +387,23 @@ int main(int argc, char** argv) {
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "Select sources " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << "Select sources: " << time_end - time_start << std::endl;
       }
 
       // ------------------------------ KBFS ------------------------------ //
       {
         const double time_start = MPI_Wtime();
-        const level_t max_level = havoqgt::k_breadth_first_search_level_per_source(graph,
-                                                                                   kbfs_vertex_data.level,
-                                                                                   kbfs_vertex_data.visit_bitmap,
-                                                                                   kbfs_vertex_data.next_visit_bitmap,
-                                                                                   kbfs_vertex_data.visit_flag,
-                                                                                   kbfs_vertex_data.next_visit_flag,
-                                                                                   source_locator_list);
+        const kbfs_result_t result = havoqgt::k_breadth_first_search_level_per_source(graph,
+                                                                                      kbfs_vertex_data.level,
+                                                                                      kbfs_vertex_data.visit_bitmap,
+                                                                                      kbfs_vertex_data.next_visit_bitmap,
+                                                                                      kbfs_vertex_data.visit_flag,
+                                                                                      kbfs_vertex_data.next_visit_flag,
+                                                                                      source_locator_list);
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
 
-        if (mpi_rank == 0) std::cout << "BFS Time = " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << "BFS Time: " << time_end - time_start << std::endl;
       }
 
       // ------------------------------ Find ECC for k sources ------------------------------ //
@@ -415,6 +414,7 @@ int main(int argc, char** argv) {
 
         compute_ecc_k_source(graph->vertices_begin(), graph->vertices_end(), kbfs_vertex_data, k_source_ecc);
         compute_ecc_k_source(graph->controller_begin(), graph->controller_end(), kbfs_vertex_data, k_source_ecc);
+        mpi_all_reduce_inplace(k_source_ecc, std::greater<level_t>(), MPI_COMM_WORLD);
         for (size_t k = 0; k < source_id_list.size(); ++k) {
           if (source_locator_list[k].owner() == mpi_rank) {
             ecc_vertex_data.lower[source_locator_list[k]] = ecc_vertex_data.upper[source_locator_list[k]] = k_source_ecc[k];
@@ -422,13 +422,17 @@ int main(int argc, char** argv) {
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "Find ECC for k sources = " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << "Find ECC for k sources: " << time_end - time_start << std::endl;
+        for (size_t k = 0; k < source_id_list.size(); ++k)
+          std::cout << k_source_ecc[k] << " ";
+        std::cout << std::endl;
       }
 
       // ------------------------------ Bound ECC ------------------------------ //
-      size_t num_completed_vertices = 0;
-      size_t num_non_completed_vertices = 0;
       {
+        size_t num_completed_vertices(0);
+        size_t num_non_completed_vertices(0);
+
         const double time_start = MPI_Wtime();
         source_id_list.clear();
 
@@ -455,10 +459,32 @@ int main(int argc, char** argv) {
           num_completed_vertices += ret.first;
           num_non_completed_vertices += ret.second;
         }
-
         MPI_Barrier(MPI_COMM_WORLD);
+
+        size_t global_num_completed_vertices(0);
+        CHK_MPI(MPI_Reduce(&num_completed_vertices,
+                           &global_num_completed_vertices,
+                           1,
+                           mpi_typeof(num_completed_vertices),
+                           MPI_SUM,
+                           0,
+                           MPI_COMM_WORLD));
+
+        size_t global_num_non_completed_vertices(0);
+        CHK_MPI(MPI_Reduce(&num_non_completed_vertices,
+                           &global_num_non_completed_vertices,
+                           1,
+                           mpi_typeof(num_non_completed_vertices),
+                           MPI_SUM,
+                           0,
+                           MPI_COMM_WORLD));
+
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "Update ECC bounds = " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) {
+          std::cout << "Update ECC bounds: " << time_end - time_start << std::endl;
+          std::cout << "# completed vertices: " << global_num_completed_vertices << std::endl;
+          std::cout << "# non-completed vertices: " << global_num_non_completed_vertices << std::endl;
+        }
       }
 
       // ---------------------------------------- Check termination ---------------------------------------- //
@@ -474,20 +500,20 @@ int main(int argc, char** argv) {
     // ------------------------------ Compute diameter ------------------------------ //
     {
       const double time_start = MPI_Wtime();
-      level_t max_ecc1 = find_max_ecc(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data);
-      level_t max_ecc2 = find_max_ecc(graph->controller_begin(), graph->controller_end(), ecc_vertex_data);
-      const level_t max_ecc = std::max(max_ecc1, max_ecc2);
-      const level_t diameter = mpi_all_reduce(max_ecc, std::greater<level_t>(), MPI_COMM_WORLD);
+      const level_t max_ecc = std::max(find_max_ecc(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data),
+                                       find_max_ecc(graph->controller_begin(), graph->controller_end(), ecc_vertex_data));
+      level_t diameter;
+      CHK_MPI(MPI_Reduce(&max_ecc, &diameter, 1, mpi_typeof(max_ecc), MPI_MAX, 0, MPI_COMM_WORLD));
       const double time_end = MPI_Wtime();
 
       if (mpi_rank == 0) {
-        std::cout << "\nCompute diameter = " << time_end - time_start << std::endl;
-        std::cout << "Diameter = " << diameter << std::endl;
+        std::cout << "\nCompute diameter: " << time_end - time_start << std::endl;
+        std::cout << "Diameter: " << diameter << std::endl;
       }
     } // End Compute diameter
 
     const double total_end_time = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "Total execution time = " << total_end_time - total_start_time << std::endl;
+    if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 

@@ -66,10 +66,15 @@ constexpr int k_num_sources = NUM_SOURCES;
 constexpr int k_num_sources = 8;
 #endif
 
+using level_t = uint16_t;
 using visit_bitmap_t = typename havoqgt::k_visit_bitmap<k_num_sources>;
 
+struct kbfs_result_t {
+  level_t level;
+  size_t num_visited_vertices;
+};
 // Should add to graph object?
-uint16_t g_current_level;
+level_t g_current_level;
 
 namespace havoqgt {
 
@@ -174,7 +179,7 @@ class kbfs_visitor {
 
 
 template <typename TGraph, typename LevelData, typename VisitBitmapData, typename VisitFlagData>
-uint16_t k_breadth_first_search_level_per_source(TGraph *g,
+kbfs_result_t k_breadth_first_search_level_per_source(TGraph *g,
                                                  LevelData &level_data,
                                                  VisitBitmapData &visit_bitmap,
                                                  VisitBitmapData &next_visit_bitmap,
@@ -187,11 +192,12 @@ uint16_t k_breadth_first_search_level_per_source(TGraph *g,
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   g_current_level = 0;
+  size_t num_total_visited_vertices(0);
 
   // Set (pre_visit) BFS sources
   int mpi_rank = 0;
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  for (uint16_t i = 0; i < source_list.size(); ++i) {
+  for (int i = 0; i < source_list.size(); ++i) {
     if (source_list[i].owner() == mpi_rank) {
       vq.queue_visitor(visitor_type(source_list[i], i)); // -> call pre_visit
       visit_bitmap[source_list[i]] = next_visit_bitmap[source_list[i]];
@@ -201,38 +207,60 @@ uint16_t k_breadth_first_search_level_per_source(TGraph *g,
   MPI_Barrier(MPI_COMM_WORLD);
 
   ++g_current_level;
-  while (g_current_level < std::numeric_limits<uint16_t>::max()) { // level
-    vq.init_visitor_traversal_new(); // init_visit -> queue
+  while (g_current_level < std::numeric_limits<level_t>::max()) { // level
+    // ------------------------------ Traversal ------------------------------ //
+    {
+      const double time_start = MPI_Wtime();
+      vq.init_visitor_traversal_new(); // init_visit -> queue
+      MPI_Barrier(MPI_COMM_WORLD);
+      const double time_end = MPI_Wtime();
+      if (mpi_rank == 0) {
+        std::cout << "Traversal time: " << time_end - time_start << std::endl;
+      }
+    }
 
+    // ------------------------------ Local update ------------------------------ //
     size_t num_visited_vertices = 0;
-    for (auto vitr = g->vertices_begin(), end = g->vertices_end(); vitr != end; ++vitr) {
-      visit_bitmap[*vitr] = next_visit_bitmap[*vitr];
-      num_visited_vertices += next_visit_flag[*vitr];
-      visit_flag[*vitr] = next_visit_flag[*vitr];
-      next_visit_flag[*vitr] = false;
+    {
+      const double time_start = MPI_Wtime();
+      for (auto vitr = g->vertices_begin(), end = g->vertices_end(); vitr != end; ++vitr) {
+        visit_bitmap[*vitr] = next_visit_bitmap[*vitr];
+        num_visited_vertices += next_visit_flag[*vitr];
+        visit_flag[*vitr] = next_visit_flag[*vitr];
+        next_visit_flag[*vitr] = false;
+      }
+
+      for (auto citr = g->controller_begin(), end = g->controller_end(); citr != end; ++citr) {
+        visit_bitmap[*citr] = next_visit_bitmap[*citr];
+        num_visited_vertices += next_visit_flag[*citr];
+        visit_flag[*citr] = next_visit_flag[*citr];
+        next_visit_flag[*citr] = false;
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+      const double time_end = MPI_Wtime();
+      if (mpi_rank == 0) {
+        std::cout << "Local Update time: " << time_end - -time_start << std::endl;
+      }
     }
 
-    // Count the controllers!
-    for (auto citr = g->controller_begin(), end = g->controller_end(); citr != end; ++citr) {
-      visit_bitmap[*citr] = next_visit_bitmap[*citr];
-      num_visited_vertices += next_visit_flag[*citr];
-      visit_flag[*citr] = next_visit_flag[*citr];
-      next_visit_flag[*citr] = false;
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
+    num_visited_vertices = mpi_all_reduce(num_visited_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // Just in case
 
-    const size_t global = mpi_all_reduce(num_visited_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
-    if (global == 0) break;
+    if (num_visited_vertices == 0) break;
+    num_total_visited_vertices += num_visited_vertices;
 
     if (mpi_rank == 0) {
       std::cout << "Level: " << g_current_level << std::endl;
-      std::cout << "# visited vertices: " << global << std::endl;
+      std::cout << "# visited vertices (not unique): " << num_visited_vertices << std::endl;
     }
-    MPI_Barrier(MPI_COMM_WORLD); // Just in case
     ++g_current_level;
   }
 
-  return g_current_level;
+  if (mpi_rank == 0) {
+    std::cout << "# total visited vertices (not unique): " << num_total_visited_vertices << std::endl;
+  }
+
+  return kbfs_result_t{g_current_level, num_total_visited_vertices};
 }
 } //end namespace havoqgt
 
