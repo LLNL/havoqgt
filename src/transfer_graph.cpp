@@ -42,8 +42,9 @@ int main(int argc, char** argv) {
     std::cout << "Dest = '" << fname_output.c_str() << std::endl;
   }
 
-  fname_input += "_" + std::to_string(mpi_rank);
+ fname_input = fname_input + "_" + std::to_string(mpi_rank) + "_of_" + std::to_string(mpi_size);
  {
+   std::cout << mpi_rank << " open " << fname_input << std::endl;
     std::ifstream fin(fname_input);
     bool is_good = fin.good();
     fin.close();

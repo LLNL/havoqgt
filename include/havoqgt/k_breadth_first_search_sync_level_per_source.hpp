@@ -54,11 +54,18 @@
 
 #ifndef HAVOQGT_K_BREADTH_FIRST_SEARCH_SYNC_LEVEL_PER_SOURCE_HPP
 #define HAVOQGT_K_BREADTH_FIRST_SEARCH_SYNC_LEVEL_PER_SOURCE_HPP
+
+#include <iostream>
+#include <iomanip>
+#include <array>
+#include <limits>
+
 #include <boost/container/deque.hpp>
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
-#include <havoqgt/k_visit_bitmap.hpp>
+#include <havoqgt/detail/bitmap.hpp>
+
 
 #ifdef NUM_SOURCES
 constexpr int k_num_sources = NUM_SOURCES;
@@ -67,19 +74,62 @@ constexpr int k_num_sources = 8;
 #endif
 
 using level_t = uint16_t;
-using visit_bitmap_t = typename havoqgt::k_visit_bitmap<k_num_sources>;
+constexpr level_t k_unvisited_level = std::numeric_limits<level_t>::max();
 
-struct kbfs_result_t {
-  level_t level;
+using k_level_t = std::array<level_t, k_num_sources>;
+using k_bitmap_t = typename havoqgt::detail::static_bitmap<k_num_sources>;
+
+struct kbfs_result_t
+{
+  level_t max_level;
   size_t num_visited_vertices;
 };
+
+
+template <typename graph_t>
+struct kbfs_vertex_data_t
+{
+  using level_array_t = typename graph_t::template vertex_data<k_level_t, std::allocator<k_level_t>>;
+  using visited_sources_bitmap_t = typename graph_t::template vertex_data<k_bitmap_t, std::allocator<k_bitmap_t>>;
+  using visited_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
+
+  kbfs_vertex_data_t(const graph_t &graph)
+    : level(graph),
+      visited_sources_bitmap(graph),
+      new_visited_sources_bitmap(graph),
+      visited_flag(graph),
+      new_visited_flag(graph) { }
+
+  void init()
+  {
+    k_level_t initial_value;
+    initial_value.fill(k_unvisited_level);
+    level.reset(initial_value);
+
+    visited_sources_bitmap.reset(k_bitmap_t());
+    new_visited_sources_bitmap.reset(k_bitmap_t());
+
+    visited_flag.reset(false);
+    new_visited_flag.reset(false);
+  }
+
+  level_array_t level;
+  visited_sources_bitmap_t visited_sources_bitmap;
+  visited_sources_bitmap_t new_visited_sources_bitmap;
+  visited_flag_t visited_flag; // whether visited at the previous level
+  visited_flag_t new_visited_flag;
+};
+
+
 // Should add to graph object?
 level_t g_current_level;
 
-namespace havoqgt {
+namespace havoqgt
+{
 
-template<typename Graph, typename VisitBitmap>
-class kbfs_visitor {
+template <typename Graph, typename VisitBitmap>
+class kbfs_visitor
+{
  private:
   static constexpr int index_level = 0;
   static constexpr int index_bitmap = 1;
@@ -88,177 +138,196 @@ class kbfs_visitor {
   static constexpr int index_next_visit_flag = 4;
 
  public:
-  typedef typename Graph::vertex_locator                 vertex_locator;
+  typedef typename Graph::vertex_locator vertex_locator;
 
   kbfs_visitor()
     : vertex(),
-      // m_level(0),
-      m_visit_bitmap() { }
+      visit_bitmap() { }
 
   explicit kbfs_visitor(vertex_locator _vertex)
     : vertex(_vertex),
-      // m_level(0),
-      m_visit_bitmap()
-  { }
-
-  kbfs_visitor(vertex_locator _vertex, uint16_t _source_no)
-    : vertex(_vertex),
-      // m_level(0),
-      m_visit_bitmap()
-  {
-    m_visit_bitmap.set(_source_no);
-  }
+      visit_bitmap() { }
 
 #pragma GCC diagnostic pop
-  kbfs_visitor(vertex_locator _vertex, visit_bitmap_t _visit_bitmap)
-  // kbfs_visitor(vertex_locator _vertex, uint16_t _level, visit_bitmap_t _visit_bitmap)
+  kbfs_visitor(vertex_locator _vertex, k_bitmap_t _visit_bitmap)
     : vertex(_vertex),
-      // m_level(_level),
-      m_visit_bitmap(_visit_bitmap) { }
+      visit_bitmap(_visit_bitmap) { }
 
-  template<typename VisitorQueueHandle, typename AlgData>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph &g, VisitorQueueHandle vis_queue, AlgData &alg_data)
+  {
     // -------------------------------------------------- //
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
 
-    if (!std::get<index_visit_flag>(alg_data)[vertex]) return false;
+    if (!std::get<index_visit_flag>(alg_data)[vertex]) return false; // TODO: erase?
 
-    // const auto g_current_level = std::get<index_level>(alg_data)[vertex];
-    const auto& current_bitmap = std::get<index_bitmap>(alg_data)[vertex];
-    typedef typename Graph::edge_iterator eitr_type;
-    for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
-      vertex_locator neighbor = eitr.target();
-      kbfs_visitor new_visitor(neighbor, current_bitmap);
-      // kbfs_visitor new_visitor(neighbor, g_current_level + 1, current_bitmap);
-      vis_queue->queue_visitor(new_visitor);
+    const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(kbfs_visitor(eitr.target(), bitmap));
     }
 
-    return true;
+    return true; // trigger bcast to queue visitors from delegates (label:FLOW1)
   }
 
-  template<typename AlgData>
-  bool pre_visit(AlgData& alg_data) const {
+  template <typename AlgData>
+  bool pre_visit(AlgData &alg_data) const
+  {
     // -------------------------------------------------- //
-    // This function apply sent data for this vertex (apply step)
+    // This function applies sent data to the vertex (apply step)
     // -------------------------------------------------- //
 
-    visit_bitmap_t& next_visit_bitmap = std::get<index_next_bitmap>(alg_data)[vertex];
+    bool updated(false);
+    for (size_t k = 0; k < k_bitmap_t::num_bit; ++k) { // TODO: change to actual num bit
+      if (std::get<index_level>(alg_data)[vertex][k] != k_unvisited_level) continue; // Already visited by source k
 
-    for (size_t i = 0; i < visit_bitmap_t::num_bit; ++i) {
-      bool next_visited_bit = next_visit_bitmap.get(i);
-      if (!next_visited_bit && m_visit_bitmap.get(i)) {
-        next_visit_bitmap.set(i);
-        std::get<index_next_visit_flag>(alg_data)[vertex] = true;
-        std::get<index_level>(alg_data)[vertex][i] = g_current_level + 1;
-      }
+      if (!visit_bitmap.get(k)) continue; // No visit request from source k
+
+      std::get<index_level>(alg_data)[vertex][k] = g_current_level;
+      std::get<index_next_bitmap>(alg_data)[vertex].set(k);
+      std::get<index_next_visit_flag>(alg_data)[vertex] = true; // TODO: doesn't need?
+      updated = true;
     }
+
+    // return true to call pre_visit() at the master of delegated vertices required by visitor_queue.hpp 274
+    // (label:FLOW2)
+    return updated && vertex.is_delegate();
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    // return true, to bcast bitmap sent by label:FLOW2
+    if (!vertex.get_bcast()) {
+      // const int mpi_rank = havoqgt_env()->world_comm().rank();
+      // std::cout << "trigger bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+      return true;
+    }
+    // handle bcast triggered by the line above
+    if (pre_visit(alg_data)) {
+      // const int mpi_rank = havoqgt_env()->world_comm().rank();
+      // std::cout << "recived bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+      return false;
+    }
+    // FIXME:
+    // if I'm not the owner of a vertex, I recieve the vertex with bitmap == 1
+
+    // for the case, triggered by label:FLOW1
+    // const int mpi_rank = havoqgt_env()->world_comm().rank();
+    // std::cout << "queue visitor " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+    const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(kbfs_visitor(eitr.target(), bitmap));
+    }
+
     return false;
   }
 
-  template<typename VisitorQueueHandle, typename AlgData>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    return false;
-  }
-
-  // uint16_t level() const {  return m_level; }
-  typename VisitBitmap::value_type visit_bitmap() const {  return m_visit_bitmap; }
-
-  friend inline bool operator>(const kbfs_visitor& v1, const kbfs_visitor& v2) {
+  friend inline bool operator>(const kbfs_visitor &v1, const kbfs_visitor &v2)
+  {
     return v1.vertex < v2.vertex; // or source?
   }
 
-  friend inline bool operator<(const kbfs_visitor &v1, const kbfs_visitor &v2) {
+  friend inline bool operator<(const kbfs_visitor &v1, const kbfs_visitor &v2)
+  {
     return v1.vertex < v2.vertex; // or source?
   }
 
   vertex_locator vertex;
-  // uint16_t       m_level;
-  visit_bitmap_t  m_visit_bitmap;
+  k_bitmap_t visit_bitmap;
 } __attribute__ ((packed));
 
 
-template <typename TGraph, typename LevelData, typename VisitBitmapData, typename VisitFlagData>
-kbfs_result_t k_breadth_first_search_level_per_source(TGraph *g,
-                                                 LevelData &level_data,
-                                                 VisitBitmapData &visit_bitmap,
-                                                 VisitBitmapData &next_visit_bitmap,
-                                                 VisitFlagData &visit_flag,
-                                                 VisitFlagData &next_visit_flag,
-                                                 std::vector<typename TGraph::vertex_locator> source_list)
+template <typename TGraph, typename iterator_t>
+size_t update_local_vertex_data(iterator_t vitr, iterator_t end, kbfs_vertex_data_t<TGraph> &vertex_data)
 {
-  typedef  kbfs_visitor<TGraph, VisitBitmapData>    visitor_type;
-  auto alg_data = std::forward_as_tuple(level_data, visit_bitmap, next_visit_bitmap, visit_flag, next_visit_flag);
+  size_t num_visited_vertices(0);
+  for (; vitr != end; ++vitr) {
+    // TODO: skip for unvisited vertices?
+    vertex_data.visited_sources_bitmap[*vitr] = vertex_data.new_visited_sources_bitmap[*vitr];
+    num_visited_vertices += vertex_data.new_visited_flag[*vitr];
+    vertex_data.visited_flag[*vitr] = vertex_data.new_visited_flag[*vitr];
+    vertex_data.new_visited_flag[*vitr] = false;
+  }
+
+  return num_visited_vertices;
+}
+
+template <typename TGraph>
+kbfs_result_t k_breadth_first_search_level_per_source(TGraph *g,
+                                                      kbfs_vertex_data_t<TGraph> &vertex_data,
+                                                      std::vector<typename TGraph::vertex_locator> source_list)
+{
+  typedef kbfs_visitor<TGraph, typename kbfs_vertex_data_t<TGraph>::visited_sources_bitmap_t> visitor_type;
+  auto alg_data = std::forward_as_tuple(vertex_data.level,
+                                        vertex_data.visited_sources_bitmap, vertex_data.new_visited_sources_bitmap,
+                                        vertex_data.visited_flag, vertex_data.new_visited_flag);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   g_current_level = 0;
   size_t num_total_visited_vertices(0);
-
-  // Set (pre_visit) BFS sources
-  int mpi_rank = 0;
+  int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  for (int i = 0; i < source_list.size(); ++i) {
-    if (source_list[i].owner() == mpi_rank) {
-      vq.queue_visitor(visitor_type(source_list[i], i)); // -> call pre_visit
-      visit_bitmap[source_list[i]] = next_visit_bitmap[source_list[i]];
-      visit_flag[source_list[i]] = true;
-    }
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
 
+  if (mpi_rank == 0) std::cout << "Level\t" << "Traversal time\t" <<"Local Update\t" << "Visited vertices\t" << std::endl;
+
+  // Set BFS sources (level 0)
+  {
+    const double time_start = MPI_Wtime();
+    for (uint32_t k = 0; k < source_list.size(); ++k) {
+      if (source_list[k].owner() == mpi_rank) {
+        vertex_data.level[source_list[k]][k] = 0; // source vertices are visited at level 0
+        k_bitmap_t visited_sources_bitmap;
+        visited_sources_bitmap.set(k);
+        vertex_data.visited_sources_bitmap[source_list[k]] = visited_sources_bitmap;
+        vertex_data.visited_flag[source_list[k]] = true;
+      }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    const double time_end = MPI_Wtime();
+    if (mpi_rank == 0) std::cout << "0\t" // Level
+                                 << std::setprecision(6) << 0.0 << "\t" // Traversal time
+                                 << std::setprecision(6) << time_end - time_start << "\t" // Local update
+                                 << source_list.size() << std::endl; // #of visited vertices
+  }
+
+  num_total_visited_vertices += source_list.size();
   ++g_current_level;
+
   while (g_current_level < std::numeric_limits<level_t>::max()) { // level
+    if (mpi_rank == 0) std::cout << g_current_level << "\t";
     // ------------------------------ Traversal ------------------------------ //
     {
       const double time_start = MPI_Wtime();
       vq.init_visitor_traversal_new(); // init_visit -> queue
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) {
-        std::cout << "Traversal time: " << time_end - time_start << std::endl;
-      }
+      if (mpi_rank == 0) std::cout << std::setprecision(6) << time_end - time_start << "\t";
     }
 
     // ------------------------------ Local update ------------------------------ //
     size_t num_visited_vertices = 0;
     {
       const double time_start = MPI_Wtime();
-      for (auto vitr = g->vertices_begin(), end = g->vertices_end(); vitr != end; ++vitr) {
-        visit_bitmap[*vitr] = next_visit_bitmap[*vitr];
-        num_visited_vertices += next_visit_flag[*vitr];
-        visit_flag[*vitr] = next_visit_flag[*vitr];
-        next_visit_flag[*vitr] = false;
-      }
-
-      for (auto citr = g->controller_begin(), end = g->controller_end(); citr != end; ++citr) {
-        visit_bitmap[*citr] = next_visit_bitmap[*citr];
-        num_visited_vertices += next_visit_flag[*citr];
-        visit_flag[*citr] = next_visit_flag[*citr];
-        next_visit_flag[*citr] = false;
+      num_visited_vertices += update_local_vertex_data(g->vertices_begin(), g->vertices_end(), vertex_data);
+      update_local_vertex_data(g->delegate_vertices_begin(), g->delegate_vertices_end(), vertex_data);
+      for (auto vitr = g->controller_begin(), end = g->controller_end(); vitr != end; ++vitr) {
+        num_visited_vertices += vertex_data.visited_flag[*vitr];
       }
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) {
-        std::cout << "Local Update time: " << time_end - -time_start << std::endl;
-      }
+      if (mpi_rank == 0) std::cout << std::setprecision(6) << time_end - -time_start << "\t";
     }
 
     num_visited_vertices = mpi_all_reduce(num_visited_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD); // Just in case
-
+    if (mpi_rank == 0) std::cout << num_visited_vertices << std::endl;
     if (num_visited_vertices == 0) break;
-    num_total_visited_vertices += num_visited_vertices;
 
-    if (mpi_rank == 0) {
-      std::cout << "Level: " << g_current_level << std::endl;
-      std::cout << "# visited vertices (not unique): " << num_visited_vertices << std::endl;
-    }
+    num_total_visited_vertices += num_visited_vertices;
     ++g_current_level;
   }
 
-  if (mpi_rank == 0) {
-    std::cout << "# total visited vertices (not unique): " << num_total_visited_vertices << std::endl;
-  }
+  if (mpi_rank == 0) std::cout << "Total visited vertices: " << num_total_visited_vertices << std::endl;
 
   return kbfs_result_t{g_current_level, num_total_visited_vertices};
 }
