@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 num_nodes=32
-max_id=$((2**26))
-graph_path="/p/lscfratchf/iwabuchi/havoqgt_graph/tw/n"
+max_id=$((2**24))
+graph_path="/p/lscratchf/iwabuchi/havoqgt_graph/tw/n"
 
 function init
 {
@@ -16,7 +16,7 @@ function init
     echo "export HAVOQGT_MAILBOX_SHM_SIZE=16384" >> run_${num_nodes}.sh
     echo "export HAVOQGT_MAILBOX_MPI_SIZE=131072" >> run_${num_nodes}.sh
 
-    echo "srun --ntasks-per-node=24 --distribution=block ./src/transfer_graph ${graph_path}${num_nodes}/graph /dev/shm/graph" >> run_${num_nodes}.sh
+    echo "srun --ntasks-per-node=24 --distribution=block ./src/transfer_graph ${graph_path}${num_nodes}/graph /dev/shm/" >> run_${num_nodes}.sh
 }
 
 function make_script()
@@ -26,10 +26,11 @@ function make_script()
     echo "export NUM_SOURCES=${num_sources}" >> run_${num_nodes}.sh
     echo "srun -n1 -N1 sh scripts/do_cmake.sh" >> run_${num_nodes}.sh
     echo "srun -n1 -N1 make -j4" >> run_${num_nodes}.sh
+    echo "srun -n1 -N1 g++ -std=c++11 ${HOME}/utility/src/gen_src.cpp -o ./src/gen_src" >> run_${num_nodes}.sh
     for i in $(seq 1 1)
     do
         echo "src_list=\$(./src/gen_src ${num_sources} ${max_id})" >> run_${num_nodes}.sh
-        echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=24 --distribution=block ./src/run_kbfs_sync -i /dev/shm/graph  -s \${src_list}" >> run_${num_nodes}.sh
+        echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=24 --distribution=block ./src/run_exact_ecc -i /dev/shm/graph  -s \${src_list}" >> run_${num_nodes}.sh
     done
 }
 

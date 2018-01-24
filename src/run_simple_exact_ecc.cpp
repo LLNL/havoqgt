@@ -67,7 +67,7 @@ level_type bfs(const id_type root, graph_type &graph)
     std::unordered_set<id_type> next;
     for (const id_type source : queue) {
       for (const id_type target : graph.at(source).edge_list) {
-        if (graph.at(target).level != k_unvisited_level) {
+        if (graph.at(target).level == k_unvisited_level) {
           graph.at(target).level = level + 1;
           next.insert(target);
         }

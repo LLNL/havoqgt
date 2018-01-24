@@ -118,8 +118,7 @@ inline constexpr bool get_bit(const bitmap_base_type* const bitmap, const size_t
 template <typename bitmap_base_type>
 inline void set_bit(bitmap_base_type* const bitmap, const size_t pos)
 {
-  bitmap[bitmap_global_pos<bitmap_base_type>(pos)]
-    |= (0x1ULL << bitmap_local_pos<bitmap_base_type>(pos));
+  bitmap[bitmap_global_pos<bitmap_base_type>(pos)] |= (0x1ULL << bitmap_local_pos<bitmap_base_type>(pos));
 }
 
 template <size_t _num_bit>
@@ -131,7 +130,11 @@ class static_bitmap
   using const_bitmap_base_t = const havoqgt::detail::bitmap_base_type<num_bit>;
   static constexpr size_t size = havoqgt::detail::bitmap_size<bitmap_base_t>(num_bit);
 
-  static_bitmap &operator=(const static_bitmap &rhs)
+  static_bitmap<_num_bit>() = default;
+  static_bitmap<_num_bit>(const static_bitmap<_num_bit>&) = default;
+  static_bitmap<_num_bit>(static_bitmap<_num_bit>&&) = default;
+
+  static_bitmap<_num_bit> &operator=(const static_bitmap &rhs)
   {
     for (size_t i = 0; i < size; ++i) {
       m_map[i] = rhs.m_map[i];
@@ -139,7 +142,7 @@ class static_bitmap
     return (*this);
   }
 
-  const static_bitmap &operator|=(const static_bitmap &rhs)
+  const static_bitmap<_num_bit> &operator|=(const static_bitmap &rhs)
   {
     for (size_t i = 0; i < size; ++i) {
       m_map[i] |= rhs.m_map[i];

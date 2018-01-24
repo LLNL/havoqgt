@@ -81,7 +81,7 @@
 using namespace havoqgt;
 
 using segment_manager_t = havoqgt::distributed_db::segment_manager_type;
-using graph_t   = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
 
 // -------------------------------------------------------------------------------------------------------------- //
 // Data structure
@@ -145,7 +145,6 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
         std::stringstream sstrm(optarg);
         while (std::getline(sstrm, buf, ':'))
           source_id_list.push_back(std::stoull(buf.c_str()));
-        assert(source_id_list.size() == k_num_sources);
         break;
       }
       case 'i':
@@ -161,10 +160,85 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
         break;
     }
   }
-  if (prn_help || !found_input_filename || source_id_list.empty()) {
+  if (prn_help || !found_input_filename || source_id_list.size() < k_num_sources) {
     usage();
     exit(-1);
   }
+}
+
+// -------------------------------------------------------------------------------------------------------------- //
+// find_highest_degree_vertices
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename iterator_t>
+void find_highest_degree_vertices(const graph_t *const graph, iterator_t vitr, iterator_t end,
+                                  const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
+                                  const ecc_vertex_data_t &ecc_vertex_data,
+                                  std::vector<size_t> &highest_degree_list,
+                                  std::vector<uint64_t> &highest_degree_id_list)
+{
+  for (; vitr != end; ++vitr) {
+    if (kbfs_vertex_data.level[*vitr][0] == k_unvisited_level) continue; // skip unvisited vertices
+    if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
+
+    const size_t degree = graph->degree(*vitr);
+    if (highest_degree_list.size() < k_num_sources) {
+      highest_degree_list.emplace_back(degree);
+      highest_degree_id_list.emplace_back(graph->locator_to_label(*vitr));
+    } else {
+      const auto min_itr = std::min_element(highest_degree_list.begin(), highest_degree_list.end());
+      const off_t min_pos = std::distance(highest_degree_list.begin(), min_itr);
+      if (highest_degree_list[min_pos] < degree) {
+        highest_degree_list[min_pos] = degree;
+        highest_degree_id_list[min_pos] = graph->locator_to_label(*vitr);
+      }
+    }
+  }
+}
+
+std::vector<uint64_t> select_source_2(const graph_t *const graph,
+                                      const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
+                                      const ecc_vertex_data_t &ecc_vertex_data)
+{
+  std::vector<size_t> global_highest_degree_list;
+  std::vector<uint64_t> global_highest_degree_id_list;
+
+  {
+    std::vector<size_t> local_highest_degree_list;
+    std::vector<uint64_t> local_highest_degree_id_list;
+    find_highest_degree_vertices(graph, graph->vertices_begin(), graph->vertices_end(),
+                                 kbfs_vertex_data, ecc_vertex_data,
+                                 local_highest_degree_list, local_highest_degree_id_list);
+    find_highest_degree_vertices(graph, graph->controller_begin(), graph->controller_end(),
+                                 kbfs_vertex_data, ecc_vertex_data,
+                                 local_highest_degree_list, local_highest_degree_id_list);
+    assert(local_highest_degree_list.size() == global_highest_degree_id_list.size());
+
+    havoqgt::mpi_all_gather(local_highest_degree_list, global_highest_degree_list, MPI_COMM_WORLD);
+    havoqgt::mpi_all_gather(local_highest_degree_id_list, global_highest_degree_id_list, MPI_COMM_WORLD);
+  }
+
+  const size_t num_total_candidates = global_highest_degree_list.size();
+  std::vector<uint64_t> selected_vertex_id_list;
+  if (num_total_candidates > k_num_sources) {
+    std::vector<std::pair<size_t, uint64_t>> table;
+    table.resize(num_total_candidates);
+    for (size_t i = 0; i < global_highest_degree_list.size(); ++i) {
+      table[i] = std::make_pair(global_highest_degree_list[i], global_highest_degree_id_list[i]);
+    }
+    std::sort(table.begin(), table.end(),
+              [&](const std::pair<size_t, uint64_t> &a, const std::pair<size_t, uint64_t> &b) -> bool {
+                return (a.first > b.first);
+              });
+
+    selected_vertex_id_list.resize(k_num_sources);
+    for (size_t i = 0; i < k_num_sources; ++i) {
+      selected_vertex_id_list[i] = table[i].second;
+    }
+  } else {
+    selected_vertex_id_list = std::move(global_highest_degree_id_list);
+  }
+
+  return selected_vertex_id_list;
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -176,11 +250,11 @@ void select_non_zero_degree_source(const graph_t *const graph, std::vector<uint6
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
 
-  for (auto &candidate_source_id : source_id_list) {
-    uint64_t source_id = candidate_source_id;
+  for (auto id_itr = source_id_list.begin(), end = source_id_list.end(); id_itr != end; ++id_itr) {
+    uint64_t source_id = *id_itr;
     graph_t::vertex_locator source = graph->label_to_locator(source_id);
     uint64_t global_degree(0);
-    do {
+    while (true) {
       uint64_t local_degree = 0;
       source = graph->label_to_locator(source_id);
       if (source.is_delegate()) {
@@ -190,12 +264,13 @@ void select_non_zero_degree_source(const graph_t *const graph, std::vector<uint6
         local_degree = graph->degree(source);
       }
       global_degree = mpi_all_reduce(local_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
-      if (global_degree == 0) ++source_id;
-    } while (global_degree == 0);
+      const bool already_exist = (std::find(source_id_list.begin(), id_itr, source_id) != id_itr);
+      if (global_degree == 0 || already_exist) ++source_id;
+      else break;
+    }
     if (uint32_t(mpi_rank) == source.owner()) {
-      if (source_id != candidate_source_id) {
-        std::cout << "\nVertex " << candidate_source_id << " has a degree of 0.   New source vertex = " << source_id
-                  << std::endl;
+      if (source_id != *id_itr) {
+        std::cout << "\nVertex " << *id_itr << " has a degree of 0.   New source vertex = " << source_id << std::endl;
       } else {
         std::cout << "\nStarting vertex = " << source_id << std::endl;
       }
@@ -203,7 +278,7 @@ void select_non_zero_degree_source(const graph_t *const graph, std::vector<uint6
       std::cout << "local_id = " << source.local_id() << std::endl;
       std::cout << "degree = " << graph->degree(source) << std::endl;
     }
-    candidate_source_id = source_id;
+    *id_itr = source_id;
   }
 }
 
@@ -211,7 +286,7 @@ void select_non_zero_degree_source(const graph_t *const graph, std::vector<uint6
 // select_source
 // -------------------------------------------------------------------------------------------------------------- //
 template <typename iterator_t>
-void find_farthest_vertex(const graph_t *const graph,
+void find_farthest_vertices(const graph_t *const graph,
                           iterator_t vitr, iterator_t end,
                           const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
                           const ecc_vertex_data_t &ecc_vertex_data,
@@ -219,18 +294,15 @@ void find_farthest_vertex(const graph_t *const graph,
 {
   for (; vitr != end; ++vitr) {
     if (kbfs_vertex_data.level[*vitr][0] == k_unvisited_level) continue; // skip unvisited vertices
-
     if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
+
     const auto min_itr = std::min_element(kbfs_vertex_data.level[*vitr].begin(), kbfs_vertex_data.level[*vitr].end());
     const level_t min_level = *min_itr;
     if (level_list.size() < k_num_sources) {
       level_list.emplace_back(min_level);
       vertex_id_list.emplace_back(graph->locator_to_label(*vitr));
     } else {
-      auto min_level_itr = std::min_element(level_list.begin(), level_list.end(),
-                                            [&](const level_t &a, const level_t &b) -> bool {
-                                              return (a < b);
-                                            });
+      auto min_level_itr = std::min_element(level_list.begin(), level_list.end());
       const off_t min_pos = std::distance(level_list.begin(), min_level_itr);
       if (level_list[min_pos] < min_level) {
         level_list[min_pos] = min_level;
@@ -240,9 +312,9 @@ void find_farthest_vertex(const graph_t *const graph,
   }
 }
 
-std::vector<uint64_t>
-select_source(const graph_t *const graph,
-              const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data, const ecc_vertex_data_t &ecc_vertex_data)
+std::vector<uint64_t> select_source(const graph_t *const graph,
+                                    const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
+                                    const ecc_vertex_data_t &ecc_vertex_data)
 {
   std::vector<level_t> global_level_list;
   std::vector<uint64_t> global_vertex_id_list;
@@ -250,19 +322,16 @@ select_source(const graph_t *const graph,
   {
     std::vector<level_t> local_level_list;
     std::vector<uint64_t> local_vertex_id_list;
-    find_farthest_vertex(graph,
-                         graph->vertices_begin(), graph->vertices_end(),
-                         kbfs_vertex_data, ecc_vertex_data,
-                         local_level_list, local_vertex_id_list);
-    find_farthest_vertex(graph,
-                         graph->controller_begin(), graph->controller_end(),
-                         kbfs_vertex_data, ecc_vertex_data,
-                         local_level_list, local_vertex_id_list);
+    find_farthest_vertices(graph, graph->vertices_begin(), graph->vertices_end(),
+                           kbfs_vertex_data, ecc_vertex_data,
+                           local_level_list, local_vertex_id_list);
+    find_farthest_vertices(graph, graph->controller_begin(), graph->controller_end(),
+                           kbfs_vertex_data, ecc_vertex_data,
+                           local_level_list, local_vertex_id_list);
     assert(local_level_list.size() == local_vertex_id_list.size());
 
     havoqgt::mpi_all_gather(local_level_list, global_level_list, MPI_COMM_WORLD);
     havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
-    assert(global_level_list.size() == global_vertex_id_list.size());
   }
 
   const size_t num_total_candidates = global_level_list.size();
@@ -295,63 +364,73 @@ select_source(const graph_t *const graph,
 template <typename iterator_t>
 void compute_ecc_k_source(iterator_t vitr, iterator_t end,
                           const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
-                          k_level_t &k_source_ecc)
+                          std::vector<level_t> &k_source_ecc)
 {
   for (; vitr != end; ++vitr) {
+    if (kbfs_vertex_data.level[*vitr][0] == k_unvisited_level) continue;
     for (size_t k = 0; k < k_source_ecc.size(); ++k) {
-      if (kbfs_vertex_data.level[*vitr][k] == k_unvisited_level) break;
+      assert(kbfs_vertex_data.level[*vitr][k] != k_unvisited_level); // vertices must be reachable from all k sources
       k_source_ecc[k] = std::max(kbfs_vertex_data.level[*vitr][k], k_source_ecc[k]);
     }
   }
 }
 
-
 // -------------------------------------------------------------------------------------------------------------- //
 // bound_ecc
 // -------------------------------------------------------------------------------------------------------------- //
+struct pair_hash {
+  template <class T1, class T2>
+  std::size_t operator () (const std::pair<T1,T2> &x) const {
+    const auto h1 = std::hash<T1>()(x.first);
+    const auto h2 = std::hash<T2>()(x.second);
+    return h1 ^ h2;
+  }
+};
+std::unordered_map<std::pair<level_t, level_t>, size_t, pair_hash> bound_progress;
+
 template <typename iterator_t>
 std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
                                     iterator_t vitr,
                                     iterator_t end,
                                     const kbfs_vertex_data_t<graph_t> &kbfs_vertex_data,
-                                    const k_level_t &k_source_ecc,
-                                    ecc_vertex_data_t &ecc_vertex_data,
-                                    std::vector<uint64_t> &source_candidate_id_list)
+                                    const std::vector<level_t > &k_source_ecc,
+                                    ecc_vertex_data_t &ecc_vertex_data)
 {
-  size_t num_completed_vertices(0);
-  size_t num_non_completed_vertices(0);
+  size_t num_bounded_vertices(0);
+  size_t num_non_bounded_vertices(0);
 
   for (; vitr != end; ++vitr) {
     if (kbfs_vertex_data.level[*vitr][0] == k_unvisited_level) continue; // skip unvisited vertices
 
-    auto &current_lower = ecc_vertex_data.lower[*vitr];
-    auto &current_upper = ecc_vertex_data.upper[*vitr];
+    level_t &current_lower = ecc_vertex_data.lower[*vitr];
+    level_t &current_upper = ecc_vertex_data.upper[*vitr];
     if (current_lower == current_upper) continue; // Exact ecc has been already found
 
-    bool completed = false;
-    for (size_t k = 0; k < k_num_sources; ++k) {
+    bool bounded = false;
+    for (size_t k = 0; k < k_source_ecc.size(); ++k) {
       assert(kbfs_vertex_data.level[*vitr][k] != k_unvisited_level);
 
-      level_t level = kbfs_vertex_data.level[*vitr][k]; // Distance from source 'k'
+      const level_t level = kbfs_vertex_data.level[*vitr][k];
 
       current_lower = std::max(current_lower, std::max(level, static_cast<uint16_t>(k_source_ecc[k] - level)));
       current_upper = std::min(current_upper, static_cast<uint16_t>(k_source_ecc[k] + level));
 
       if (current_lower == current_upper) {
-        completed = true;
+        bounded = true;
         break;
+      } else {
+        const auto key = std::make_pair(current_lower, current_upper);
+        if (bound_progress.count(key) == 0) {
+          bound_progress[key] = 0;
+        }
+        ++bound_progress[key];
       }
     }
-    num_completed_vertices += completed;
-    num_non_completed_vertices += !completed;
-
-    // While updating ecc boundary, correct the candidate of next BFS sources
-    if (!completed && source_candidate_id_list.size() < k_num_sources) {
-      source_candidate_id_list.push_back(graph->locator_to_label(*vitr));
-    }
+    num_bounded_vertices += bounded;
+    num_non_bounded_vertices += !bounded;
   }
 
-  return std::make_pair(num_completed_vertices, num_non_completed_vertices);
+  return std::make_pair(num_bounded_vertices, num_non_bounded_vertices);
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -362,11 +441,27 @@ level_t find_max_ecc(iterator_t vitr, iterator_t end, ecc_vertex_data_t &ecc_ver
 {
   level_t max_ecc = std::numeric_limits<level_t>::min();
   for (; vitr != end; ++vitr) {
-    //TODO: skip unvisited vertices
     max_ecc = std::max(max_ecc, ecc_vertex_data.lower[*vitr]);
   }
   return max_ecc;
 }
+
+// -------------------------------------------------------------------------------------------------------------- //
+// find_max_lower_upper
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename iterator_t>
+std::pair<level_t, level_t> find_max_lower_upper(iterator_t vitr, iterator_t end, ecc_vertex_data_t &ecc_vertex_data)
+{
+  level_t max_lower = std::numeric_limits<level_t>::min();
+  level_t max_upper = std::numeric_limits<level_t>::min();
+  for (; vitr != end; ++vitr) {
+    max_lower = std::max(max_lower, ecc_vertex_data.lower[*vitr]);
+    max_upper = std::max(max_upper, ecc_vertex_data.lower[*vitr]);
+  }
+
+  return std::make_pair(max_lower, max_upper);
+}
+
 
 // -------------------------------------------------------------------------------------------------------------- //
 // Main
@@ -433,7 +528,7 @@ int main(int argc, char **argv)
       ecc_vertex_data.init();
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << "Init vertex data: " << time_end - time_start << std::endl;
+      if (mpi_rank == 0) std::cout << "Init ecc vertex data: " << time_end - time_start << std::endl;
     }
 
     // ------------------------------ Compute exact ECC ------------------------------ //
@@ -453,7 +548,7 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
-          std::cout << "BFS initialization: " << time_end - time_start << std::endl;
+          std::cout << "Init for KBFS: " << time_end - time_start << std::endl;
           std::cout << "# KBFS sources: " << source_locator_list.size() << std::endl;
           for (auto source_id : source_id_list) std::cout << source_id << " ";
           std::cout << std::endl;
@@ -463,56 +558,50 @@ int main(int argc, char **argv)
       // ------------------------------ KBFS ------------------------------ //
       {
         const double time_start = MPI_Wtime();
-        const kbfs_result_t result = havoqgt::k_breadth_first_search_level_per_source(graph,
-                                                                                      kbfs_vertex_data,
-                                                                                      source_locator_list);
+        havoqgt::k_breadth_first_search_level_per_source(graph, kbfs_vertex_data, source_locator_list);
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
 
         if (mpi_rank == 0) std::cout << "BFS Time: " << time_end - time_start << std::endl;
       }
 
-      // ------------------------------ Find ECC for k sources ------------------------------ //
-      k_level_t k_source_ecc;
+      // ------------------------------ Compute ECC for k sources ------------------------------ //
+      std::vector<level_t> k_source_ecc(0, source_id_list.size());
       {
         const double time_start = MPI_Wtime();
-        k_source_ecc.fill(0);
 
         compute_ecc_k_source(graph->vertices_begin(), graph->vertices_end(), kbfs_vertex_data, k_source_ecc);
         compute_ecc_k_source(graph->controller_begin(), graph->controller_end(), kbfs_vertex_data, k_source_ecc);
         mpi_all_reduce_inplace(k_source_ecc, std::greater<level_t>(), MPI_COMM_WORLD);
-        for (size_t k = 0; k < source_id_list.size(); ++k) {
-          if (source_locator_list[k].owner() == mpi_rank) {
+        for (size_t k = 0; k < k_source_ecc.size(); ++k) {
+          if (source_locator_list[k].owner() == mpi_rank) { // delegated vertices are owned by all processes
             ecc_vertex_data.lower[source_locator_list[k]] = ecc_vertex_data.upper[source_locator_list[k]] = k_source_ecc[k];
           }
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
-          std::cout << "Find ECC for k sources: " << time_end - time_start << std::endl;
-          for (size_t k = 0; k < source_id_list.size(); ++k) std::cout << k_source_ecc[k] << " ";
+          std::cout << "Compute ECC for k sources: " << time_end - time_start << std::endl;
+          for (auto ecc : k_source_ecc) std::cout << ecc << " ";
           std::cout << std::endl;
         }
       }
 
       // ------------------------------ Bound ECC ------------------------------ //
+      size_t num_bounded_vertices(0);
+      size_t num_non_bounded_vertices(0);
+      bound_progress.clear();
       {
-        size_t num_completed_vertices(0);
-        size_t num_non_completed_vertices(0);
-
         const double time_start = MPI_Wtime();
-        source_id_list.clear();
-
         {
           auto ret = bound_ecc(graph,
                                graph->vertices_begin(),
                                graph->vertices_end(),
                                kbfs_vertex_data,
                                k_source_ecc,
-                               ecc_vertex_data,
-                               source_id_list);
-          num_completed_vertices += ret.first;
-          num_non_completed_vertices += ret.second;
+                               ecc_vertex_data);
+          num_bounded_vertices += ret.first;
+          num_non_bounded_vertices += ret.second;
         }
 
         {
@@ -521,27 +610,26 @@ int main(int argc, char **argv)
                                graph->controller_end(),
                                kbfs_vertex_data,
                                k_source_ecc,
-                               ecc_vertex_data,
-                               source_id_list);
-          num_completed_vertices += ret.first;
-          num_non_completed_vertices += ret.second;
+                               ecc_vertex_data);
+          num_bounded_vertices += ret.first;
+          num_non_bounded_vertices += ret.second;
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
-        size_t global_num_completed_vertices(0);
-        CHK_MPI(MPI_Reduce(&num_completed_vertices,
-                           &global_num_completed_vertices,
+        size_t global_num_bounded_vertices(0);
+        CHK_MPI(MPI_Reduce(&num_bounded_vertices,
+                           &global_num_bounded_vertices,
                            1,
-                           mpi_typeof(num_completed_vertices),
+                           mpi_typeof(num_bounded_vertices),
                            MPI_SUM,
                            0,
                            MPI_COMM_WORLD));
 
-        size_t global_num_non_completed_vertices(0);
-        CHK_MPI(MPI_Reduce(&num_non_completed_vertices,
-                           &global_num_non_completed_vertices,
+        size_t global_num_non_bounded_vertices(0);
+        CHK_MPI(MPI_Reduce(&num_non_bounded_vertices,
+                           &global_num_non_bounded_vertices,
                            1,
-                           mpi_typeof(num_non_completed_vertices),
+                           mpi_typeof(num_non_bounded_vertices),
                            MPI_SUM,
                            0,
                            MPI_COMM_WORLD));
@@ -549,19 +637,20 @@ int main(int argc, char **argv)
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Update ECC bounds: " << time_end - time_start << std::endl;
-          std::cout << "# completed vertices: " << global_num_completed_vertices << std::endl;
-          std::cout << "# non-completed vertices: " << global_num_non_completed_vertices << std::endl;
+          std::cout << "# bounded vertices: " << global_num_bounded_vertices << std::endl;
+          std::cout << "# non-bounded vertices: " << global_num_non_bounded_vertices << std::endl;
+          for (auto itr : bound_progress) {
+            std::cout << itr.first.first << " " << itr.first.second << " " << itr.second << std::endl;
+          }
         }
       }
 
       // ------------------------------ Check termination ------------------------------ //
       {
-        const char wk = static_cast<char>(source_id_list.size() > 0);
-        const char global = mpi_all_reduce(wk, std::logical_or<char>(), MPI_COMM_WORLD);
+        const size_t global = mpi_all_reduce(num_non_bounded_vertices, std::logical_or<size_t>(), MPI_COMM_WORLD);
         if (!global) break;
         MPI_Barrier(MPI_COMM_WORLD); // Just in case
       }
-
 
       // ------------------------------ Select sources for next step ------------------------------ //
       {
@@ -574,28 +663,36 @@ int main(int argc, char **argv)
         }
       }
 
+      // ------------------------------ Diameter calculation terminate test ------------------------------ //
+      {
+        const auto ret1 = find_max_lower_upper(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data);
+        const auto ret2 = find_max_lower_upper(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data);
+
+        const level_t max_lower = std::max(ret1.first, ret2.first);
+        const level_t max_upper = std::max(ret1.second, ret2.second);
+        std::cout << "terminate test " << max_lower << " : " << max_upper << std::endl;
+      }
+
       ++current_iteration_number;
     } // End Exact ECC
 
+    const double total_end_time = MPI_Wtime();
+    if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
+
     // ------------------------------ Compute diameter ------------------------------ //
     {
-      const double time_start = MPI_Wtime();
+      // const double time_start = MPI_Wtime();
       const level_t max_ecc = std::max(find_max_ecc(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data),
-                                       find_max_ecc(graph->controller_begin(),
-                                                    graph->controller_end(),
-                                                    ecc_vertex_data));
+                                       find_max_ecc(graph->controller_begin(), graph->controller_end(), ecc_vertex_data));
       level_t diameter;
       CHK_MPI(MPI_Reduce(&max_ecc, &diameter, 1, mpi_typeof(max_ecc), MPI_MAX, 0, MPI_COMM_WORLD));
-      const double time_end = MPI_Wtime();
+      // const double time_end = MPI_Wtime();
 
       if (mpi_rank == 0) {
-        std::cout << "\nCompute diameter: " << time_end - time_start << std::endl;
+        // std::cout << "\nCompute diameter: " << time_end - time_start << std::endl;
         std::cout << "Diameter: " << diameter << std::endl;
       }
     } // End Compute diameter
-
-    const double total_end_time = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 
