@@ -247,7 +247,7 @@ void set_bfs_sources(kbfs_vertex_data_t<TGraph> &vertex_data, std::vector<typena
 
   const double time_start = MPI_Wtime();
   for (size_t k = 0; k < source_list.size(); ++k) {
-    if (source_list[k].owner() == mpi_rank) {
+    if (source_list[k].owner() == mpi_rank || source_list[k].is_delegate()) {
       vertex_data.level[source_list[k]][k] = 0; // source vertices are visited at level 0
       k_bitmap_t visited_sources_bitmap;
       visited_sources_bitmap.set(k);
