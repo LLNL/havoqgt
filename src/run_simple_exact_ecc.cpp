@@ -15,7 +15,7 @@
 
 using id_type = uint64_t;
 using level_type = uint16_t;
-constexpr level_type k_unvisited_level = std::numeric_limits<level_type>::max();
+constexpr level_type unvisited_level = std::numeric_limits<level_type>::max();
 
 using edge_list_type = std::vector<id_type>;
 struct ecc_data_type {
@@ -24,7 +24,7 @@ struct ecc_data_type {
 };
 struct vertex_data_type
 {
-  level_type level{k_unvisited_level};
+  level_type level{unvisited_level};
   ecc_data_type ecc_data;
   edge_list_type edge_list;
 };
@@ -50,7 +50,7 @@ size_t ingest_edge_list(const std::vector<std::string> &edge_list, graph_type &g
 void reset_bfs_data(graph_type &graph)
 {
   for (auto &vertex : graph) {
-    vertex.second.level = k_unvisited_level;
+    vertex.second.level = unvisited_level;
   }
 }
 
@@ -67,7 +67,7 @@ level_type bfs(const id_type root, graph_type &graph)
     std::unordered_set<id_type> next;
     for (const id_type source : queue) {
       for (const id_type target : graph.at(source).edge_list) {
-        if (graph.at(target).level == k_unvisited_level) {
+        if (graph.at(target).level == unvisited_level) {
           graph.at(target).level = level + 1;
           next.insert(target);
         }
@@ -88,7 +88,7 @@ size_t bound_ecc(const id_type source, const level_type exact_ecc, graph_type &g
   for (auto &vertex : graph) {
     vertex_data_type& vertex_data = vertex.second;
     ecc_data_type& ecc_data = vertex_data.ecc_data;
-    if (vertex_data.level == k_unvisited_level) continue;
+    if (vertex_data.level == unvisited_level) continue;
     if (ecc_data.lower == ecc_data.upper) continue;
 
     ecc_data.lower = std::max(ecc_data.lower, std::max(vertex_data.level, static_cast<uint16_t>(exact_ecc - vertex_data.level)));

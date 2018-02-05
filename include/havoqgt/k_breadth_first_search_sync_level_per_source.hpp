@@ -68,70 +68,62 @@
 #include <havoqgt/detail/bitmap.hpp>
 
 
-#ifdef NUM_SOURCES
-constexpr int k_num_sources = NUM_SOURCES;
-#else
-constexpr int k_num_sources = 8;
-#endif
-
-using level_t = uint16_t;
-constexpr level_t k_unvisited_level = std::numeric_limits<level_t>::max();
-
-using k_level_t = std::array<level_t, k_num_sources>;
-using k_bitmap_t = typename havoqgt::detail::static_bitmap<k_num_sources>;
-
-struct kbfs_result_t
-{
-  level_t max_level;
-  size_t num_visited_vertices;
-};
-
-
-template <typename graph_t>
-struct kbfs_vertex_data_t
-{
-  using level_array_t = typename graph_t::template vertex_data<k_level_t, std::allocator<k_level_t>>;
-  using visited_sources_bitmap_t = typename graph_t::template vertex_data<k_bitmap_t, std::allocator<k_bitmap_t>>;
-  using visited_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
-
-  kbfs_vertex_data_t(const graph_t &graph)
-    : level(graph),
-      visited_sources_bitmap(graph),
-      new_visited_sources_bitmap(graph),
-      visited_flag(graph),
-      new_visited_flag(graph) { }
-
-  void init()
-  {
-    k_level_t initial_value;
-    initial_value.fill(k_unvisited_level);
-    level.reset(initial_value);
-
-    visited_sources_bitmap.reset(k_bitmap_t());
-    new_visited_sources_bitmap.reset(k_bitmap_t());
-
-    visited_flag.reset(false);
-    new_visited_flag.reset(false);
-  }
-
-  level_array_t level;
-  visited_sources_bitmap_t visited_sources_bitmap;
-  visited_sources_bitmap_t new_visited_sources_bitmap;
-  visited_flag_t visited_flag; // whether visited at the previous level
-  visited_flag_t new_visited_flag;
-};
-
-
-// Should add to graph object?
-level_t g_current_level;
-
 namespace havoqgt
 {
+using level_t = uint16_t;
 
-template <typename Graph, typename VisitBitmap>
+template <typename _graph_t, int _k_num_sources>
+struct kbfs_type
+{
+  using graph_t = _graph_t;
+  static constexpr int k_num_sources = _k_num_sources;
+  using k_level = std::array<level_t, k_num_sources>;
+  using k_bitmap = typename havoqgt::detail::static_bitmap<k_num_sources>;
+  static constexpr level_t unvisited_level = std::numeric_limits<level_t>::max();
+
+
+  struct vertex_data
+  {
+    using level_array_t = typename graph_t::template vertex_data<k_level, std::allocator<k_level>>;
+    using visited_sources_bitmap_t = typename graph_t::template vertex_data<k_bitmap, std::allocator<k_bitmap>>;
+    using visited_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
+
+    vertex_data(const graph_t &graph)
+      : level(graph),
+        visited_sources_bitmap(graph),
+        new_visited_sources_bitmap(graph),
+        visited_flag(graph),
+        new_visited_flag(graph) { }
+
+    void init()
+    {
+      k_level initial_value;
+      initial_value.fill(unvisited_level);
+      level.reset(initial_value);
+
+      visited_sources_bitmap.reset(k_bitmap());
+      new_visited_sources_bitmap.reset(k_bitmap());
+
+      visited_flag.reset(false);
+      new_visited_flag.reset(false);
+    }
+
+    level_array_t level;
+    visited_sources_bitmap_t visited_sources_bitmap;
+    visited_sources_bitmap_t new_visited_sources_bitmap;
+    visited_flag_t visited_flag; // whether visited at the previous level
+    visited_flag_t new_visited_flag;
+  };
+};
+
+// Should add to graph object?
+size_t g_current_level;
+
+template <typename Graph, int num_k_sources>
 class kbfs_visitor
 {
  private:
+  using kbfs_t = kbfs_type<Graph, num_k_sources>;
   static constexpr int index_level = 0;
   static constexpr int index_bitmap = 1;
   static constexpr int index_next_bitmap = 2;
@@ -150,7 +142,8 @@ class kbfs_visitor
       visit_bitmap() { }
 
 #pragma GCC diagnostic pop
-  kbfs_visitor(vertex_locator _vertex, k_bitmap_t _visit_bitmap)
+
+  kbfs_visitor(vertex_locator _vertex, typename kbfs_t::k_bitmap _visit_bitmap)
     : vertex(_vertex),
       visit_bitmap(_visit_bitmap) { }
 
@@ -179,8 +172,9 @@ class kbfs_visitor
     // -------------------------------------------------- //
 
     bool updated(false);
-    for (size_t k = 0; k < k_num_sources; ++k) { // TODO: change to actual num bit
-      if (std::get<index_level>(alg_data)[vertex][k] != k_unvisited_level) continue; // Already visited by source k
+    for (size_t k = 0; k < kbfs_t::k_num_sources; ++k) { // TODO: change to actual num bit
+      if (std::get<index_level>(alg_data)[vertex][k] != kbfs_t::unvisited_level)
+        continue; // Already visited by source k
 
       if (!visit_bitmap.get(k)) continue; // No visit request from source k
 
@@ -235,12 +229,15 @@ class kbfs_visitor
   }
 
   vertex_locator vertex;
-  k_bitmap_t visit_bitmap;
+  typename kbfs_t::k_bitmap visit_bitmap;
 } __attribute__ ((packed));
 
-
-template <typename TGraph>
-void set_bfs_sources(kbfs_vertex_data_t<TGraph> &vertex_data, std::vector<typename TGraph::vertex_locator> source_list)
+namespace detail
+{
+template <typename TGraph, int k_num_sources>
+void
+set_bfs_sources(typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data,
+                std::vector<typename TGraph::vertex_locator> source_list)
 {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -249,7 +246,7 @@ void set_bfs_sources(kbfs_vertex_data_t<TGraph> &vertex_data, std::vector<typena
   for (size_t k = 0; k < source_list.size(); ++k) {
     if (source_list[k].owner() == mpi_rank || source_list[k].is_delegate()) {
       vertex_data.level[source_list[k]][k] = 0; // source vertices are visited at level 0
-      k_bitmap_t visited_sources_bitmap;
+      typename kbfs_type<TGraph, k_num_sources>::k_bitmap visited_sources_bitmap;
       visited_sources_bitmap.set(k);
       vertex_data.visited_sources_bitmap[source_list[k]] = visited_sources_bitmap;
       vertex_data.visited_flag[source_list[k]] = true;
@@ -267,8 +264,9 @@ void set_bfs_sources(kbfs_vertex_data_t<TGraph> &vertex_data, std::vector<typena
   }
 }
 
-template <typename TGraph, typename iterator_t>
-void update_local_vertex_data(iterator_t vitr, iterator_t end, kbfs_vertex_data_t<TGraph> &vertex_data)
+template <typename TGraph, int k_num_sources, typename iterator_t>
+void update_local_vertex_data(iterator_t vitr, iterator_t end,
+                              typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data)
 {
   for (; vitr != end; ++vitr) {
     vertex_data.visited_sources_bitmap[*vitr] = vertex_data.new_visited_sources_bitmap[*vitr];
@@ -277,8 +275,11 @@ void update_local_vertex_data(iterator_t vitr, iterator_t end, kbfs_vertex_data_
   }
 }
 
-template <typename TGraph, typename iterator_t>
-std::vector<size_t> count_visited_vertices(iterator_t vitr, iterator_t end, const kbfs_vertex_data_t<TGraph> &vertex_data, const level_t level)
+template <typename TGraph, int k_num_sources, typename iterator_t>
+std::vector<size_t>
+count_visited_vertices(iterator_t vitr, iterator_t end,
+                       const typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data,
+                       const level_t level)
 {
   std::vector<size_t> num_vertices(k_num_sources, 0);
   for (; vitr != end; ++vitr) {
@@ -288,13 +289,14 @@ std::vector<size_t> count_visited_vertices(iterator_t vitr, iterator_t end, cons
   }
   return num_vertices;
 }
+} // namespace detail
 
-template <typename TGraph>
+template <typename TGraph, int k_num_sources>
 void k_breadth_first_search_level_per_source(TGraph *g,
-                                             kbfs_vertex_data_t<TGraph> &vertex_data,
+                                             typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data,
                                              std::vector<typename TGraph::vertex_locator> source_list)
 {
-  typedef kbfs_visitor<TGraph, typename kbfs_vertex_data_t<TGraph>::visited_sources_bitmap_t> visitor_type;
+  typedef kbfs_visitor<TGraph, k_num_sources> visitor_type;
 
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -307,7 +309,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
 
   // Set BFS sources (level 0)
   if (mpi_rank == 0) std::cout << "Level\t" << "Traversal time\t" <<"Local Update\t" << "Visited vertices\t" << std::endl;
-  set_bfs_sources(vertex_data, source_list);
+  detail::set_bfs_sources<TGraph, k_num_sources>(vertex_data, source_list);
   std::vector<size_t> num_total_visited_vertices(source_list.size(), 1);
   g_current_level = 1;
 
@@ -326,10 +328,12 @@ void k_breadth_first_search_level_per_source(TGraph *g,
     std::vector<size_t> num_local_visited_vertices(source_list.size(), 0);
     {
       const double time_start = MPI_Wtime();
-      update_local_vertex_data(g->vertices_begin(), g->vertices_end(), vertex_data);
-      update_local_vertex_data(g->delegate_vertices_begin(), g->delegate_vertices_end(), vertex_data);
-      std::vector<size_t> cnt1 = count_visited_vertices(g->vertices_begin(), g->vertices_end(), vertex_data, g_current_level);
-      std::vector<size_t> cnt2 = count_visited_vertices(g->controller_begin(), g->controller_end(), vertex_data, g_current_level);
+      detail::update_local_vertex_data<TGraph, k_num_sources>(g->vertices_begin(), g->vertices_end(), vertex_data);
+      detail::update_local_vertex_data<TGraph, k_num_sources>(g->delegate_vertices_begin(), g->delegate_vertices_end(), vertex_data);
+      std::vector<size_t> cnt1 = detail::count_visited_vertices<TGraph, k_num_sources>(g->vertices_begin(), g->vertices_end(),
+                                                                                       vertex_data, g_current_level);
+      std::vector<size_t> cnt2 = detail::count_visited_vertices<TGraph, k_num_sources>(g->controller_begin(), g->controller_end(),
+                                                                                       vertex_data, g_current_level);
       for (size_t i = 0; i < num_local_visited_vertices.size(); ++i)
         num_local_visited_vertices[i] = cnt1[i] + cnt2[i];
       MPI_Barrier(MPI_COMM_WORLD);

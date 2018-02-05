@@ -5,7 +5,7 @@ INSTALL_PREFIX=${PWD}
 
 if [[ ! -n $NUM_SOURCES ]]
 then
-    NUM_SOURCES=64
+    NUM_SOURCES=8
 fi
 
 rm CMakeCache.txt

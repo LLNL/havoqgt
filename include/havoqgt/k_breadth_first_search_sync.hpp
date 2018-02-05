@@ -57,7 +57,7 @@
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
-#include <havoqgt/k_visit_bitmap.hpp>
+#include <havoqgt/detail/bitmap.hpp>
 
 #ifdef NUM_SOURCES
 constexpr int k_num_sources = NUM_SOURCES;
@@ -65,7 +65,7 @@ constexpr int k_num_sources = NUM_SOURCES;
 constexpr int k_num_sources = 64;
 #endif
 
-using visit_bitmap_t = typename havoqgt::k_visit_bitmap<k_num_sources>;
+using visit_bitmap_t = typename havoqgt::detail::static_bitmap<k_num_sources>;
 
 template <size_t num_sources>
 bool is_contain(const visit_bitmap_t &lhs, const visit_bitmap_t &rhs)
