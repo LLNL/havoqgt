@@ -291,6 +291,7 @@ count_visited_vertices(iterator_t vitr, iterator_t end,
 }
 } // namespace detail
 
+
 template <typename TGraph, int k_num_sources>
 void k_breadth_first_search_level_per_source(TGraph *g,
                                              typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data,

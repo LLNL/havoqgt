@@ -80,9 +80,9 @@ level_type bfs(const id_type root, graph_type &graph)
   return level - 1;
 }
 
-size_t bound_ecc(const id_type source, const level_type exact_ecc, graph_type &graph)
+size_t bound_ecc(const id_type source, const level_type eecc, graph_type &graph)
 {
-  graph.at(source).ecc_data.lower = graph.at(source).ecc_data.upper = exact_ecc;
+  graph.at(source).ecc_data.lower = graph.at(source).ecc_data.upper = eecc;
 
   size_t num_bounded = 0;
   for (auto &vertex : graph) {
@@ -91,8 +91,8 @@ size_t bound_ecc(const id_type source, const level_type exact_ecc, graph_type &g
     if (vertex_data.level == unvisited_level) continue;
     if (ecc_data.lower == ecc_data.upper) continue;
 
-    ecc_data.lower = std::max(ecc_data.lower, std::max(vertex_data.level, static_cast<uint16_t>(exact_ecc - vertex_data.level)));
-    ecc_data.upper = std::min(ecc_data.upper, static_cast<uint16_t>(exact_ecc + vertex_data.level));
+    ecc_data.lower = std::max(ecc_data.lower, std::max(vertex_data.level, static_cast<uint16_t>(eecc - vertex_data.level)));
+    ecc_data.upper = std::min(ecc_data.upper, static_cast<uint16_t>(eecc + vertex_data.level));
 
     if (ecc_data.lower == ecc_data.upper) ++num_bounded;
   }
@@ -125,8 +125,8 @@ int main (int argc, char *argv[])
   for (const id_type source : source_list) {
     std::cout << "\nSource: " << source << std::endl;
     reset_bfs_data(graph);
-    const level_type exact_ecc = bfs(source, graph);
-    const size_t num_bounded = bound_ecc(source, exact_ecc, graph);
+    const level_type eecc = bfs(source, graph);
+    const size_t num_bounded = bound_ecc(source, eecc, graph);
     std::cout << "num_bounded: " << num_bounded << std::endl;
   }
 
