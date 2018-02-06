@@ -490,9 +490,7 @@ std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                            eecc_source_select_mode_tag::rnd)
 {
-  std::cout << "randomly select sources" << std::endl;
   return detail::randomly_select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-
 }
 
 template <typename graph_t, int k_num_sources>
@@ -501,9 +499,7 @@ std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                            eecc_source_select_mode_tag::far)
 {
-  std::cout << "select farthest sources" << std::endl;
   return detail::find_farthest_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-
 }
 
 template <typename graph_t, int k_num_sources>
@@ -512,9 +508,7 @@ std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                            eecc_source_select_mode_tag::hdeg)
 {
-  std::cout << "select highest degree sources" << std::endl;
   return detail::find_highest_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-
 }
 
 template <typename graph_t, int k_num_sources>
@@ -523,9 +517,7 @@ std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                            eecc_source_select_mode_tag::lvl2)
 {
-  std::cout << "select 2 level away sources" << std::endl;
   return detail::select_2_level_away_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-
 }
 } // namespace detail
 
@@ -623,6 +615,150 @@ select_source(graph_t *graph,
   }
   return source_locator_list;
 }
+
+
+// -------------------------------------------------------------------------------------------------------------- //
+// find_max_ecc_bound_from_neighbor
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename Graph, int num_k_sources>
+class ecc_bound_info_prop_visitor
+{
+ private:
+  using kbfs_t = kbfs_type<Graph, num_k_sources>;
+
+ public:
+  typedef typename Graph::vertex_locator vertex_locator;
+
+  ecc_bound_info_prop_visitor()
+    : vertex(),
+      lower(),
+      upper() { }
+
+  explicit ecc_bound_info_prop_visitor(vertex_locator _vertex)
+    : vertex(_vertex),
+      lower(),
+      upper() { }
+
+#pragma GCC diagnostic pop
+
+  ecc_bound_info_prop_visitor(vertex_locator _vertex, level_t _lower, level_t _upper)
+    : vertex(_vertex),
+      lower(_lower),
+      upper(_upper) { }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph &g, VisitorQueueHandle vis_queue, AlgData &alg_data)
+  {
+    // -------------------------------------------------- //
+    // This function issues visitors for neighbors (scatter step)
+    // -------------------------------------------------- //
+
+    if (std::get<0>(alg_data).level[vertex][0] == kbfs_t::unvisited_level) return false; // skip unvisited vertices
+
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(ecc_bound_info_prop_visitor(eitr.target(),
+                                                           std::get<1>(alg_data).lower[vertex],
+                                                           std::get<1>(alg_data).upper[vertex]));
+    }
+
+    return true; // trigger bcast to queue visitors from delegates (label:FLOW1)
+  }
+
+  template <typename AlgData>
+  bool pre_visit(AlgData &alg_data) const
+  {
+    // -------------------------------------------------- //
+    // This function applies sent data to the vertex (apply step)
+    // -------------------------------------------------- //
+    std::get<2>(alg_data).lower[vertex] = std::max((int)lower, std::get<2>(alg_data).lower[vertex] - 1);
+    std::get<2>(alg_data).upper[vertex] = std::min((int)upper, std::get<2>(alg_data).upper[vertex] + 1);
+    std::get<3>(alg_data)[vertex] |= (lower == upper);
+
+    // return true to call pre_visit() at the master of delegated vertices required by visitor_queue.hpp 274
+    // (label:FLOW2)
+    return vertex.is_delegate();
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    // return true, to bcast bitmap sent by label:FLOW2
+    if (!vertex.get_bcast()) {
+      // const int mpi_rank = havoqgt_env()->world_comm().rank();
+      // std::cout << "trigger bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+      return true;
+    }
+    pre_visit(alg_data);
+//    // handle bcast triggered by the line above
+//    if (pre_visit(alg_data)) {
+//      // const int mpi_rank = havoqgt_env()->world_comm().rank();
+//      // std::cout << "recived bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+//      return false;
+//    }
+    // FIXME:
+    // if I'm not the owner of a vertex, I recieve the vertex with bitmap == 1 ??
+
+    // for the case, triggered by label:FLOW1
+    // const int mpi_rank = havoqgt_env()->world_comm().rank();
+    // std::cout << "queue visitor " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
+//    const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
+//    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+//      vis_queue->queue_visitor(ecc_bound_info_prop_visitor(eitr.target(), bitmap));
+//    }
+
+    return false;
+  }
+
+  friend inline bool operator>(const ecc_bound_info_prop_visitor &v1, const ecc_bound_info_prop_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  friend inline bool operator<(const ecc_bound_info_prop_visitor &v1, const ecc_bound_info_prop_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  vertex_locator vertex;
+  level_t lower;
+  level_t upper;
+} __attribute__ ((packed));
+
+template <typename graph_t, int k_num_sources>
+void find_max_ecc_bound_from_neighbor(graph_t *graph,
+                                      typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                      typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
+{
+  int mpi_rank(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+  typedef ecc_bound_info_prop_visitor<graph_t, k_num_sources> visitor_type;
+
+  typename eecc_type<graph_t, k_num_sources>::vertex_data tmp_ecc(*graph);
+  typename graph_t::template vertex_data<bool, std::allocator<bool>> flag(*graph);
+
+  auto alg_data = std::forward_as_tuple(kbfs_vertex_data, ecc_vertex_data, tmp_ecc, flag);
+  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(graph, alg_data);
+  // ------------------------------ Traversal ------------------------------ //
+  {
+    const double time_start = MPI_Wtime();
+    vq.init_visitor_traversal_new(); // init_visit -> queue
+    MPI_Barrier(MPI_COMM_WORLD);
+    const double time_end = MPI_Wtime();
+    if (mpi_rank == 0) std::cout << "Collect bound info: " << time_end - time_start << "\t";
+  }
+
+  size_t num_bounded(0);
+  for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
+    num_bounded += ((tmp_ecc.lower[*itr] == tmp_ecc.upper[*itr]) && (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]));
+  }
+  for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
+    num_bounded += ((tmp_ecc.lower[*itr] == tmp_ecc.upper[*itr]) && (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]));
+  }
+
+  num_bounded = mpi_all_reduce(num_bounded, std::greater<level_t>(), MPI_COMM_WORLD);
+  if (mpi_rank == 0) std::cout << "Bounded: " << num_bounded << std::endl;
+};
 
 } // namespace havoqgt
 #endif //HAVOQGT_EXACT_ECCENTRICITY_HPP
