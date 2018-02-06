@@ -362,8 +362,11 @@ int main(int argc, char **argv)
       }
 
       {
-        find_max_ecc_bound_from_neighbor<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+        plun_single_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
       }
+//      {
+//        find_max_ecc_bound_from_neighbor<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+//      }
 
       // ------------------------------ Diameter calculation termination test ------------------------------ //
       {

@@ -161,7 +161,7 @@ class kbfs_visitor
       vis_queue->queue_visitor(kbfs_visitor(eitr.target(), bitmap));
     }
 
-    return true; // trigger bcast to queue visitors from delegates (label:FLOW1)
+    return true; // trigger bcast from the masters (label:FLOW1)
   }
 
   template <typename AlgData>
@@ -192,13 +192,15 @@ class kbfs_visitor
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
   {
-    // return true, to bcast bitmap sent by label:FLOW2
+    // return true, to bcast bitmap, to visit non-master delegates, sent by label:FLOW2
     if (!vertex.get_bcast()) {
       // const int mpi_rank = havoqgt_env()->world_comm().rank();
       // std::cout << "trigger bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
       return true;
     }
+
     // handle bcast triggered by the line above
+    // visitors issued by label:FLOW1 paths this condition
     if (pre_visit(alg_data)) {
       // const int mpi_rank = havoqgt_env()->world_comm().rank();
       // std::cout << "recived bcast " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
@@ -208,6 +210,7 @@ class kbfs_visitor
     // if I'm not the owner of a vertex, I recieve the vertex with bitmap == 1 ??
 
     // for the case, triggered by label:FLOW1
+    // scatter current status to neighbors (this line is supposed to be executed on only non-master delegates)
     // const int mpi_rank = havoqgt_env()->world_comm().rank();
     // std::cout << "queue visitor " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
     const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
