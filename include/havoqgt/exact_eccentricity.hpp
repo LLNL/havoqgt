@@ -62,6 +62,7 @@
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
+#include <havoqgt/detail/hash.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include "k_breadth_first_search_sync_level_per_source.hpp"
 
@@ -71,10 +72,11 @@ namespace havoqgt
 
 struct eecc_source_select_mode_tag
 {
-  struct rnd {};
-  struct far {};
+  struct random {};
+  struct max_lower {};
   struct hdeg {};
-  struct lvl2 {};
+  struct level2 {};
+  struct far_and_hdeg {};
 };
 
 template <typename graph_t, int k_num_sources>
@@ -187,10 +189,10 @@ std::vector<uint64_t> find_highest_degree_vertices(const graph_t *const graph,
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
-// find_farthest_vertices
+// find_max_lower_vertices
 // -------------------------------------------------------------------------------------------------------------- //
 template <typename graph_t, int k_num_sources, typename iterator_t>
-void find_farthest_vertices_helper(const graph_t *const graph,
+void find_max_lower_vertices_helper(const graph_t *const graph,
                                    iterator_t vitr, iterator_t end,
                                    const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                    const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
@@ -218,7 +220,7 @@ void find_farthest_vertices_helper(const graph_t *const graph,
 }
 
 template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> find_farthest_vertices(const graph_t *const graph,
+std::vector<uint64_t> find_max_lower_vertices(const graph_t *const graph,
                                              const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                              const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
 {
@@ -228,10 +230,10 @@ std::vector<uint64_t> find_farthest_vertices(const graph_t *const graph,
   {
     std::vector<level_t> local_level_list;
     std::vector<uint64_t> local_vertex_id_list;
-    find_farthest_vertices_helper<graph_t, k_num_sources>(graph, graph->vertices_begin(), graph->vertices_end(),
+    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->vertices_begin(), graph->vertices_end(),
                                                           kbfs_vertex_data, ecc_vertex_data,
                                                           local_level_list, local_vertex_id_list);
-    find_farthest_vertices_helper<graph_t, k_num_sources>(graph, graph->controller_begin(), graph->controller_end(),
+    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->controller_begin(), graph->controller_end(),
                                                           kbfs_vertex_data, ecc_vertex_data,
                                                           local_level_list, local_vertex_id_list);
     assert(local_level_list.size() == local_vertex_id_list.size());
@@ -421,6 +423,54 @@ void compute_ecc_k_source(iterator_t vitr, iterator_t end,
   }
 }
 
+// -------------------------------------------------------------------------------------------------------------- //
+// find_sources_helper
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename graph_t, typename iterator_t>
+void construct_vid_list(const graph_t *const graph, iterator_t vitr, iterator_t end,
+                        const size_t max_size,
+                        std::function<bool(const uint64_t)> &is_valid,
+                        std::function<bool(const uint64_t, const uint64_t)> &is_lower,
+                        std::vector<uint64_t> &vid_list)
+{
+  const uint64_t vid = graph->locator_to_label(*vitr);
+  if (!is_valid(vid)) return;
+  if (vid_list.size() < max_size) {
+    vid_list.emplace_back(vid);
+  } else {
+    auto min_itr = std::min_element(vid_list.begin(), vid_list.end(), is_lower);
+    uint64_t &min_vid = *min_itr;
+    if (is_lower(min_vid, vid)) {
+      min_vid = vid;
+    }
+  }
+};
+
+template <typename graph_t>
+std::vector<uint64_t> select_source_helper(const graph_t *const graph,
+                                           const size_t max_size,
+                                           std::function<bool(const uint64_t)> is_valid,
+                                           std::function<bool(const uint64_t, const uint64_t)> is_lower)
+{
+  int mpi_rank(0), mpi_size(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+
+  std::vector<uint64_t> local_vid_list;
+  construct_vid_list(graph, graph->vertices_begin(), graph->vertices_end(),
+                     max_size, is_valid, is_lower, local_vid_list);
+  construct_vid_list(graph, graph->controller_begin(), graph->controller_end(),
+                     max_size, is_valid, is_lower, local_vid_list);
+
+  std::vector<uint64_t> global_vid_list;
+  havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
+
+  const size_t final_size = std::min(max_size, global_vid_list.size());
+  std::partial_sort(global_vid_list.begin(), global_vid_list.begin() + final_size, global_vid_list.end(), is_lower);
+  global_vid_list.resize(final_size);
+
+  return global_vid_list;
+};
 
 // -------------------------------------------------------------------------------------------------------------- //
 // bound_ecc
@@ -489,7 +539,7 @@ template <typename graph_t, int k_num_sources>
 std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::rnd)
+                                           eecc_source_select_mode_tag::random)
 {
   return detail::randomly_select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
 }
@@ -498,9 +548,9 @@ template <typename graph_t, int k_num_sources>
 std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::far)
+                                           eecc_source_select_mode_tag::max_lower)
 {
-  return detail::find_farthest_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+  return detail::find_max_lower_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
 }
 
 template <typename graph_t, int k_num_sources>
@@ -516,10 +566,41 @@ template <typename graph_t, int k_num_sources>
 std::vector<uint64_t> select_source_helper(graph_t *graph,
                                            typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                            typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::lvl2)
+                                           eecc_source_select_mode_tag::level2)
 {
   return detail::select_2_level_away_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
 }
+
+template <typename graph_t, int k_num_sources>
+std::vector<uint64_t> select_source_helper(graph_t *graph,
+                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                                           eecc_source_select_mode_tag::far_and_hdeg)
+{
+  return detail::select_source_helper(graph, k_num_sources,
+                                      [&graph, &kbfs_vertex_data, &ecc_vertex_data](const uint64_t vid) -> bool {
+                                        auto locator = graph->label_to_locator(vid);
+                                        if (kbfs_vertex_data.level[locator][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
+                                          return false;
+                                        if (ecc_vertex_data.lower[locator] == ecc_vertex_data.upper[locator])
+                                          return false;
+                                        return true;
+                                      },
+                                      [&graph, &kbfs_vertex_data, &ecc_vertex_data](const uint64_t vid1, const uint64_t vid2) -> bool {
+                                        auto locator1 = graph->label_to_locator(vid1);
+                                        auto locator2 = graph->label_to_locator(vid2);
+                                        const size_t score1 = ecc_vertex_data.upper[locator1] - ecc_vertex_data.lower[locator1];
+                                        const size_t score2 = ecc_vertex_data.upper[locator2] - ecc_vertex_data.lower[locator2];
+                                        if (score1 != score2) return (score1 < score2);
+                                        const size_t deg1 = graph->degree(locator1);
+                                        const size_t deg2 = graph->degree(locator2);
+                                        if (deg1 != deg2) return (deg1 < deg2);
+                                        const uint64_t h1 = shifted_n_hash16(vid1, 64);
+                                        const uint64_t h2 = shifted_n_hash16(vid2, 64);
+                                        return (h1 < h2);
+  });
+}
+
 } // namespace detail
 
 
@@ -675,7 +756,7 @@ class pluning_visitor
         vis_queue->queue_visitor(pluning_visitor(eitr.target(), std::get<1>(alg_data).lower[vertex]));
       }
     } else {
-      if (g.degree(vertex) == 1) {
+      if (g.degree(vertex) == 1 && std::get<1>(alg_data).lower[vertex] != std::get<1>(alg_data).upper[vertex]) {
         std::get<1>(alg_data).lower[vertex] = std::get<1>(alg_data).upper[vertex] = ecc + 1;
         ++(std::get<2>(alg_data));
       }

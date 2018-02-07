@@ -311,22 +311,9 @@ int main(int argc, char **argv)
         const double time_start = MPI_Wtime();
         if (count_iteration == 0) {
           // Do nothing
-        } else if (count_iteration % 4 == 0) {
-          if (mpi_rank ==  0) std::cout << "randomly select sources" << std::endl;
+        } else {
           source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::rnd());
-        } else if (count_iteration % 4 == 1) {
-          if (mpi_rank ==  0) std::cout << "select farthest sources" << std::endl;
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::far());
-        } else if (count_iteration % 4 == 2) {
-          if (mpi_rank ==  0) std::cout << "select highest degree sources" << std::endl;
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::hdeg());
-        } else if (count_iteration % 4 == 3) {
-          if (mpi_rank ==  0) std::cout << "select 2 level away sources" << std::endl;
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::lvl2());
+                                                                      eecc_source_select_mode_tag::far_and_hdeg());
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
