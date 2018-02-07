@@ -319,6 +319,9 @@ int main(int argc, char **argv)
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Sources: " << time_end - time_start << std::endl;
+          for (auto locator : source_locator_list)
+            std::cout << graph->locator_to_label(locator) << " ";
+          std::cout << std::endl;
         }
       }
 
@@ -351,9 +354,16 @@ int main(int argc, char **argv)
       {
         plun_single_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
       }
-//      {
-//        find_max_ecc_bound_from_neighbor<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-//      }
+
+      {
+        std::vector<size_t> histgram = compute_distance_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
+        if (mpi_rank == 0) {
+          std::cout << "distance score (upper - lower)" << std::endl;
+          for (size_t i = 0; i < histgram.size(); ++i) {
+            std::cout << "DS: " << i << "\t" << histgram[i] << std::endl;
+          }
+        }
+      }
 
       // ------------------------------ Diameter calculation termination test ------------------------------ //
       {
