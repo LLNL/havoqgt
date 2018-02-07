@@ -260,8 +260,8 @@ set_bfs_sources(typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_d
 
   if (mpi_rank == 0) {
     std::cout << "0\t" // Level
-              << std::setprecision(6) << static_cast<double>(0.0) << "\t" // Traversal time
-              << std::setprecision(6) << time_end - time_start << "\t"; // Local update
+              << std::setprecision(2) << static_cast<double>(0.0) << "\t" // Traversal time
+              << std::setprecision(2) << time_end - time_start << "\t"; // Local update
     for (size_t k = 0; k < source_list.size(); ++k) std::cout << "1 ";
     std::cout << std::endl; // #of visited vertices
   }
@@ -312,7 +312,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
 
 
   // Set BFS sources (level 0)
-  if (mpi_rank == 0) std::cout << "Level\t" << "Traversal time\t" <<"Local Update\t" << "Visited vertices\t" << std::endl;
+  if (mpi_rank == 0) std::cout << "[Level]\t" << "[Traversal time]\t" <<"[Local Update]\t" << "[Visited vertices]" << std::endl;
   detail::set_bfs_sources<TGraph, k_num_sources>(vertex_data, source_list);
   std::vector<size_t> num_total_visited_vertices(source_list.size(), 1);
   g_current_level = 1;
@@ -325,7 +325,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
       vq.init_visitor_traversal_new(); // init_visit -> queue
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << std::setprecision(6) << time_end - time_start << "\t";
+      if (mpi_rank == 0) std::cout << std::setprecision(2) << time_end - time_start << "\t";
     }
 
     // ------------------------------ Update BFS information ------------------------------ //
@@ -342,7 +342,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
         num_local_visited_vertices[i] = cnt1[i] + cnt2[i];
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << std::setprecision(6) << time_end - -time_start << "\t";
+      if (mpi_rank == 0) std::cout << std::setprecision(2) << time_end - -time_start << "\t";
     }
 
     std::vector<size_t> num_global_visited_vertices;

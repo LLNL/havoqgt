@@ -313,7 +313,7 @@ int main(int argc, char **argv)
           // Do nothing
         } else {
           source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::far_and_hdeg());
+                                                                      eecc_source_select_mode_tag::far_and_hdeg(k_num_sources / 2, k_num_sources / 2));
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
@@ -342,7 +342,7 @@ int main(int argc, char **argv)
         k_breadth_first_search_level_per_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, source_locator_list);
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "BFS Time: " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << std::setprecision(6) << "BFS Time: " << time_end - time_start << std::endl;
       }
 
       // ------------------------------ Compute exact ecc ------------------------------ //
@@ -358,10 +358,11 @@ int main(int argc, char **argv)
       {
         std::vector<size_t> histgram = compute_distance_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
         if (mpi_rank == 0) {
-          std::cout << "distance score (upper - lower)" << std::endl;
+          std::cout << "Distance score (upper - lower):";
           for (size_t i = 0; i < histgram.size(); ++i) {
-            std::cout << "DS: " << i << "\t" << histgram[i] << std::endl;
+            std::cout << " " << histgram[i];
           }
+          std::cout << std::endl;
         }
       }
 
@@ -376,7 +377,7 @@ int main(int argc, char **argv)
         max_lower = mpi_all_reduce(max_lower, std::greater<level_t>(), MPI_COMM_WORLD);
         max_upper = mpi_all_reduce(max_upper, std::greater<level_t>(), MPI_COMM_WORLD);
 
-        if (mpi_rank == 0) std::cout << "terminate test " << max_lower << " : " << max_upper << std::endl;
+        if (mpi_rank == 0) std::cout << "Diameter termination test " << max_lower << " : " << max_upper << std::endl;
       }
       ++count_iteration;
     } // End exact ecc loop
