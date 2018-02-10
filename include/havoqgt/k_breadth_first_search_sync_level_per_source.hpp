@@ -260,8 +260,8 @@ set_bfs_sources(typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_d
 
   if (mpi_rank == 0) {
     std::cout << "0\t" // Level
-              << std::setprecision(2) << static_cast<double>(0.0) << "\t" // Traversal time
-              << std::setprecision(2) << time_end - time_start << "\t"; // Local update
+              << static_cast<double>(0.0) << "\t" // Traversal time
+              << time_end - time_start << "\t"; // Local update
     for (size_t k = 0; k < source_list.size(); ++k) std::cout << "1 ";
     std::cout << std::endl; // #of visited vertices
   }
@@ -310,6 +310,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
                                         vertex_data.visited_flag, vertex_data.new_visited_flag);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
+  std::cout << std::setprecision(2);
 
   // Set BFS sources (level 0)
   if (mpi_rank == 0) std::cout << "[Level]\t" << "[Traversal time]\t" <<"[Local Update]\t" << "[Visited vertices]" << std::endl;
@@ -325,7 +326,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
       vq.init_visitor_traversal_new(); // init_visit -> queue
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << std::setprecision(2) << time_end - time_start << "\t";
+      if (mpi_rank == 0) std::cout << time_end - time_start << "\t";
     }
 
     // ------------------------------ Update BFS information ------------------------------ //
@@ -342,7 +343,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
         num_local_visited_vertices[i] = cnt1[i] + cnt2[i];
       MPI_Barrier(MPI_COMM_WORLD);
       const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << std::setprecision(2) << time_end - -time_start << "\t";
+      if (mpi_rank == 0) std::cout << time_end - -time_start << "\t";
     }
 
     std::vector<size_t> num_global_visited_vertices;
@@ -368,6 +369,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
       std::cout << n << "\t";
     std::cout << std::endl;
   }
+  std::cout << std::setprecision(6);
 }
 } //end namespace havoqgt
 

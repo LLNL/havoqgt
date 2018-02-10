@@ -312,13 +312,13 @@ int main(int argc, char **argv)
         if (count_iteration == 0) {
           // Do nothing
         } else {
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                      eecc_source_select_mode_tag::far_and_hdeg(k_num_sources / 2, k_num_sources / 2));
+          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
-          std::cout << "Sources: " << time_end - time_start << std::endl;
+          std::cout << "Select sources: " << time_end - time_start << std::endl;
+          std::cout << "# sources: " << source_locator_list.size() << std::endl;
           for (auto locator : source_locator_list)
             std::cout << graph->locator_to_label(locator) << " ";
           std::cout << std::endl;
@@ -349,14 +349,16 @@ int main(int argc, char **argv)
       {
         const size_t num_remains = compute_eecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, source_locator_list);
         if (num_remains == 0) break; // Terminal condition
+        MPI_Barrier(MPI_COMM_WORLD);
       }
 
       {
         plun_single_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+        MPI_Barrier(MPI_COMM_WORLD);
       }
 
       {
-        std::vector<size_t> histgram = compute_distance_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
+        std::vector<size_t> histgram = compute_distance_score_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
         if (mpi_rank == 0) {
           std::cout << "Distance score (upper - lower):";
           for (size_t i = 0; i < histgram.size(); ++i) {
@@ -364,6 +366,12 @@ int main(int argc, char **argv)
           }
           std::cout << std::endl;
         }
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+
+      {
+        collect_unsolved_vertices_statistics<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+        MPI_Barrier(MPI_COMM_WORLD);
       }
 
       // ------------------------------ Diameter calculation termination test ------------------------------ //
@@ -378,6 +386,7 @@ int main(int argc, char **argv)
         max_upper = mpi_all_reduce(max_upper, std::greater<level_t>(), MPI_COMM_WORLD);
 
         if (mpi_rank == 0) std::cout << "Diameter termination test " << max_lower << " : " << max_upper << std::endl;
+        MPI_Barrier(MPI_COMM_WORLD);
       }
       ++count_iteration;
     } // End exact ecc loop

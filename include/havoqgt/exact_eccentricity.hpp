@@ -60,6 +60,7 @@
 #include <chrono>
 #include <random>
 #include <functional>
+#include <unordered_map>
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -147,308 +148,309 @@ namespace detail
 // -------------------------------------------------------------------------------------------------------------- //
 // find_highest_degree_vertices
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, int k_num_sources, typename iterator_t>
-void find_highest_degree_vertices_helper(const graph_t *const graph, iterator_t vitr, iterator_t end,
-                                         const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                         const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                         std::vector<size_t> &highest_degree_list,
-                                         std::vector<uint64_t> &highest_degree_id_list)
-{
-  for (; vitr != end; ++vitr) {
-    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
-      continue; // skip unvisited vertices
-    if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
-
-    const size_t degree = graph->degree(*vitr);
-    if (highest_degree_list.size() < k_num_sources) {
-      highest_degree_list.emplace_back(degree);
-      highest_degree_id_list.emplace_back(graph->locator_to_label(*vitr));
-    } else {
-      const auto min_itr = std::min_element(highest_degree_list.begin(), highest_degree_list.end());
-      const off_t min_pos = std::distance(highest_degree_list.begin(), min_itr);
-      if (highest_degree_list[min_pos] < degree) {
-        highest_degree_list[min_pos] = degree;
-        highest_degree_id_list[min_pos] = graph->locator_to_label(*vitr);
-      }
-    }
-  }
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> find_highest_degree_vertices(const graph_t *const graph,
-                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
-{
-  std::vector<size_t> global_highest_degree_list;
-  std::vector<uint64_t> global_highest_degree_id_list;
-
-  {
-    std::vector<size_t> local_highest_degree_list;
-    std::vector<uint64_t> local_highest_degree_id_list;
-    find_highest_degree_vertices_helper<graph_t, k_num_sources>(graph,
-                                                                graph->vertices_begin(),
-                                                                graph->vertices_end(),
-                                                                kbfs_vertex_data,
-                                                                ecc_vertex_data,
-                                                                local_highest_degree_list,
-                                                                local_highest_degree_id_list);
-    find_highest_degree_vertices_helper<graph_t, k_num_sources>(graph,
-                                                                graph->controller_begin(),
-                                                                graph->controller_end(),
-                                                                kbfs_vertex_data,
-                                                                ecc_vertex_data,
-                                                                local_highest_degree_list,
-                                                                local_highest_degree_id_list);
-    assert(local_highest_degree_list.size() == global_highest_degree_id_list.size());
-
-    havoqgt::mpi_all_gather(local_highest_degree_list, global_highest_degree_list, MPI_COMM_WORLD);
-    havoqgt::mpi_all_gather(local_highest_degree_id_list, global_highest_degree_id_list, MPI_COMM_WORLD);
-  }
-
-  const size_t num_total_candidates = global_highest_degree_list.size();
-  std::vector<uint64_t> selected_vertex_id_list;
-  if (num_total_candidates > k_num_sources) {
-    std::vector<std::pair<size_t, uint64_t>> table;
-    table.resize(num_total_candidates);
-    for (size_t i = 0; i < global_highest_degree_list.size(); ++i) {
-      table[i] = std::make_pair(global_highest_degree_list[i], global_highest_degree_id_list[i]);
-    }
-    std::partial_sort(table.begin(), table.begin() + k_num_sources, table.end(),
-                      [&](const std::pair<size_t, uint64_t> &a, const std::pair<size_t, uint64_t> &b) -> bool {
-                        return (a.first > b.first);
-                      });
-
-    selected_vertex_id_list.resize(k_num_sources);
-    for (size_t i = 0; i < k_num_sources; ++i) {
-      selected_vertex_id_list[i] = table[i].second;
-    }
-  } else {
-    selected_vertex_id_list = std::move(global_highest_degree_id_list);
-  }
-
-  return selected_vertex_id_list;
-}
+//template <typename graph_t, int k_num_sources, typename iterator_t>
+//void find_highest_degree_vertices_helper(const graph_t *const graph, iterator_t vitr, iterator_t end,
+//                                         const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                         const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                         std::vector<size_t> &highest_degree_list,
+//                                         std::vector<uint64_t> &highest_degree_id_list)
+//{
+//  for (; vitr != end; ++vitr) {
+//    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
+//      continue; // skip unvisited vertices
+//    if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
+//
+//    const size_t degree = graph->degree(*vitr);
+//    if (highest_degree_list.size() < k_num_sources) {
+//      highest_degree_list.emplace_back(degree);
+//      highest_degree_id_list.emplace_back(graph->locator_to_label(*vitr));
+//    } else {
+//      const auto min_itr = std::min_element(highest_degree_list.begin(), highest_degree_list.end());
+//      const off_t min_pos = std::distance(highest_degree_list.begin(), min_itr);
+//      if (highest_degree_list[min_pos] < degree) {
+//        highest_degree_list[min_pos] = degree;
+//        highest_degree_id_list[min_pos] = graph->locator_to_label(*vitr);
+//      }
+//    }
+//  }
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> find_highest_degree_vertices(const graph_t *const graph,
+//                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
+//{
+//  std::vector<size_t> global_highest_degree_list;
+//  std::vector<uint64_t> global_highest_degree_id_list;
+//
+//  {
+//    std::vector<size_t> local_highest_degree_list;
+//    std::vector<uint64_t> local_highest_degree_id_list;
+//    find_highest_degree_vertices_helper<graph_t, k_num_sources>(graph,
+//                                                                graph->vertices_begin(),
+//                                                                graph->vertices_end(),
+//                                                                kbfs_vertex_data,
+//                                                                ecc_vertex_data,
+//                                                                local_highest_degree_list,
+//                                                                local_highest_degree_id_list);
+//    find_highest_degree_vertices_helper<graph_t, k_num_sources>(graph,
+//                                                                graph->controller_begin(),
+//                                                                graph->controller_end(),
+//                                                                kbfs_vertex_data,
+//                                                                ecc_vertex_data,
+//                                                                local_highest_degree_list,
+//                                                                local_highest_degree_id_list);
+//    assert(local_highest_degree_list.size() == global_highest_degree_id_list.size());
+//
+//    havoqgt::mpi_all_gather(local_highest_degree_list, global_highest_degree_list, MPI_COMM_WORLD);
+//    havoqgt::mpi_all_gather(local_highest_degree_id_list, global_highest_degree_id_list, MPI_COMM_WORLD);
+//  }
+//
+//  const size_t num_total_candidates = global_highest_degree_list.size();
+//  std::vector<uint64_t> selected_vertex_id_list;
+//  if (num_total_candidates > k_num_sources) {
+//    std::vector<std::pair<size_t, uint64_t>> table;
+//    table.resize(num_total_candidates);
+//    for (size_t i = 0; i < global_highest_degree_list.size(); ++i) {
+//      table[i] = std::make_pair(global_highest_degree_list[i], global_highest_degree_id_list[i]);
+//    }
+//    std::partial_sort(table.begin(), table.begin() + k_num_sources, table.end(),
+//                      [&](const std::pair<size_t, uint64_t> &a, const std::pair<size_t, uint64_t> &b) -> bool {
+//                        return (a.first > b.first);
+//                      });
+//
+//    selected_vertex_id_list.resize(k_num_sources);
+//    for (size_t i = 0; i < k_num_sources; ++i) {
+//      selected_vertex_id_list[i] = table[i].second;
+//    }
+//  } else {
+//    selected_vertex_id_list = std::move(global_highest_degree_id_list);
+//  }
+//
+//  return selected_vertex_id_list;
+//}
 
 // -------------------------------------------------------------------------------------------------------------- //
 // find_max_lower_vertices
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, int k_num_sources, typename iterator_t>
-void find_max_lower_vertices_helper(const graph_t *const graph,
-                                    iterator_t vitr, iterator_t end,
-                                    const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                    const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                    std::vector<level_t> &level_list, std::vector<uint64_t> &vertex_id_list,
-                                    const size_t max_num_sources)
-{
-  for (; vitr != end; ++vitr) {
-    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
-      continue; // skip unvisited vertices
-    if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
-
-    const auto min_itr = std::min_element(kbfs_vertex_data.level[*vitr].begin(), kbfs_vertex_data.level[*vitr].end());
-    const level_t min_level = *min_itr;
-    if (level_list.size() < max_num_sources) {
-      level_list.emplace_back(min_level);
-      vertex_id_list.emplace_back(graph->locator_to_label(*vitr));
-    } else {
-      auto min_level_itr = std::min_element(level_list.begin(), level_list.end());
-      const off_t min_pos = std::distance(level_list.begin(), min_level_itr);
-      if (level_list[min_pos] < min_level) {
-        level_list[min_pos] = min_level;
-        vertex_id_list[min_pos] = graph->locator_to_label(*vitr);
-      }
-    }
-  }
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> find_max_lower_vertices(const graph_t *const graph,
-                                              const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                              const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                              const eecc_source_select_mode_tag::max_lower tag)
-{
-  std::vector<level_t> global_level_list;
-  std::vector<uint64_t> global_vertex_id_list;
-
-  {
-    std::vector<level_t> local_level_list;
-    std::vector<uint64_t> local_vertex_id_list;
-    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->vertices_begin(), graph->vertices_end(),
-                                                           kbfs_vertex_data, ecc_vertex_data,
-                                                           local_level_list, local_vertex_id_list, tag.max_sources);
-    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->controller_begin(), graph->controller_end(),
-                                                           kbfs_vertex_data, ecc_vertex_data,
-                                                           local_level_list, local_vertex_id_list, tag.max_sources);
-    assert(local_level_list.size() == local_vertex_id_list.size());
-
-    havoqgt::mpi_all_gather(local_level_list, global_level_list, MPI_COMM_WORLD);
-    havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
-  }
-
-  const size_t num_total_candidates = global_level_list.size();
-  std::vector<uint64_t> selected_vertex_id_list;
-  if (num_total_candidates > tag.max_sources) {
-    std::vector<std::pair<level_t, uint64_t>> table;
-    table.resize(num_total_candidates);
-    for (size_t i = 0; i < global_level_list.size(); ++i) {
-      table[i] = std::make_pair(global_level_list[i], global_vertex_id_list[i]);
-    }
-    std::partial_sort(table.begin(), table.begin() + tag.max_sources, table.end(),
-                      [&](const std::pair<level_t, uint64_t> &a,
-                          const std::pair<level_t, uint64_t> &b) -> bool {
-                        return (a.first > b.first);
-                      });
-
-    selected_vertex_id_list.resize(tag.max_sources);
-    for (size_t i = 0; i < tag.max_sources; ++i) {
-      selected_vertex_id_list[i] = table[i].second;
-    }
-  } else {
-    selected_vertex_id_list = std::move(global_vertex_id_list);
-  }
-
-  return selected_vertex_id_list;
-}
+//template <typename graph_t, int k_num_sources, typename iterator_t>
+//void find_max_lower_vertices_helper(const graph_t *const graph,
+//                                    iterator_t vitr, iterator_t end,
+//                                    const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                    const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                    std::vector<level_t> &level_list, std::vector<uint64_t> &vertex_id_list,
+//                                    const size_t max_num_sources)
+//{
+//  for (; vitr != end; ++vitr) {
+//    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
+//      continue; // skip unvisited vertices
+//    if (ecc_vertex_data.lower[*vitr] == ecc_vertex_data.upper[*vitr]) continue;
+//
+//    const auto min_itr = std::min_element(kbfs_vertex_data.level[*vitr].begin(), kbfs_vertex_data.level[*vitr].end());
+//    const level_t min_level = *min_itr;
+//    if (level_list.size() < max_num_sources) {
+//      level_list.emplace_back(min_level);
+//      vertex_id_list.emplace_back(graph->locator_to_label(*vitr));
+//    } else {
+//      auto min_level_itr = std::min_element(level_list.begin(), level_list.end());
+//      const off_t min_pos = std::distance(level_list.begin(), min_level_itr);
+//      if (level_list[min_pos] < min_level) {
+//        level_list[min_pos] = min_level;
+//        vertex_id_list[min_pos] = graph->locator_to_label(*vitr);
+//      }
+//    }
+//  }
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> find_max_lower_vertices(const graph_t *const graph,
+//                                              const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                              const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                              const eecc_source_select_mode_tag::max_lower tag)
+//{
+//  std::vector<level_t> global_level_list;
+//  std::vector<uint64_t> global_vertex_id_list;
+//
+//  {
+//    std::vector<level_t> local_level_list;
+//    std::vector<uint64_t> local_vertex_id_list;
+//    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->vertices_begin(), graph->vertices_end(),
+//                                                           kbfs_vertex_data, ecc_vertex_data,
+//                                                           local_level_list, local_vertex_id_list, tag.max_sources);
+//    find_max_lower_vertices_helper<graph_t, k_num_sources>(graph, graph->controller_begin(), graph->controller_end(),
+//                                                           kbfs_vertex_data, ecc_vertex_data,
+//                                                           local_level_list, local_vertex_id_list, tag.max_sources);
+//    assert(local_level_list.size() == local_vertex_id_list.size());
+//
+//    havoqgt::mpi_all_gather(local_level_list, global_level_list, MPI_COMM_WORLD);
+//    havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
+//  }
+//
+//  const size_t num_total_candidates = global_level_list.size();
+//  std::vector<uint64_t> selected_vertex_id_list;
+//  if (num_total_candidates > tag.max_sources) {
+//    std::vector<std::pair<level_t, uint64_t>> table;
+//    table.resize(num_total_candidates);
+//    for (size_t i = 0; i < global_level_list.size(); ++i) {
+//      table[i] = std::make_pair(global_level_list[i], global_vertex_id_list[i]);
+//    }
+//    std::partial_sort(table.begin(), table.begin() + tag.max_sources, table.end(),
+//                      [&](const std::pair<level_t, uint64_t> &a,
+//                          const std::pair<level_t, uint64_t> &b) -> bool {
+//                        return (a.first > b.first);
+//                      });
+//
+//    selected_vertex_id_list.resize(tag.max_sources);
+//    for (size_t i = 0; i < tag.max_sources; ++i) {
+//      selected_vertex_id_list[i] = table[i].second;
+//    }
+//  } else {
+//    selected_vertex_id_list = std::move(global_vertex_id_list);
+//  }
+//
+//  return selected_vertex_id_list;
+//}
 
 // -------------------------------------------------------------------------------------------------------------- //
 // randomly_select_source
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> randomly_select_source(graph_t *graph,
-                                             const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                             const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
-{
-  int mpi_rank(0), mpi_size(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
-  std::vector<uint64_t> local_vertex_id_list;
-  std::vector<uint64_t> global_vertex_id_list;
-
-  size_t num_non_resolved_vertices(0);
-  for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
-    if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-    if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
-    ++num_non_resolved_vertices;
-  }
-
-  for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
-    if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-    if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
-    ++num_non_resolved_vertices;
-  }
-
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint64_t> dis(0, num_non_resolved_vertices - 1);
-
-  // ----- randomly pick up vertices up to whichever smaller number of k sources or non resolved vertices ----- //
-  while (local_vertex_id_list.size() < std::min(static_cast<size_t>(k_num_sources), num_non_resolved_vertices)) {
-    for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
-      if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-      if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
-      if (dis(gen) >= k_num_sources) continue;
-      uint64_t vid = graph->locator_to_label(*itr);
-      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
-        continue;
-      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
-    }
-    for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
-      if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-      if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
-      if (dis(gen) >= k_num_sources) continue;
-      uint64_t vid = graph->locator_to_label(*itr);
-      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
-        continue;
-      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
-    }
-  }
-
-  havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
-
-  if (global_vertex_id_list.size() > k_num_sources) {
-    std::mt19937_64 gen(global_vertex_id_list.size());
-    std::shuffle(global_vertex_id_list.begin(), global_vertex_id_list.end(), gen);
-    global_vertex_id_list.resize(k_num_sources);
-  }
-
-  return global_vertex_id_list;
-}
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> randomly_select_source(graph_t *graph,
+//                                             const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                             const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                             eecc_source_select_mode_tag::random tag)
+//{
+//  int mpi_rank(0), mpi_size(0);
+//  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+//  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+//
+//  std::vector<uint64_t> local_vertex_id_list;
+//  std::vector<uint64_t> global_vertex_id_list;
+//
+//  size_t num_non_resolved_vertices(0);
+//  for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
+//    if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+//    if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
+//    ++num_non_resolved_vertices;
+//  }
+//
+//  for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
+//    if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+//    if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
+//    ++num_non_resolved_vertices;
+//  }
+//
+//  std::random_device rd;
+//  std::mt19937_64 gen(rd());
+//  std::uniform_int_distribution<uint64_t> dis(0, num_non_resolved_vertices - 1);
+//
+//  // ----- randomly pick up vertices up to whichever smaller number of k sources or non resolved vertices ----- //
+//  while (local_vertex_id_list.size() < std::min(static_cast<size_t>(tag.max_sources), num_non_resolved_vertices)) {
+//    for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
+//      if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+//      if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
+//      if (dis(gen) >= tag.max_sources) continue;
+//      uint64_t vid = graph->locator_to_label(*itr);
+//      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
+//        continue;
+//      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
+//    }
+//    for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
+//      if (kbfs_vertex_data.level[*itr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+//      if (ecc_vertex_data.lower[*itr] == ecc_vertex_data.upper[*itr]) continue;
+//      if (dis(gen) >= tag.max_sources) continue;
+//      uint64_t vid = graph->locator_to_label(*itr);
+//      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
+//        continue;
+//      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
+//    }
+//  }
+//
+//  havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
+//
+//  if (global_vertex_id_list.size() > tag.max_sources) {
+//    std::mt19937_64 gen(global_vertex_id_list.size());
+//    std::shuffle(global_vertex_id_list.begin(), global_vertex_id_list.end(), gen);
+//    global_vertex_id_list.resize(tag.max_sources);
+//  }
+//
+//  return global_vertex_id_list;
+//}
 
 
 // -------------------------------------------------------------------------------------------------------------- //
 // select_2level_away_vertices
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, int k_num_sources>
-bool is_2_level_away(const typename graph_t::vertex_locator vertex,
-                     const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                     const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
-{
-  if (kbfs_vertex_data.level[vertex][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) return false;
-  if (ecc_vertex_data.lower[vertex] == ecc_vertex_data.upper[vertex]) return false;
-
-  for (level_t lv : kbfs_vertex_data.level[vertex]) {
-    if (lv == 2) {
-      return true;
-    }
-  }
-  return false;
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_2_level_away_vertices(graph_t *graph,
-                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
-{
-  int mpi_rank(0), mpi_size(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
-  std::vector<uint64_t> local_vertex_id_list;
-  std::vector<uint64_t> global_vertex_id_list;
-
-  size_t num_non_resolved_vertices(0);
-  for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
-    num_non_resolved_vertices += is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data);
-  }
-  for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
-    num_non_resolved_vertices += is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data);
-  }
-
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint64_t> dis(0, num_non_resolved_vertices - 1);
-
-  // ---- randomly pick up vertices which are 2 levels away----- //
-  while (local_vertex_id_list.size() < std::min(static_cast<size_t>(k_num_sources), num_non_resolved_vertices)) {
-    for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
-      if (!is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data)) continue;
-      if (dis(gen) >= k_num_sources) continue;
-      uint64_t vid = graph->locator_to_label(*itr);
-      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
-        continue;
-      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
-    }
-    for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
-      if (!is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data)) continue;
-      if (dis(gen) >= k_num_sources) continue;
-      uint64_t vid = graph->locator_to_label(*itr);
-      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
-        continue;
-      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
-    }
-  }
-
-  havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
-
-  if (global_vertex_id_list.size() > k_num_sources) {
-    std::mt19937_64 gen(global_vertex_id_list.size());
-    std::shuffle(global_vertex_id_list.begin(), global_vertex_id_list.end(), gen);
-    global_vertex_id_list.resize(k_num_sources);
-  }
-
-  return global_vertex_id_list;
-}
+//template <typename graph_t, int k_num_sources>
+//bool is_2_level_away(const typename graph_t::vertex_locator vertex,
+//                     const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                     const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
+//{
+//  if (kbfs_vertex_data.level[vertex][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) return false;
+//  if (ecc_vertex_data.lower[vertex] == ecc_vertex_data.upper[vertex]) return false;
+//
+//  for (level_t lv : kbfs_vertex_data.level[vertex]) {
+//    if (lv == 2) {
+//      return true;
+//    }
+//  }
+//  return false;
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_2_level_away_vertices(graph_t *graph,
+//                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
+//{
+//  int mpi_rank(0), mpi_size(0);
+//  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+//  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+//
+//  std::vector<uint64_t> local_vertex_id_list;
+//  std::vector<uint64_t> global_vertex_id_list;
+//
+//  size_t num_non_resolved_vertices(0);
+//  for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
+//    num_non_resolved_vertices += is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data);
+//  }
+//  for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
+//    num_non_resolved_vertices += is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data);
+//  }
+//
+//  std::random_device rd;
+//  std::mt19937_64 gen(rd());
+//  std::uniform_int_distribution<uint64_t> dis(0, num_non_resolved_vertices - 1);
+//
+//  // ---- randomly pick up vertices which are 2 levels away----- //
+//  while (local_vertex_id_list.size() < std::min(static_cast<size_t>(k_num_sources), num_non_resolved_vertices)) {
+//    for (auto itr = graph->vertices_begin(), end = graph->vertices_end(); itr != end; ++itr) {
+//      if (!is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data)) continue;
+//      if (dis(gen) >= k_num_sources) continue;
+//      uint64_t vid = graph->locator_to_label(*itr);
+//      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
+//        continue;
+//      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
+//    }
+//    for (auto itr = graph->controller_begin(), end = graph->controller_end(); itr != end; ++itr) {
+//      if (!is_2_level_away<graph_t, k_num_sources>(*itr, kbfs_vertex_data, ecc_vertex_data)) continue;
+//      if (dis(gen) >= k_num_sources) continue;
+//      uint64_t vid = graph->locator_to_label(*itr);
+//      if (std::find(local_vertex_id_list.begin(), local_vertex_id_list.end(), vid) != local_vertex_id_list.end())
+//        continue;
+//      local_vertex_id_list.emplace_back(graph->locator_to_label(*itr));
+//    }
+//  }
+//
+//  havoqgt::mpi_all_gather(local_vertex_id_list, global_vertex_id_list, MPI_COMM_WORLD);
+//
+//  if (global_vertex_id_list.size() > k_num_sources) {
+//    std::mt19937_64 gen(global_vertex_id_list.size());
+//    std::shuffle(global_vertex_id_list.begin(), global_vertex_id_list.end(), gen);
+//    global_vertex_id_list.resize(k_num_sources);
+//  }
+//
+//  return global_vertex_id_list;
+//}
 
 // -------------------------------------------------------------------------------------------------------------- //
 // compute_ecc_k_source
@@ -469,176 +471,333 @@ void compute_ecc_k_source(iterator_t vitr, iterator_t end,
 // -------------------------------------------------------------------------------------------------------------- //
 // select_source_in_local
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, typename iterator_t>
-void select_source_in_local_helper(const graph_t *const graph, iterator_t vitr, iterator_t end,
-                                   const size_t max_size,
-                                   std::function<bool(const uint64_t)> &is_candidate,
-                                   std::function<bool(const uint64_t, const uint64_t)> &is_prior,
-                                   std::vector<uint64_t> &vid_list)
+//template <typename graph_t, typename iterator_t>
+//void select_source_in_local_helper(const graph_t *const graph, iterator_t vitr, iterator_t end,
+//                                   const size_t max_size,
+//                                   std::function<bool(const uint64_t)> &is_candidate,
+//                                   std::function<bool(const uint64_t, const uint64_t)> &is_prior,
+//                                   std::vector<uint64_t> &vid_list)
+//{
+//  for (; vitr != end; ++vitr) {
+//    const uint64_t vid = graph->locator_to_label(*vitr);
+//    if (!is_candidate(vid)) continue;
+//    if (vid_list.size() < max_size) {
+//      vid_list.emplace_back(vid);
+//    } else {
+//      auto min_itr = std::min_element(vid_list.begin(), vid_list.end(),
+//                                      [&is_prior](const uint64_t x1, const uint64_t x2) -> bool {
+//                                        return !is_prior(x1, x2);
+//                                      });
+//      uint64_t &min_vid = *min_itr;
+//      if (is_prior(vid, min_vid)) {
+//        min_vid = vid; // kick out lowest priority element
+//      }
+//    }
+//  }
+//}
+//
+//template <typename graph_t>
+//std::vector<uint64_t> select_source_in_local(const graph_t *const graph,
+//                                             const size_t max_size,
+//                                             std::function<bool(const uint64_t)> is_candidate,
+//                                             std::function<bool(const uint64_t, const uint64_t)> is_prior)
+//{
+//  std::vector<uint64_t> local_vid_list;
+//  select_source_in_local_helper(graph, graph->vertices_begin(), graph->vertices_end(),
+//                                max_size, is_candidate, is_prior, local_vid_list);
+//  select_source_in_local_helper(graph, graph->controller_begin(), graph->controller_end(),
+//                                max_size, is_candidate, is_prior, local_vid_list);
+//
+//  return local_vid_list;
+//}
+
+template <typename graph_t, int k_num_sources, typename iterator_t>
+void select_source_in_local(const graph_t *const graph,
+                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                                   const size_t max_num_sources,
+                                   std::vector<std::function<uint64_t(const typename graph_t::vertex_locator)>> &score_calculater_list,
+                                   std::vector<typename graph_t::vertex_locator> &candidate_list,
+                                   iterator_t vitr, iterator_t end)
 {
+  auto is_candidate =  [&graph, &kbfs_vertex_data, &ecc_vertex_data](const typename graph_t::vertex_locator locator) -> bool {
+    return ((kbfs_vertex_data.level[locator][0] != kbfs_type<graph_t, k_num_sources>::unvisited_level) &&
+            (ecc_vertex_data.lower[locator] != ecc_vertex_data.upper[locator]));
+  };
+  auto is_prior = [graph, &score_calculater_list](const typename graph_t::vertex_locator locator1, const typename graph_t::vertex_locator locator2) -> bool {
+    for (auto& score_calculator : score_calculater_list) {
+      const uint64_t score1 = score_calculator(locator1);
+      const uint64_t score2 = score_calculator(locator2);
+      if (score1 != score2) return (score1 > score1);
+    }
+    // --- Final tie braker--- //
+    const uint64_t vid1 = graph->locator_to_label(locator1);
+    const uint64_t vid2 = graph->locator_to_label(locator2);
+    const uint64_t h1 = shifted_n_hash16(vid1, 64);
+    const uint64_t h2 = shifted_n_hash16(vid2, 64);
+    return (h1 > h2);
+  };
+
   for (; vitr != end; ++vitr) {
-    const uint64_t vid = graph->locator_to_label(*vitr);
-    if (!is_candidate(vid)) continue;
-    if (vid_list.size() < max_size) {
-      vid_list.emplace_back(vid);
+    auto locator = *vitr;
+    if (!is_candidate(locator)) continue;
+    if (candidate_list.size() < max_num_sources) {
+      candidate_list.emplace_back(locator);
     } else {
-      auto min_itr = std::min_element(vid_list.begin(), vid_list.end(),
-                                      [&is_prior](const uint64_t x1, const uint64_t x2) -> bool {
-                                        return !is_prior(x1, x2);
-                                      });
-      uint64_t &min_vid = *min_itr;
-      if (is_prior(vid, min_vid)) {
-        min_vid = vid; // kick out lowest priority element
+      auto min_itr = std::min_element(candidate_list.begin(), candidate_list.end(),
+                                      [&is_prior](const typename graph_t::vertex_locator x1, const typename graph_t::vertex_locator x2) -> bool {
+        return !is_prior(x1, x2);
+      });
+      if (is_prior(locator, *min_itr)) {
+        *min_itr = locator; // kick out lowest priority element
       }
     }
   }
 }
 
-template <typename graph_t>
-std::vector<uint64_t> select_source_in_local(const graph_t *const graph,
-                                             const size_t max_size,
-                                             std::function<bool(const uint64_t)> is_candidate,
-                                             std::function<bool(const uint64_t, const uint64_t)> is_prior)
-{
-  std::vector<uint64_t> local_vid_list;
-  select_source_in_local_helper(graph, graph->vertices_begin(), graph->vertices_end(),
-                                max_size, is_candidate, is_prior, local_vid_list);
-  select_source_in_local_helper(graph, graph->controller_begin(), graph->controller_end(),
-                                max_size, is_candidate, is_prior, local_vid_list);
-
-  return local_vid_list;
-}
-
-// -------------------------------------------------------------------------------------------------------------- //
-// select_far_and_hdeg_vertices
-// -------------------------------------------------------------------------------------------------------------- //
 template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_far_and_hdeg_vertices_helper(graph_t *graph,
-                                                          const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                                          const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                                          const size_t max_num_sources, const bool prior_distance)
+std::vector<typename graph_t::vertex_locator>
+select_source_in_global(const graph_t *const graph,
+                        const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                        const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                        const size_t max_num_sources,
+                        const std::vector<std::function<uint64_t(const typename graph_t::vertex_locator)>> &score_calculater_list,
+                        const std::vector<typename graph_t::vertex_locator> &candidate_list)
 {
-  auto local_vid_list = detail::select_source_in_local(graph, max_num_sources,
-                                                       [&graph, &kbfs_vertex_data, &ecc_vertex_data](const uint64_t vid) -> bool {
-                                                         auto locator = graph->label_to_locator(vid);
-                                                         return ((kbfs_vertex_data.level[locator][0] !=
-                                                                  kbfs_type<graph_t, k_num_sources>::unvisited_level) &&
-                                                                 (ecc_vertex_data.lower[locator] !=
-                                                                  ecc_vertex_data.upper[locator]));
-                                                       },
-                                                       [&graph, &kbfs_vertex_data, &ecc_vertex_data, &prior_distance](
-                                                         const uint64_t vid1,
-                                                         const uint64_t vid2) -> bool {
-                                                         auto locator1 = graph->label_to_locator(vid1);
-                                                         auto locator2 = graph->label_to_locator(vid2);
-
-                                                         const size_t distance_score1 =
-                                                           ecc_vertex_data.upper[locator1] - ecc_vertex_data.lower[locator1];
-                                                         const size_t distance_score2 =
-                                                           ecc_vertex_data.upper[locator2] - ecc_vertex_data.lower[locator2];
-                                                         const size_t degree1 = graph->degree(locator1);
-                                                         const size_t degree2 = graph->degree(locator2);
-
-                                                         if (prior_distance) {
-                                                           if (distance_score1 != distance_score2)
-                                                             return (distance_score1 > distance_score2);
-                                                           if (degree1 != degree2)
-                                                             return (degree1 > degree2);
-                                                         } else {
-                                                           if (degree1 != degree2)
-                                                             return (degree1 > degree2);
-                                                           if (distance_score1 != distance_score2)
-                                                             return (distance_score1 > distance_score2);
-                                                         }
-
-                                                         const uint64_t h1 = shifted_n_hash16(vid1, 64);
-                                                         const uint64_t h2 = shifted_n_hash16(vid2, 64);
-                                                         return (h1 > h2);
-                                                       });
-
-  std::vector<uint64_t> global_distance_score_list;
-  {
-    std::vector<uint64_t> local_distance_score_list;
-    for (auto vid : local_vid_list) {
-      auto locator = graph->label_to_locator(vid);
-      local_distance_score_list.emplace_back(ecc_vertex_data.upper[locator] - ecc_vertex_data.lower[locator]);
+  std::vector<std::vector<uint64_t>> global_score_matrix;
+  for (size_t i = 0; i < score_calculater_list.size(); ++i) {
+    std::vector<uint64_t> local_score_list;
+    for (auto locator : candidate_list) {
+      local_score_list.emplace_back(score_calculater_list[i](locator));
     }
-    havoqgt::mpi_all_gather(local_distance_score_list, global_distance_score_list, MPI_COMM_WORLD);
+    mpi_all_gather(local_score_list, global_score_matrix[i], MPI_COMM_WORLD);
   }
 
-  std::vector<size_t> global_degree_list;
-  {
-    std::vector<size_t> local_degree_list;
-    for (auto vid : local_vid_list) {
-      auto locator = graph->label_to_locator(vid);
-      local_degree_list.emplace_back(graph->degree(locator));
-    }
-    havoqgt::mpi_all_gather(local_degree_list, global_degree_list, MPI_COMM_WORLD);
+  std::vector<uint64_t> local_vid_list;
+  for (auto locator : candidate_list) {
+    local_vid_list.emplace_back(graph->locator_to_label(locator));
   }
-
   std::vector<uint64_t> global_vid_list;
   havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
 
-  std::unordered_map<uint64_t, uint64_t> distance_score_table;
-  std::unordered_map<uint64_t, size_t> degree_table;
-  {
-    for (size_t i = 0; i < global_vid_list.size(); ++i) {
-      distance_score_table[global_vid_list[i]] = global_distance_score_list[i];
-      degree_table[global_vid_list[i]] = global_degree_list[i];
+  std::vector<std::unordered_map<uint64_t, uint64_t>> global_score_table_list;
+  for (size_t i = 0; i < global_score_matrix.size(); ++i) {
+    auto& global_score_table = global_score_table_list[i];
+    auto& global_score_list = global_score_matrix[i];
+    for (size_t j = 0; j < global_vid_list.size(); ++j) {
+      global_score_table[global_vid_list[i]] = global_score_list[i];
     }
   }
 
   const size_t final_size = std::min(static_cast<size_t>(max_num_sources), global_vid_list.size());
   std::partial_sort(global_vid_list.begin(), global_vid_list.begin() + final_size, global_vid_list.end(),
-                    [&distance_score_table, &degree_table, &prior_distance](const uint64_t vid1,
-                                                                            const uint64_t vid2) -> bool {
-                      const uint64_t distance_score1 = distance_score_table[vid1];
-                      const uint64_t distance_score2 = distance_score_table[vid2];
-                      const size_t degree1 = degree_table[vid1];
-                      const size_t degree2 = degree_table[vid2];
-
-                      if (prior_distance) {
-                        if (distance_score1 != distance_score2)
-                          return (distance_score1 > distance_score2);
-                        if (degree1 != degree2)
-                          return (degree1 > degree2);
-                      } else {
-                        if (degree1 != degree2)
-                          return (degree1 > degree2);
-                        if (distance_score1 != distance_score2)
-                          return (distance_score1 > distance_score2);
+                    [&global_score_table_list](const uint64_t vid1, const uint64_t vid2) -> bool {
+                      for (auto& score_table : global_score_table_list) {
+                        const uint64_t score1 = score_table[vid1];
+                        const uint64_t score2 = score_table[vid2];
+                        if (score1 != score2) return (score1 > score2);
                       }
-
-                      const uint64_t h1 = shifted_n_hash16(vid1, 64);
-                      const uint64_t h2 = shifted_n_hash16(vid2, 64);
-                      return (h1 > h2);
                     });
   global_vid_list.resize(final_size);
 
-  return global_vid_list;
-};
+  std::vector<typename graph_t::vertex_locator> selected_source_list;
+  for (auto vid : global_vid_list) {
+    selected_source_list.emplace_back(graph->label_to_locator(vid));
+  }
+
+  return selected_source_list;
+}
 
 template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_far_and_hdeg_vertices(graph_t *graph,
-                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                                   eecc_source_select_mode_tag::far_and_hdeg tag)
+std::vector<typename graph_t::vertex_locator>
+select_source(const graph_t *const graph,
+              const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+              const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+              const size_t max_num_sources,
+              std::vector<std::function<uint64_t(const typename graph_t::vertex_locator)>> score_calculater_list)
 {
-  auto vid_list1 = select_far_and_hdeg_vertices_helper<graph_t, k_num_sources>(graph,
-                                                                               kbfs_vertex_data, ecc_vertex_data,
-                                                                               tag.max_num_far_sources, true);
-  auto vid_list2 = select_far_and_hdeg_vertices_helper<graph_t, k_num_sources>(graph,
-                                                                               kbfs_vertex_data, ecc_vertex_data,
-                                                                               tag.max_num_hdeg_sources, false);
 
-  // --- Merge selected sources removing duplicates --- //
-  vid_list1.insert(vid_list1.end(), vid_list2.begin(), vid_list2.end());
-  std::sort(vid_list1.begin(), vid_list1.end());
-  auto end = std::unique(vid_list1.begin(), vid_list1.end());
-  vid_list1.resize(std::distance(vid_list1.begin(), end));
+  std::vector<typename graph_t::vertex_locator> local_candidate_list;
+  select_source_in_local<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                 max_num_sources, score_calculater_list, local_candidate_list,
+                                                 graph->vertices_begin(), graph->vertices_end());
+  select_source_in_local<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                 max_num_sources, score_calculater_list, local_candidate_list,
+                                                 graph->controller_begin(), graph->controller_end());
 
-  return vid_list1;
-};
+  return select_source_in_global<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                         max_num_sources, score_calculater_list, local_candidate_list);
+}
+
+
+// -------------------------------------------------------------------------------------------------------------- //
+// select_far_and_hdeg_vertices
+// -------------------------------------------------------------------------------------------------------------- //
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_far_and_hdeg_vertices_helper(graph_t *graph,
+//                                                          const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                                          const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                                          const size_t max_num_sources, const bool prior_distance)
+//{
+//  auto count_2level = [kbfs_vertex_data](typename graph_t::vertex_locator locator) -> size_t {
+//    size_t count(0);
+//    for (level_t lv : kbfs_vertex_data.level[locator]) {
+//      if (lv == 2) {
+//        ++count;
+//      }
+//    }
+//    return count;
+//  };
+//
+//  auto local_vid_list = detail::select_source_in_local(graph, max_num_sources,
+//                                                       [&graph, &kbfs_vertex_data, &ecc_vertex_data](const uint64_t vid) -> bool {
+//                                                         auto locator = graph->label_to_locator(vid);
+//                                                         return ((kbfs_vertex_data.level[locator][0] !=
+//                                                                  kbfs_type<graph_t, k_num_sources>::unvisited_level) &&
+//                                                                 (ecc_vertex_data.lower[locator] !=
+//                                                                  ecc_vertex_data.upper[locator]));
+//                                                       },
+//                                                       [&graph, &kbfs_vertex_data, &ecc_vertex_data, &prior_distance, &count_2level](
+//                                                         const uint64_t vid1,
+//                                                         const uint64_t vid2) -> bool {
+//                                                         auto locator1 = graph->label_to_locator(vid1);
+//                                                         auto locator2 = graph->label_to_locator(vid2);
+//
+//                                                         // --- Distance score & degree --- //
+//                                                         const size_t distance_score1 =
+//                                                           ecc_vertex_data.upper[locator1] - ecc_vertex_data.lower[locator1];
+//                                                         const size_t distance_score2 =
+//                                                           ecc_vertex_data.upper[locator2] - ecc_vertex_data.lower[locator2];
+//                                                         const size_t degree1 = graph->degree(locator1);
+//                                                         const size_t degree2 = graph->degree(locator2);
+//
+//                                                         if (prior_distance) {
+//                                                           if (distance_score1 != distance_score2)
+//                                                             return (distance_score1 > distance_score2);
+//                                                           if (degree1 != degree2)
+//                                                             return (degree1 > degree2);
+//                                                         } else {
+//                                                           if (degree1 != degree2)
+//                                                             return (degree1 > degree2);
+//                                                           if (distance_score1 != distance_score2)
+//                                                             return (distance_score1 > distance_score2);
+//                                                         }
+//
+//                                                         // --- 2 level --- //
+//                                                         const size_t num_level2_1 = count_2level(locator1);
+//                                                         const size_t num_level2_2 = count_2level(locator2);
+//                                                         if (num_level2_1 != num_level2_2)
+//                                                           return (num_level2_1 > num_level2_2);
+//
+//                                                         // --- Random --- //
+//                                                         const uint64_t h1 = shifted_n_hash16(vid1, 64);
+//                                                         const uint64_t h2 = shifted_n_hash16(vid2, 64);
+//                                                         return (h1 > h2);
+//                                                       });
+//
+//  std::vector<uint64_t> global_distance_score_list;
+//  {
+//    std::vector<uint64_t> local_distance_score_list;
+//    for (auto vid : local_vid_list) {
+//      auto locator = graph->label_to_locator(vid);
+//      local_distance_score_list.emplace_back(ecc_vertex_data.upper[locator] - ecc_vertex_data.lower[locator]);
+//    }
+//    havoqgt::mpi_all_gather(local_distance_score_list, global_distance_score_list, MPI_COMM_WORLD);
+//  }
+//
+//  std::vector<size_t> global_degree_list;
+//  {
+//    std::vector<size_t> local_degree_list;
+//    for (auto vid : local_vid_list) {
+//      auto locator = graph->label_to_locator(vid);
+//      local_degree_list.emplace_back(graph->degree(locator));
+//    }
+//    havoqgt::mpi_all_gather(local_degree_list, global_degree_list, MPI_COMM_WORLD);
+//  }
+//
+//  std::vector<size_t> global_num_2level_list;
+//  {
+//    std::vector<size_t> local_num_2level_list;
+//    for (auto vid : local_vid_list) {
+//      auto locator = graph->label_to_locator(vid);
+//      local_num_2level_list.emplace_back(count_2level(locator));
+//    }
+//    havoqgt::mpi_all_gather(local_num_2level_list, global_num_2level_list, MPI_COMM_WORLD);
+//  }
+//
+//  std::vector<uint64_t> global_vid_list;
+//  havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
+//
+//  std::unordered_map<uint64_t, uint64_t> distance_score_table;
+//  std::unordered_map<uint64_t, size_t> degree_table;
+//  std::unordered_map<uint64_t, size_t> num_2level_table;
+//  {
+//    for (size_t i = 0; i < global_vid_list.size(); ++i) {
+//      distance_score_table[global_vid_list[i]] = global_distance_score_list[i];
+//      degree_table[global_vid_list[i]] = global_degree_list[i];
+//      num_2level_table[global_vid_list[i]] = global_num_2level_list[i];
+//    }
+//  }
+//
+//  const size_t final_size = std::min(static_cast<size_t>(max_num_sources), global_vid_list.size());
+//  std::partial_sort(global_vid_list.begin(), global_vid_list.begin() + final_size, global_vid_list.end(),
+//                    [&distance_score_table, &degree_table, &prior_distance, &num_2level_table](const uint64_t vid1,
+//                                                                            const uint64_t vid2) -> bool {
+//                      const uint64_t distance_score1 = distance_score_table[vid1];
+//                      const uint64_t distance_score2 = distance_score_table[vid2];
+//                      const size_t degree1 = degree_table[vid1];
+//                      const size_t degree2 = degree_table[vid2];
+//
+//                      // --- Distance score & degree --- //
+//                      if (prior_distance) {
+//                        if (distance_score1 != distance_score2)
+//                          return (distance_score1 > distance_score2);
+//                        if (degree1 != degree2)
+//                          return (degree1 > degree2);
+//                      } else {
+//                        if (degree1 != degree2)
+//                          return (degree1 > degree2);
+//                        if (distance_score1 != distance_score2)
+//                          return (distance_score1 > distance_score2);
+//                      }
+//
+//                      // --- 2 level --- //
+//                      const size_t num_level2_1 = num_2level_table[vid1];
+//                      const size_t num_level2_2 = num_2level_table[vid2];
+//                      if (num_level2_1 != num_level2_2)
+//                        return (num_level2_1 > num_level2_2);
+//
+//                      // --- Random --- //
+//                      const uint64_t h1 = shifted_n_hash16(vid1, 64);
+//                      const uint64_t h2 = shifted_n_hash16(vid2, 64);
+//                      return (h1 > h2);
+//                    });
+//  global_vid_list.resize(final_size);
+//
+//  return global_vid_list;
+//};
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_far_and_hdeg_vertices(graph_t *graph,
+//                                                   const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                                   const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                                   eecc_source_select_mode_tag::far_and_hdeg tag)
+//{
+//  auto vid_list1 = select_far_and_hdeg_vertices_helper<graph_t, k_num_sources>(graph,
+//                                                                               kbfs_vertex_data, ecc_vertex_data,
+//                                                                               tag.max_num_far_sources, true);
+//  auto vid_list2 = select_far_and_hdeg_vertices_helper<graph_t, k_num_sources>(graph,
+//                                                                               kbfs_vertex_data, ecc_vertex_data,
+//                                                                               tag.max_num_hdeg_sources, false);
+//
+//  // --- Merge selected sources removing duplicates --- //
+//  vid_list1.insert(vid_list1.end(), vid_list2.begin(), vid_list2.end());
+//  std::sort(vid_list1.begin(), vid_list1.end());
+//  auto end = std::unique(vid_list1.begin(), vid_list1.end());
+//  vid_list1.resize(std::distance(vid_list1.begin(), end));
+//
+//  return vid_list1;
+//};
 
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -704,50 +863,50 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
   return std::make_pair(num_bounded_vertices, num_non_bounded_vertices);
 }
 
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_source_helper(graph_t *graph,
-                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::random)
-{
-  return detail::randomly_select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_source_helper(graph_t *graph,
-                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::max_lower tag)
-{
-  return detail::find_max_lower_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, tag);
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_source_helper(graph_t *graph,
-                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::high_degree)
-{
-  return detail::find_highest_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_source_helper(graph_t *graph,
-                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::level2)
-{
-  return detail::select_2_level_away_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
-}
-
-template <typename graph_t, int k_num_sources>
-std::vector<uint64_t> select_source_helper(graph_t *graph,
-                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                           eecc_source_select_mode_tag::far_and_hdeg tag)
-{
-  return detail::select_far_and_hdeg_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, tag);
-}
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_source_helper(graph_t *graph,
+//                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                           eecc_source_select_mode_tag::random tag)
+//{
+//  return detail::randomly_select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, tag);
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_source_helper(graph_t *graph,
+//                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                           eecc_source_select_mode_tag::max_lower tag)
+//{
+//  return detail::find_max_lower_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, tag);
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_source_helper(graph_t *graph,
+//                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                           eecc_source_select_mode_tag::high_degree tag)
+//{
+//  return detail::find_highest_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_source_helper(graph_t *graph,
+//                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                           eecc_source_select_mode_tag::level2 tag)
+//{
+//  return detail::select_2_level_away_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+//}
+//
+//template <typename graph_t, int k_num_sources>
+//std::vector<uint64_t> select_source_helper(graph_t *graph,
+//                                           typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//                                           typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//                                           eecc_source_select_mode_tag::far_and_hdeg tag)
+//{
+//  return detail::select_far_and_hdeg_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, tag);
+//}
 
 } // namespace detail
 
@@ -831,23 +990,80 @@ size_t compute_eecc(graph_t *graph,
 // -------------------------------------------------------------------------------------------------------------- //
 // select_source
 // -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, int k_num_sources, typename eecc_source_select_mode_tag_t>
+template <typename graph_t, int k_num_sources>
 std::vector<typename graph_t::vertex_locator>
 select_source(graph_t *graph,
               typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
               typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-              eecc_source_select_mode_tag_t tag)
+              const size_t max_num_sources)
 {
-  auto source_id_list = detail::select_source_helper<graph_t, k_num_sources>(graph,
-                                                                             kbfs_vertex_data,
-                                                                             ecc_vertex_data,
-                                                                             tag);
-  std::vector<typename graph_t::vertex_locator> source_locator_list;
-  for (auto id : source_id_list) {
-    source_locator_list.emplace_back(graph->label_to_locator(id));
+  auto degree_score = [graph](const typename graph_t::vertex_locator locator) -> uint64_t {
+    return graph->degree(locator);
+  };
+
+  auto shell_score = [&kbfs_vertex_data](const typename graph_t::vertex_locator locator) -> uint64_t {
+    level_t total(0);
+    for (int k = 0; k < k_num_sources; ++k) {
+      total += kbfs_vertex_data.level[locator][k];
+    }
+    return total;
+  };
+
+  auto diff_score = [&ecc_vertex_data](const typename graph_t::vertex_locator locator) -> uint64_t {
+    return ecc_vertex_data.upper[locator] - ecc_vertex_data.lower[locator];
+  };
+
+  auto level2_score = [&kbfs_vertex_data](const typename graph_t::vertex_locator locator) -> uint64_t {
+    level_t total(0);
+    for (int k = 0; k < k_num_sources; ++k) {
+      total += (kbfs_vertex_data.level[locator][k] == 2);
+    }
+    return total;
+  };
+
+  auto source_list1 = detail::select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                                    max_num_sources / 2,
+                                                                    {degree_score, shell_score, diff_score, level2_score});
+  auto source_list2 = detail::select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                                    max_num_sources / 4 * 3,
+                                                                    {shell_score, diff_score, level2_score, degree_score});
+  auto source_list3 = detail::select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                                    max_num_sources,
+                                                                    {diff_score, level2_score, degree_score, shell_score});
+
+  for (auto locator : source_list2) {
+    if (std::find(source_list1.begin(), source_list1.end(), locator) == source_list1.end()) {
+      source_list1.push_back(locator);
+    }
+    if (source_list1.size() >= max_num_sources / 4 * 3) break;
   }
-  return source_locator_list;
+
+  for (auto locator : source_list3) {
+    if (std::find(source_list1.begin(), source_list1.end(), locator) == source_list1.end()) {
+      source_list1.push_back(locator);
+    }
+    if (source_list1.size() >= max_num_sources / 4 * 3) break;
+  }
+
 }
+
+//template <typename graph_t, int k_num_sources, typename eecc_source_select_mode_tag_t>
+//std::vector<typename graph_t::vertex_locator>
+//select_source(graph_t *graph,
+//              typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+//              typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+//              eecc_source_select_mode_tag_t tag)
+//{
+//  auto source_id_list = detail::select_source_helper<graph_t, k_num_sources>(graph,
+//                                                                             kbfs_vertex_data,
+//                                                                             ecc_vertex_data,
+//                                                                             tag);
+//  std::vector<typename graph_t::vertex_locator> source_locator_list;
+//  for (auto id : source_id_list) {
+//    source_locator_list.emplace_back(graph->label_to_locator(id));
+//  }
+//  return source_locator_list;
+//}
 
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -954,7 +1170,7 @@ void plun_single_degree_vertices(graph_t *graph,
   }
 
   num_pluned = mpi_all_reduce(num_pluned, std::plus<level_t>(), MPI_COMM_WORLD);
-  if (mpi_rank == 0) std::cout << "Plunned: " << num_pluned << std::endl;
+  if (mpi_rank == 0) std::cout << "# pluned: " << num_pluned << std::endl;
 }
 
 
@@ -1098,7 +1314,7 @@ void find_max_ecc_bound_from_neighbor(graph_t *graph,
 // compute_distance_score
 // -------------------------------------------------------------------------------------------------------------- //
 template <typename graph_t, int k_num_sources, typename iterator_t>
-void compute_distance_histgram_helper(iterator_t vitr, iterator_t end,
+void compute_distance_score_histgram_helper(iterator_t vitr, iterator_t end,
                                       typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                       typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                       const size_t max_distance,
@@ -1113,20 +1329,156 @@ void compute_distance_histgram_helper(iterator_t vitr, iterator_t end,
 }
 
 template <typename graph_t, int k_num_sources>
-std::vector<size_t> compute_distance_histgram(graph_t *graph,
+std::vector<size_t> compute_distance_score_histgram(graph_t *graph,
                                               typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                               typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                               const size_t max_distance)
 {
   std::vector<size_t> histgram(max_distance + 2, 0);
-  compute_distance_histgram_helper<graph_t, k_num_sources>(graph->vertices_begin(), graph->vertices_end(),
+  compute_distance_score_histgram_helper<graph_t, k_num_sources>(graph->vertices_begin(), graph->vertices_end(),
                                                            kbfs_vertex_data, ecc_vertex_data, max_distance, histgram);
-  compute_distance_histgram_helper<graph_t, k_num_sources>(graph->controller_begin(), graph->controller_end(),
+  compute_distance_score_histgram_helper<graph_t, k_num_sources>(graph->controller_begin(), graph->controller_end(),
                                                            kbfs_vertex_data, ecc_vertex_data, max_distance, histgram);
 
   mpi_all_reduce_inplace(histgram, std::plus<size_t>(), MPI_COMM_WORLD);
 
   return histgram;
+}
+
+// -------------------------------------------------------------------------------------------------------------- //
+// collect information about unsolved vertices
+// -------------------------------------------------------------------------------------------------------------- //
+template <typename graph_t, int k_num_sources, typename iterator_t>
+void dump_unsolved_vertices_info_helper(graph_t *graph, iterator_t vitr, iterator_t end,
+                                        typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                        typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                                        std::ofstream &ofs)
+{
+  for (; vitr != end; ++vitr) {
+    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+    if (ecc_vertex_data.upper[*vitr] == ecc_vertex_data.lower[*vitr]) continue;
+    ofs << graph->locator_to_label(*vitr) << " " << graph->degree(*vitr) << " " << kbfs_vertex_data.level[*vitr]
+        << " " << ecc_vertex_data.upper[*vitr] << " " << ecc_vertex_data.lower[*vitr] << std::endl;
+  }
+}
+
+template <typename graph_t, int k_num_sources>
+void dump_unsolved_vertices_info(graph_t *graph,
+                                 typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                 typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                                 const std::string &output_prefix)
+{
+  int mpi_rank(0), mpi_size(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+
+  std::string output_path = output_prefix + "_" + std::to_string(mpi_rank);
+  std::ofstream ofs(output_path);
+  dump_unsolved_vertices_info_helper(graph, graph->vertices_begin(), graph->vertices_end(),
+                                     kbfs_vertex_data, ecc_vertex_data, ofs);
+  dump_unsolved_vertices_info_helper(graph, graph->controller_begin(), graph->controller_end(),
+                                     kbfs_vertex_data, ecc_vertex_data, ofs);
+}
+
+template <typename graph_t, int k_num_sources, typename iterator_t>
+void collect_unsolved_vertices_statistics_helper(graph_t *graph, iterator_t vitr, iterator_t end,
+                                                 const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                                 const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
+                                                 std::map<size_t, size_t> &degree_count,
+                                                 std::map<size_t, size_t> &level_count,
+                                                 std::map<size_t, size_t> &lower_count,
+                                                 std::map<size_t, size_t> &upper_count)
+{
+  auto count_up = [](const size_t key, std::map<size_t, size_t>& table){
+    if (table.count(key) == 0) table[key] = 0;
+    ++table[key];
+  };
+
+  for (; vitr != end; ++vitr) {
+    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
+    if (ecc_vertex_data.upper[*vitr] == ecc_vertex_data.lower[*vitr]) continue;
+    {
+      size_t degree = graph->degree(*vitr);
+      if (degree > 10) {
+        degree = std::pow(10, std::log10(degree));
+      }
+      count_up(degree, degree_count);
+    }
+    {
+      level_t average_level = 0;
+      for (size_t k = 0; k < k_num_sources; ++k) {
+        average_level += kbfs_vertex_data.level[*vitr][k];
+      }
+      average_level /= k_num_sources;
+      count_up(average_level, level_count);
+    }
+    {
+      count_up(ecc_vertex_data.upper[*vitr], lower_count);
+      count_up(ecc_vertex_data.lower[*vitr], upper_count);
+    }
+  }
+}
+
+template <typename graph_t, int k_num_sources>
+void collect_unsolved_vertices_statistics(graph_t *graph,
+                                          typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+                                          typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
+{
+  int mpi_rank(0), mpi_size(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+
+  std::map<size_t, size_t> degree_count;
+  std::map<size_t, size_t> level_count;
+  std::map<size_t, size_t> lower_count;
+  std::map<size_t, size_t> upper_count;
+
+  collect_unsolved_vertices_statistics_helper<graph_t, k_num_sources>(graph,
+                                                                      graph->vertices_begin(), graph->vertices_end(),
+                                                                      kbfs_vertex_data, ecc_vertex_data,
+                                                                      degree_count, level_count, lower_count, upper_count);
+  collect_unsolved_vertices_statistics_helper<graph_t, k_num_sources>(graph,
+                                                                      graph->controller_begin(), graph->controller_end(),
+                                                                      kbfs_vertex_data, ecc_vertex_data,
+                                                                      degree_count, level_count, lower_count, upper_count);
+
+  auto all_gather = [](std::map<size_t, size_t>& table){
+    std::vector<size_t> first;
+    std::vector<size_t> second;
+    for (auto elem : table) {
+      first.emplace_back(elem.first);
+      second.emplace_back(elem.second);
+    }
+    std::vector<size_t> gl_first;
+    mpi_all_gather(first, gl_first, MPI_COMM_WORLD);
+    std::vector<size_t> gl_second;
+    mpi_all_gather(second, gl_second, MPI_COMM_WORLD);
+
+    table.clear();
+    for (size_t i = 0; i < gl_first.size(); ++i) {
+      if (table.count(gl_first[i]) == 0) table[gl_first[i]] = 0;
+      table[gl_first[i]] += gl_second[i];
+    }
+  };
+
+  all_gather(degree_count);
+  all_gather(level_count);
+  all_gather(lower_count);
+  all_gather(upper_count);
+
+  auto print = [](std::map<size_t, size_t>& table) {
+    for (auto elem : table) {
+      std::cout << elem.first << " " << elem.second << ", ";
+    }
+    std::cout << std::endl;
+  };
+
+  if (mpi_rank == 0) {
+    std::cout << "degree: "; print(degree_count);
+    std::cout << "level: "; print(level_count);
+    std::cout << "lower: "; print(lower_count);
+    std::cout << "upper: "; print(upper_count);
+  }
 }
 
 } // namespace havoqgt
