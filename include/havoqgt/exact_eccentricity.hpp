@@ -545,7 +545,8 @@ void select_source_in_local(const graph_t *const graph,
       candidate_list.emplace_back(locator);
     } else {
       auto min_itr = std::min_element(candidate_list.begin(), candidate_list.end(),
-                                      [&is_prior](const typename graph_t::vertex_locator x1, const typename graph_t::vertex_locator x2) -> bool {
+                                      [&is_prior](const typename graph_t::vertex_locator x1,
+                                                  const typename graph_t::vertex_locator x2) -> bool {
         return !is_prior(x1, x2);
       });
       if (is_prior(locator, *min_itr)) {
@@ -564,7 +565,8 @@ select_source_in_global(const graph_t *const graph,
                         const std::vector<std::function<uint64_t(const typename graph_t::vertex_locator)>> &score_calculater_list,
                         const std::vector<typename graph_t::vertex_locator> &candidate_list)
 {
-  std::vector<std::vector<uint64_t>> global_score_matrix;
+  // -------------------- Construct and exchange score list in global -------------------- //
+  std::vector<std::vector<uint64_t>> global_score_matrix(score_calculater_list.size());
   for (size_t i = 0; i < score_calculater_list.size(); ++i) {
     std::vector<uint64_t> local_score_list;
     for (auto locator : candidate_list) {
@@ -580,12 +582,13 @@ select_source_in_global(const graph_t *const graph,
   std::vector<uint64_t> global_vid_list;
   havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
 
-  std::vector<std::unordered_map<uint64_t, uint64_t>> global_score_table_list;
+  // -------------------- Select high priority sources based on the exchanged scores -------------------- //
+  std::vector<std::unordered_map<uint64_t, uint64_t>> global_score_table_list(global_score_matrix.size());
   for (size_t i = 0; i < global_score_matrix.size(); ++i) {
     auto& global_score_table = global_score_table_list[i];
     auto& global_score_list = global_score_matrix[i];
     for (size_t j = 0; j < global_vid_list.size(); ++j) {
-      global_score_table[global_vid_list[i]] = global_score_list[i];
+      global_score_table[global_vid_list[j]] = global_score_list[j];
     }
   }
 
@@ -601,7 +604,7 @@ select_source_in_global(const graph_t *const graph,
   global_vid_list.resize(final_size);
 
   std::vector<typename graph_t::vertex_locator> selected_source_list;
-  for (auto vid : global_vid_list) {
+  for (uint64_t vid : global_vid_list) {
     selected_source_list.emplace_back(graph->label_to_locator(vid));
   }
 
@@ -1014,7 +1017,7 @@ select_source(graph_t *graph,
   };
 
   auto level2_score = [&kbfs_vertex_data](const typename graph_t::vertex_locator locator) -> uint64_t {
-    level_t total(0);
+    uint64_t total(0);
     for (int k = 0; k < k_num_sources; ++k) {
       total += (kbfs_vertex_data.level[locator][k] == 2);
     }
@@ -1045,6 +1048,7 @@ select_source(graph_t *graph,
     if (source_list1.size() >= max_num_sources / 4 * 3) break;
   }
 
+  return source_list1;
 }
 
 //template <typename graph_t, int k_num_sources, typename eecc_source_select_mode_tag_t>
@@ -1400,7 +1404,7 @@ void collect_unsolved_vertices_statistics_helper(graph_t *graph, iterator_t vitr
     {
       size_t degree = graph->degree(*vitr);
       if (degree > 10) {
-        degree = std::pow(10, std::log10(degree));
+        degree = std::pow(10, static_cast<uint64_t>(std::log10(degree)));
       }
       count_up(degree, degree_count);
     }
