@@ -88,7 +88,7 @@ struct kbfs_type
     using visited_sources_bitmap_t = typename graph_t::template vertex_data<k_bitmap, std::allocator<k_bitmap>>;
     using visited_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
 
-    vertex_data(const graph_t &graph)
+    explicit vertex_data(const graph_t &graph)
       : level(graph),
         visited_sources_bitmap(graph),
         new_visited_sources_bitmap(graph),
@@ -117,7 +117,7 @@ struct kbfs_type
 };
 
 // Should add to graph object?
-size_t g_current_level;
+level_t g_current_level;
 
 template <typename Graph, int num_k_sources>
 class kbfs_visitor
@@ -238,9 +238,8 @@ class kbfs_visitor
 namespace detail
 {
 template <typename TGraph, int k_num_sources>
-void
-set_bfs_sources(typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data,
-                std::vector<typename TGraph::vertex_locator> source_list)
+void set_bfs_sources(const std::vector<typename TGraph::vertex_locator> source_list,
+                     typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_data)
 {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -249,22 +248,14 @@ set_bfs_sources(typename kbfs_type<TGraph, k_num_sources>::vertex_data &vertex_d
   for (size_t k = 0; k < source_list.size(); ++k) {
     if (source_list[k].owner() == mpi_rank || source_list[k].is_delegate()) {
       vertex_data.level[source_list[k]][k] = 0; // source vertices are visited at level 0
-      typename kbfs_type<TGraph, k_num_sources>::k_bitmap visited_sources_bitmap;
-      visited_sources_bitmap.set(k);
-      vertex_data.visited_sources_bitmap[source_list[k]] = visited_sources_bitmap;
+      typename kbfs_type<TGraph, k_num_sources>::k_bitmap visited_bitmap;
+      visited_bitmap.set(k);
+      vertex_data.visited_sources_bitmap[source_list[k]] = visited_bitmap;
       vertex_data.visited_flag[source_list[k]] = true;
     }
   }
   MPI_Barrier(MPI_COMM_WORLD);
   const double time_end = MPI_Wtime();
-
-  if (mpi_rank == 0) {
-    std::cout << "0\t" // Level
-              << static_cast<double>(0.0) << "\t" // Traversal time
-              << time_end - time_start << "\t"; // Local update
-    for (size_t k = 0; k < source_list.size(); ++k) std::cout << "1 ";
-    std::cout << std::endl; // #of visited vertices
-  }
 }
 
 template <typename TGraph, int k_num_sources, typename iterator_t>
@@ -310,13 +301,16 @@ void k_breadth_first_search_level_per_source(TGraph *g,
                                         vertex_data.visited_flag, vertex_data.new_visited_flag);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
-  std::cout << std::setprecision(2);
+  // std::cout << std::setprecision(2);
 
   // Set BFS sources (level 0)
-  if (mpi_rank == 0) std::cout << "[Level]\t" << "[Traversal time]\t" <<"[Local Update]\t" << "[Visited vertices]" << std::endl;
-  detail::set_bfs_sources<TGraph, k_num_sources>(vertex_data, source_list);
+  detail::set_bfs_sources<TGraph, k_num_sources>(source_list, vertex_data);
   std::vector<size_t> num_total_visited_vertices(source_list.size(), 1);
   g_current_level = 1;
+
+  if (mpi_rank == 0) {
+    std::cout << "[Level]\t" << "[Traversal time]\t" <<"[Local Update]\t" << "[Visited vertices]" << std::endl;
+  }
 
   while (g_current_level < std::numeric_limits<level_t>::max()) { // level
     if (mpi_rank == 0) std::cout << g_current_level << "\t";
@@ -355,7 +349,7 @@ void k_breadth_first_search_level_per_source(TGraph *g,
     }
 
     // Terminate condition
-    if (std::accumulate(num_global_visited_vertices.begin(), num_global_visited_vertices.end(), 0) == 0) break;
+    if (std::accumulate(num_global_visited_vertices.begin(), num_global_visited_vertices.end(), 0ULL) == 0) break;
 
     for (size_t i = 0; i < num_total_visited_vertices.size(); ++i)
       num_total_visited_vertices[i] += num_global_visited_vertices[i];
@@ -364,12 +358,17 @@ void k_breadth_first_search_level_per_source(TGraph *g,
   }
 
   if (mpi_rank == 0) {
-    std::cout << "# total visited vertices: ";
-    for (auto n : num_total_visited_vertices)
-      std::cout << n << "\t";
-    std::cout << std::endl;
+    std::cout << "# total visited vertices from each sources: " << num_total_visited_vertices[0] << std::endl;
+
+    /// Simple validation code
+    for (size_t i = 0; i < num_total_visited_vertices.size() - 1; ++i) {
+      if (num_total_visited_vertices[i] != num_total_visited_vertices[i+1]) {
+        std::cerr << "# total visited vertices do not much" << std::endl;
+        std::abort();
+      }
+    }
   }
-  std::cout << std::setprecision(6);
+  // std::cout << std::setprecision(6);
 }
 } //end namespace havoqgt
 

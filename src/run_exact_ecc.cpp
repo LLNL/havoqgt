@@ -148,7 +148,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
         break;
     }
   }
-  if (prn_help || !found_input_filename || source_id_list.size() < k_num_sources) {
+  if (prn_help || !found_input_filename) {
     usage();
     exit(-1);
   }
@@ -253,19 +253,19 @@ int main(int argc, char **argv)
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
       havoqgt::get_environment().print();
-      std::cout << "k_num_sources " << k_num_sources << std::endl;
+      std::cout << "k_num_sources: " << k_num_sources << std::endl;
       //print_system_info(false);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
     std::string graph_input;
     std::string backup_filename;
-    std::vector<uint64_t> source_id_list;
+    std::vector<uint64_t> parsed_source_id_list;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, source_id_list);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, parsed_source_id_list);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    if (backup_filename.size() > 0) {
+    if (!backup_filename.empty()) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
@@ -277,11 +277,13 @@ int main(int argc, char **argv)
       std::cout << "Graph Loaded Ready." << std::endl;
     }
 
-    std::vector<typename graph_t::vertex_locator> source_locator_list = select_non_zero_degree_source(graph, source_id_list);
-    MPI_Barrier(MPI_COMM_WORLD);
-    if (mpi_rank == 0) {
-      std::cout << "Selected initial vertices" << std::endl;
-    }
+//    std::vector<typename graph_t::vertex_locator> source_locator_list;
+//    if (parsed_source_id_list.size() > 0)
+//      source_locator_list = select_non_zero_degree_source(graph, parsed_source_id_list);
+//    MPI_Barrier(MPI_COMM_WORLD);
+//    if (mpi_rank == 0) {
+//      std::cout << "Selected initial vertices" << std::endl;
+//    }
 
     // -------------------------------------------------------------------------------------------------------------- //
     //                                        Compute exact ecc and diameter
@@ -307,10 +309,14 @@ int main(int argc, char **argv)
         std::cout << "\n==================== " << count_iteration << " ====================" << std::endl;
 
       // ------------------------------ Select sources ------------------------------ //
+      std::vector<typename graph_t::vertex_locator> source_locator_list;
       {
         const double time_start = MPI_Wtime();
         if (count_iteration == 0) {
-          // Do nothing
+          if (!parsed_source_id_list.empty())
+            source_locator_list = select_non_zero_degree_source(graph, parsed_source_id_list);
+          else
+            source_locator_list = select_initial_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
         } else {
           source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
         }
@@ -319,8 +325,8 @@ int main(int argc, char **argv)
         if (mpi_rank == 0) {
           std::cout << "Select sources: " << time_end - time_start << std::endl;
           std::cout << "# sources: " << source_locator_list.size() << std::endl;
-          for (auto locator : source_locator_list)
-            std::cout << graph->locator_to_label(locator) << " ";
+          for (int k = 0; k < source_locator_list.size(); ++k)
+            std::cout << graph->locator_to_label(source_locator_list[k]) << " ";
           std::cout << std::endl;
         }
       }
@@ -342,18 +348,19 @@ int main(int argc, char **argv)
         k_breadth_first_search_level_per_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, source_locator_list);
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << std::setprecision(6) << "BFS Time: " << time_end - time_start << std::endl;
+        if (mpi_rank == 0) std::cout << "BFS Time: " << time_end - time_start << std::endl;
       }
 
       // ------------------------------ Compute exact ecc ------------------------------ //
       {
-        const size_t num_remains = compute_eecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, source_locator_list);
+        const size_t num_remains = compute_eecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, source_locator_list,
+                                                                        ecc_vertex_data);
         if (num_remains == 0) break; // Terminal condition
         MPI_Barrier(MPI_COMM_WORLD);
       }
 
       {
-        plun_single_degree_vertices<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+        plun_single_degree_vertices<graph_t, k_num_sources>(kbfs_vertex_data, graph, ecc_vertex_data);
         MPI_Barrier(MPI_COMM_WORLD);
       }
 
