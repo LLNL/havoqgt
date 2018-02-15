@@ -289,8 +289,8 @@ int main(int argc, char **argv)
     //                                        Compute exact ecc and diameter
     //-------------------------------------------------------------------------------------------------------------- //
     const double total_start_time = MPI_Wtime();
-    kbfs_t::vertex_data kbfs_vertex_data(*graph);
-    eecc_t::vertex_data ecc_vertex_data(*graph);
+    typename kbfs_t::vertex_data kbfs_vertex_data(*graph);
+    typename eecc_t::vertex_data ecc_vertex_data(*graph);
     if (mpi_rank == 0) std::cout << "Allocated vertex data: " << std::endl;
 
     // ------------------------------ Init ecc vertex data ------------------------------ //
@@ -304,6 +304,7 @@ int main(int argc, char **argv)
 
     // ------------------------------ Compute exact ECC ------------------------------ //
     size_t count_iteration(0);
+    size_t previous_num_sources(0);
     while (true) {
       if (mpi_rank == 0)
         std::cout << "\n==================== " << count_iteration << " ====================" << std::endl;
@@ -318,17 +319,18 @@ int main(int argc, char **argv)
           else
             source_locator_list = select_initial_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
         } else {
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
+          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources, previous_num_sources);
         }
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Select sources: " << time_end - time_start << std::endl;
           std::cout << "# sources: " << source_locator_list.size() << std::endl;
-          for (int k = 0; k < source_locator_list.size(); ++k)
+          for (size_t k = 0; k < source_locator_list.size(); ++k)
             std::cout << graph->locator_to_label(source_locator_list[k]) << " ";
           std::cout << std::endl;
         }
+        previous_num_sources = source_locator_list.size();
       }
 
       // ------------------------------ Reset data for KBFS ------------------------------ //
@@ -377,7 +379,8 @@ int main(int argc, char **argv)
       }
 
       {
-        collect_unsolved_vertices_statistics<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data);
+        collect_unsolved_vertices_statistics<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
+                                                                     source_locator_list.size());
         MPI_Barrier(MPI_COMM_WORLD);
       }
 

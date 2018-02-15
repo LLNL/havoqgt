@@ -76,9 +76,10 @@ template <typename _graph_t, int _k_num_sources>
 struct kbfs_type
 {
   using graph_t = _graph_t;
+  using k_level = std::array<level_t, _k_num_sources>;
+  using k_bitmap = typename havoqgt::detail::static_bitmap<_k_num_sources>;
+
   static constexpr int k_num_sources = _k_num_sources;
-  using k_level = std::array<level_t, k_num_sources>;
-  using k_bitmap = typename havoqgt::detail::static_bitmap<k_num_sources>;
   static constexpr level_t unvisited_level = std::numeric_limits<level_t>::max();
 
 
@@ -98,7 +99,7 @@ struct kbfs_type
     void init()
     {
       k_level initial_value;
-      initial_value.fill(unvisited_level);
+      initial_value.fill(std::numeric_limits<level_t>::max());
       level.reset(initial_value);
 
       visited_sources_bitmap.reset(k_bitmap());
@@ -244,9 +245,9 @@ void set_bfs_sources(const std::vector<typename TGraph::vertex_locator> source_l
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  const double time_start = MPI_Wtime();
+  // const double time_start = MPI_Wtime();
   for (size_t k = 0; k < source_list.size(); ++k) {
-    if (source_list[k].owner() == mpi_rank || source_list[k].is_delegate()) {
+    if (source_list[k].owner() == static_cast<uint32_t>(mpi_rank) || source_list[k].is_delegate()) {
       vertex_data.level[source_list[k]][k] = 0; // source vertices are visited at level 0
       typename kbfs_type<TGraph, k_num_sources>::k_bitmap visited_bitmap;
       visited_bitmap.set(k);
@@ -255,7 +256,7 @@ void set_bfs_sources(const std::vector<typename TGraph::vertex_locator> source_l
     }
   }
   MPI_Barrier(MPI_COMM_WORLD);
-  const double time_end = MPI_Wtime();
+  // const double time_end = MPI_Wtime();
 }
 
 template <typename TGraph, int k_num_sources, typename iterator_t>
