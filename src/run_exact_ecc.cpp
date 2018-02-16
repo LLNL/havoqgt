@@ -362,7 +362,7 @@ int main(int argc, char **argv)
       }
 
       {
-        plun_single_degree_vertices<graph_t, k_num_sources>(kbfs_vertex_data, graph, ecc_vertex_data);
+        prun_single_degree_vertices<graph_t, k_num_sources>(kbfs_vertex_data, graph, ecc_vertex_data);
         MPI_Barrier(MPI_COMM_WORLD);
       }
 
