@@ -127,7 +127,8 @@ struct eecc_type
 {
   struct vertex_data
   {
-    using vertex_data_ecc_t = typename graph_t::template vertex_data<level_t, std::allocator<level_t>>;
+    using ecc_t = typename graph_t::template vertex_data<level_t, std::allocator<level_t>>;
+    using just_solved_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
 
     explicit vertex_data(const graph_t &graph)
       : lower(graph),
@@ -137,10 +138,12 @@ struct eecc_type
     {
       lower.reset(std::numeric_limits<level_t>::min());
       upper.reset(std::numeric_limits<level_t>::max());
+      just_solved_flag.reset(false);
     }
 
-    vertex_data_ecc_t lower;
-    vertex_data_ecc_t upper;
+    ecc_t lower;
+    ecc_t upper;
+    just_solved_flag_t just_solved_flag;
   };
 };
 
@@ -321,8 +324,8 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
                                     typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
                                     iterator_t vitr, iterator_t end)
 {
-  size_t num_bounded_vertices(0);
-  size_t num_non_bounded_vertices(0);
+  size_t num_solved_vertices(0);
+  size_t num_non_solved_vertices(0);
 
   for (; vitr != end; ++vitr) {
     if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level)
@@ -332,7 +335,6 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
     level_t &current_upper = ecc_vertex_data.upper[*vitr];
     if (current_lower == current_upper) continue; // Exact ecc has been already found
 
-    bool bounded = false;
     for (size_t k = 0; k < k_source_ecc.size(); ++k) {
       const level_t level = kbfs_vertex_data.level[*vitr][k];
 
@@ -340,15 +342,15 @@ std::pair<size_t, size_t> bound_ecc(const graph_t *const graph,
       current_upper = std::min(current_upper, static_cast<uint16_t>(k_source_ecc[k] + level));
 
       if (current_lower == current_upper) {
-        bounded = true;
+        ecc_vertex_data.just_solved_flag[*vitr] = true;
         break;
       }
     }
-    num_bounded_vertices += bounded;
-    num_non_bounded_vertices += !bounded;
+    num_solved_vertices += ecc_vertex_data.just_solved_flag[*vitr];
+    num_non_solved_vertices += !ecc_vertex_data.just_solved_flag[*vitr];
   }
 
-  return std::make_pair(num_bounded_vertices, num_non_bounded_vertices);
+  return std::make_pair(num_solved_vertices, num_non_solved_vertices);
 }
 
 } // namespace detail
@@ -377,8 +379,10 @@ size_t compute_eecc(const graph_t *const graph,
                                                          graph->controller_begin(), graph->controller_end(), k_source_ecc);
     mpi_all_reduce_inplace(k_source_ecc, std::greater<level_t>(), MPI_COMM_WORLD);
     for (size_t k = 0; k < k_source_ecc.size(); ++k) {
-      if (source_locator_list[k].owner() == static_cast<uint32_t>(mpi_rank) || source_locator_list[k].is_delegate()) {
-        ecc_vertex_data.lower[source_locator_list[k]] = ecc_vertex_data.upper[source_locator_list[k]] = k_source_ecc[k];
+      auto& locator = source_locator_list[k];
+      if (locator.owner() == static_cast<uint32_t>(mpi_rank) || locator.is_delegate()) {
+        ecc_vertex_data.lower[locator] = ecc_vertex_data.upper[locator] = k_source_ecc[k];
+        ecc_vertex_data.just_solved_flag[locator] = true;
       }
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -392,42 +396,38 @@ size_t compute_eecc(const graph_t *const graph,
   }
 
   // ------------------------------ Bound ECC ------------------------------ //
-  size_t num_bounded_vertices(0);
-  size_t num_non_bounded_vertices(0);
+  size_t num_solved_vertices(0);
+  size_t num_non_solved_vertices(0);
   {
     const double time_start = MPI_Wtime();
     {
       auto ret = detail::bound_ecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, k_source_ecc,
                                                            ecc_vertex_data, graph->vertices_begin(), graph->vertices_end());
-      num_bounded_vertices += ret.first;
-      num_non_bounded_vertices += ret.second;
+      num_solved_vertices += ret.first;
+      num_non_solved_vertices += ret.second;
     }
 
     {
       auto ret = detail::bound_ecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, k_source_ecc,
                                                            ecc_vertex_data, graph->controller_begin(), graph->controller_end());
-      num_bounded_vertices += ret.first;
-      num_non_bounded_vertices += ret.second;
+      num_solved_vertices += ret.first;
+      num_non_solved_vertices += ret.second;
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    const size_t global_num_bounded_vertices = mpi_all_reduce(num_bounded_vertices,
-                                                              std::plus<size_t>(),
-                                                              MPI_COMM_WORLD);
-    const size_t global_num_non_bounded_vertices = mpi_all_reduce(num_non_bounded_vertices,
-                                                                  std::plus<size_t>(),
-                                                                  MPI_COMM_WORLD);
+    const size_t global_num_solved_vertices = mpi_all_reduce(num_solved_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
+    const size_t global_num_non_solved_vertices = mpi_all_reduce(num_non_solved_vertices, std::plus<size_t>(), MPI_COMM_WORLD);
     const double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
       std::cout << "Update ECC bounds: " << time_end - time_start << std::endl;
-      std::cout << "# bounded vertices: " << global_num_bounded_vertices << std::endl;
-      std::cout << "# non-bounded vertices: " << global_num_non_bounded_vertices << std::endl;
+      std::cout << "# solved vertices: " << global_num_solved_vertices << std::endl;
+      std::cout << "# non-solved vertices: " << global_num_non_solved_vertices << std::endl;
     }
   }
 
-  const size_t global_num_non_bounded_vertices = mpi_all_reduce(num_non_bounded_vertices, std::logical_or<size_t>(),
+  const size_t global_num_non_solved_vertices = mpi_all_reduce(num_non_solved_vertices, std::logical_or<size_t>(),
                                                                 MPI_COMM_WORLD);
-  return global_num_non_bounded_vertices;
+  return global_num_non_solved_vertices;
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -519,10 +519,10 @@ select_source(const graph_t *const graph,
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
-// pluning
+// pruning
 // -------------------------------------------------------------------------------------------------------------- //
 template <typename Graph, int num_k_sources>
-class pluning_visitor
+class pruning_visitor
 {
  private:
   using kbfs_t = kbfs_type<Graph, num_k_sources>;
@@ -530,17 +530,17 @@ class pluning_visitor
  public:
   typedef typename Graph::vertex_locator vertex_locator;
 
-  pluning_visitor()
+  pruning_visitor()
     : vertex(),
       ecc() { }
 
-  explicit pluning_visitor(vertex_locator _vertex)
+  explicit pruning_visitor(vertex_locator _vertex)
     : vertex(_vertex),
       ecc() { }
 
 #pragma GCC diagnostic pop
 
-  pluning_visitor(vertex_locator _vertex, level_t _cee)
+  pruning_visitor(vertex_locator _vertex, level_t _cee)
     : vertex(_vertex),
       ecc(_cee) { }
 
@@ -555,7 +555,7 @@ class pluning_visitor
 
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       if (!eitr.target().is_delegate()) // Don't send visitor to delegates because they are obviously not degree 1 vertices
-        vis_queue->queue_visitor(pluning_visitor(eitr.target(), std::get<1>(alg_data).lower[vertex]));
+        vis_queue->queue_visitor(pruning_visitor(eitr.target(), std::get<1>(alg_data).lower[vertex]));
     }
 
     return true; // trigger bcast from masters of delegates (label:FLOW1)
@@ -582,12 +582,12 @@ class pluning_visitor
     return false;
   }
 
-  friend inline bool operator>(const pluning_visitor &v1, const pluning_visitor &v2)
+  friend inline bool operator>(const pruning_visitor &v1, const pruning_visitor &v2)
   {
     return v1.vertex < v2.vertex; // or source?
   }
 
-  friend inline bool operator<(const pluning_visitor &v1, const pluning_visitor &v2)
+  friend inline bool operator<(const pruning_visitor &v1, const pruning_visitor &v2)
   {
     return v1.vertex < v2.vertex; // or source?
   }
@@ -598,16 +598,16 @@ class pluning_visitor
 
 
 template <typename graph_t, int k_num_sources>
-void plun_single_degree_vertices(const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
+void prun_single_degree_vertices(const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
                                  graph_t *const  graph,
                                  typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data)
 {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  typedef pluning_visitor<graph_t, k_num_sources> visitor_type;
-  size_t num_pluned = 0;
-  auto alg_data = std::forward_as_tuple(kbfs_vertex_data, ecc_vertex_data, num_pluned);
+  typedef pruning_visitor<graph_t, k_num_sources> visitor_type;
+  size_t num_pruned = 0;
+  auto alg_data = std::forward_as_tuple(kbfs_vertex_data, ecc_vertex_data, num_pruned);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(graph, alg_data);
   // ------------------------------ Traversal ------------------------------ //
   {
@@ -615,11 +615,11 @@ void plun_single_degree_vertices(const typename kbfs_type<graph_t, k_num_sources
     vq.init_visitor_traversal_new(); // init_visit -> queue
     MPI_Barrier(MPI_COMM_WORLD);
     const double time_end = MPI_Wtime();
-    if (mpi_rank == 0) std::cout << "Pluning: " << time_end - time_start << "\t";
+    if (mpi_rank == 0) std::cout << "Pruning: " << time_end - time_start << "\t";
   }
 
-  num_pluned = mpi_all_reduce(num_pluned, std::plus<level_t>(), MPI_COMM_WORLD);
-  if (mpi_rank == 0) std::cout << "# pluned: " << num_pluned << std::endl;
+  num_pruned = mpi_all_reduce(num_pruned, std::plus<level_t>(), MPI_COMM_WORLD);
+  if (mpi_rank == 0) std::cout << "# pruned: " << num_pruned << std::endl;
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -726,8 +726,8 @@ void collect_unsolved_vertices_statistics_helper(const graph_t *const graph,
       count_up(average_level, level_count);
     }
     {
-      count_up(ecc_vertex_data.upper[*vitr], lower_count);
-      count_up(ecc_vertex_data.lower[*vitr], upper_count);
+      count_up(ecc_vertex_data.lower[*vitr], lower_count);
+      count_up(ecc_vertex_data.upper[*vitr], upper_count);
     }
   }
 }
