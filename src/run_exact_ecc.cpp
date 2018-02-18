@@ -355,17 +355,22 @@ int main(int argc, char **argv)
 
       // ------------------------------ Compute exact ecc ------------------------------ //
       {
-        const size_t num_remains = compute_eecc<graph_t, k_num_sources>(graph, kbfs_vertex_data, source_locator_list,
-                                                                        ecc_vertex_data);
-        if (num_remains == 0) break; // Terminal condition
+        size_t num_solved;
+        size_t num_remains;
+        std::tie(num_solved, num_remains) = compute_eecc<graph_t, k_num_sources>(kbfs_vertex_data,
+                                                                                 source_locator_list,
+                                                                                 graph,
+                                                                                 ecc_vertex_data);
         MPI_Barrier(MPI_COMM_WORLD);
+
+        if (mpi_rank == 0) {
+          std::cout << "# solved vertices: " << num_solved << std::endl;
+          std::cout << "# remained vertices: " << num_remains << std::endl;
+        }
+        if (num_remains == 0) break; // Terminate condition
       }
 
-      {
-        prun_single_degree_vertices<graph_t, k_num_sources>(kbfs_vertex_data, graph, ecc_vertex_data);
-        MPI_Barrier(MPI_COMM_WORLD);
-      }
-
+      // ------------------------------ Compute statistics information ------------------------------ //
       {
         std::vector<size_t> histgram = compute_distance_score_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
         if (mpi_rank == 0) {

@@ -136,10 +136,12 @@ class kbfs_visitor
 {
  private:
   using kbfs_t = kbfs_type<Graph, num_k_sources>;
-  static constexpr int index_level = 0;
-  static constexpr int index_bitmap = 1;
-  static constexpr int index_next_bitmap = 2;
-  static constexpr int index_visit_flag = 3;
+  enum index {
+    level = 0,
+    bitmap = 1,
+    next_bitmap = 2,
+    visit_flag = 3
+  };
 
  public:
   typedef typename Graph::vertex_locator vertex_locator;
@@ -165,9 +167,9 @@ class kbfs_visitor
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
 
-    if (!(std::get<index_visit_flag>(alg_data)[vertex] & kbfs_t::vertex_data::k_visited_bit)) return false;
+    if (!(std::get<index::visit_flag>(alg_data)[vertex] & kbfs_t::vertex_data::k_visited_bit)) return false;
 
-    const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
+    const auto &bitmap = std::get<index::bitmap>(alg_data)[vertex];
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       vis_queue->queue_visitor(kbfs_visitor(eitr.target(), bitmap));
     }
@@ -184,14 +186,14 @@ class kbfs_visitor
 
     bool updated(false);
     for (size_t k = 0; k < num_k_sources; ++k) { // TODO: change to actual num bit
-      if (std::get<index_level>(alg_data)[vertex][k] != kbfs_t::unvisited_level)
+      if (std::get<index::level>(alg_data)[vertex][k] != kbfs_t::unvisited_level)
         continue; // Already visited by source k
 
       if (!visit_bitmap.get(k)) continue; // No visit request from source k
 
-      std::get<index_level>(alg_data)[vertex][k] = g_current_level;
-      std::get<index_next_bitmap>(alg_data)[vertex].set(k);
-      std::get<index_visit_flag>(alg_data)[vertex] |= kbfs_t::vertex_data::k_next_visited_bit;
+      std::get<index::level>(alg_data)[vertex][k] = g_current_level;
+      std::get<index::next_bitmap>(alg_data)[vertex].set(k);
+      std::get<index::visit_flag>(alg_data)[vertex] |= kbfs_t::vertex_data::k_next_visited_bit;
       updated = true;
     }
 
@@ -224,7 +226,7 @@ class kbfs_visitor
     // scatter current status to neighbors (this line is supposed to be executed on only non-master delegates)
     // const int mpi_rank = havoqgt_env()->world_comm().rank();
     // std::cout << "queue visitor " << mpi_rank << " : " << g.master(vertex) << " : " << vertex.owner() << " : " << vertex.local_id() << " : " << visit_bitmap.get(0) << std::endl;
-    const auto &bitmap = std::get<index_bitmap>(alg_data)[vertex];
+    const auto &bitmap = std::get<index::bitmap>(alg_data)[vertex];
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       vis_queue->queue_visitor(kbfs_visitor(eitr.target(), bitmap));
     }
