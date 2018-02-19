@@ -73,7 +73,6 @@
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/fixed_size_unordered_map.hpp>
 #include <havoqgt/distributed_db.hpp>
-#include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/exact_eccentricity.hpp>
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -85,13 +84,13 @@ using segment_manager_t = havoqgt::distributed_db::segment_manager_type;
 using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
 
 #ifdef NUM_SOURCES
-constexpr int k_num_sources = NUM_SOURCES;
+constexpr uint32_t k_num_sources = NUM_SOURCES;
 #else
-constexpr int k_num_sources = 8;
+constexpr uint32_t k_num_sources = 8;
 #endif
 
-using kbfs_t = havoqgt::kbfs_type<graph_t, k_num_sources>;
-using eecc_t = havoqgt::eecc_type<graph_t, k_num_sources>;
+using level_t = uint16_t;
+using exact_eccentricity_t = exact_eccentricity<segment_manager_t, level_t, k_num_sources>;
 
 // -------------------------------------------------------------------------------------------------------------- //
 // Parse command line
@@ -202,37 +201,6 @@ select_non_zero_degree_source(const graph_t *const graph, std::vector<uint64_t> 
 }
 
 // -------------------------------------------------------------------------------------------------------------- //
-// find_max_lower_upper
-// -------------------------------------------------------------------------------------------------------------- //
-template <typename iterator_t>
-std::pair<level_t, level_t> find_max_lower_upper(iterator_t vitr, iterator_t end,
-                                                 eecc_t::vertex_data &ecc_vertex_data)
-{
-  level_t max_lower = std::numeric_limits<level_t>::min();
-  level_t max_upper = std::numeric_limits<level_t>::min();
-  for (; vitr != end; ++vitr) {
-    if (ecc_vertex_data.upper[*vitr] == std::numeric_limits<level_t>::max()) continue; // skip unvisited vertices
-    max_lower = std::max(max_lower, ecc_vertex_data.lower[*vitr]);
-    max_upper = std::max(max_upper, ecc_vertex_data.upper[*vitr]);
-  }
-
-  return std::make_pair(max_lower, max_upper);
-}
-
-// -------------------------------------------------------------------------------------------------------------- //
-// find_max_ecc
-// -------------------------------------------------------------------------------------------------------------- //
-template <typename iterator_t>
-level_t find_max_ecc(iterator_t vitr, iterator_t end, typename eecc_t::vertex_data &ecc_vertex_data)
-{
-  level_t max_ecc = std::numeric_limits<level_t>::min();
-  for (; vitr != end; ++vitr) {
-    max_ecc = std::max(max_ecc, ecc_vertex_data.lower[*vitr]);
-  }
-  return max_ecc;
-}
-
-// -------------------------------------------------------------------------------------------------------------- //
 // Main
 // -------------------------------------------------------------------------------------------------------------- //
 int main(int argc, char **argv)
@@ -277,151 +245,14 @@ int main(int argc, char **argv)
       std::cout << "Graph Loaded Ready." << std::endl;
     }
 
-//    std::vector<typename graph_t::vertex_locator> source_locator_list;
-//    if (parsed_source_id_list.size() > 0)
-//      source_locator_list = select_non_zero_degree_source(graph, parsed_source_id_list);
-//    MPI_Barrier(MPI_COMM_WORLD);
-//    if (mpi_rank == 0) {
-//      std::cout << "Selected initial vertices" << std::endl;
-//    }
-
     // -------------------------------------------------------------------------------------------------------------- //
     //                                        Compute exact ecc and diameter
     //-------------------------------------------------------------------------------------------------------------- //
     const double total_start_time = MPI_Wtime();
-    typename kbfs_t::vertex_data kbfs_vertex_data(*graph);
-    typename eecc_t::vertex_data ecc_vertex_data(*graph);
-    if (mpi_rank == 0) std::cout << "Allocated vertex data: " << std::endl;
-
-    // ------------------------------ Init ecc vertex data ------------------------------ //
-    {
-      const double time_start = MPI_Wtime();
-      ecc_vertex_data.init();
-      MPI_Barrier(MPI_COMM_WORLD);
-      const double time_end = MPI_Wtime();
-      if (mpi_rank == 0) std::cout << "Init ecc vertex data: " << time_end - time_start << std::endl;
-    }
-
-    // ------------------------------ Compute exact ECC ------------------------------ //
-    size_t count_iteration(0);
-    size_t previous_num_sources(0);
-    while (true) {
-      if (mpi_rank == 0)
-        std::cout << "\n==================== " << count_iteration << " ====================" << std::endl;
-
-      // ------------------------------ Select sources ------------------------------ //
-      std::vector<typename graph_t::vertex_locator> source_locator_list;
-      {
-        const double time_start = MPI_Wtime();
-        if (count_iteration == 0) {
-          if (!parsed_source_id_list.empty())
-            source_locator_list = select_non_zero_degree_source(graph, parsed_source_id_list);
-          else
-            source_locator_list = select_initial_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources);
-        } else {
-          source_locator_list = select_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, k_num_sources, previous_num_sources);
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-        const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) {
-          std::cout << "Select sources: " << time_end - time_start << std::endl;
-          std::cout << "# sources: " << source_locator_list.size() << std::endl;
-          for (size_t k = 0; k < source_locator_list.size(); ++k)
-            std::cout << graph->locator_to_label(source_locator_list[k]) << " ";
-          std::cout << std::endl;
-        }
-        previous_num_sources = source_locator_list.size();
-      }
-
-      // ------------------------------ Reset data for KBFS ------------------------------ //
-      {
-        const double time_start = MPI_Wtime();
-        kbfs_vertex_data.init();
-        MPI_Barrier(MPI_COMM_WORLD);
-        const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) {
-          std::cout << "Reset data for KBFS: " << time_end - time_start << std::endl;
-        }
-      }
-
-      // ------------------------------ KBFS ------------------------------ //
-      {
-        const double time_start = MPI_Wtime();
-        k_breadth_first_search_level_per_source<graph_t, k_num_sources>(graph, kbfs_vertex_data, source_locator_list);
-        MPI_Barrier(MPI_COMM_WORLD);
-        const double time_end = MPI_Wtime();
-        if (mpi_rank == 0) std::cout << "BFS Time: " << time_end - time_start << std::endl;
-      }
-
-      // ------------------------------ Compute exact ecc ------------------------------ //
-      {
-        size_t num_solved;
-        size_t num_remains;
-        std::tie(num_solved, num_remains) = compute_eecc<graph_t, k_num_sources>(kbfs_vertex_data,
-                                                                                 source_locator_list,
-                                                                                 graph,
-                                                                                 ecc_vertex_data);
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (mpi_rank == 0) {
-          std::cout << "# solved vertices: " << num_solved << std::endl;
-          std::cout << "# remained vertices: " << num_remains << std::endl;
-        }
-        if (num_remains == 0) break; // Terminate condition
-      }
-
-      // ------------------------------ Compute statistics information ------------------------------ //
-      {
-        std::vector<size_t> histgram = compute_distance_score_histgram<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data, 5);
-        if (mpi_rank == 0) {
-          std::cout << "Distance score (upper - lower):";
-          for (size_t i = 0; i < histgram.size(); ++i) {
-            std::cout << " " << histgram[i];
-          }
-          std::cout << std::endl;
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-      }
-
-      {
-        collect_unsolved_vertices_statistics<graph_t, k_num_sources>(graph, kbfs_vertex_data, ecc_vertex_data,
-                                                                     source_locator_list.size());
-        MPI_Barrier(MPI_COMM_WORLD);
-      }
-
-      // ------------------------------ Diameter calculation termination test ------------------------------ //
-      {
-        const auto ret1 = find_max_lower_upper(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data);
-        const auto ret2 = find_max_lower_upper(graph->controller_begin(), graph->controller_end(), ecc_vertex_data);
-
-        level_t max_lower = std::max(ret1.first, ret2.first);
-        level_t max_upper = std::max(ret1.second, ret2.second);
-
-        max_lower = mpi_all_reduce(max_lower, std::greater<level_t>(), MPI_COMM_WORLD);
-        max_upper = mpi_all_reduce(max_upper, std::greater<level_t>(), MPI_COMM_WORLD);
-
-        if (mpi_rank == 0) std::cout << "Diameter termination test " << max_lower << " : " << max_upper << std::endl;
-        MPI_Barrier(MPI_COMM_WORLD);
-      }
-      ++count_iteration;
-    } // End exact ecc loop
+    exact_eccentricity_t eeec(*graph);
+    eeec.run();
     const double total_end_time = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
-
-    // ------------------------------ Compute diameter ------------------------------ //
-    {
-      const double time_start = MPI_Wtime();
-      const level_t max_ecc = std::max(find_max_ecc(graph->vertices_begin(), graph->vertices_end(), ecc_vertex_data),
-                                       find_max_ecc(graph->controller_begin(), graph->controller_end(), ecc_vertex_data));
-      level_t diameter;
-      CHK_MPI(MPI_Reduce(&max_ecc, &diameter, 1, mpi_typeof(max_ecc), MPI_MAX, 0, MPI_COMM_WORLD));
-      const double time_end = MPI_Wtime();
-
-      if (mpi_rank == 0) {
-        std::cout << "\nCompute diameter: " << time_end - time_start << std::endl;
-        std::cout << "Diameter: " << diameter << std::endl;
-      }
-    } // End compute exact ecc & diameter
 
   }  // END Main MPI
   havoqgt_finalize();

@@ -3,15 +3,20 @@
 
 INSTALL_PREFIX=${PWD}
 
+if [[ ! -n $NUM_SOURCES ]]
+then
+    NUM_SOURCES=8
+fi
+
 
 rm CMakeCache.txt
 
 cmake ../../ \
-  -DHAVOQGT_BUILD_TEST=TRUE \
+  -DHAVOQGT_BUILD_TEST=FALSE \
   -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DMPI_C_COMPILER=/usr/tce/packages/openmpi/openmpi-2.0.0-gcc-4.9.3/bin/mpicc \
-  -DMPI_CXX_COMPILER=/usr/tce/packages/openmpi/openmpi-2.0.0-gcc-4.9.3/bin/mpicxx \
-  -DBOOST_ROOT=/g/g90/reza2/boost_1_57_0/ \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -Wredundant-decls -DDEBUG -DDEBUG_DPG -lrt -lpthread -lm" \
+  -DMPI_C_COMPILER=mpicc \
+  -DMPI_CXX_COMPILER=mpicxx \
+  -DBOOST_ROOT=$HOME/local/boost \
+  -DCMAKE_CXX_FLAGS="-std=c++11 -Wredundant-decls -DDEBUG -DDEBUG_DPG -lrt -lpthread -lm -DNUM_SOURCES=${NUM_SOURCES}"
 

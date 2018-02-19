@@ -60,9 +60,9 @@
 #include <havoqgt/detail/bitmap.hpp>
 
 #ifdef NUM_SOURCES
-constexpr int k_num_sources = NUM_SOURCES;
+constexpr uint32_t k_num_sources = NUM_SOURCES;
 #else
-constexpr int k_num_sources = 64;
+constexpr uint32_t k_num_sources = 64;
 #endif
 
 using visit_bitmap_t = typename havoqgt::detail::static_bitmap<k_num_sources>;
