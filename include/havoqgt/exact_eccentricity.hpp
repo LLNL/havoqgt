@@ -171,8 +171,9 @@ class exact_eccentricity
     : m_graph(graph),
       m_kbfs(graph),
       m_ecc_vertex_data(graph),
-      m_source_info_holder(),
-      m_source_selection_strategy_list()
+      m_source_info(),
+      m_source_selection_strategy_list(),
+      m_progress_info()
   {
     m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
       return max_upper(vertex);
@@ -203,8 +204,6 @@ class exact_eccentricity
     m_ecc_vertex_data.init();
 
     size_t count_iteration(0);
-    size_t num_solved;
-    size_t num_unsolved;
     while (true) {
       if (mpi_rank == 0) std::cout << "========== " << count_iteration << " ==========" << std::endl;
 
@@ -212,19 +211,19 @@ class exact_eccentricity
       {
         const double time_start = MPI_Wtime();
         if (count_iteration == 0) select_initial_source();
-        else adaptively_select_source(static_cast<double>(num_solved) / num_unsolved);
+        else adaptively_select_source();
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Souces: " << time_end - time_start << std::endl;
-          std::cout << "#souces: " << m_source_info_holder.source_list.size() << std::endl;
+          std::cout << "#souces: " << m_source_info.source_list.size() << std::endl;
 
           std::cout << "ID: ";
-          for (auto v : m_source_info_holder.source_list) std::cout << m_graph.locator_to_label(v) << " ";
+          for (auto v : m_source_info.source_list) std::cout << m_graph.locator_to_label(v) << " ";
           std::cout << std::endl;
 
           std::cout << "Strategy: ";
-          for (auto s : m_source_info_holder.strategy_list) std::cout << s << " ";
+          for (auto s : m_source_info.strategy_list) std::cout << s << " ";
           std::cout << std::endl;
         }
       }
@@ -232,7 +231,7 @@ class exact_eccentricity
       // -------------------- Run KBFS -------------------- //
       {
         const double time_start = MPI_Wtime();
-        m_kbfs.run(m_source_info_holder.source_list);
+        m_kbfs.run(m_source_info.source_list);
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
@@ -245,26 +244,25 @@ class exact_eccentricity
         const double time_start = MPI_Wtime();
         compute_ecc_k_source();
         m_ecc_vertex_data.reset_just_solved();
-        std::tie(num_solved, num_unsolved) = bound_ecc();
+        std::tie(m_progress_info.num_bounded, m_progress_info.num_unbounded) = bound_ecc();
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Bound: " << time_end - time_start << std::endl;
-          std::cout << "#num_solved:   " << num_solved << std::endl;
-          std::cout << "#num_unsolved: " << num_unsolved << std::endl;
+          std::cout << "#num_bounded:   " << m_progress_info.num_bounded << std::endl;
+          std::cout << "#num_unbounded: " << m_progress_info.num_unbounded << std::endl;
         }
       }
-      if (num_unsolved == 0) break;
+      if (m_progress_info.num_unbounded == 0) break;
 
       // -------------------- Pruning -------------------- //
-      size_t num_pruned;
       {
         const double time_start = MPI_Wtime();
-        num_pruned = prun_single_degree_vertices();
+        m_progress_info.num_pruned = prun_single_degree_vertices();
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Pruning: " << time_end - time_start << std::endl;
-          std::cout << "#pruned: " << num_pruned << std::endl;
+          std::cout << "#pruned: " << m_progress_info.num_pruned << std::endl;
         }
       }
 
@@ -281,7 +279,7 @@ class exact_eccentricity
       }
 
 
-      if (num_unsolved - num_pruned == 0) break;
+      if (m_progress_info.num_unbounded - m_progress_info.num_pruned == 0) break;
       ++count_iteration;
     }
   }
@@ -289,7 +287,7 @@ class exact_eccentricity
 
  private:
 
-  class source_info_holder_t
+  class source_info_t
   {
 
    public:
@@ -299,7 +297,7 @@ class exact_eccentricity
       if (ret != source_list.end()) return false;
 
       source_list.emplace_back(source);
-      num_solved_list.emplace_back(0);
+      num_bounded_list.emplace_back(0);
       strategy_list.emplace_back(strategy);
       ecc_list.emplace_back(std::numeric_limits<level_t>::min());
 
@@ -309,7 +307,7 @@ class exact_eccentricity
     size_t num_source() const
     {
 #ifdef DEBUG
-      assert(source_list.size() == num_solved_list.size()
+      assert(source_list.size() == num_bounded_list.size()
              && source_list.size() == strategy_list.size()
              && source_list.size() == ecc_list.size());
 #endif
@@ -317,11 +315,17 @@ class exact_eccentricity
     }
 
     std::vector<vertex_locator_t> source_list;
-    std::vector<size_t> num_solved_list;
+    std::vector<size_t> num_bounded_list;
     std::vector<int> strategy_list;
     std::vector<level_t> ecc_list;
   };
 
+  struct progress_info_t
+  {
+    size_t num_bounded{0}; // #solved by the bounding algorithm
+    size_t num_unbounded{0}; // #unsolved by the bounding algorithm
+    size_t num_pruned{0}; // #pruned
+  };
 
   // -------------------------------------------------------------------------------------------------------------- //
   // select source
@@ -331,22 +335,22 @@ class exact_eccentricity
     return detail::hash_nbits(vid, 64);
   }
 
-  bool compare_by_id(const uint64_t &vid_lhd, const uint64_t &vid_rhd)
+  bool compare_vertex_by_random_hash(const uint64_t &vid_lhd, const uint64_t &vid_rhd)
   {
     const uint64_t h_lhd = hash_vertex_id(vid_lhd);
     const uint64_t h_rhd = hash_vertex_id(vid_rhd);
     return (h_lhd > h_rhd);
   }
 
-  bool compare_by_id(const vertex_locator_t &lhd, const vertex_locator_t &rhd)
+  bool compare_vertex_by_random_hash(const vertex_locator_t &lhd, const vertex_locator_t &rhd)
   {
     const uint64_t vid_lhd = m_graph.locator_to_label(lhd);
     const uint64_t vid_rhd = m_graph.locator_to_label(rhd);
-    return compare_by_id(vid_lhd, vid_rhd); // To minimize replacement, smaller IDs have priority
+    return compare_vertex_by_random_hash(vid_lhd, vid_rhd); // To minimize replacement, smaller IDs have priority
   }
 
   template <typename iterator_t>
-  void select_source_in_local(const size_t max_num_sources,
+  void select_candidate_in_local(const size_t max_num_sources,
                               const std::function<bool(const vertex_locator_t)> &is_candidate,
                               const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_calculater_list,
                               std::vector<vertex_locator_t> &candidate_list,
@@ -359,7 +363,7 @@ class exact_eccentricity
         if (score_lhd != score_rhd) return (score_lhd > score_rhd);
       }
       // --- Final tie braker--- //
-      return compare_by_id(lhd, rhd);
+      return compare_vertex_by_random_hash(lhd, rhd);
     };
 
     for (; vitr != end; ++vitr) {
@@ -381,7 +385,7 @@ class exact_eccentricity
   }
 
   std::vector<vertex_locator_t>
-  select_source_in_global(const size_t max_num_sources,
+  select_candidate_in_global(const size_t max_num_sources,
                           const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_calculater_list,
                           const std::vector<vertex_locator_t> &candidate_list)
   {
@@ -420,7 +424,7 @@ class exact_eccentricity
                           const uint64_t score2 = score_table[rhd];
                           if (score1 != score2) return (score1 > score2);
                         }
-                        return compare_by_id(lhd, rhd);
+                        return compare_vertex_by_random_hash(lhd, rhd);
                       });
     global_vid_list.resize(final_size);
 
@@ -433,20 +437,20 @@ class exact_eccentricity
   }
 
   std::vector<vertex_locator_t>
-  select_source(const size_t max_num_sources,
-                const std::function<bool(const vertex_locator_t)> &is_candidate,
-                std::vector<std::function<uint64_t(const vertex_locator_t)>> score_calculater_list)
+  select_candidate(const size_t max_num_sources,
+                   const std::function<bool(const vertex_locator_t)> &is_candidate,
+                   std::vector<std::function<uint64_t(const vertex_locator_t)>> score_calculater_list)
   {
 
     std::vector<vertex_locator_t> local_candidate_list;
-    select_source_in_local(max_num_sources, is_candidate,
-                           score_calculater_list, local_candidate_list,
-                           m_graph.vertices_begin(), m_graph.vertices_end());
-    select_source_in_local(max_num_sources, is_candidate,
-                           score_calculater_list, local_candidate_list,
-                           m_graph.controller_begin(), m_graph.controller_end());
+    select_candidate_in_local(max_num_sources, is_candidate,
+                              score_calculater_list, local_candidate_list,
+                              m_graph.vertices_begin(), m_graph.vertices_end());
+    select_candidate_in_local(max_num_sources, is_candidate,
+                              score_calculater_list, local_candidate_list,
+                              m_graph.controller_begin(), m_graph.controller_end());
 
-    return select_source_in_global(max_num_sources, score_calculater_list, local_candidate_list);
+    return select_candidate_in_global(max_num_sources, score_calculater_list, local_candidate_list);
   }
 
   uint64_t degree_score(const vertex_locator_t vertex)
@@ -457,7 +461,7 @@ class exact_eccentricity
   uint64_t shell_score(const vertex_locator_t vertex)
   {
     uint64_t total(0);
-    for (size_t k = 0; k < m_source_info_holder.num_source(); ++k) {
+    for (size_t k = 0; k < m_source_info.num_source(); ++k) {
       total += m_kbfs.vertex_data().level(vertex)[k];
     }
     return total;
@@ -471,7 +475,7 @@ class exact_eccentricity
   uint64_t level2_score(const vertex_locator_t vertex)
   {
     uint64_t total(0);
-    for (size_t k = 0; k < m_source_info_holder.num_source(); ++k) {
+    for (size_t k = 0; k < m_source_info.num_source(); ++k) {
       total += (m_kbfs.vertex_data().level(vertex)[k] == 2);
     }
     return total;
@@ -487,34 +491,34 @@ class exact_eccentricity
     return m_ecc_vertex_data.upper(vertex);
   }
 
-  void adaptively_select_source_helper(const std::function<bool(const vertex_locator_t)> &is_candidate,
-                                       const std::vector<size_t> &num_solved_by_strategy,
-                                       source_info_holder_t &new_source_info_holder)
+  void select_source_by_contribution_score_helper(const std::function<bool(const vertex_locator_t)> &is_candidate,
+                                                  const std::vector<size_t> &strategy_contribution_score,
+                                                  source_info_t &new_source_info)
   {
-    std::vector<size_t> wk_num_solved_by_strategy(num_solved_by_strategy);
-    const size_t num_total_solved = std::accumulate(num_solved_by_strategy.begin(), num_solved_by_strategy.end(), 0ULL);
+    std::vector<size_t> wk_strategy_contribution_score(strategy_contribution_score);
+    const size_t total_score = std::accumulate(strategy_contribution_score.begin(), strategy_contribution_score.end(), 0ULL);
 
     for (size_t i = 0; i < m_source_selection_strategy_list.size(); ++i) {
-      auto max_itr = std::max_element(wk_num_solved_by_strategy.begin(), wk_num_solved_by_strategy.end());
-      const size_t num_solved = *max_itr;
+      auto max_itr = std::max_element(wk_strategy_contribution_score.begin(), wk_strategy_contribution_score.end());
+      const size_t contribution_score = *max_itr;
       *max_itr = 0; // To the same element is not selected
 
-      const double ratio = static_cast<double>(num_solved) / num_total_solved;
+      const double ratio = static_cast<double>(contribution_score) / total_score;
       const size_t num_to_generate = static_cast<size_t>(ratio * k_num_sources);
       if (num_to_generate == 0) break;
 
-      const size_t new_num_sources = std::min(new_source_info_holder.num_source() + num_to_generate,
+      const size_t new_num_sources = std::min(new_source_info.num_source() + num_to_generate,
                                               static_cast<size_t>(k_num_sources));
-      const int strategy_id = static_cast<int>(std::distance(wk_num_solved_by_strategy.begin(), max_itr));
-      auto source_candidate_list = select_source(new_num_sources, is_candidate,
-                                                 {m_source_selection_strategy_list[strategy_id]});
+      const int strategy_id = static_cast<int>(std::distance(wk_strategy_contribution_score.begin(), max_itr));
+      auto source_candidate_list = select_candidate(new_num_sources, is_candidate,
+                                                    {m_source_selection_strategy_list[strategy_id]});
 
       // ----- Merge sources ----- //
       for (auto candidate : source_candidate_list) {
-        new_source_info_holder.uniquely_add_source(candidate, strategy_id);
-        if (new_source_info_holder.num_source() == new_num_sources) break;
+        new_source_info.uniquely_add_source(candidate, strategy_id);
+        if (new_source_info.num_source() == new_num_sources) break;
       }
-      if (new_source_info_holder.num_source() == k_num_sources) break;
+      if (new_source_info.num_source() == k_num_sources) break;
     }
   }
 
@@ -523,50 +527,56 @@ class exact_eccentricity
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return (m_graph.degree(vertex) > 0);
     };
-    const double solved_ratio = 0.0;
-    adaptively_select_source_helper(solved_ratio, is_candidate);
+    select_source_by_all_strategy_equally(is_candidate);
   }
 
-  void adaptively_select_source(const double solved_ratio)
+  void adaptively_select_source()
   {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return m_kbfs.vertex_data().visited_by(vertex, 0)
              && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
-    adaptively_select_source_helper(solved_ratio, is_candidate);
-  }
 
-  void adaptively_select_source_helper(const double solved_ratio,
-                                       const std::function<bool(const vertex_locator_t)> &is_candidate)
-  {
-    int mpi_rank(0);
-    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-
-    std::vector<size_t> num_solved_by_strategy(m_source_selection_strategy_list.size(), 0);
-
-    if (solved_ratio < 0.01) {
-      // ----- Reset strategy (use all strategies again) since #sloved is small ----- //
-      std::fill(num_solved_by_strategy.begin(), num_solved_by_strategy.end(), 1);
+    if (m_progress_info.num_bounded < k_num_sources * 10) {
+      select_source_by_all_strategy_equally(is_candidate);
     } else {
-      // ---------- Compute number of solved vertices by each strategy ---------- //
-      for (size_t i = 0; i < m_source_info_holder.num_source(); ++i)
-        num_solved_by_strategy[m_source_info_holder.strategy_list[i]] += m_source_info_holder.num_solved_list[i];
+      // ----- Set contribution score based on #bounded ----- //
+      std::vector<size_t> strategy_contribution_score(m_source_selection_strategy_list.size(), 0);
+      for (size_t i = 0; i < m_source_info.num_source(); ++i)
+        strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_bounded_list[i];
 
+      int mpi_rank(0);
+      CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
       if (mpi_rank == 0) {
         std::cout << "Strategy score: ";
-        for (auto n : num_solved_by_strategy) std::cout << n << " ";
+        for (auto n : strategy_contribution_score) std::cout << n << " ";
         std::cout << std::endl;
       }
+
+      select_source_by_contribution_score(strategy_contribution_score, is_candidate);
     }
+  }
 
+  void select_source_by_all_strategy_equally(const std::function<bool(const vertex_locator_t)> &is_candidate)
+  {
+    // ----- To use all strategy equally, set the same score ----- //
+    std::vector<size_t> strategy_contribution_score(m_source_selection_strategy_list.size(), 0);
+    std::fill(strategy_contribution_score.begin(), strategy_contribution_score.end(), 1);
+
+    select_source_by_contribution_score(strategy_contribution_score, is_candidate);
+  }
+
+  void select_source_by_contribution_score(const std::vector<size_t> &strategy_contribution_score,
+                                           const std::function<bool(const vertex_locator_t)> &is_candidate)
+  {
     // ---------- Select sources ---------- //
-    source_info_holder_t new_source_info_holder;
-    adaptively_select_source_helper(is_candidate, num_solved_by_strategy, new_source_info_holder);
-    if (new_source_info_holder.num_source() < k_num_sources)
-      adaptively_select_source_helper(is_candidate, num_solved_by_strategy, new_source_info_holder);
+    source_info_t new_source_info;
+    select_source_by_contribution_score_helper(is_candidate, strategy_contribution_score, new_source_info);
+    if (new_source_info.num_source() < k_num_sources)
+      select_source_by_contribution_score_helper(is_candidate, strategy_contribution_score, new_source_info);
 
-    m_source_info_holder = std::move(new_source_info_holder);
-    assert(m_source_info_holder.num_source() > 0);
+    m_source_info = std::move(new_source_info);
+    assert(m_source_info.num_source() > 0);
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -585,24 +595,24 @@ class exact_eccentricity
 
   void compute_ecc_k_source()
   {
-    m_source_info_holder.ecc_list.resize(m_source_info_holder.num_source(), std::numeric_limits<level_t>::min());
-    compute_ecc_k_source_helper(m_source_info_holder.ecc_list, m_graph.vertices_begin(), m_graph.vertices_end());
-    compute_ecc_k_source_helper(m_source_info_holder.ecc_list, m_graph.controller_begin(), m_graph.controller_end());
+    m_source_info.ecc_list.resize(m_source_info.num_source(), std::numeric_limits<level_t>::min());
+    compute_ecc_k_source_helper(m_source_info.ecc_list, m_graph.vertices_begin(), m_graph.vertices_end());
+    compute_ecc_k_source_helper(m_source_info.ecc_list, m_graph.controller_begin(), m_graph.controller_end());
 
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-    mpi_all_reduce_inplace(m_source_info_holder.ecc_list, std::greater<level_t>(), MPI_COMM_WORLD);
-    for (size_t k = 0; k < m_source_info_holder.ecc_list.size(); ++k) {
-      auto &source = m_source_info_holder.source_list[k];
+    mpi_all_reduce_inplace(m_source_info.ecc_list, std::greater<level_t>(), MPI_COMM_WORLD);
+    for (size_t k = 0; k < m_source_info.ecc_list.size(); ++k) {
+      auto &source = m_source_info.source_list[k];
       if (source.owner() == static_cast<uint32_t>(mpi_rank) || source.is_delegate()) {
-        m_ecc_vertex_data.lower(source) = m_ecc_vertex_data.upper(source) = m_source_info_holder.ecc_list[k];
+        m_ecc_vertex_data.lower(source) = m_ecc_vertex_data.upper(source) = m_source_info.ecc_list[k];
       }
     }
 
     if (mpi_rank == 0) {
       std::cout << "ECC for k sources: ";
-      for (level_t ecc : m_source_info_holder.ecc_list) std::cout << ecc << " ";
+      for (level_t ecc : m_source_info.ecc_list) std::cout << ecc << " ";
       std::cout << std::endl;
     }
   }
@@ -613,8 +623,8 @@ class exact_eccentricity
   template <typename iterator_t>
   std::pair<size_t, size_t> bound_ecc_helper(iterator_t vitr, iterator_t end)
   {
-    size_t num_solved(0);
-    size_t num_unsolved(0);
+    size_t num_bounded(0);
+    size_t num_unbounded(0);
 
     for (; vitr != end; ++vitr) {
       if (!m_kbfs.vertex_data().visited_by(*vitr, 0)) continue; // skip unvisited vertices
@@ -623,24 +633,24 @@ class exact_eccentricity
       level_t &upper = m_ecc_vertex_data.upper(*vitr);
       if (lower == upper) continue; // Exact ecc has been already found
 
-      for (size_t k = 0; k < m_source_info_holder.num_source(); ++k) {
+      for (size_t k = 0; k < m_source_info.num_source(); ++k) {
         const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
-        const level_t k_ecc = m_source_info_holder.ecc_list[k];
+        const level_t k_ecc = m_source_info.ecc_list[k];
 
         lower = std::max(lower, std::max(level, static_cast<uint16_t>(k_ecc - level)));
         upper = std::min(upper, static_cast<uint16_t>(k_ecc + level));
 
         if (lower == upper) {
-          ++m_source_info_holder.num_solved_list[k];
+          ++m_source_info.num_bounded_list[k];
           m_ecc_vertex_data.set_just_solved(*vitr);
           break;
         }
       }
-      num_solved += m_ecc_vertex_data.get_just_solved(*vitr);
-      num_unsolved += !m_ecc_vertex_data.get_just_solved(*vitr);
+      num_bounded += m_ecc_vertex_data.get_just_solved(*vitr);
+      num_unbounded += !m_ecc_vertex_data.get_just_solved(*vitr);
     }
 
-    return std::make_pair(num_solved, num_unsolved);
+    return std::make_pair(num_bounded, num_unbounded);
   }
 
   std::pair<size_t, size_t> bound_ecc()
@@ -648,14 +658,14 @@ class exact_eccentricity
     const auto ret_vrtx = bound_ecc_helper(m_graph.vertices_begin(), m_graph.vertices_end());
     const auto ret_ctrl = bound_ecc_helper(m_graph.controller_begin(), m_graph.controller_end());
 
-    size_t num_solved = ret_vrtx.first + ret_ctrl.first;
-    size_t num_unsolved = ret_vrtx.second + ret_ctrl.second;
+    size_t num_bounded = ret_vrtx.first + ret_ctrl.first;
+    size_t num_unbounded = ret_vrtx.second + ret_ctrl.second;
 
-    num_solved = mpi_all_reduce(num_solved, std::plus<size_t>(), MPI_COMM_WORLD);
-    num_unsolved = mpi_all_reduce(num_unsolved, std::plus<size_t>(), MPI_COMM_WORLD);
-    mpi_all_reduce_inplace(m_source_info_holder.num_solved_list, std::plus<size_t>(), MPI_COMM_WORLD);
+    num_bounded = mpi_all_reduce(num_bounded, std::plus<size_t>(), MPI_COMM_WORLD);
+    num_unbounded = mpi_all_reduce(num_unbounded, std::plus<size_t>(), MPI_COMM_WORLD);
+    mpi_all_reduce_inplace(m_source_info.num_bounded_list, std::plus<size_t>(), MPI_COMM_WORLD);
 
-    return std::make_pair(num_solved, num_unsolved);
+    return std::make_pair(num_bounded, num_unbounded);
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -732,10 +742,10 @@ class exact_eccentricity
       }
       {
         level_t average_level = 0;
-        for (size_t k = 0; k < m_source_info_holder.num_source(); ++k) {
+        for (size_t k = 0; k < m_source_info.num_source(); ++k) {
           average_level += m_kbfs.vertex_data().level(*vitr)[k];
         }
-        average_level /= m_source_info_holder.num_source();
+        average_level /= m_source_info.num_source();
         count_up(average_level, level_count);
       }
       {
@@ -803,8 +813,9 @@ class exact_eccentricity
   graph_t &m_graph;
   kbfs_t m_kbfs;
   ecc_vertex_data_t m_ecc_vertex_data;
-  source_info_holder_t m_source_info_holder;
+  source_info_t m_source_info;
   source_selection_strategy_list_t m_source_selection_strategy_list;
+  progress_info_t m_progress_info;
 };
 
 
@@ -902,7 +913,7 @@ class propagate_ecc_visitor
  private:
   enum index {
     ecc_data = 0,
-    count_num_solved = 1
+    count_num_bounded = 1
   };
 
  public:
@@ -956,7 +967,7 @@ class propagate_ecc_visitor
         lower = std::max(lower, static_cast<level_t>(std::max(1, ecc - 1)));
         upper = std::min(upper, static_cast<level_t>(ecc + 1));
 
-        std::get<index::count_num_solved>(alg_data) += (lower == upper);
+        std::get<index::count_num_bounded>(alg_data) += (lower == upper);
       }
     }
 
@@ -986,14 +997,14 @@ size_t propagate_ecc(graph_t *const graph,
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
   typedef propagate_ecc_visitor<graph_t> visitor_type;
-  size_t local_num_solved = 0;
-  auto alg_data = std::forward_as_tuple(ecc_vertex_data, local_num_solved);
+  size_t local_num_bounded = 0;
+  auto alg_data = std::forward_as_tuple(ecc_vertex_data, local_num_bounded);
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(graph, alg_data);
   vq.init_visitor_traversal_new();
   MPI_Barrier(MPI_COMM_WORLD);
 
-  const size_t global_num_solved = mpi_all_reduce(local_num_solved, std::plus<level_t>(), MPI_COMM_WORLD);
-  return global_num_solved;
+  const size_t global_num_bounded = mpi_all_reduce(local_num_bounded, std::plus<level_t>(), MPI_COMM_WORLD);
+  return global_num_bounded;
 }
 
 #endif
