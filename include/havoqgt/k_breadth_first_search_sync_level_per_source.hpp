@@ -96,7 +96,12 @@ class k_breadth_first_search_vertex_data
       m_level(graph),
       m_visited_bitmap(graph),
       m_tmp_visited_bitmap(graph),
-      m_queue_status(graph) { }
+      m_queue_status(graph)
+  {
+#ifdef DEBUG
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
+#endif
+  }
 
   void reset()
   {
@@ -112,21 +117,33 @@ class k_breadth_first_search_vertex_data
 
   bool in_frontier(const typename graph_t::vertex_locator &vertex)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     return (m_queue_status[vertex] & k_in_frontier_bit);
   }
 
   k_bitmap_t& visited_bitmap(const typename graph_t::vertex_locator &vertex)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     return m_visited_bitmap[vertex];
   }
 
   bool visited_by(const typename graph_t::vertex_locator &vertex, const size_t k)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     return (m_level[vertex][k] != unvisited_level);
   }
 
   void visit(const typename graph_t::vertex_locator &vertex, const size_t k, const level_t level)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     m_level[vertex][k] = level;
     m_tmp_visited_bitmap[vertex].set(k);
     m_queue_status[vertex] |= k_in_next_queue_bit;
@@ -134,6 +151,9 @@ class k_breadth_first_search_vertex_data
 
   void set_source(const typename graph_t::vertex_locator &vertex, const size_t k)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     m_level[vertex][k] = 0;
     m_visited_bitmap[vertex].set(k);
     m_tmp_visited_bitmap[vertex].set(k);
@@ -151,7 +171,7 @@ class k_breadth_first_search_vertex_data
     std::vector<size_t> cnt_vrtx = count_visited_vertices_helper(level, num_souces,
                                                                  m_graph.vertices_begin(), m_graph.vertices_end());
     std::vector<size_t> cnt_ctrl = count_visited_vertices_helper(level, num_souces,
-                                                                 m_graph.delegate_vertices_begin(), m_graph.delegate_vertices_end());
+                                                                 m_graph.controller_begin(), m_graph.controller_end());
     std::transform(cnt_vrtx.begin(), cnt_vrtx.end(), cnt_ctrl.begin(), cnt_vrtx.begin(), std::plus<size_t>());
 
     return cnt_vrtx;
@@ -159,6 +179,9 @@ class k_breadth_first_search_vertex_data
 
   k_level_t& level(const typename graph_t::vertex_locator &vertex)
   {
+#ifdef DEBUG
+    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
+#endif
     return m_level[vertex];
   }
 
@@ -190,6 +213,9 @@ class k_breadth_first_search_vertex_data
   vertex_data_visited_sources_bitmap_t m_visited_bitmap;
   vertex_data_visited_sources_bitmap_t m_tmp_visited_bitmap;
   queue_status_t m_queue_status;
+#ifdef DEBUG
+  int m_mpi_rank;
+#endif
 };
 
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
@@ -257,6 +283,7 @@ class k_breadth_first_search
         const double time_start = MPI_Wtime();
         m_vertex_data.prepare_for_next_iteration();
         num_visited_vertices = m_vertex_data.count_visited_vertices(current_level, source_list.size());
+        MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) std::cout << time_end - -time_start << "\t";
       }
@@ -284,14 +311,15 @@ class k_breadth_first_search
 
       /// Simple validation code
       std::sort(num_total_visited_vertices.begin(), num_total_visited_vertices.end());
-      if (num_total_visited_vertices[0] != num_total_visited_vertices[num_total_visited_vertices.size()-1]) {
-        std::cerr << "# total visited vertices do not much" << std::endl;
+      if (*(num_total_visited_vertices.begin()) != *(num_total_visited_vertices.end()-1)) {
+        std::cerr << "# total visited vertices do not much: "
+                  << *(num_total_visited_vertices.begin()) << " " << *(num_total_visited_vertices.end()-1) << std::endl;
         std::abort();
       }
     }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     std::cout << std::fixed;
-
     return num_total_visited_vertices[0];
   }
 
