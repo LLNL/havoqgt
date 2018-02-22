@@ -123,7 +123,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:b:e:h")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;

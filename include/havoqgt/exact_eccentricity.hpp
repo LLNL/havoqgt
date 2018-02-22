@@ -291,7 +291,7 @@ class exact_eccentricity
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-    std::ofstream ofs(file_name + "_" + std::to_string(mpi_rank));
+    std::ofstream ofs(file_name + "-" + std::to_string(mpi_rank));
 
     if (!ofs.is_open()) {
       std::cerr << "Can not open " << file_name << std::endl;
