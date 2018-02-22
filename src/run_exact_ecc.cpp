@@ -108,6 +108,7 @@ void usage()
 
 void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::string &backup_filename,
+                    std::string &ecc_output_filename,
                     std::vector<uint64_t> &source_id_list)
 {
   if (havoqgt_env()->world_comm().rank() == 0) {
@@ -127,6 +128,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
       case 'h':
         prn_help = true;
         break;
+
       case 's': {
         std::string buf;
         std::stringstream sstrm(optarg);
@@ -134,13 +136,20 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
           source_id_list.push_back(std::stoull(buf.c_str()));
         break;
       }
+
       case 'i':
         found_input_filename = true;
         input_filename = optarg;
         break;
+
       case 'b':
         backup_filename = optarg;
         break;
+
+      case 'e':
+        ecc_output_filename = optarg;
+        break;
+
       default:
         std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
         prn_help = true;
@@ -228,9 +237,10 @@ int main(int argc, char **argv)
 
     std::string graph_input;
     std::string backup_filename;
+    std::string ecc_output_filename;
     std::vector<uint64_t> parsed_source_id_list;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, parsed_source_id_list);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list);
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (!backup_filename.empty()) {
@@ -253,6 +263,11 @@ int main(int argc, char **argv)
     eeec.run();
     const double total_end_time = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
+
+    if (!ecc_output_filename.empty())
+      eeec.dump_ecc(ecc_output_filename);
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (mpi_rank == 0) std::cout << "Dumped EEC in " << ecc_output_filename << std::endl;
 
   }  // END Main MPI
   havoqgt_finalize();

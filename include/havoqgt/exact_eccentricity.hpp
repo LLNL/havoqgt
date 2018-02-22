@@ -286,6 +286,25 @@ class exact_eccentricity
     }
   }
 
+  void dump_ecc(const std::string& file_name)
+  {
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+    std::ofstream ofs(file_name + "_" + std::to_string(mpi_rank));
+
+    if (!ofs.is_open()) {
+      std::cerr << "Can not open " << file_name << std::endl;
+      return;
+    }
+
+    for (auto vitr = m_graph.vertices_begin(), end = m_graph.vertices_end(); vitr != end; ++vitr) {
+      if (m_kbfs.vertex_data().visited_by(*vitr, 0))
+        ofs << m_graph.locator_to_label(*vitr) << " " << m_ecc_vertex_data.lower(*vitr) << "\n";
+    }
+
+    ofs.close();
+  }
 
  private:
 
