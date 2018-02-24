@@ -266,7 +266,7 @@ int main(int argc, char **argv)
     }
 
     // -------------------------------------------------------------------------------------------------------------- //
-    //                                        Compute exact ecc and diameter
+    //                                        Compute exact ecc
     // -------------------------------------------------------------------------------------------------------------- //
     const double total_start_time = MPI_Wtime();
     exact_eccentricity_t eeec(*graph, use_algorithm);
@@ -274,6 +274,15 @@ int main(int argc, char **argv)
     const double total_end_time = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
 
+    // -------------------------------------------------------------------------------------------------------------- //
+    //                                        Compute diameter
+    // -------------------------------------------------------------------------------------------------------------- //
+    const uint16_t diameter = eeec.find_max_ecc();
+    if (mpi_rank == 0) std::cout << "Diameter: " << diameter << std::endl;
+
+    // -------------------------------------------------------------------------------------------------------------- //
+    //                                        Dump exact ecc
+    // -------------------------------------------------------------------------------------------------------------- //
     if (!ecc_output_filename.empty()) {
       eeec.dump_ecc(ecc_output_filename);
       MPI_Barrier(MPI_COMM_WORLD);

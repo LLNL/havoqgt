@@ -122,7 +122,7 @@ class exact_eccentricity_vertex_data
     return m_upper[vertex];
   }
 
-  bool& just_solved(const typename graph_t::vertex_locator vertex)
+  bool &just_solved(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -130,7 +130,7 @@ class exact_eccentricity_vertex_data
     return m_just_solved[vertex];
   }
 
-  size_t& num_unsolved_neighbors(const typename graph_t::vertex_locator vertex)
+  size_t &num_unsolved_neighbors(const typename graph_t::vertex_locator vertex)
   {
     return m_num_unsolved_neighbors[vertex];
   }
@@ -154,11 +154,15 @@ class exact_eccentricity
   using self_type = exact_eccentricity<segment_manager_t, level_t, k_num_sources>;
   using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
   using vertex_locator_t = typename graph_t::vertex_locator;
-  using source_selection_strategy_t = std::function<uint64_t(const vertex_locator_t)>;
-  using source_selection_strategy_list_t = std::vector<source_selection_strategy_t>;
+  using source_score_function_t = std::function<uint64_t(const vertex_locator_t)>;
+  using source_score_function_list_t = std::vector<source_score_function_t>;
+
 
   class pruning_visitor;
+
+
   class unsolved_visitor;
+
 
  public:
   using kbfs_t = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
@@ -167,49 +171,51 @@ class exact_eccentricity
 
 
   explicit exact_eccentricity<segment_manager_t, level_t, k_num_sources>(graph_t &graph,
-                                                                         const std::vector<bool>& use_algorithm)
+                                                                         const std::vector<bool> &use_algorithm)
     : m_graph(graph),
       m_kbfs(graph),
       m_ecc_vertex_data(graph),
       m_source_info(),
-      m_source_selection_strategy_list(),
+      m_source_score_function_list(),
       m_progress_info()
   {
     if (use_algorithm[0])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return exact_eccentricity::max_upper(vertex);
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return max_upper(vertex);
       });
     if (use_algorithm[1])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return min_lower(vertex);
       });
     if (use_algorithm[2])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return degree_score(vertex);
       });
     if (use_algorithm[3])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return shell_score(vertex);
       });
     if (use_algorithm[4])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return diff_score(vertex);
       });
     if (use_algorithm[5])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return level2_score(vertex);
       });
     if (use_algorithm[6])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return unsolved_neighbors_score(vertex);
       });
     if (use_algorithm[7])
-      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return random_score(vertex);
       });
   }
 
-
+  // -------------------------------------------------------------------------------------------------------------- //
+  // run exact ecc algorithm
+  // -------------------------------------------------------------------------------------------------------------- //
   void run()
   {
     int mpi_rank(0);
@@ -308,7 +314,26 @@ class exact_eccentricity
     }
   }
 
-  void dump_ecc(const std::string& file_name)
+  // -------------------------------------------------------------------------------------------------------------- //
+  // find max ecc
+  // -------------------------------------------------------------------------------------------------------------- //
+  uint16_t find_max_ecc()
+  {
+    uint16_t max_ecc = 0;
+    for (auto vitr = m_graph.vertices_begin(), end = m_graph.vertices_end(); vitr != end; ++vitr)
+      max_ecc = std::max(max_ecc, m_ecc_vertex_data.lower(*vitr));
+    for (auto vitr = m_graph.controller_begin(), end = m_graph.controller_end(); vitr != end; ++vitr)
+      max_ecc = std::max(max_ecc, m_ecc_vertex_data.lower(*vitr));
+
+    max_ecc = mpi_all_reduce(max_ecc, std::greater<uint16_t>(), MPI_COMM_WORLD);
+
+    return max_ecc;
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // dump ecc
+  // -------------------------------------------------------------------------------------------------------------- //
+  void dump_ecc(const std::string &file_name)
   {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -366,6 +391,7 @@ class exact_eccentricity
     std::vector<level_t> ecc_list;
   };
 
+
   struct progress_info_t
   {
     size_t iteration_no{0}; // Iteration No
@@ -376,7 +402,7 @@ class exact_eccentricity
 
 
   // -------------------------------------------------------------------------------------------------------------- //
-  // select source
+  // source selection score functions
   // -------------------------------------------------------------------------------------------------------------- //
   uint64_t hash_vertex_id(const uint64_t vid)
   {
@@ -395,110 +421,6 @@ class exact_eccentricity
     const uint64_t vid_lhd = m_graph.locator_to_label(lhd);
     const uint64_t vid_rhd = m_graph.locator_to_label(rhd);
     return compare_vertex_by_random_hash(vid_lhd, vid_rhd); // To minimize replacement, smaller IDs have priority
-  }
-
-  template <typename iterator_t>
-  void select_source_in_local(const size_t max_num_sources,
-                                 const std::function<bool(const vertex_locator_t)> &is_candidate,
-                                 const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_calculater_list,
-                                 std::vector<vertex_locator_t> &selected_source_list,
-                                 iterator_t vitr, iterator_t end)
-  {
-    auto is_prior = [this, &score_calculater_list](const vertex_locator_t &lhd, const vertex_locator_t &rhd) -> bool {
-      for (auto &score_calculator : score_calculater_list) {
-        const uint64_t score_lhd = score_calculator(lhd);
-        const uint64_t score_rhd = score_calculator(rhd);
-        if (score_lhd != score_rhd) return (score_lhd > score_rhd);
-      }
-      // --- Final tie braker--- //
-      return compare_vertex_by_random_hash(lhd, rhd);
-    };
-
-    for (; vitr != end; ++vitr) {
-      auto locator = *vitr;
-      if (!is_candidate(locator)) continue;
-      if (selected_source_list.size() < max_num_sources) {
-        selected_source_list.emplace_back(locator);
-      } else {
-        if (is_prior(locator, selected_source_list[0])) {
-          selected_source_list[0] = locator; // kick out lowest priority element
-          std::partial_sort(selected_source_list.begin(), selected_source_list.begin() + 1, selected_source_list.end(),
-                            [&is_prior](const vertex_locator_t &lhd,
-                                        const vertex_locator_t &rhd) -> bool {
-                              return !is_prior(lhd, rhd); // Sort by ascending order
-                            });
-        }
-      }
-    }
-  }
-
-  std::vector<vertex_locator_t>
-  select_source_in_global(const size_t max_num_sources,
-                          const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_calculater_list,
-                          const std::vector<vertex_locator_t> &local_candidate_list)
-  {
-    // -------------------- Construct and exchange score lists in global -------------------- //
-    std::vector<std::vector<uint64_t>> global_score_matrix(score_calculater_list.size());
-    for (size_t i = 0; i < score_calculater_list.size(); ++i) {
-      std::vector<uint64_t> local_score_list;
-      for (auto locator : local_candidate_list) {
-        local_score_list.emplace_back(score_calculater_list[i](locator));
-      }
-      mpi_all_gather(local_score_list, global_score_matrix[i], MPI_COMM_WORLD);
-    }
-
-    std::vector<uint64_t> local_vid_list;
-    for (auto locator : local_candidate_list) {
-      local_vid_list.emplace_back(m_graph.locator_to_label(locator));
-    }
-    std::vector<uint64_t> global_vid_list;
-    havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
-
-    // -------------------- Select high priority sources based on the exchanged scores -------------------- //
-    std::vector<std::unordered_map<uint64_t, uint64_t>> global_score_table_list(global_score_matrix.size());
-    for (size_t i = 0; i < global_score_matrix.size(); ++i) {
-      auto &global_score_table = global_score_table_list[i];
-      auto &global_score_list = global_score_matrix[i];
-      for (size_t j = 0; j < global_vid_list.size(); ++j) {
-        global_score_table[global_vid_list[j]] = global_score_list[j];
-      }
-    }
-
-    const size_t final_size = std::min(static_cast<size_t>(max_num_sources), global_vid_list.size());
-    std::partial_sort(global_vid_list.begin(), global_vid_list.begin() + final_size, global_vid_list.end(),
-                      [this, &global_score_table_list](const uint64_t lhd, const uint64_t rhd) -> bool {
-                        for (auto &score_table : global_score_table_list) {
-                          const uint64_t score1 = score_table[lhd];
-                          const uint64_t score2 = score_table[rhd];
-                          if (score1 != score2) return (score1 > score2);
-                        }
-                        return compare_vertex_by_random_hash(lhd, rhd);
-                      });
-    global_vid_list.resize(final_size);
-
-    std::vector<vertex_locator_t> global_selected_source_list;
-    for (uint64_t vid : global_vid_list) {
-      global_selected_source_list.emplace_back(m_graph.label_to_locator(vid));
-    }
-
-    return global_selected_source_list;
-  }
-
-  std::vector<vertex_locator_t>
-  select_source(const size_t max_num_sources,
-                const std::function<bool(const vertex_locator_t)> &is_candidate,
-                const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_calculater_list)
-  {
-
-    std::vector<vertex_locator_t> local_candidate_list;
-    select_source_in_local(max_num_sources, is_candidate,
-                              score_calculater_list, local_candidate_list,
-                              m_graph.vertices_begin(), m_graph.vertices_end());
-    select_source_in_local(max_num_sources, is_candidate,
-                              score_calculater_list, local_candidate_list,
-                              m_graph.controller_begin(), m_graph.controller_end());
-
-    return select_source_in_global(max_num_sources, score_calculater_list, local_candidate_list);
   }
 
   uint64_t degree_score(const vertex_locator_t vertex)
@@ -549,6 +471,9 @@ class exact_eccentricity
     return m_ecc_vertex_data.num_unsolved_neighbors(vertex);
   }
 
+  // -------------------------------------------------------------------------------------------------------------- //
+  // select source
+  // -------------------------------------------------------------------------------------------------------------- //
   void select_initial_source()
   {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
@@ -565,7 +490,7 @@ class exact_eccentricity
     };
 
     // ---------- Set contribution score based on #bounded ---------- //
-    std::vector<size_t> strategy_contribution_score(m_source_selection_strategy_list.size(), 0);
+    std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
     for (uint32_t i = 0; i < m_source_info.num_source(); ++i)
       strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_bounded_list[i];
 
@@ -575,7 +500,7 @@ class exact_eccentricity
   void select_source_by_all_strategy_equally(const std::function<bool(const vertex_locator_t)> &is_candidate)
   {
     // ----- To use all strategy equally, set the same score ----- //
-    std::vector<size_t> strategy_contribution_score(m_source_selection_strategy_list.size(), 0);
+    std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
     std::fill(strategy_contribution_score.begin(), strategy_contribution_score.end(), 0);
 
     select_source_by_contribution_score(is_candidate, strategy_contribution_score);
@@ -584,11 +509,11 @@ class exact_eccentricity
   void select_source_by_contribution_score(const std::function<bool(const vertex_locator_t)> &is_candidate,
                                            const std::vector<size_t> &strategy_contribution_score)
   {
-    assert(m_source_selection_strategy_list.size() <= k_num_sources);
+    assert(m_source_score_function_list.size() <= k_num_sources);
 
-    if ( m_progress_info.num_unbounded > 0 && m_progress_info.num_unbounded <= k_num_sources) {
+    if (m_progress_info.num_unbounded > 0 && m_progress_info.num_unbounded <= k_num_sources) {
       // Use a single strategy to select the remaining unsolved sources
-      const std::vector<uint32_t> num_to_generate_by_strategy {static_cast<uint32_t>(m_progress_info.num_unbounded)};
+      const std::vector<uint32_t> num_to_generate_by_strategy{static_cast<uint32_t>(m_progress_info.num_unbounded)};
       select_source_with_multiple_strategy(num_to_generate_by_strategy, is_candidate);
       return;
     }
@@ -603,15 +528,15 @@ class exact_eccentricity
 
     // ---------- Compute how many sources to be selected by each strategy using discrete_distribution ---------- //
     std::vector<size_t> wk_strategy_contribution_score(strategy_contribution_score);
-    for (auto& n : wk_strategy_contribution_score) n += 1; // To avoid the case where all contirubtion scores are 0
+    for (auto &n : wk_strategy_contribution_score) n += 1; // To avoid the case where all contirubtion scores are 0
     std::discrete_distribution<uint32_t> distribution(wk_strategy_contribution_score.begin(),
                                                       wk_strategy_contribution_score.end());
 
     // To use all strategies at least one time, initial value is 1
-    std::vector<uint32_t> num_to_generate_by_strategy(m_source_selection_strategy_list.size(), 1);
+    std::vector<uint32_t> num_to_generate_by_strategy(m_source_score_function_list.size(), 1);
 
     std::mt19937 rnd(m_progress_info.num_bounded); // seed can be any number but must be same among the all processes
-    for (uint32_t i = 0; i < k_num_sources - m_source_selection_strategy_list.size(); ++i) {
+    for (uint32_t i = 0; i < k_num_sources - m_source_score_function_list.size(); ++i) {
       const uint32_t strategy_id = distribution(rnd);
       ++num_to_generate_by_strategy[strategy_id];
     }
@@ -630,8 +555,15 @@ class exact_eccentricity
       // To get enough non-duplicated vertices, select more vertices than acutall need
       const size_t new_total_num_sources = new_source_info.num_source() + num_to_generate_by_strategy[strategy_id];
 
-      auto source_candidate_list = select_source(new_total_num_sources, is_candidate,
-                                                 {m_source_selection_strategy_list[strategy_id]});
+      std::vector<vertex_locator_t> source_candidate_list;
+      if (std::getenv("U_L_EXCHANGE")) {
+        source_candidate_list = select_source(new_total_num_sources, is_candidate,
+                                              {m_source_score_function_list[m_progress_info.iteration_no % 2],
+                                               m_source_score_function_list[2]});
+      } else {
+        source_candidate_list = select_source(new_total_num_sources, is_candidate,
+                                              {m_source_score_function_list[strategy_id]});
+      }
 
       // ----- Merge sources ----- //
       for (auto candidate : source_candidate_list) {
@@ -640,6 +572,119 @@ class exact_eccentricity
       }
     }
     m_source_info = std::move(new_source_info);
+  }
+
+
+  std::vector<vertex_locator_t>
+  select_source(const size_t max_num_sources,
+                const std::function<bool(const vertex_locator_t)> &is_candidate,
+                const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_function_list)
+  {
+
+    std::vector<vertex_locator_t> local_candidate_list;
+    select_source_in_local(max_num_sources, is_candidate,
+                           score_function_list, local_candidate_list,
+                           m_graph.vertices_begin(), m_graph.vertices_end());
+    select_source_in_local(max_num_sources, is_candidate,
+                           score_function_list, local_candidate_list,
+                           m_graph.controller_begin(), m_graph.controller_end());
+
+    return select_source_in_global(max_num_sources, score_function_list, local_candidate_list);
+  }
+
+  template <typename iterator_t>
+  void select_source_in_local(const size_t max_num_sources,
+                              const std::function<bool(const vertex_locator_t)> &is_candidate,
+                              const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_function_list,
+                              std::vector<vertex_locator_t> &selected_source_list,
+                              iterator_t vitr, iterator_t end)
+  {
+    // Return true if 'lhd' has higher priority than 'rhd'
+    auto is_prior = [this, &score_function_list](const vertex_locator_t &lhd, const vertex_locator_t &rhd) -> bool {
+      for (auto &score_calculator : score_function_list) {
+        const uint64_t score_lhd = score_calculator(lhd);
+        const uint64_t score_rhd = score_calculator(rhd);
+        if (score_lhd != score_rhd) return (score_lhd > score_rhd);
+      }
+      // --- Final tie braker--- //
+      return compare_vertex_by_random_hash(lhd, rhd);
+    };
+
+    // To sort by acseinding order
+    auto less = [this, &is_prior](const vertex_locator_t &lhd, const vertex_locator_t &rhd) -> bool {
+      return !is_prior(lhd, rhd);
+    };
+
+    for (; vitr != end; ++vitr) {
+      auto locator = *vitr;
+      if (!is_candidate(locator)) continue;
+      if (selected_source_list.size() < max_num_sources) {
+        selected_source_list.emplace_back(locator);
+        if (selected_source_list.size() == max_num_sources)
+          std::sort(selected_source_list.begin(), selected_source_list.end(), less);
+      } else {
+        if (is_prior(locator, selected_source_list[0])) {
+          // kick out the lowest priority element
+          selected_source_list[0] = locator;
+
+          // Just move the lowest priority element at the begining
+          std::partial_sort(selected_source_list.begin(), selected_source_list.begin() + 1,
+                            selected_source_list.end(), less);
+        }
+      }
+    }
+  }
+
+  std::vector<vertex_locator_t>
+  select_source_in_global(const size_t max_num_sources,
+                          const std::vector<std::function<uint64_t(const vertex_locator_t)>> &score_function_list,
+                          const std::vector<vertex_locator_t> &local_candidate_list)
+  {
+    // -------------------- Construct and exchange score lists in global -------------------- //
+    std::vector<std::vector<uint64_t>> global_score_matrix(score_function_list.size());
+    for (size_t i = 0; i < score_function_list.size(); ++i) {
+      std::vector<uint64_t> local_score_list;
+      for (auto locator : local_candidate_list) {
+        local_score_list.emplace_back(score_function_list[i](locator));
+      }
+      mpi_all_gather(local_score_list, global_score_matrix[i], MPI_COMM_WORLD);
+    }
+
+    std::vector<uint64_t> local_vid_list;
+    for (auto locator : local_candidate_list) {
+      local_vid_list.emplace_back(m_graph.locator_to_label(locator));
+    }
+    std::vector<uint64_t> global_vid_list;
+    havoqgt::mpi_all_gather(local_vid_list, global_vid_list, MPI_COMM_WORLD);
+
+    // -------------------- Select high priority sources based on the exchanged scores -------------------- //
+    std::vector<std::unordered_map<uint64_t, uint64_t>> global_score_table_list(global_score_matrix.size());
+    for (size_t i = 0; i < global_score_matrix.size(); ++i) {
+      auto &global_score_table = global_score_table_list[i];
+      auto &global_score_list = global_score_matrix[i];
+      for (size_t j = 0; j < global_vid_list.size(); ++j) {
+        global_score_table[global_vid_list[j]] = global_score_list[j];
+      }
+    }
+
+    const size_t final_size = std::min(static_cast<size_t>(max_num_sources), global_vid_list.size());
+    std::partial_sort(global_vid_list.begin(), global_vid_list.begin() + final_size, global_vid_list.end(),
+                      [this, &global_score_table_list](const uint64_t lhd, const uint64_t rhd) -> bool {
+                        for (auto &score_table : global_score_table_list) {
+                          const uint64_t score1 = score_table[lhd];
+                          const uint64_t score2 = score_table[rhd];
+                          if (score1 != score2) return (score1 > score2);
+                        }
+                        return compare_vertex_by_random_hash(lhd, rhd);
+                      });
+    global_vid_list.resize(final_size);
+
+    std::vector<vertex_locator_t> global_selected_source_list;
+    for (uint64_t vid : global_vid_list) {
+      global_selected_source_list.emplace_back(m_graph.label_to_locator(vid));
+    }
+
+    return global_selected_source_list;
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -891,11 +936,12 @@ class exact_eccentricity
     }
   }
 
+
   graph_t &m_graph;
   kbfs_t m_kbfs;
   ecc_vertex_data_t m_ecc_vertex_data;
   source_info_t m_source_info;
-  source_selection_strategy_list_t m_source_selection_strategy_list;
+  source_score_function_list_t m_source_score_function_list;
   progress_info_t m_progress_info;
 };
 
@@ -997,7 +1043,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_vi
     : vertex() { }
 
   explicit unsolved_visitor(vertex_locator_t _vertex)
-    : vertex(_vertex){ }
+    : vertex(_vertex) { }
 
   template <typename VisitorQueueHandle, typename AlgData>
   bool init_visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
@@ -1050,6 +1096,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_vi
 
   vertex_locator_t vertex;
 } __attribute__ ((packed));
+
 
 #if 0
 // -------------------------------------------------------------------------------------------------------------- //

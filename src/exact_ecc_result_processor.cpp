@@ -58,13 +58,16 @@ void read_edge_list(const std::vector<std::string> &edge_file_list, graph_t &gra
 void remove_duplicated_edges(graph_t &graph)
 {
   std::cout << "In " << __FUNCTION__ << std::endl;
-
+  size_t num_edges = 0;
   for (auto &vertex : graph) {
     auto& edge_list = vertex.second.edge_list;
     std::sort(edge_list.begin(), edge_list.end());
     auto last = std::unique(edge_list.begin(), edge_list.end());
     edge_list.erase(last, edge_list.end());
+    num_edges += edge_list.size();
   }
+
+  std::cout << "#unique edges: " << num_edges << std::endl;
 }
 
 
