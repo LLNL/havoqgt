@@ -109,7 +109,8 @@ void usage()
 void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::string &backup_filename,
                     std::string &ecc_output_filename,
-                    std::vector<uint64_t> &source_id_list)
+                    std::vector<uint64_t> &source_id_list,
+                    std::vector<bool>& use_algorithm)
 {
   if (havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
@@ -123,7 +124,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:e:h")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:b:e:a:h")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
@@ -149,6 +150,14 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
       case 'e':
         ecc_output_filename = optarg;
         break;
+
+      case 'a': {
+        std::string buf;
+        std::stringstream sstrm(optarg);
+        while (std::getline(sstrm, buf, ':'))
+          use_algorithm[std::stoull(buf.c_str())] = true;
+        break;
+      }
 
       default:
         std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
@@ -239,8 +248,9 @@ int main(int argc, char **argv)
     std::string backup_filename;
     std::string ecc_output_filename;
     std::vector<uint64_t> parsed_source_id_list;
+    std::vector<bool> use_algorithm(8, false);
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list, use_algorithm);
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (!backup_filename.empty()) {
@@ -257,18 +267,18 @@ int main(int argc, char **argv)
 
     // -------------------------------------------------------------------------------------------------------------- //
     //                                        Compute exact ecc and diameter
-    //-------------------------------------------------------------------------------------------------------------- //
+    // -------------------------------------------------------------------------------------------------------------- //
     const double total_start_time = MPI_Wtime();
-    exact_eccentricity_t eeec(*graph);
+    exact_eccentricity_t eeec(*graph, use_algorithm);
     eeec.run();
     const double total_end_time = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
 
-    if (!ecc_output_filename.empty())
+    if (!ecc_output_filename.empty()) {
       eeec.dump_ecc(ecc_output_filename);
-    MPI_Barrier(MPI_COMM_WORLD);
-    if (mpi_rank == 0) std::cout << "Dumped EEC in " << ecc_output_filename << std::endl;
-
+      MPI_Barrier(MPI_COMM_WORLD);
+      if (mpi_rank == 0) std::cout << "Dumped EEC in " << ecc_output_filename << std::endl;
+    }
   }  // END Main MPI
   havoqgt_finalize();
 

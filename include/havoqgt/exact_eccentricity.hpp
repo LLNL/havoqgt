@@ -68,8 +68,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/detail/hash.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
-#include "k_breadth_first_search_sync_level_per_source.hpp"
-
 
 namespace havoqgt
 {
@@ -79,14 +77,16 @@ class exact_eccentricity_vertex_data
  private:
   using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
   using ecc_t = typename graph_t::template vertex_data<level_t, std::allocator<level_t>>;
-  using just_solved_flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
+  using flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
+  using count_t = typename graph_t::template vertex_data<size_t, std::allocator<size_t>>;
 
  public:
   explicit exact_eccentricity_vertex_data(const graph_t &graph)
     : m_graph(graph),
       m_lower(graph),
       m_upper(graph),
-      m_just_solved(graph)
+      m_just_solved(graph),
+      m_num_unsolved_neighbors(graph)
   {
 #ifdef DEBUG
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
@@ -97,15 +97,16 @@ class exact_eccentricity_vertex_data
   {
     m_lower.reset(std::numeric_limits<level_t>::min());
     m_upper.reset(std::numeric_limits<level_t>::max());
-    reset_just_solved();
+    reset_for_each_iteration();
   }
 
-  void reset_just_solved()
+  void reset_for_each_iteration()
   {
     m_just_solved.reset(false);
+    m_num_unsolved_neighbors.reset(0);
   }
 
-  level_t &lower(const typename graph_t::vertex_locator &vertex)
+  level_t &lower(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -113,7 +114,7 @@ class exact_eccentricity_vertex_data
     return m_lower[vertex];
   }
 
-  level_t &upper(const typename graph_t::vertex_locator &vertex)
+  level_t &upper(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -121,15 +122,7 @@ class exact_eccentricity_vertex_data
     return m_upper[vertex];
   }
 
-  void set_just_solved(const typename graph_t::vertex_locator &vertex)
-  {
-#ifdef DEBUG
-    assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
-#endif
-    m_just_solved[vertex] = true;
-  }
-
-  bool get_just_solved(const typename graph_t::vertex_locator &vertex)
+  bool& just_solved(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -137,11 +130,17 @@ class exact_eccentricity_vertex_data
     return m_just_solved[vertex];
   }
 
+  size_t& num_unsolved_neighbors(const typename graph_t::vertex_locator vertex)
+  {
+    return m_num_unsolved_neighbors[vertex];
+  }
+
  private:
   const graph_t &m_graph;
   ecc_t m_lower;
   ecc_t m_upper;
-  just_solved_flag_t m_just_solved;
+  flag_t m_just_solved;
+  count_t m_num_unsolved_neighbors;
 #ifdef DEBUG
   int m_mpi_rank;
 #endif
@@ -158,16 +157,17 @@ class exact_eccentricity
   using source_selection_strategy_t = std::function<uint64_t(const vertex_locator_t)>;
   using source_selection_strategy_list_t = std::vector<source_selection_strategy_t>;
 
+  class pruning_visitor;
+  class unsolved_visitor;
+
  public:
   using kbfs_t = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
   using kbfs_vertex_data_t = typename kbfs_t::vertex_data_t;
   using ecc_vertex_data_t = exact_eccentricity_vertex_data<segment_manager_t, level_t, k_num_sources>;
 
 
-  class pruning_visitor;
-
-
-  explicit exact_eccentricity<segment_manager_t, level_t, k_num_sources>(graph_t &graph)
+  explicit exact_eccentricity<segment_manager_t, level_t, k_num_sources>(graph_t &graph,
+                                                                         const std::vector<bool>& use_algorithm)
     : m_graph(graph),
       m_kbfs(graph),
       m_ecc_vertex_data(graph),
@@ -175,27 +175,38 @@ class exact_eccentricity
       m_source_selection_strategy_list(),
       m_progress_info()
   {
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return max_upper(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return min_lower(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return degree_score(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return shell_score(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return diff_score(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return level2_score(vertex);
-    });
-    m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-      return random_score(vertex);
-    });
+    if (use_algorithm[0])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return exact_eccentricity::max_upper(vertex);
+      });
+    if (use_algorithm[1])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return min_lower(vertex);
+      });
+    if (use_algorithm[2])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return degree_score(vertex);
+      });
+    if (use_algorithm[3])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return shell_score(vertex);
+      });
+    if (use_algorithm[4])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return diff_score(vertex);
+      });
+    if (use_algorithm[5])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return level2_score(vertex);
+      });
+    if (use_algorithm[6])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return unsolved_neighbors_score(vertex);
+      });
+    if (use_algorithm[7])
+      m_source_selection_strategy_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return random_score(vertex);
+      });
   }
 
 
@@ -241,11 +252,12 @@ class exact_eccentricity
         }
       }
 
+      m_ecc_vertex_data.reset_for_each_iteration();
+
       // -------------------- Bounding algorithm -------------------- //
       {
         const double time_start = MPI_Wtime();
         compute_ecc_k_source();
-        m_ecc_vertex_data.reset_just_solved();
         std::tie(m_progress_info.num_bounded, m_progress_info.num_unbounded) = bound_ecc();
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
@@ -265,6 +277,16 @@ class exact_eccentricity
         if (mpi_rank == 0) {
           std::cout << "Pruning: " << time_end - time_start << std::endl;
           std::cout << "#pruned: " << m_progress_info.num_pruned << std::endl;
+        }
+      }
+
+      // -------------------- unsolved neighbors -------------------- //
+      {
+        const double time_start = MPI_Wtime();
+        count_unsolved_neighbors();
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) {
+          std::cout << "unsolved neighbors: " << time_end - time_start << std::endl;
         }
       }
 
@@ -308,6 +330,9 @@ class exact_eccentricity
 
  private:
 
+  // -------------------------------------------------------------------------------------------------------------- //
+  // Data structures used in internal
+  // -------------------------------------------------------------------------------------------------------------- //
   class source_info_t
   {
 
@@ -341,7 +366,6 @@ class exact_eccentricity
     std::vector<level_t> ecc_list;
   };
 
-
   struct progress_info_t
   {
     size_t iteration_no{0}; // Iteration No
@@ -349,6 +373,7 @@ class exact_eccentricity
     size_t num_unbounded{0}; // #unsolved by the bounding algorithm
     size_t num_pruned{0}; // #pruned
   };
+
 
   // -------------------------------------------------------------------------------------------------------------- //
   // select source
@@ -395,13 +420,13 @@ class exact_eccentricity
       if (selected_source_list.size() < max_num_sources) {
         selected_source_list.emplace_back(locator);
       } else {
-        auto min_itr = std::min_element(selected_source_list.begin(), selected_source_list.end(),
-                                        [&is_prior](const vertex_locator_t &lhd,
-                                                    const vertex_locator_t &rhd) -> bool {
-                                          return !is_prior(lhd, rhd);
-                                        });
-        if (is_prior(locator, *min_itr)) {
-          *min_itr = locator; // kick out lowest priority element
+        if (is_prior(locator, selected_source_list[0])) {
+          selected_source_list[0] = locator; // kick out lowest priority element
+          std::partial_sort(selected_source_list.begin(), selected_source_list.begin() + 1, selected_source_list.end(),
+                            [&is_prior](const vertex_locator_t &lhd,
+                                        const vertex_locator_t &rhd) -> bool {
+                              return !is_prior(lhd, rhd); // Sort by ascending order
+                            });
         }
       }
     }
@@ -517,6 +542,11 @@ class exact_eccentricity
   uint64_t random_score(const vertex_locator_t vertex)
   {
     return hash_vertex_id(m_graph.locator_to_label(vertex));
+  }
+
+  uint64_t unsolved_neighbors_score(const vertex_locator_t vertex)
+  {
+    return m_ecc_vertex_data.num_unsolved_neighbors(vertex);
   }
 
   void select_initial_source()
@@ -675,12 +705,12 @@ class exact_eccentricity
 
         if (lower == upper) {
           ++m_source_info.num_bounded_list[k];
-          m_ecc_vertex_data.set_just_solved(*vitr);
+          m_ecc_vertex_data.just_solved(*vitr) = true;
           break;
         }
       }
-      num_bounded += m_ecc_vertex_data.get_just_solved(*vitr);
-      num_unbounded += !m_ecc_vertex_data.get_just_solved(*vitr);
+      num_bounded += m_ecc_vertex_data.just_solved(*vitr);
+      num_unbounded += !m_ecc_vertex_data.just_solved(*vitr);
     }
 
     return std::make_pair(num_bounded, num_unbounded);
@@ -718,6 +748,20 @@ class exact_eccentricity
     const size_t global_num_pruned = mpi_all_reduce(local_num_pruned, std::plus<level_t>(), MPI_COMM_WORLD);
 
     return global_num_pruned;
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // count_unsolved_neighbors
+  // -------------------------------------------------------------------------------------------------------------- //
+  void count_unsolved_neighbors()
+  {
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+    auto alg_data = std::forward_as_tuple(m_kbfs.vertex_data(), m_ecc_vertex_data);
+    auto vq = create_visitor_queue<unsolved_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
+    vq.init_visitor_traversal_new();
+    MPI_Barrier(MPI_COMM_WORLD);
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -887,7 +931,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::pruning_vis
     // -------------------------------------------------- //
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
-    if (!std::get<index::ecc_data>(alg_data).get_just_solved(vertex)) return false;
+    if (!std::get<index::ecc_data>(alg_data).just_solved(vertex)) return false;
 
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       if (!eitr.target().is_delegate()) // Don't send visitor to delegates because they are obviously not degree 1 vertices
@@ -938,8 +982,75 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::pruning_vis
 } __attribute__ ((packed));
 
 
-//namespace detail
-//{
+template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_visitor
+{
+ private:
+  enum index
+  {
+    kbfs_data = 0,
+    ecc_data = 1
+  };
+
+ public:
+  unsolved_visitor()
+    : vertex() { }
+
+  explicit unsolved_visitor(vertex_locator_t _vertex)
+    : vertex(_vertex){ }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    // -------------------------------------------------- //
+    // This function issues visitors for neighbors (scatter step)
+    // -------------------------------------------------- //
+    if (std::get<index::kbfs_data>(alg_data).visited_by(vertex, 0))
+      return false; // skip unvisited vertices
+
+    if (std::get<index::ecc_data>(alg_data).lower(vertex) == std::get<index::ecc_data>(alg_data).upper(vertex))
+      return false; // skip solved vertices
+
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(unsolved_visitor(eitr.target()));
+    }
+
+    return true; // trigger bcast from masters of delegates (label:FLOW1)
+  }
+
+  template <typename AlgData>
+  bool pre_visit(AlgData &alg_data) const
+  {
+    return true;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    if (vertex.get_bcast()) { // for visitors triggered by label:FLOW1
+      for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+        vis_queue->queue_visitor(unsolved_visitor(eitr.target()));
+      }
+    } else {
+      ++std::get<index::ecc_data>(alg_data).num_unsolved_neighbors(vertex);
+    }
+
+    return false;
+  }
+
+  friend inline bool operator>(const unsolved_visitor &v1, const unsolved_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  friend inline bool operator<(const unsolved_visitor &v1, const unsolved_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  vertex_locator_t vertex;
+} __attribute__ ((packed));
+
 #if 0
 // -------------------------------------------------------------------------------------------------------------- //
 // propagate ecc
@@ -1046,148 +1157,7 @@ size_t propagate_ecc(graph_t *const graph,
 
 #endif
 
-#if 0
-// -------------------------------------------------------------------------------------------------------------- //
-// collect information about unsolved vertices
-// -------------------------------------------------------------------------------------------------------------- //
-template <typename graph_t, uint32_t k_num_sources, typename iterator_t>
-void dump_unsolved_vertices_info_helper(const graph_t *const graph,
-                                        const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                        const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                        iterator_t vitr, iterator_t end, std::ofstream &ofs)
-{
-  for (; vitr != end; ++vitr) {
-    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-    if (ecc_vertex_data.upper[*vitr] == ecc_vertex_data.lower[*vitr]) continue;
-    ofs << m_graph.locator_to_label(*vitr) << " " << graph->degree(*vitr) << " " << kbfs_vertex_data.level[*vitr]
-        << " " << ecc_vertex_data.upper[*vitr] << " " << ecc_vertex_data.lower[*vitr] << std::endl;
-  }
-}
-
-template <typename graph_t, uint32_t k_num_sources>
-void dump_unsolved_vertices_info(const graph_t *const graph,
-                                 const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                 const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                 const std::string &output_prefix)
-{
-  int mpi_rank(0), mpi_size(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
-  std::string output_path = output_prefix + "_" + std::to_string(mpi_rank);
-  std::ofstream ofs(output_path);
-  dump_unsolved_vertices_info_helper(graph, kbfs_vertex_data, ecc_vertex_data,
-                                     graph->vertices_begin(), graph->vertices_end(), ofs);
-  dump_unsolved_vertices_info_helper(graph, kbfs_vertex_data, ecc_vertex_data,
-                                     graph->controller_begin(), graph->controller_end(), ofs);
-}
-
-template <typename graph_t, uint32_t k_num_sources, typename iterator_t>
-void collect_unsolved_vertices_statistics_helper(const graph_t *const graph,
-                                                 const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                                 const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                                 const size_t num_sources,
-                                                 std::map<size_t, size_t> &degree_count,
-                                                 std::map<size_t, size_t> &level_count,
-                                                 std::map<size_t, size_t> &lower_count,
-                                                 std::map<size_t, size_t> &upper_count,
-                                                 iterator_t vitr, iterator_t end)
-{
-  auto count_up = [](const size_t key, std::map<size_t, size_t>& table){
-    if (table.count(key) == 0) table[key] = 0;
-    ++table[key];
-  };
-
-  for (; vitr != end; ++vitr) {
-    if (kbfs_vertex_data.level[*vitr][0] == kbfs_type<graph_t, k_num_sources>::unvisited_level) continue;
-    if (ecc_vertex_data.upper[*vitr] == ecc_vertex_data.lower[*vitr]) continue;
-    {
-      size_t degree = graph->degree(*vitr);
-      if (degree > 10) {
-        degree = std::pow(10, static_cast<uint64_t>(std::log10(degree)));
-      }
-      count_up(degree, degree_count);
-    }
-    {
-      level_t average_level = 0;
-      for (size_t k = 0; k < num_sources; ++k) {
-        average_level += kbfs_vertex_data.level[*vitr][k];
-      }
-      average_level /= num_sources;
-      count_up(average_level, level_count);
-    }
-    {
-      count_up(ecc_vertex_data.lower[*vitr], lower_count);
-      count_up(ecc_vertex_data.upper[*vitr], upper_count);
-    }
-  }
-}
-
-template <typename graph_t, uint32_t k_num_sources>
-void collect_unsolved_vertices_statistics(const graph_t *const graph,
-                                          const typename kbfs_type<graph_t, k_num_sources>::vertex_data &kbfs_vertex_data,
-                                          const typename eecc_type<graph_t, k_num_sources>::vertex_data &ecc_vertex_data,
-                                          const size_t num_sources)
-{
-  int mpi_rank(0), mpi_size(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
-  std::map<size_t, size_t> degree_count;
-  std::map<size_t, size_t> level_count;
-  std::map<size_t, size_t> lower_count;
-  std::map<size_t, size_t> upper_count;
-
-  collect_unsolved_vertices_statistics_helper<graph_t, k_num_sources>(graph,
-                                                                      kbfs_vertex_data, ecc_vertex_data,
-                                                                      num_sources,
-                                                                      degree_count, level_count, lower_count, upper_count,
-                                                                      graph->vertices_begin(), graph->vertices_end());
-  collect_unsolved_vertices_statistics_helper<graph_t, k_num_sources>(graph,
-                                                                      kbfs_vertex_data, ecc_vertex_data,
-                                                                      num_sources,
-                                                                      degree_count, level_count, lower_count, upper_count,
-                                                                      graph->controller_begin(), graph->controller_end());
-
-  auto all_gather = [](std::map<size_t, size_t>& table){
-    std::vector<size_t> first;
-    std::vector<size_t> second;
-    for (auto elem : table) {
-      first.emplace_back(elem.first);
-      second.emplace_back(elem.second);
-    }
-    std::vector<size_t> gl_first;
-    mpi_all_gather(first, gl_first, MPI_COMM_WORLD);
-    std::vector<size_t> gl_second;
-    mpi_all_gather(second, gl_second, MPI_COMM_WORLD);
-
-    table.clear();
-    for (size_t i = 0; i < gl_first.size(); ++i) {
-      if (table.count(gl_first[i]) == 0) table[gl_first[i]] = 0;
-      table[gl_first[i]] += gl_second[i];
-    }
-  };
-
-  all_gather(degree_count);
-  all_gather(level_count);
-  all_gather(lower_count);
-  all_gather(upper_count);
-
-  auto print = [](std::map<size_t, size_t>& table) {
-    for (auto elem : table) {
-      std::cout << elem.first << " " << elem.second << ", ";
-    }
-    std::cout << std::endl;
-  };
-
-  if (mpi_rank == 0) {
-    std::cout << "degree: "; print(degree_count);
-    std::cout << "level: "; print(level_count);
-    std::cout << "lower: "; print(lower_count);
-    std::cout << "upper: "; print(upper_count);
-  }
-}
-#endif
 
 } // namespace havoqgt
+
 #endif //HAVOQGT_EXACT_ECCENTRICITY_HPP

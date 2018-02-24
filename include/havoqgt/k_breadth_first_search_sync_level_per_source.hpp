@@ -115,7 +115,7 @@ class k_breadth_first_search_vertex_data
     m_queue_status.reset(k_not_in_queue_bit);
   }
 
-  bool in_frontier(const typename graph_t::vertex_locator &vertex)
+  bool in_frontier(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -123,7 +123,7 @@ class k_breadth_first_search_vertex_data
     return (m_queue_status[vertex] & k_in_frontier_bit);
   }
 
-  k_bitmap_t& visited_bitmap(const typename graph_t::vertex_locator &vertex)
+  k_bitmap_t& visited_bitmap(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -131,7 +131,7 @@ class k_breadth_first_search_vertex_data
     return m_visited_bitmap[vertex];
   }
 
-  bool visited_by(const typename graph_t::vertex_locator &vertex, const size_t k)
+  bool visited_by(const typename graph_t::vertex_locator vertex, const size_t k)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -139,7 +139,7 @@ class k_breadth_first_search_vertex_data
     return (m_level[vertex][k] != unvisited_level);
   }
 
-  void visit(const typename graph_t::vertex_locator &vertex, const size_t k, const level_t level)
+  void visit(const typename graph_t::vertex_locator vertex, const size_t k, const level_t level)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -149,7 +149,7 @@ class k_breadth_first_search_vertex_data
     m_queue_status[vertex] |= k_in_next_queue_bit;
   }
 
-  void set_source(const typename graph_t::vertex_locator &vertex, const size_t k)
+  void set_source(const typename graph_t::vertex_locator vertex, const size_t k)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
@@ -177,7 +177,7 @@ class k_breadth_first_search_vertex_data
     return cnt_vrtx;
   }
 
-  k_level_t& level(const typename graph_t::vertex_locator &vertex)
+  k_level_t& level(const typename graph_t::vertex_locator vertex)
   {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
