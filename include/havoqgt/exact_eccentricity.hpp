@@ -179,15 +179,15 @@ class exact_eccentricity
       m_source_score_function_list(),
       m_progress_info()
   {
-    if (use_algorithm[0])
+    if (use_algorithm[0] || std::getenv("U_L_EXCHANGE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return max_upper(vertex);
       });
-    if (use_algorithm[1])
+    if (use_algorithm[1] || std::getenv("U_L_EXCHANGE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return min_lower(vertex);
       });
-    if (use_algorithm[2])
+    if (use_algorithm[2] || std::getenv("U_L_EXCHANGE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return degree_score(vertex);
       });
@@ -479,7 +479,12 @@ class exact_eccentricity
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return (m_graph.degree(vertex) > 0);
     };
-    select_source_by_all_strategy_equally(is_candidate);
+
+    if (std::getenv("U_L_EXCHANGE")) {
+      seelct_source_by_take_algorithm(is_candidate);
+    } else {
+      select_source_by_all_strategy_equally(is_candidate);
+    }
   }
 
   void adaptively_select_source()
@@ -489,12 +494,28 @@ class exact_eccentricity
              && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
 
-    // ---------- Set contribution score based on #bounded ---------- //
-    std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
-    for (uint32_t i = 0; i < m_source_info.num_source(); ++i)
-      strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_bounded_list[i];
+    if (std::getenv("U_L_EXCHANGE")) {
+      seelct_source_by_take_algorithm(is_candidate);
+    } else {
+      // ---------- Set contribution score based on #bounded ---------- //
+      std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
+      for (uint32_t i = 0; i < m_source_info.num_source(); ++i)
+        strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_bounded_list[i];
 
-    select_source_by_contribution_score(is_candidate, strategy_contribution_score);
+      select_source_by_contribution_score(is_candidate, strategy_contribution_score);
+    }
+  }
+
+  void seelct_source_by_take_algorithm(const std::function<bool(const vertex_locator_t)> &is_candidate)
+  {
+    auto source_candidate_list = select_source(k_num_sources, is_candidate,
+                                          {m_source_score_function_list[m_progress_info.iteration_no % 2],
+                                           m_source_score_function_list[2]});
+    source_info_t new_source_info;
+    for (auto candidate : source_candidate_list) {
+      new_source_info.uniquely_add_source(candidate, m_progress_info.iteration_no % 2);
+    }
+    m_source_info = std::move(new_source_info);
   }
 
   void select_source_by_all_strategy_equally(const std::function<bool(const vertex_locator_t)> &is_candidate)
@@ -552,19 +573,11 @@ class exact_eccentricity
     for (uint32_t strategy_id = 0; strategy_id < num_to_generate_by_strategy.size(); ++strategy_id) {
       if (num_to_generate_by_strategy[strategy_id] == 0) continue;
 
-      // To get enough non-duplicated vertices, select more vertices than acutall need
+      // To get enough non-duplicated vertices, select more sources than actually needed
       const size_t new_total_num_sources = new_source_info.num_source() + num_to_generate_by_strategy[strategy_id];
 
-      std::vector<vertex_locator_t> source_candidate_list;
-      if (std::getenv("U_L_EXCHANGE")) {
-        source_candidate_list = select_source(new_total_num_sources, is_candidate,
-                                              {m_source_score_function_list[m_progress_info.iteration_no % 2],
-                                               m_source_score_function_list[2]});
-      } else {
-        source_candidate_list = select_source(new_total_num_sources, is_candidate,
-                                              {m_source_score_function_list[strategy_id]});
-      }
-
+      std::vector<vertex_locator_t> source_candidate_list = select_source(new_total_num_sources, is_candidate,
+                                                                          {m_source_score_function_list[strategy_id]});
       // ----- Merge sources ----- //
       for (auto candidate : source_candidate_list) {
         new_source_info.uniquely_add_source(candidate, strategy_id);
