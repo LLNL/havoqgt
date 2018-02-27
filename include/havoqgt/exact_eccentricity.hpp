@@ -78,7 +78,7 @@ class exact_eccentricity_vertex_data
   using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
   using ecc_t = typename graph_t::template vertex_data<level_t, std::allocator<level_t>>;
   using flag_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
-  using count_t = typename graph_t::template vertex_data<size_t, std::allocator<size_t>>;
+  using count_t = typename graph_t::template vertex_data<uint32_t, std::allocator<uint32_t>>;
 
  public:
   explicit exact_eccentricity_vertex_data(const graph_t &graph)
@@ -130,7 +130,7 @@ class exact_eccentricity_vertex_data
     return m_just_solved[vertex];
   }
 
-  size_t &num_unsolved_neighbors(const typename graph_t::vertex_locator vertex)
+  uint32_t &num_unsolved_neighbors(const typename graph_t::vertex_locator vertex)
   {
     return m_num_unsolved_neighbors[vertex];
   }
@@ -956,6 +956,7 @@ class exact_eccentricity
   source_info_t m_source_info;
   source_score_function_list_t m_source_score_function_list;
   progress_info_t m_progress_info;
+
 };
 
 
