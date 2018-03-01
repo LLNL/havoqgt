@@ -65,25 +65,31 @@ class kth_core_data
 {
  public:
   kth_core_data()
-    : core_bound(std::numeric_limits<uint32_t>::max()),
-      max_hiding_depth(0),
+    : num_cut(0),
+      core_bound(std::numeric_limits<uint32_t>::max()),
+      cut_depth(0),
       alive(false) { }
 
   uint32_t get_core_bound() const { return core_bound; }
 
   void set_core_bound(uint32_t bound) { core_bound = bound; }
 
-  uint16_t get_max_hiding_depth() const { return max_hiding_depth; }
+  uint16_t get_cut_depth() const { return cut_depth; }
 
-  void set_max_hiding_depth(uint16_t hiding_depth) { max_hiding_depth = hiding_depth; }
+  void set_cut_depth(size_t _cut_depth) { cut_depth = _cut_depth; }
+
+  size_t get_num_cut() const { return num_cut; }
+
+  void set_num_cut(uint16_t _num_cut) { num_cut = _num_cut; }
 
   bool get_alive() const { return alive; }
 
   void set_alive(bool b) { alive = b; }
 
  private:
+  size_t num_cut;
   uint32_t core_bound;
-  uint16_t max_hiding_depth;
+  uint16_t cut_depth;
   bool alive;
 };
 
@@ -98,18 +104,22 @@ class kth_core_visitor
 
   kth_core_visitor() { }
 
-  kth_core_visitor(vertex_locator _vertex)
-    : vertex(_vertex) { }
-
-  kth_core_visitor(vertex_locator _vertex, uint16_t _hiding_depth)
+  explicit kth_core_visitor(const vertex_locator _vertex)
     : vertex(_vertex),
-      hiding_depth(_hiding_depth) { }
+      num_cut(0),
+      cut_depth(0) { }
+
+  kth_core_visitor(const vertex_locator _vertex, const size_t _num_cut, const uint16_t _cut_depth)
+    : vertex(_vertex),
+      num_cut(_num_cut),
+      cut_depth(_cut_depth) { }
 
   template <typename AlgData>
   bool pre_visit(AlgData &alg_data) const
   {
-    std::get<0>(alg_data)[vertex].set_max_hiding_depth(std::max(static_cast<uint16_t>(hiding_depth + 1),
-                                                            std::get<0>(alg_data)[vertex].get_max_hiding_depth()));
+    std::get<0>(alg_data)[vertex].set_num_cut(std::get<0>(alg_data)[vertex].get_num_cut() + num_cut + 1);
+    std::get<0>(alg_data)[vertex].set_cut_depth(std::max(static_cast<uint16_t>(cut_depth + 1),
+                                                            std::get<0>(alg_data)[vertex].get_cut_depth()));
     if (std::get<0>(alg_data)[vertex].get_alive()) {
       std::get<0>(alg_data)[vertex].set_core_bound(std::get<0>(alg_data)[vertex].get_core_bound() - 1);
       if (std::get<0>(alg_data)[vertex].get_core_bound() < std::get<1>(alg_data)) {
@@ -137,7 +147,9 @@ class kth_core_visitor
     //std::get<0>(alg_data)[vertex].set_alive(false);
     typedef typename Graph::edge_iterator eitr_type;
     for (eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
-      vis_queue->queue_visitor(my_type(eitr.target(), std::get<0>(alg_data)[vertex].get_max_hiding_depth()));
+      vis_queue->queue_visitor(my_type(eitr.target(),
+                                       std::get<0>(alg_data)[vertex].get_num_cut(),
+                                       std::get<0>(alg_data)[vertex].get_cut_depth()));
     }
     return true;
   }
@@ -149,8 +161,9 @@ class kth_core_visitor
   }
 
   vertex_locator vertex;
-  uint16_t hiding_depth;
-};
+  size_t num_cut;
+  uint16_t cut_depth;
+} __attribute__ ((packed));
 
 
 template <typename TGraph, typename KCoreData>
@@ -166,12 +179,12 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
   //reset graph data
   for (auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
     k_core_data[*vitr].set_alive(true);
-    k_core_data[*vitr].set_max_hiding_depth(0);
+    k_core_data[*vitr].set_cut_depth(0);
     k_core_data[*vitr].set_core_bound(graph.degree(*vitr));
   }
   for (auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
     k_core_data[*citr].set_alive(true);
-    k_core_data[*citr].set_max_hiding_depth(0);
+    k_core_data[*citr].set_cut_depth(0);
     k_core_data[*citr].set_core_bound(graph.degree(*citr));
   }
 
@@ -183,17 +196,41 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     vq.init_visitor_traversal_new();
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
+
     uint64_t local_alive(0);
+    uint16_t local_max_cut_depth(0);
+    size_t local_max_cut(0);
     for (auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
-      if (k_core_data[*vitr].get_alive()) ++local_alive;
+      if (k_core_data[*vitr].get_alive()) {
+        ++local_alive;
+        local_max_cut = std::max(local_max_cut, k_core_data[*vitr].get_num_cut());
+        local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*vitr].get_cut_depth());
+      }
+      std::cout << graph.locator_to_label(*vitr)
+                << " : " << k_core_data[*vitr].get_alive()
+                << " : " << k_core_data[*vitr].get_num_cut()
+                << " : " << k_core_data[*vitr].get_cut_depth() << std::endl;
     }
     for (auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
-      if (k_core_data[*citr].get_alive()) ++local_alive;
+      if (k_core_data[*citr].get_alive()) {
+        ++local_alive;
+        local_max_cut = std::max(local_max_cut, k_core_data[*citr].get_num_cut());
+        local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*citr].get_cut_depth());
+      }
+      std::cout << graph.locator_to_label(*citr)
+                << " : " << k_core_data[*citr].get_alive()
+                << " : " << k_core_data[*citr].get_num_cut()
+                << " : " << k_core_data[*citr].get_cut_depth() << std::endl;
     }
     count_alive = mpi_all_reduce(local_alive, std::plus<uint64_t>(), MPI_COMM_WORLD);
+    const size_t max_cut = mpi_all_reduce(local_max_cut, std::greater<size_t>(), MPI_COMM_WORLD);
+    const uint16_t max_cut_depth = mpi_all_reduce(local_max_cut_depth, std::greater<uint16_t>(), MPI_COMM_WORLD);
     if (havoqgt_env()->world_comm().rank() == 0) {
-      std::cout << "Core " << std::get<1>(alg_data) << ", size = " << count_alive << ", time = "
-                << time_end - time_start << std::endl;
+      std::cout << "Core " << std::get<1>(alg_data)
+                << ", size = " << count_alive
+                << ", max cut = " << max_cut
+                << ", max cut depth = " << max_cut_depth
+                << ", time = " << time_end - time_start << std::endl;
     }
   } while (count_alive && ++std::get<1>(alg_data) <= k);
 
