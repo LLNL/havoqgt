@@ -404,9 +404,9 @@ class exact_eccentricity
   // -------------------------------------------------------------------------------------------------------------- //
   // source selection score functions
   // -------------------------------------------------------------------------------------------------------------- //
-  uint64_t hash_vertex_id(const uint64_t vid)
+  uint32_t hash_vertex_id(const uint64_t vid)
   {
-    return detail::hash_nbits(vid, 64);
+    return detail::hash_nbits(vid, 32);
   }
 
   bool compare_vertex_by_random_hash(const uint64_t &vid_lhd, const uint64_t &vid_rhd)
