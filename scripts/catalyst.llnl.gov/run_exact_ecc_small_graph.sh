@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-NUM_P=40
+NUM_P=20
 
 TAG="adp"
 
-#TAG="mul"
-#export U_L_EXCHANGE
+#TAG="take"
+#export U_L_EXCHANGE="1" ## 1 is a dummy value
 
 function ingest_edge
 {
