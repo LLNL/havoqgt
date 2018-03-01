@@ -68,6 +68,7 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/detail/hash.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
+#include <havoqgt/kth_core_new.hpp>
 
 namespace havoqgt
 {
@@ -159,8 +160,6 @@ class exact_eccentricity
 
 
   class pruning_visitor;
-
-
   class unsolved_visitor;
 
 
@@ -168,7 +167,7 @@ class exact_eccentricity
   using kbfs_t = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
   using kbfs_vertex_data_t = typename kbfs_t::vertex_data_t;
   using ecc_vertex_data_t = exact_eccentricity_vertex_data<segment_manager_t, level_t, k_num_sources>;
-
+  using kth_core_vertex_data_t = typename graph_t::template vertex_data<kth_core_data, std::allocator<kth_core_data>>;
 
   explicit exact_eccentricity<segment_manager_t, level_t, k_num_sources>(graph_t &graph,
                                                                          const std::vector<bool> &use_algorithm)
@@ -177,7 +176,8 @@ class exact_eccentricity
       m_ecc_vertex_data(graph),
       m_source_info(),
       m_source_score_function_list(),
-      m_progress_info()
+      m_progress_info(),
+      m_2core_vertex_data(graph)
   {
     if (use_algorithm[0] || std::getenv("U_L_EXCHANGE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
@@ -211,6 +211,10 @@ class exact_eccentricity
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return random_score(vertex);
       });
+    if (use_algorithm[8])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return articulation_score(vertex);
+      });
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -221,8 +225,19 @@ class exact_eccentricity
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-    m_ecc_vertex_data.init();
+    // -------------------- Compute 2-core -------------------- //
+    {
+      MPI_Barrier(MPI_COMM_WORLD);
+      double time_start = MPI_Wtime();
+      kth_core(m_graph, m_2core_vertex_data, 2);
+      MPI_Barrier(MPI_COMM_WORLD);
+      double time_end = MPI_Wtime();
+      if(mpi_rank == 0){
+        std::cout << "2-core: " << time_end - time_start << std::endl;
+      }
+    }
 
+    m_ecc_vertex_data.init();
     while (true) {
       if (mpi_rank == 0) std::cout << "========== " << m_progress_info.iteration_no << " ==========" << std::endl;
 
@@ -469,6 +484,11 @@ class exact_eccentricity
   uint64_t unsolved_neighbors_score(const vertex_locator_t vertex)
   {
     return m_ecc_vertex_data.num_unsolved_neighbors(vertex);
+  }
+
+  uint64_t articulation_score(const vertex_locator_t vertex)
+  {
+    return m_2core_vertex_data[vertex].get_num_cut();
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -956,7 +976,7 @@ class exact_eccentricity
   source_info_t m_source_info;
   source_score_function_list_t m_source_score_function_list;
   progress_info_t m_progress_info;
-
+  kth_core_vertex_data_t m_2core_vertex_data;
 };
 
 

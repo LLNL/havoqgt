@@ -206,10 +206,10 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
         local_max_cut = std::max(local_max_cut, k_core_data[*vitr].get_num_cut());
         local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*vitr].get_cut_depth());
       }
-      std::cout << graph.locator_to_label(*vitr)
-                << " : " << k_core_data[*vitr].get_alive()
-                << " : " << k_core_data[*vitr].get_num_cut()
-                << " : " << k_core_data[*vitr].get_cut_depth() << std::endl;
+//      std::cout << graph.locator_to_label(*vitr)
+//                << " : " << k_core_data[*vitr].get_alive()
+//                << " : " << k_core_data[*vitr].get_num_cut()
+//                << " : " << k_core_data[*vitr].get_cut_depth() << std::endl;
     }
     for (auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
       if (k_core_data[*citr].get_alive()) {
@@ -217,10 +217,10 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
         local_max_cut = std::max(local_max_cut, k_core_data[*citr].get_num_cut());
         local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*citr].get_cut_depth());
       }
-      std::cout << graph.locator_to_label(*citr)
-                << " : " << k_core_data[*citr].get_alive()
-                << " : " << k_core_data[*citr].get_num_cut()
-                << " : " << k_core_data[*citr].get_cut_depth() << std::endl;
+//      std::cout << graph.locator_to_label(*citr)
+//                << " : " << k_core_data[*citr].get_alive()
+//                << " : " << k_core_data[*citr].get_num_cut()
+//                << " : " << k_core_data[*citr].get_cut_depth() << std::endl;
     }
     count_alive = mpi_all_reduce(local_alive, std::plus<uint64_t>(), MPI_COMM_WORLD);
     const size_t max_cut = mpi_all_reduce(local_max_cut, std::greater<size_t>(), MPI_COMM_WORLD);
