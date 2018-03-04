@@ -200,11 +200,15 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     uint64_t local_alive(0);
     uint16_t local_max_cut_depth(0);
     size_t local_max_cut(0);
+    size_t local_articulation(0);
     for (auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
       if (k_core_data[*vitr].get_alive()) {
         ++local_alive;
-        local_max_cut = std::max(local_max_cut, k_core_data[*vitr].get_num_cut());
-        local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*vitr].get_cut_depth());
+        if ( k_core_data[*vitr].get_num_cut() > 0) {
+          local_max_cut = std::max(local_max_cut, k_core_data[*vitr].get_num_cut());
+          local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*vitr].get_cut_depth());
+          ++local_articulation;
+        }
       }
 //      std::cout << graph.locator_to_label(*vitr)
 //                << " : " << k_core_data[*vitr].get_alive()
@@ -214,8 +218,11 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     for (auto citr = graph.controller_begin(); citr != graph.controller_end(); ++citr) {
       if (k_core_data[*citr].get_alive()) {
         ++local_alive;
-        local_max_cut = std::max(local_max_cut, k_core_data[*citr].get_num_cut());
-        local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*citr].get_cut_depth());
+        if ( k_core_data[*citr].get_num_cut() > 0) {
+          local_max_cut = std::max(local_max_cut, k_core_data[*citr].get_num_cut());
+          local_max_cut_depth = std::max(local_max_cut_depth, k_core_data[*citr].get_cut_depth());
+          ++local_articulation;
+        }
       }
 //      std::cout << graph.locator_to_label(*citr)
 //                << " : " << k_core_data[*citr].get_alive()
@@ -225,11 +232,13 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     count_alive = mpi_all_reduce(local_alive, std::plus<uint64_t>(), MPI_COMM_WORLD);
     const size_t max_cut = mpi_all_reduce(local_max_cut, std::greater<size_t>(), MPI_COMM_WORLD);
     const uint16_t max_cut_depth = mpi_all_reduce(local_max_cut_depth, std::greater<uint16_t>(), MPI_COMM_WORLD);
+    const size_t global_articulation = mpi_all_reduce(local_articulation, std::plus<size_t>(), MPI_COMM_WORLD);
     if (havoqgt_env()->world_comm().rank() == 0) {
       std::cout << "Core " << std::get<1>(alg_data)
                 << ", size = " << count_alive
                 << ", max cut = " << max_cut
                 << ", max cut depth = " << max_cut_depth
+                << ", num articulation = " << global_articulation
                 << ", time = " << time_end - time_start << std::endl;
     }
   } while (count_alive && ++std::get<1>(alg_data) <= k);

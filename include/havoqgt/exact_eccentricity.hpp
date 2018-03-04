@@ -161,7 +161,9 @@ class exact_eccentricity
 
   class pruning_visitor;
   class unsolved_visitor;
-
+  class articulation_visitor;
+  class single_source_visitor;
+  class hanging_tree_visitor;
 
  public:
   using kbfs_t = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
@@ -179,42 +181,7 @@ class exact_eccentricity
       m_progress_info(),
       m_2core_vertex_data(graph)
   {
-    if (use_algorithm[0] || std::getenv("U_L_EXCHANGE"))
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return max_upper(vertex);
-      });
-    if (use_algorithm[1] || std::getenv("U_L_EXCHANGE"))
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return min_lower(vertex);
-      });
-    if (use_algorithm[2] || std::getenv("U_L_EXCHANGE"))
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return degree_score(vertex);
-      });
-    if (use_algorithm[3])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return shell_score(vertex);
-      });
-    if (use_algorithm[4])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return diff_score(vertex);
-      });
-    if (use_algorithm[5])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return level2_score(vertex);
-      });
-    if (use_algorithm[6])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return unsolved_neighbors_score(vertex);
-      });
-    if (use_algorithm[7])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return random_score(vertex);
-      });
-    if (use_algorithm[8])
-      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return articulation_score(vertex);
-      });
+    set_strategy(use_algorithm);
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -236,8 +203,12 @@ class exact_eccentricity
         std::cout << "2-core: " << time_end - time_start << std::endl;
       }
     }
+//    {
+//      count_single_source();
+//    }
 
     m_ecc_vertex_data.init();
+
     while (true) {
       if (mpi_rank == 0) std::cout << "========== " << m_progress_info.iteration_no << " ==========" << std::endl;
 
@@ -250,7 +221,7 @@ class exact_eccentricity
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
           std::cout << "Souces: " << time_end - time_start << std::endl;
-          std::cout << "#souces: " << m_source_info.source_list.size() << std::endl;
+          std::cout << "#souces: " << m_source_info.num_source() << std::endl;
 
           std::cout << "ID: ";
           for (auto v : m_source_info.source_list) std::cout << m_graph.locator_to_label(v) << " ";
@@ -288,16 +259,16 @@ class exact_eccentricity
           std::cout << "#num_unbounded: " << m_progress_info.num_unbounded << std::endl;
         }
       }
-      if (m_progress_info.num_unbounded == 0) break;
+      if (m_progress_info.num_unbounded == 0) return;
 
-      // -------------------- Pruning -------------------- //
+      // -------------------- Solve hanging tree -------------------- //
       {
         const double time_start = MPI_Wtime();
-        m_progress_info.num_pruned = prun_single_degree_vertices();
+        const size_t num_solved = solve_hanging_tree();
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
-          std::cout << "Pruning: " << time_end - time_start << std::endl;
-          std::cout << "#pruned: " << m_progress_info.num_pruned << std::endl;
+          std::cout << "Tree: " << time_end - time_start << std::endl;
+          std::cout << "#solved: " << num_solved << std::endl;
         }
       }
 
@@ -324,7 +295,7 @@ class exact_eccentricity
       }
 
 
-      if (m_progress_info.num_unbounded - m_progress_info.num_pruned == 0) break;
+      if (m_progress_info.num_unbounded == 0) return;
       ++m_progress_info.iteration_no;
     }
   }
@@ -419,6 +390,46 @@ class exact_eccentricity
   // -------------------------------------------------------------------------------------------------------------- //
   // source selection score functions
   // -------------------------------------------------------------------------------------------------------------- //
+  void set_strategy(const std::vector<bool>& use_algorithm)
+  {
+    if (use_algorithm[0] || std::getenv("U_L_EXCHANGE"))
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return max_upper(vertex);
+      });
+    if (use_algorithm[1] || std::getenv("U_L_EXCHANGE"))
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return min_lower(vertex);
+      });
+    if (use_algorithm[2] || std::getenv("U_L_EXCHANGE"))
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return degree_score(vertex);
+      });
+    if (use_algorithm[3])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return shell_score(vertex);
+      });
+    if (use_algorithm[4])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return diff_score(vertex);
+      });
+    if (use_algorithm[5])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return level2_score(vertex);
+      });
+    if (use_algorithm[6])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return unsolved_neighbors_score(vertex);
+      });
+    if (use_algorithm[7])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return random_score(vertex);
+      });
+    if (use_algorithm[8])
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return articulation_score(vertex);
+      });
+  }
+
   uint32_t hash_vertex_id(const uint64_t vid)
   {
     return detail::hash_nbits(vid, 32);
@@ -494,6 +505,20 @@ class exact_eccentricity
   // -------------------------------------------------------------------------------------------------------------- //
   // select source
   // -------------------------------------------------------------------------------------------------------------- //
+  void select_articulation_point()
+  {
+    const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
+      return (m_2core_vertex_data[vertex].get_alive() && m_2core_vertex_data[vertex].get_num_cut() > 0);
+    };
+
+    auto source_candidate_list = select_source(k_num_sources, is_candidate, {m_source_score_function_list[7]});
+    source_info_t new_source_info;
+    for (auto candidate : source_candidate_list) {
+      new_source_info.uniquely_add_source(candidate, 0);
+    }
+    m_source_info = std::move(new_source_info);
+  }
+
   void select_initial_source()
   {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
@@ -818,7 +843,7 @@ class exact_eccentricity
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
     size_t local_num_pruned = 0;
-    auto alg_data = std::forward_as_tuple(m_ecc_vertex_data, local_num_pruned);
+    auto alg_data = std::forward_as_tuple(m_ecc_vertex_data, m_2core_vertex_data, local_num_pruned);
     auto vq = create_visitor_queue<pruning_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
     vq.init_visitor_traversal_new();
     MPI_Barrier(MPI_COMM_WORLD);
@@ -826,6 +851,62 @@ class exact_eccentricity
     const size_t global_num_pruned = mpi_all_reduce(local_num_pruned, std::plus<level_t>(), MPI_COMM_WORLD);
 
     return global_num_pruned;
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // prun_single_degree_vertices
+  // -------------------------------------------------------------------------------------------------------------- //
+  size_t solve_hanging_tree()
+  {
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+    size_t local_num_solved = 0;
+    auto alg_data = std::forward_as_tuple(m_kbfs.vertex_data(), m_ecc_vertex_data, m_2core_vertex_data, local_num_solved);
+    auto vq = create_visitor_queue<hanging_tree_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
+    vq.init_visitor_traversal_new();
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    const size_t global_num_solved = mpi_all_reduce(local_num_solved, std::plus<level_t>(), MPI_COMM_WORLD);
+
+    return global_num_solved;
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // count_single_source
+  // -------------------------------------------------------------------------------------------------------------- //
+  void count_single_source()
+  {
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+
+    auto alg_data = std::forward_as_tuple(m_2core_vertex_data);
+    auto vq = create_visitor_queue<single_source_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
+    vq.init_visitor_traversal_new();
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    {
+      size_t num_single_vertices = 0;
+      size_t num_parent = 0;
+      for (auto vitr = m_graph.vertices_begin(), end = m_graph.vertices_end(); vitr != end; ++vitr) {
+        const size_t n = m_2core_vertex_data[*vitr].get_num_cut();
+        num_single_vertices += n;
+        num_parent += (n > 0);
+      }
+      for (auto vitr = m_graph.controller_begin(), end = m_graph.controller_end(); vitr != end; ++vitr) {
+        const size_t n = m_2core_vertex_data[*vitr].get_num_cut();
+        num_single_vertices += n;
+        num_parent += (n > 0);
+      }
+
+      num_single_vertices = mpi_all_reduce(num_single_vertices, std::plus<size_t >(), MPI_COMM_WORLD);
+      num_parent = mpi_all_reduce(num_parent, std::plus<size_t >(), MPI_COMM_WORLD);
+      if (mpi_rank == 0) {
+        std::cout << "num single vertices: " << num_single_vertices << std::endl;
+        std::cout << "num parent: " << num_parent << std::endl;
+      }
+    }
+
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -987,7 +1068,8 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::pruning_vis
   enum index
   {
     ecc_data = 0,
-    count_num_pruned = 1
+    core_info = 1,
+    count_num_pruned = 2
   };
 
  public:
@@ -1012,6 +1094,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::pruning_vis
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
     if (!std::get<index::ecc_data>(alg_data).just_solved(vertex)) return false;
+    if (std::get<index::core_info>(alg_data)[vertex].get_num_cut() == 0) return false;
 
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       if (!eitr.target().is_delegate()) // Don't send visitor to delegates because they are obviously not degree 1 vertices
@@ -1131,6 +1214,157 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_vi
   vertex_locator_t vertex;
 } __attribute__ ((packed));
 
+
+template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tree_visitor
+{
+ private:
+  enum index
+  {
+    kbfs_data = 0,
+    ecc_data = 1,
+    k_core_data = 2,
+    num_solved = 3,
+  };
+
+ public:
+  hanging_tree_visitor()
+    : vertex() { }
+
+  explicit hanging_tree_visitor(const vertex_locator_t _vertex)
+    : vertex(_vertex) { }
+
+  explicit hanging_tree_visitor(const vertex_locator_t _vertex, const uint16_t _ecc)
+    : vertex(_vertex),
+      ecc(_ecc) { }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    // -------------------------------------------------- //
+    // This function issues visitors for neighbors (scatter step)
+    // -------------------------------------------------- //
+    if (!std::get<index::kbfs_data>(alg_data).visited_by(vertex, 0))
+      return false; // skip unvisited vertices
+
+    if (std::get<index::ecc_data>(alg_data).lower(vertex) != std::get<index::ecc_data>(alg_data).upper(vertex))
+      return false; // skip unsolved vertices
+
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() == 0)
+      return false; // skip non-articulation vertices
+
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_cut_depth() > std::get<index::ecc_data>(alg_data).lower(vertex))
+      return false; // skip vertices who have deeper trees than ecc their values
+
+    if (!std::get<index::k_core_data>(alg_data)[vertex].get_alive())
+      return false; // skip dead vertices
+
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(hanging_tree_visitor(eitr.target(), std::get<index::ecc_data>(alg_data).lower(vertex) + 1));
+    }
+
+    return true; // trigger bcast from masters of delegates (label:FLOW1)
+  }
+
+  template <typename AlgData>
+  bool pre_visit(AlgData &alg_data) const
+  {
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_alive())
+      return false; // skip allive vertices
+
+    return true;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc)
+      return false;
+
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(hanging_tree_visitor(eitr.target(), ecc + static_cast<uint16_t>(1)));
+    }
+
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_alive())
+      return false;
+
+    std::get<index::ecc_data>(alg_data).lower(vertex) = std::get<index::ecc_data>(alg_data).upper(vertex) = ecc;
+    ++std::get<index::num_solved>(alg_data);
+
+    return true;
+  }
+
+  friend inline bool operator>(const hanging_tree_visitor &v1, const hanging_tree_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  friend inline bool operator<(const hanging_tree_visitor &v1, const hanging_tree_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  vertex_locator_t vertex;
+  uint16_t ecc;
+} __attribute__ ((packed));
+
+template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::single_source_visitor
+{
+ private:
+  enum index
+  {
+    k_core_data = 0,
+  };
+
+ public:
+  single_source_visitor()
+    : vertex() { }
+
+  explicit single_source_visitor(vertex_locator_t _vertex)
+    : vertex(_vertex) { }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    // -------------------------------------------------- //
+    // This function issues visitors for neighbors (scatter step)
+    // -------------------------------------------------- //
+    if (g.degree(vertex) != 1)
+      return false; // skip non single degree
+
+    for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
+      vis_queue->queue_visitor(single_source_visitor(eitr.target()));
+    }
+
+    return false;
+  }
+
+  template <typename AlgData>
+  bool pre_visit(AlgData &alg_data) const
+  {
+    return true;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
+  {
+    std::get<index::k_core_data>(alg_data)[vertex].set_num_cut(std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() + 1);
+    return false;
+  }
+
+  friend inline bool operator>(const single_source_visitor &v1, const single_source_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  friend inline bool operator<(const single_source_visitor &v1, const single_source_visitor &v2)
+  {
+    return v1.vertex < v2.vertex; // or source?
+  }
+
+  vertex_locator_t vertex;
+} __attribute__ ((packed));
 
 #if 0
 // -------------------------------------------------------------------------------------------------------------- //
