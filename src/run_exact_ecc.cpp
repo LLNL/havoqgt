@@ -110,7 +110,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::string &backup_filename,
                     std::string &ecc_output_filename,
                     std::vector<uint64_t> &source_id_list,
-                    std::vector<bool>& use_algorithm)
+                    std::set<int>& use_algorithm)
 {
   if (havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
@@ -155,7 +155,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
         std::string buf;
         std::stringstream sstrm(optarg);
         while (std::getline(sstrm, buf, ':'))
-          use_algorithm[std::stoull(buf.c_str())] = true;
+          use_algorithm.insert(std::stoi(buf.c_str()));
         break;
       }
 
@@ -248,7 +248,7 @@ int main(int argc, char **argv)
     std::string backup_filename;
     std::string ecc_output_filename;
     std::vector<uint64_t> parsed_source_id_list;
-    std::vector<bool> use_algorithm(9, false);
+    std::set<int> use_algorithm;
 
     parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list, use_algorithm);
     MPI_Barrier(MPI_COMM_WORLD);

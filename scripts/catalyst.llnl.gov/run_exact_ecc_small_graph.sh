@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
+TAG=$1
+
 NUM_P=20
 
-TAG="adp"
+unset USE_TAKE
 
-#TAG="take"
-#export U_L_EXCHANGE="1" ## 1 is a dummy value
+if [${TAG} == "take"]
+then
+    export USE_TAKE="1" ## 1 is a dummy value
+fi
 
 function ingest_edge
 {
@@ -15,14 +19,18 @@ function ingest_edge
 
 function run
 {
-  srun --drop-caches=pagecache -N1 --ntasks-per-node=${NUM_P} ./src/run_exact_ecc  -i /dev/shm/graph -e /p/lscratchf/iwabuchi/ecc_${PREFIX} -a 0:1:2:3:4:5:6:7 |& tee ecc_all_${PREFIX}_${TAG}.log
-  srun --drop-caches=pagecache -N1 --ntasks-per-node=${NUM_P} ./src/run_exact_ecc  -i /dev/shm/graph -e /p/lscratchf/iwabuchi/ecc_${PREFIX} -a 7 |& tee ecc_rnd_${PREFIX}_${TAG}.log
+  if [${TAG} == "rnd"]
+  then
+    srun --drop-caches=pagecache -N1 --ntasks-per-node=${NUM_P} ./src/run_exact_ecc  -i /dev/shm/graph -e /p/lscratchf/iwabuchi/ecc/ecc_${PREFIX}_${TAG} -a 7 |& tee ecc_${PREFIX}_${TAG}.log
+  else
+    srun --drop-caches=pagecache -N1 --ntasks-per-node=${NUM_P} ./src/run_exact_ecc  -i /dev/shm/graph -e /p/lscratchf/iwabuchi/ecc/ecc_${PREFIX}_${TAG} -a 0:1:2:3:4:5:6:7:8 |& tee ecc_${PREFIX}_${TAG}.log
+  fi
 }
 
-function check
-{
-  ./src/exact_ecc_result_processor ${NUM_P} /p/lscratchf/iwabuchi/ecc_${PREFIX} ${EDGE} |& tee check_${PREFIX}_${TAG}.log
-}
+#function check
+#{
+#  ./src/exact_ecc_result_processor ${NUM_P} /p/lscratchf/iwabuchi/ecc/ecc_${PREFIX}_${TAG} ${EDGE} |& tee check_${PREFIX}_${TAG}.log
+#}
 
 # /p/lscratchf/iwabuchi/graph_dataset/as-skitter/as-skitter.txt
 EDGE=/p/lscratchf/iwabuchi/graph_dataset/as-skitter/as-skitter.txt
