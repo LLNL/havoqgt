@@ -1263,7 +1263,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
       return false; // skip non-articulation vertices
 
     if (std::get<index::k_core_data>(alg_data)[vertex].get_cut_depth() > std::get<index::ecc_data>(alg_data).lower(vertex))
-      return false; // skip vertices who have deeper trees than ecc their values
+      return false; // skip vertices who have deeper trees than their ecc values
 
     if (!std::get<index::k_core_data>(alg_data)[vertex].get_alive())
       return false; // skip dead vertices
@@ -1287,18 +1287,24 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(graph_t &g, VisitorQueueHandle vis_queue, AlgData &alg_data) const
   {
-    if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc)
-      return false;
+    // -- Only dead vertices and delegate vertices shuld be here -- //
 
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       vis_queue->queue_visitor(hanging_tree_visitor(eitr.target(), ecc + static_cast<uint16_t>(1)));
     }
 
-    if (std::get<index::k_core_data>(alg_data)[vertex].get_alive())
-      return false;
+    if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc)
+      std::abort(); // Logic error
 
-    std::get<index::ecc_data>(alg_data).lower(vertex) = std::get<index::ecc_data>(alg_data).upper(vertex) = ecc;
-    ++std::get<index::num_solved>(alg_data);
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_alive()) {
+      if (!vertex.get_bcast()) std::abort(); // Logic error
+      return false; // We only update ecc of dead vertices, i.e., vertices in hanging trees
+    }
+
+    if (std::get<index::ecc_data>(alg_data).lower(vertex) != std::get<index::ecc_data>(alg_data).upper(vertex)) {
+      std::get<index::ecc_data>(alg_data).lower(vertex) = std::get<index::ecc_data>(alg_data).upper(vertex) = ecc;
+      ++std::get<index::num_solved>(alg_data);
+    }
 
     return true;
   }
