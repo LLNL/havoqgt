@@ -15,26 +15,18 @@ procs=36
 # ---------------------------------------------------------------------------------------------------- #
 # Functions
 # ---------------------------------------------------------------------------------------------------- #
-function init
+function make_script
 {
-    rm -f sbatch_out
+    rm -f ${sbatch_out}
     echo "#!/bin/bash" > ${sh_file}
     echo "#SBATCH -N${num_nodes}" >> ${sh_file}
     echo "#SBATCH -o ${sbatch_out}" >> ${sh_file}
     echo "#SBATCH --ntasks-per-node=${procs}" >> ${sh_file}
     echo "#SBATCH -t 12:00:00" >> ${sh_file}
 
+    echo "${option}" >> ${sh_file}
+
     echo "srun --ntasks-per-node=${procs} --distribution=block ./src/transfer_graph ${graph_path} /dev/shm/" >> ${sh_file}
-}
-
-function make_script()
-{
-    num_sources=$1
-
-#    echo "export NUM_SOURCES=${num_sources}" >> ${sh_file}
-#    echo "srun -n1 -N1 sh scripts/do_cmake.sh" >> ${sh_file}
-#    echo "srun -n1 -N1 make -j4" >> ${sh_file}
-
     echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=${procs} --distribution=block ./src/${exe_file_name} -i /dev/shm/graph  -e ${ecc_file_name} ${source_selection_algorithms}" >> ${sh_file}
 }
 
@@ -56,19 +48,15 @@ ecc_out_path="${storage_path}/ecc/${graph_name}/"
 unset USE_TAKE
 unset USE_TAKE_PRUNING
 
-if [${tag} == "tk"]
-then
-    export USE_TAKE="1" ## 1 is a dummy value
+if [ "${tag}" == "tk" ]; then
+    option="export USE_TAKE=1" ## 1 is a dummy value
     source_selection_algorithms=""
-elif [${tag} == "tk_pr"]
-then
-    export USE_TAKE_PRUNING="1" ## 1 is a dummy value
+elif [ "${tag}" == "adp_tk_pr" ]; then
+    option="export USE_TAKE_PRUNING=1" ## 1 is a dummy value
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [${tag} == "adp"]
-then
+elif [ "${tag}" == "adp" ]; then
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [${tag} == "adp_at"]
-then
+elif [ "${tag}" == "adp_at" ]; then
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"
 fi
 
@@ -82,8 +70,7 @@ do
         ecc_file_name="${ecc_out_path}/ecc_k${num_sources}_${tag}"
         graph_path="${base_graph_path}/n${num_nodes}/graph"
 
-        init
-        make_script ${k}
+        make_script
         compile ${k}
 
         #sbatch ${sh_file}

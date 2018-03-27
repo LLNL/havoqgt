@@ -6,7 +6,7 @@ NUM_P=20
 
 unset USE_TAKE
 
-if [${TAG} == "take"]
+if [ "${TAG}"== "take" ]
 then
     export USE_TAKE="1" ## 1 is a dummy value
 fi
@@ -19,7 +19,7 @@ function ingest_edge
 
 function run
 {
-  if [${TAG} == "rnd"]
+  if [ "${TAG}" == "rnd" ]
   then
     srun --drop-caches=pagecache -N1 --ntasks-per-node=${NUM_P} ./src/run_exact_ecc  -i /dev/shm/graph -e /p/lscratchf/iwabuchi/ecc/ecc_${PREFIX}_${TAG} -a 7 |& tee ecc_${PREFIX}_${TAG}.log
   else
