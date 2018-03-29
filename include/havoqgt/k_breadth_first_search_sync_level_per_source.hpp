@@ -136,7 +136,8 @@ class k_breadth_first_search_vertex_data
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
 #endif
-    return (m_level[vertex][k] != unvisited_level);
+    return m_tmp_visited_bitmap[vertex].get(k);
+    // return (m_level[vertex][k] != unvisited_level);
   }
 
   void visit(const typename graph_t::vertex_locator vertex, const size_t k, const level_t level)
@@ -400,7 +401,7 @@ class k_breadth_first_search<segment_manager_t, level_t, k_num_sources>::kbfs_vi
     auto &vertex_data = std::get<index::vertex_data>(alg_data);
 
     bool updated(false);
-    for (size_t k = 0; k < k_num_sources; ++k) { // TODO: change to actual num bit
+    for (size_t k = 0; k < k_num_sources; ++k) {
       if (vertex_data.visited_by(vertex, k)) continue; // Already visited by source k
 
       if (!visit_bitmap.get(k)) continue; // No visit request from source k
