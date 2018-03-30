@@ -297,7 +297,8 @@ complete_construction(const SegmentAllocator<void>& seg_allocator,
         initialize_edge_storage(seg_allocator);      
 
         if (m_has_edge_data) {
-          assert(_edge_data != NULL); 
+          // Comment out here due to compile error 2018/02/14
+          // assert(_edge_data != NULL);
           _edge_data.resize(*this);                
         }  
 
@@ -633,7 +634,7 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
   //  if it is not a hub, then it incremenets the edge count by the number of
   //  outgoing edges.
   uint64_t edge_count = 0;
-  for (uint64_t vert_id = 0; vert_id < m_owned_info.size(); vert_id++) {
+  for (uint64_t vert_id = 0; vert_id < m_owned_info.size() - 1; vert_id++) {
     const uint64_t outgoing = m_local_outgoing_count[vert_id];
     const uint64_t incoming = m_local_incoming_count[vert_id];
 
@@ -653,6 +654,7 @@ initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hubs) {
       #endif
     }
   }  // for over m_owned_info
+  m_owned_info[m_owned_info.size() - 1] = vert_info(false, 0, edge_count);
 }
 
 /**
