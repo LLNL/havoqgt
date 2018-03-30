@@ -213,6 +213,10 @@ class exact_eccentricity {
           std::cout << "Strategy: ";
           for (auto s : m_source_info.strategy_list) std::cout << s << " ";
           std::cout << std::endl;
+
+          std::cout << "Master: ";
+          for (auto v : m_source_info.source_list) std::cout << m_graph.master(v) << " ";
+          std::cout << std::endl;
         }
       }
 

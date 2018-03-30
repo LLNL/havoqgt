@@ -80,8 +80,8 @@ class visitor_queue {
 #ifdef __bgp__
   typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
-  typedef mailbox_routed<visitor_type> mailbox_type;
-  //typedef mailbox<visitor_type> mailbox_type;
+  // typedef mailbox_routed<visitor_type> mailbox_type;
+  typedef mailbox<visitor_type> mailbox_type;
 #endif
 
 
@@ -116,7 +116,8 @@ public:
     }
 
     bool intercept(const visitor_type& __value) {
-      assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
+      // Comment out here due to compile error 2018/02/14
+      // assert(m_vq->m_ptr_graph->master(__value.m_visitor.vertex) != uint32_t(m_vq->m_mailbox.comm_rank()));
       bool ret = __value.pre_visit(m_vq->m_alg_data);
       if(!ret) {
         m_vq->m_termination_detection.inc_completed();
