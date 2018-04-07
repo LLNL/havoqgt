@@ -49,6 +49,8 @@
  *
  */
 
+// g++ -std=c++11 -O3 -fopenmp ../src/extract_unique_connected_component_graph.cpp -o extract_unique_connected_component_graph
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -58,13 +60,75 @@
 #include <utility>
 #include <algorithm>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 constexpr size_t max_vid = 1ULL << 20;
 
 using vid_t = uint32_t;
-using graph_t = std::vector<std::vector<vid_t>>;
+// using graph_t = std::vector<std::vector<vid_t>>;
 using bitmap_t = std::bitset<max_vid + 1>;
 
-void bfs(const graph_t &graph, bitmap_t &visited) {
+
+std::pair<size_t, size_t> cal_range(const size_t first, const size_t last, const size_t myid, const size_t nthreads) {
+  size_t len = last - first + 1;
+  size_t chunk = len / nthreads;
+  size_t r = len % nthreads;
+
+  size_t start;
+  size_t end;
+
+  if (myid < r) {
+    start = first + (chunk + 1) * myid;
+    end = start + chunk;
+  } else {
+    start = first + (chunk + 1) * r + chunk * (myid - r);
+    end = start + chunk - 1;
+  }
+
+  return std::make_pair(start, end);
+}
+
+template <size_t num_bank, size_t max_id>
+class graph_bank
+{
+ public:
+  using edge_list_t = std::vector<vid_t>;
+  using graph_t = std::vector<edge_list_t>;
+  using table_t = std::vector<graph_t>;
+
+  graph_bank()
+      : m_offset(num_bank),
+        m_table(num_bank)
+  {
+    for (size_t i = 0; i < num_bank; ++i) {
+      auto ret = cal_range(0, max_id, i, num_bank);
+      m_offset[i] = ret.first;
+      m_table[i].resize(ret.second - ret.first + 1);
+    }
+  }
+
+  edge_list_t& operator[](const uint64_t i) {
+    const uint64_t index = i % num_bank;
+    return m_table[index][i - m_offset[i]];
+  }
+
+  uint64_t index(const uint64_t i) {
+    return i % num_bank;
+  }
+
+  size_t size() const {
+    return max_id;
+  }
+
+ private:
+  std::vector m_offset;
+  table_t m_table;
+  omp_lock_t
+};
+
+void bfs(const graph_bank<256, max_vid> &graph, bitmap_t &visited) {
   vid_t root = 0;
   while (root < graph.size()) {
     if (!graph[root].empty()) break;
@@ -96,24 +160,6 @@ void bfs(const graph_t &graph, bitmap_t &visited) {
   } // BFS loop
 }
 
-std::pair<size_t, size_t> cal_range(const size_t first, const size_t last, const size_t myid, const size_t nthreads) {
-  size_t len = last - first + 1;
-  size_t chunk = len / nthreads;
-  size_t r = len % nthreads;
-
-  size_t start;
-  size_t end;
-
-  if (myid < r) {
-    start = first + (chunk + 1) * myid;
-    end = start + chunk;
-  } else {
-    start = first + (chunk + 1) * r + chunk * (myid - r);
-    end = start + chunk - 1;
-  }
-
-  return std::make_pair(start, end);
-}
 
 inline uint32_t hash32(uint32_t a) {
   a = (a + 0x7ed55d16) + (a << 12);
@@ -139,13 +185,14 @@ int main(int argc, char **argv) {
     edge_list_file.emplace_back(argv[i]);
   }
 
-  graph_t graph(max_vid + 1);
-
   size_t count_edges = 0;
   uint64_t actual_max_vid = 0;
 
+  graph_bank<256, max_vid> graph;
+
   print_time();
-  for (const auto &f : edge_list_file) {
+  for (int i = 0; i < edge_list_file.size(); ++i) {
+    const auto& f = edge_list_file[i];
     std::ifstream ifs(f);
     std::cout << "Open " << f << std::endl;
     if (!ifs.is_open()) std::abort();
@@ -156,8 +203,10 @@ int main(int argc, char **argv) {
       if (src > max_vid || dst > max_vid) {
         std::abort();
       }
+
       graph[src].push_back(dst);
       graph[dst].push_back(src);
+
       actual_max_vid = std::max(actual_max_vid, src);
       actual_max_vid = std::max(actual_max_vid, dst);
       ++count_edges;
@@ -168,7 +217,10 @@ int main(int argc, char **argv) {
   std::cout << "Edges: " << count_edges << std::endl;
   print_time();
 
-  for (auto &edge_list : graph) {
+
+#pragma omp parallel for
+  for (uint64_t i = 0; i < graph.size(); ++i) {
+    auto& edge_list = graph[i];
     std::sort(edge_list.begin(), edge_list.end());
     auto end = std::unique(edge_list.begin(), edge_list.end());
     edge_list.resize(std::distance(edge_list.begin(), end));

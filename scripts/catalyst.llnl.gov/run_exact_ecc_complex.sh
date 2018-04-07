@@ -22,7 +22,7 @@ function make_script
     echo "#SBATCH -N${num_nodes}" >> ${sh_file}
     echo "#SBATCH -o ${sbatch_out}" >> ${sh_file}
     echo "#SBATCH --ntasks-per-node=${procs}" >> ${sh_file}
-    echo "#SBATCH -t 12:00:00" >> ${sh_file}
+    echo "#SBATCH -t 4:00:00" >> ${sh_file}
 
     echo "${option}" >> ${sh_file}
 
@@ -47,9 +47,13 @@ ecc_out_path="${storage_path}/ecc/${graph_name}/"
 
 unset USE_TAKE
 unset USE_TAKE_PRUNING
+unset USE_TAKE_TREE
 
 if [ "${tag}" == "tk" ]; then
     option="export USE_TAKE=1" ## 1 is a dummy value
+    source_selection_algorithms=""
+elif [ "${tag}" == "tk_tr" ]; then
+    option="export USE_TAKE_TREE=1" ## 1 is a dummy value
     source_selection_algorithms=""
 elif [ "${tag}" == "adp_tk_pr" ]; then
     option="export USE_TAKE_PRUNING=1" ## 1 is a dummy value
@@ -60,19 +64,19 @@ elif [ "${tag}" == "adp_at" ]; then
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"
 fi
 
-for ((num_nodes=128; num_nodes<=128; num_nodes*=2))
+for ((num_nodes=64; num_nodes<=64; num_nodes*=2))
 do
     for ((k=64; k<=64; k*=2))
     do
         sbatch_out="sbatch_${graph_name}_n${num_nodes}_k${k}_${tag}.out"
         sh_file="run_${graph_name}_n${num_nodes}_k${k}_${tag}.sh"
-        exe_file_name="run_exact_ecc_k${num_sources}_${tag}"
-        ecc_file_name="${ecc_out_path}/ecc_k${num_sources}_${tag}"
+        exe_file_name="run_exact_ecc_k${k}_${tag}"
+        ecc_file_name="${ecc_out_path}/ecc_k${k}_${tag}"
         graph_path="${base_graph_path}/n${num_nodes}/graph"
 
         make_script
         compile ${k}
 
-        #sbatch ${sh_file}
+        sbatch ${sh_file}
     done
 done
