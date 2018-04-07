@@ -70,6 +70,58 @@
 
 using namespace havoqgt;
 
+void usage()  {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cerr << "Usage: -i <string> -s <int>\n"
+         << " -i <string>   - input graph base filename (required)\n"
+         << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
+         << " -s <string>   - statistics output base filename (required)\n"
+         << " -h            - print help and exit\n\n";
+  }
+}
+
+void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, std::string& stat_filename) {
+  if(havoqgt_env()->world_comm().rank() == 0) {
+    std::cout << "CMD line:";
+    for (int i=0; i<argc; ++i) {
+      std::cout << " " << argv[i];
+    }
+    std::cout << std::endl;
+  }
+  
+  bool found_input_filename = false;
+  bool found_stat_filename = false;
+  
+  char c;
+  bool prn_help = false;
+  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
+     switch (c) {
+       case 'h':  
+         prn_help = true;
+         break;
+       case 's':
+         found_stat_filename = true;
+         stat_filename = optarg;
+         break;
+      case 'i':
+         found_input_filename = true;
+         input_filename = optarg;
+         break;
+      case 'b':
+         backup_filename = optarg;
+         break;
+      default:
+         std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
+         prn_help = true;
+         break;
+     }
+   } 
+   if (prn_help || !found_input_filename || !found_stat_filename) {
+     usage();
+     exit(-1);
+   }
+}
+
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
   typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
@@ -84,38 +136,24 @@ int main(int argc, char** argv) {
 
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    std::cout << "CMD line:";
-    for (int i = 0; i < argc; ++i) {
-      std::cout << " " << argv[i];
-    }
-    std::cout << std::endl;
     havoqgt::get_environment().print();
     //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
 
-/*  std::string graph_input;
-  std::string graph_backup
-
-  if (argc < 2) {
-    std::cerr << "usage: <graph input file name>"
-      << " (argc:" << argc << " )." << std::endl;
-    exit(-1);
-  } else {
-    int pos = 1;
-    graph_input = argv[pos++];
-  }
-*/
-
+  std::string graph_input;
+  std::string backup_filename;
+  std::string stat_filename;
+  
+  parse_cmd_line(argc, argv, graph_input, backup_filename, stat_filename);
+  
   MPI_Barrier(MPI_COMM_WORLD);
-  if(mpi_rank == 0) {
-    std::cout << "Transfering " << argv[2] << " to " << argv[1] << std::endl;
-    std::cout << "Outputing degree distributions to " << argv[3] << std::endl;
+  if(backup_filename.size() > 0) {
+    distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
-
-  distributed_db::transfer(argv[2], argv[1]);
-  havoqgt::distributed_db ddb(havoqgt::db_open(), argv[1]);
+  
+  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
   graph_type *graph = ddb.get_segment_manager()->
     find<graph_type>("graph_obj").first;
@@ -125,15 +163,13 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "Graph Loaded Ready." << std::endl;
   }
-  //graph->print_graph_statistics();
+  graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
 
-//  for(int i=0; i<100; ++i) {
-    uint64_t count = new_triangle_count(*graph, argv[3]);
-    if(mpi_rank == 0) {
-      std::cout << "Graph has " << count <<  " triangles." << std::endl;
-    }
-//  }
+  uint64_t count = new_triangle_count(*graph, stat_filename.c_str());
+  if(mpi_rank == 0) {
+    std::cout << "Graph has " << count <<  " triangles." << std::endl;
+  }
 
   }  // END Main MPI
   havoqgt::havoqgt_finalize();

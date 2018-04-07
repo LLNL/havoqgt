@@ -80,7 +80,7 @@ class visitor_queue {
 #ifdef __bgp__
   typedef mailbox_bgp_torus<visitor_type> mailbox_type;
 #else
-  // typedef mailbox_routed<visitor_type> mailbox_type;
+  //typedef mailbox_routed<visitor_type> mailbox_type;
   typedef mailbox<visitor_type> mailbox_type;
 #endif
 
@@ -226,15 +226,20 @@ public:
 
     do {
       do {
+        int count_vitr(0), count_citr(0);
+        check_mailbox(); // added 2017 TC
         if(citr != m_ptr_graph->controller_end()) {
           visitor_type v(*citr);
           do_init_visit(v);
           ++citr;
+          //if(count_citr++ > 1024) break;
         }
+        check_mailbox();  // added 2017 TC
         if(vitr != m_ptr_graph->vertices_end()) {
           visitor_type v(*vitr);
           do_init_visit(v);
           ++vitr;
+          //if(count_vitr++ > 1024) break;
         }
         process_pending_controllers();
         while(!empty()) {
@@ -252,6 +257,7 @@ public:
   }
 
   void queue_visitor(const visitor_type& v) {
+    static uint64_t counter(0);  if(counter++ % 1024 == 0) { check_mailbox(); }
     if(v.vertex.is_delegate()) {
       local_delegate_visit(v);
     } else {

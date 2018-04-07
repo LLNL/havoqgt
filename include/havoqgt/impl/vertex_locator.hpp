@@ -95,6 +95,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
   bool is_intercept() const { return m_is_intercept == 1;}
   void set_intercept(bool intercept) { m_is_intercept = intercept; }
 
+  uint64_t hash() const { return (uint64_t(m_owner_dest) << 39) | uint64_t(m_local_id) |  (uint64_t(m_is_delegate) << 60); }
+
   friend bool operator==(const vertex_locator& x,
                          const vertex_locator& y) {return x.is_equal(y); }
   friend bool operator<(const vertex_locator& x,
@@ -175,6 +177,7 @@ is_equal(const typename delegate_partitioned_graph<SegmentManager>::vertex_locat
       && m_local_id     == x.m_local_id;
 }
 
-
 }  // namespace havoqgt
+
+
 #endif  // HAVOQGT_MPI_IMPL_VERTEX_LOCATOR_HPP_

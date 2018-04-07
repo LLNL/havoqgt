@@ -73,7 +73,7 @@ class mailbox {
   template<class OPT> using offset_ptr = boost::interprocess::offset_ptr<OPT>;
   using managed_shared_memory = boost::interprocess::managed_shared_memory;
 
-  struct msg_wrapper; 
+  struct msg_wrapper;
   struct msg_bundle_shm;
   struct msg_bundle_mpi;
   struct shm_exchange;
@@ -87,7 +87,7 @@ public:
     m_shm_size = havoqgt_env()->node_local_comm().size();
     m_world_rank = havoqgt_env()->world_comm().rank();
     m_world_size = havoqgt_env()->world_comm().size();
-  
+
     init_environment_config();
 
     init_managed_shared_memory();
@@ -122,13 +122,13 @@ public:
     while(!m_shm_request_list.empty() || !m_isend_request_list.empty()) {
       cleanup_pending_isend_requests();
     }
-    
+
     while(!m_irecv_request_list.empty()) {
       CHK_MPI( MPI_Cancel( &(m_irecv_request_list.front().first) ) );
       free(m_irecv_request_list.front().second);
       m_irecv_request_list.pop_front();
     }
-    
+
     m_my_exchange->~shm_exchange(); //frees mutexes
     delete m_pmsm;        //frees managed_shared_memory
     havoqgt_env()->node_local_comm().barrier();
@@ -159,7 +159,7 @@ private:
         std::cout << "HAVOQGT_MAILBOX_NUM_IRECV     = " << s_num_irecv << std::endl;
         std::cout << "HAVOQGT_MAILBOX_MPI_SIZE      = " << mpi_bytes   << std::endl;
         std::cout << "HAVOQGT_MAILBOX_SHM_SIZE      = " << shm_bytes   << std::endl;
-        std::cout << "HAVOQGT_MAILBOX_PRINT_STATS   = " << s_b_print << std::endl; 
+        std::cout << "HAVOQGT_MAILBOX_PRINT_STATS   = " << s_b_print << std::endl;
         std::cout << "HAVOQGT_MAILBOX_ROUTE_ON_DEST = " << s_b_route_on_dest << std::endl;
 
         std::cout << "msg_bundle_mpi::capacity = " << msg_bundle_mpi::capacity << std::endl;
@@ -203,7 +203,7 @@ private:
 
   void init_alloc_bundle_shared() {
     //
-    // Allocate large chunk to help NUMA page pacement.  
+    // Allocate large chunk to help NUMA page pacement.
     // Local rank always touches pages before sending to other ranks.
     size_t num_to_preallocate = m_shm_size * 2;
     char* chunk = (char*) m_pmsm->allocate( msg_bundle_shm::padded_size * num_to_preallocate);
@@ -265,7 +265,7 @@ private:
   msg_bundle_shm* get_free_shm_bundle() {
     msg_bundle_shm* to_return;
     if(m_free_shm_list.empty()) {
-      void* addr = (void*) m_pmsm->allocate( msg_bundle_shm::padded_size ); 
+      void* addr = (void*) m_pmsm->allocate( msg_bundle_shm::padded_size );
       to_return = new (addr) msg_bundle_shm();
     } else {
       to_return = m_free_shm_list.back();
@@ -291,7 +291,7 @@ public:
     msg_wrapper wrapped;
     wrapped.intercept = 0;
     wrapped.msg =  raw_msg;
-    
+
     wrapped.bcast = 1;
     for(size_t i=0; i<m_shm_size; ++i) {
       if(i != m_shm_rank) {
@@ -352,7 +352,7 @@ public:
     }
     *oitr = wrapped.msg;
     ++oitr;
-  } 
+  }
 
   template <typename OutputIterator>
   void send(size_t world_dest, const T& raw_msg, OutputIterator oitr, bool intercept) {
@@ -362,7 +362,7 @@ public:
       *oitr = raw_msg;
       ++oitr;
     }
-  
+
     //assume block partitioning
     msg_wrapper wrapped;
     wrapped.dest_node = world_dest / m_shm_size;
@@ -420,7 +420,7 @@ public:
 
   bool is_idle() {
     cleanup_pending_isend_requests();
-    return m_mpi_pending_list.empty() && m_isend_request_list.empty() && m_shm_pending_list.empty() 
+    return m_mpi_pending_list.empty() && m_isend_request_list.empty() && m_shm_pending_list.empty()
            && !m_my_exchange->probe() && shm_count_transfers_pending() == 0;
   }
 
@@ -480,7 +480,7 @@ private:
       m_pending_iterator_per_shm_rank[shm_rank] = --(m_shm_pending_list.end());
     }
     size_t size = m_bundle_per_shm_rank[shm_rank]->push_back(wrapped);
-    
+
     if(size == msg_bundle_shm::capacity) {
       to_return = true;
       /*if(!fast_path && shm_rank != m_shm_pending_list.front()) {
@@ -489,7 +489,7 @@ private:
             HAVOQGT_ERROR_MSG("route_shm try_transfer_shm failed");
           } else {
             std::cout << "Add me up 1" << std::endl;
-            receive_shm(oitr);  
+            receive_shm(oitr);
             receive_mpi(oitr);
           }
         }
@@ -497,7 +497,7 @@ private:
       //double stuck_time = 0.0;
       while(!try_transfer_shm(shm_rank)) {
         //if(stuck_time == 0.0) stuck_time = MPI_Wtime();
-        //receive_shm(oitr);  
+        //receive_shm(oitr);
         //receive_mpi(oitr);
       }
       /*if(stuck_time > 0.0) {
@@ -561,7 +561,7 @@ private:
 
   void post_isend(size_t rank) {
     assert(*(m_pending_iterator_per_mpi_rank[rank]) == rank);
-    assert(m_pending_iterator_per_mpi_rank[rank] != m_mpi_pending_list.end()); 
+    assert(m_pending_iterator_per_mpi_rank[rank] != m_mpi_pending_list.end());
     msg_bundle_mpi* to_transfer = m_bundle_per_mpi_rank[rank];
     m_bundle_per_mpi_rank[rank] = nullptr;
     std::pair<MPI_Request, msg_bundle_mpi*> req_pair;
@@ -577,7 +577,7 @@ private:
     } else {
       world_dest = (rank * m_shm_size) + m_shm_rank;
     }
-    if(m_isend_count % 5 == 0) {
+    if(true) {//m_isend_count % 2 == 0) {
       //CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, rank, m_mpi_tag, m_mpi_comm, request_ptr) );
       CHK_MPI( MPI_Issend(buffer_ptr, size_in_bytes, MPI_BYTE, world_dest, m_mpi_tag, MPI_COMM_WORLD, request_ptr) );
     } else {
@@ -597,7 +597,7 @@ private:
     //std::cout << "Inspecting m_isend_request_list: size = " << m_isend_request_list.size() << std::endl;
   }
 
-  template <typename OutputIterator> 
+  template <typename OutputIterator>
   void receive_mpi(OutputIterator oitr) {
     m_send_recv_balance = 0;
     int flag(0);
@@ -612,7 +612,7 @@ private:
         } else  if(s_b_route_on_dest) {
           assert(ptr->data[i].dest_node == m_mpi_rank);
           if(ptr->data[i].dest_core == m_shm_rank) {
-            *oitr = ptr->data[i].msg; 
+            *oitr = ptr->data[i].msg;
             ++oitr;
           } else {
             if(ptr->data[i].intercept) {
@@ -634,7 +634,7 @@ private:
     //} while(flag);
   }
 
-  template <typename OutputIterator> 
+  template <typename OutputIterator>
   void receive_shm(OutputIterator oitr) {
     m_send_recv_balance = 0;
     std::vector<msg_bundle_shm*> to_recv;
@@ -652,8 +652,8 @@ private:
       for(int i=0; i</*recvptr->size*/copy.size(); ++i) {
         if(s_b_route_on_dest) {
           if(/*recvptr->data*/copy[i].dest_node == m_mpi_rank && /*recvptr->data*/copy[i].dest_core == m_shm_rank) {
-            *oitr = /*recvptr->data*/copy[i].msg; 
-            ++oitr; 
+            *oitr = /*recvptr->data*/copy[i].msg;
+            ++oitr;
           } else {
             if(copy[i].dest_node == m_mpi_rank) {
               std::cout << "logic problem!!!" << std::endl;
@@ -686,8 +686,8 @@ private:
               //std::cout << havoqgt_env()->whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
             }
             assert(recvptr->data[i].dest_core == m_shm_rank);
-            *oitr = recvptr->data[i].msg; 
-            ++oitr; 
+            *oitr = recvptr->data[i].msg;
+            ++oitr;
           } else {
             if(recvptr->data[i].intercept) {
               if(!oitr.intercept(recvptr->data[i].msg)) { continue; }
@@ -766,7 +766,7 @@ private:
   std::deque< std::pair<MPI_Request, msg_bundle_mpi*>> m_isend_request_list;
 
 
-  // 
+  //
   // Shared Mem Related
   managed_shared_memory*    m_pmsm;
   offset_ptr<shm_exchange>* m_poffset_exchange;
@@ -790,13 +790,13 @@ private:
   static bool s_b_route_on_dest;
 
   //
-  // 
+  //
   uint64_t m_send_recv_balance;
   uint64_t m_isend_count;
   uint64_t m_isend_bytes;
 
 
-}; 
+};
 
 template <typename T>
 uint32_t mailbox<T>::s_num_isend = 0;
@@ -818,7 +818,7 @@ struct mailbox<T>::shm_exchange {
   uint64_t source_core;
   mutex recv_mutex;
   offset_ptr<msg_bundle_shm> recv_list[capacity];
-  shm_exchange(uint32_t core) { 
+  shm_exchange(uint32_t core) {
     recv_end = 0;
     recv_beg = 0;
     source_core = core;
@@ -846,12 +846,12 @@ struct mailbox<T>::shm_exchange {
     if(/*size_recv < capacity*/ /*recv_end >= recv_beg &&*/ recv_end - recv_beg < capacity) {
       recv_list[recv_end++ % capacity] = to_send;
       return true;
-    } 
+    }
     //std::cout << havoqgt_env()->whoami() << ": Try_send Failed, sending_to_core = " << source_core << ", recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
     return false;
   }
-#else 
-  bool try_send(msg_bundle_shm* to_send) { 
+#else
+  bool try_send(msg_bundle_shm* to_send) {
     __sync_synchronize();
     if(recv_end - recv_beg >= capacity-100) {
       return false;
@@ -866,7 +866,7 @@ struct mailbox<T>::shm_exchange {
     std::cout << "recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
     HAVOQGT_ERROR_MSG("Failed to try_send");
   }
-  
+
 #endif
   bool probe() {
     __sync_synchronize();
@@ -904,7 +904,7 @@ struct mailbox<T>::shm_exchange {
     to_recv.clear();
     __sync_synchronize();
     to_recv.reserve(recv_end - recv_beg);
-    while(recv_end > recv_beg) {
+    /*while*/if(recv_end > recv_beg) { // data flow prob???
       uint64_t pos = (recv_beg) % capacity;
       if(recv_list[pos] != offset_ptr<msg_bundle_shm>()) {
         to_recv.push_back(recv_list[pos].get());
@@ -912,7 +912,7 @@ struct mailbox<T>::shm_exchange {
         ++recv_beg;
         __sync_synchronize();
       } else {
-        break;
+        //break; put back in for while
       }
     }
   }
@@ -941,10 +941,10 @@ struct mailbox<T>::msg_bundle_shm {
   // Static Members & Functions
   static uint32_t capacity;
   static uint32_t padded_size;
-  static void set_capacity_bytes(uint32_t bytes) { 
+  static void set_capacity_bytes(uint32_t bytes) {
     msg_bundle_shm::padded_size = bytes;
     msg_bundle_shm::capacity = (padded_size - sizeof(msg_bundle_mpi)) / sizeof(msg_wrapper);
-  } 
+  }
   size_t push_back(const msg_wrapper& _d) {
     data[size] = _d;
     return ++size;
@@ -979,13 +979,13 @@ template<typename T>
 struct mailbox<T>::msg_bundle_mpi {
   uint32_t size;
   msg_wrapper data[0];
-  msg_bundle_mpi() 
-    : size(0) 
-  { } 
+  msg_bundle_mpi()
+    : size(0)
+  { }
   // Static Members & Functions
   static uint32_t capacity;
   static uint32_t padded_size;
-  static void set_capacity_bytes(uint32_t bytes) { 
+  static void set_capacity_bytes(uint32_t bytes) {
     msg_bundle_mpi::padded_size = bytes;
     msg_bundle_mpi::capacity = (padded_size - sizeof(msg_bundle_shm)) / sizeof(msg_wrapper); //matches msg_bundle_shm's
   }
