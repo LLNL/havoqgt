@@ -86,11 +86,16 @@ class kth_core_data
 
   void set_alive(bool b) { alive = b; }
 
+  uint64_t get_parent_id() const { return parent_id; }
+
+  void set_parent_id(uint64_t id) { parent_id = id; }
+
  private:
   size_t num_cut;
   uint32_t core_bound;
   uint16_t cut_depth;
   bool alive;
+  uint64_t parent_id;
 };
 
 
@@ -117,10 +122,11 @@ class kth_core_visitor
   template <typename AlgData>
   bool pre_visit(AlgData &alg_data) const
   {
-    std::get<0>(alg_data)[vertex].set_num_cut(std::get<0>(alg_data)[vertex].get_num_cut() + num_cut + 1);
-    std::get<0>(alg_data)[vertex].set_cut_depth(std::max(static_cast<uint16_t>(cut_depth + 1),
-                                                            std::get<0>(alg_data)[vertex].get_cut_depth()));
     if (std::get<0>(alg_data)[vertex].get_alive()) {
+      std::get<0>(alg_data)[vertex].set_num_cut(std::get<0>(alg_data)[vertex].get_num_cut() + num_cut + 1);
+      std::get<0>(alg_data)[vertex].set_cut_depth(std::max(static_cast<uint16_t>(cut_depth + 1),
+                                                           std::get<0>(alg_data)[vertex].get_cut_depth()));
+
       std::get<0>(alg_data)[vertex].set_core_bound(std::get<0>(alg_data)[vertex].get_core_bound() - 1);
       if (std::get<0>(alg_data)[vertex].get_core_bound() < std::get<1>(alg_data)) {
         std::get<0>(alg_data)[vertex].set_alive(false);
@@ -197,6 +203,7 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
 
+
     uint64_t local_alive(0);
     uint16_t local_max_cut_depth(0);
     size_t local_max_cut(0);
@@ -213,6 +220,9 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
           ++local_articulation;
         }
       }
+      std::cout << graph.locator_to_label(locator)
+                << " " << k_core_data[locator].get_num_cut()
+                << " " << k_core_data[locator].get_cut_depth() << std::endl;
     };
 
     for (auto vitr = graph.vertices_begin(); vitr != graph.vertices_end(); ++vitr) {
