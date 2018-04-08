@@ -59,17 +59,18 @@
 #include <limits>
 #include <utility>
 #include <algorithm>
+#include <cassert>
+#include <numeric>
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
-constexpr size_t max_vid = 1ULL << 20;
+constexpr size_t max_vid = 1ULL << 20; //3563602788
 
 using vid_t = uint32_t;
 // using graph_t = std::vector<std::vector<vid_t>>;
 using bitmap_t = std::bitset<max_vid + 1>;
-
 
 std::pair<size_t, size_t> cal_range(const size_t first, const size_t last, const size_t myid, const size_t nthreads) {
   size_t len = last - first + 1;
@@ -90,51 +91,64 @@ std::pair<size_t, size_t> cal_range(const size_t first, const size_t last, const
   return std::make_pair(start, end);
 }
 
-template <size_t num_bank, size_t max_id>
-class graph_bank
-{
+template <size_t max_id, size_t num_bank = 256>
+class graph_bank {
  public:
   using edge_list_t = std::vector<vid_t>;
   using graph_t = std::vector<edge_list_t>;
   using table_t = std::vector<graph_t>;
+  static constexpr size_t k_each_size = ((max_id + 1) + num_bank - 1) / num_bank;
 
   graph_bank()
       : m_offset(num_bank),
-        m_table(num_bank)
-  {
+        m_table(num_bank),
+        m_locks() {
     for (size_t i = 0; i < num_bank; ++i) {
-      auto ret = cal_range(0, max_id, i, num_bank);
-      m_offset[i] = ret.first;
-      m_table[i].resize(ret.second - ret.first + 1);
+      m_offset[i] = i * k_each_size;
+      m_table[i].resize(k_each_size);
+      omp_init_lock(&m_locks[i]);
     }
   }
 
-  edge_list_t& operator[](const uint64_t i) {
-    const uint64_t index = i % num_bank;
-    return m_table[index][i - m_offset[i]];
+  edge_list_t &operator[](const uint64_t i) {
+    return const_cast<edge_list_t &>(const_cast<const graph_bank &>(*this)[i]);
   }
 
-  uint64_t index(const uint64_t i) {
-    return i % num_bank;
+  const edge_list_t &operator[](const uint64_t i) const {
+    const uint64_t idx = index(i);
+    return m_table[idx][i - m_offset[idx]];
+  }
+
+  void add(const vid_t src, const vid_t dst) {
+    {
+      const uint64_t idx = index(src);
+      while (!omp_test_lock(&m_locks[idx]));
+      m_table[idx][src - m_offset[idx]].push_back(dst);
+      omp_unset_lock(&m_locks[idx]);
+    }
+  }
+
+  static uint64_t index(const uint64_t i) {
+    assert(i / k_each_size < num_bank);
+    return i / k_each_size;
   }
 
   size_t size() const {
-    return max_id;
+    return (max_id + 1);
   }
 
  private:
-  std::vector m_offset;
+  std::vector<uint64_t> m_offset;
   table_t m_table;
-  omp_lock_t
+  std::array<omp_lock_t, num_bank> m_locks;
 };
 
-void bfs(const graph_bank<256, max_vid> &graph, bitmap_t &visited) {
+void bfs(const graph_bank<max_vid, 256> &graph, bitmap_t &visited) {
   vid_t root = 0;
   while (root < graph.size()) {
-    if (!graph[root].empty()) break;
+    if (!(graph[root].empty())) break;
     ++root;
   }
-
 
   std::cout << "\nBFS Root: " << root << std::endl;
   bitmap_t frontier;
@@ -160,7 +174,6 @@ void bfs(const graph_bank<256, max_vid> &graph, bitmap_t &visited) {
   } // BFS loop
 }
 
-
 inline uint32_t hash32(uint32_t a) {
   a = (a + 0x7ed55d16) + (a << 12);
   a = (a ^ 0xc761c23c) ^ (a >> 19);
@@ -177,7 +190,6 @@ void print_time() {
   std::cout << std::asctime(std::localtime(&result));
 }
 
-
 int main(int argc, char **argv) {
   std::string out_path(argv[1]);
   std::vector<std::string> edge_list_file;
@@ -187,12 +199,47 @@ int main(int argc, char **argv) {
 
   size_t count_edges = 0;
   uint64_t actual_max_vid = 0;
-
-  graph_bank<256, max_vid> graph;
-
   print_time();
-  for (int i = 0; i < edge_list_file.size(); ++i) {
-    const auto& f = edge_list_file[i];
+
+  std::vector<uint64_t> num_edges(max_vid + 1, 0);
+  {
+#pragma omp parallel for
+    for (size_t i = 0; i < edge_list_file.size(); ++i) {
+      const auto &f = edge_list_file[i];
+      std::ifstream ifs(f);
+      std::cout << "Open " << f << std::endl;
+      if (!ifs.is_open()) std::abort();
+
+      uint64_t src;
+      uint64_t dst;
+      while (ifs >> src >> dst) {
+        if (src > max_vid || dst > max_vid) {
+          std::abort();
+        }
+#pragma omp atomic
+        ++num_edges[src];
+#pragma omp atomic
+        ++num_edges[dst];
+      }
+    }
+  }
+  std::cout << "Read edge: " << std::accumulate(num_edges.cbegin(), num_edges.cend(), 0ULL) << std::endl;
+  print_time();
+
+  std::cout << "Alloc graph" << std::endl;
+  graph_bank<max_vid, 256> graph;
+
+  std::cout << "Extend edge list" << std::endl;
+#pragma omp parallel for
+  for (uint64_t i = 0; i < graph.size(); ++i) {
+    if (num_edges[i] > (1 << 30)) std::cout << i << " " << num_edges[i] << std::endl;
+    graph[i].reserve(num_edges[i]);
+  }
+  print_time();
+
+#pragma omp parallel for reduction(+:count_edges), reduction(max:actual_max_vid)
+  for (size_t i = 0; i < edge_list_file.size(); ++i) {
+    const auto &f = edge_list_file[i];
     std::ifstream ifs(f);
     std::cout << "Open " << f << std::endl;
     if (!ifs.is_open()) std::abort();
@@ -204,23 +251,24 @@ int main(int argc, char **argv) {
         std::abort();
       }
 
-      graph[src].push_back(dst);
-      graph[dst].push_back(src);
+      graph.add(src, dst);
+      graph.add(dst, src);
 
       actual_max_vid = std::max(actual_max_vid, src);
       actual_max_vid = std::max(actual_max_vid, dst);
       ++count_edges;
     }
   }
+  assert(count_edges * 2 == std::accumulate(num_edges.begin(), num_edges.end(), 0ULL));
   std::cout << "Edge loading done" << std::endl;
   std::cout << "Actual max id: " << actual_max_vid << std::endl;
   std::cout << "Edges: " << count_edges << std::endl;
+  num_edges.resize(0);
   print_time();
-
 
 #pragma omp parallel for
   for (uint64_t i = 0; i < graph.size(); ++i) {
-    auto& edge_list = graph[i];
+    auto &edge_list = graph[i];
     std::sort(edge_list.begin(), edge_list.end());
     auto end = std::unique(edge_list.begin(), edge_list.end());
     edge_list.resize(std::distance(edge_list.begin(), end));
