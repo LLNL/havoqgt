@@ -1,3 +1,7 @@
+//
+// Created by Iwabuchi, Keita on 4/7/18.
+//
+
 /*
  * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
  * Produced at the Lawrence Livermore National Laboratory.
@@ -49,7 +53,7 @@
  *
  */
 
-// g++ -std=c++11 -O3 -fopenmp ../src/extract_unique_connected_component_graph.cpp -o extract_unique_connected_component_graph
+// g++ -std=c++11 -O3 -fopenmp ../src/run_2core.cpp -o run_2core
 
 #include <iostream>
 #include <fstream>
@@ -66,7 +70,7 @@
 #include <omp.h>
 #endif
 
-constexpr size_t max_vid = 1ULL << 20; //3563602788
+constexpr size_t max_vid = 1 << 20; //3563602788
 
 using vid_t = uint32_t;
 // using graph_t = std::vector<std::vector<vid_t>>;
@@ -143,35 +147,39 @@ class graph_bank {
   std::array<omp_lock_t, num_bank> m_locks;
 };
 
-void bfs(const graph_bank<max_vid, 256> &graph, bitmap_t &visited) {
-  vid_t root = 0;
-  while (root < graph.size()) {
-    if (!(graph[root].empty())) break;
-    ++root;
+size_t compute_2_core(const graph_bank<max_vid, 256> &graph,
+                      const size_t actual_max_vid,
+                      std::vector<uint64_t> &left_degree,
+                      std::vector<uint16_t> &max_depth,
+                      std::vector<uint64_t> &num_kill)
+{
+  size_t total_num_killed = 0;
+  uint16_t depth = 1;
+  std::cout << "depth num_killed" << std::endl;
+  while (true) {
+    bool cont = false;
+    size_t num_killed = 0;
+    for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
+      if (left_degree[vid] == 1) {
+        --left_degree[vid];
+        ++num_killed;
+        for (vid_t trg : graph[vid]) {
+          if (left_degree[trg] > 0) {
+            --left_degree[trg];
+            num_kill[trg] += num_kill[vid] + 1;
+            max_depth[trg] = depth;
+          }
+        }
+        cont = true;
+      }
+    }
+    if (!cont) break;
+    std::cout << depth << " " << num_killed << std::endl;
+    ++depth;
+    total_num_killed += num_killed;
   }
 
-  std::cout << "\nBFS Root: " << root << std::endl;
-  bitmap_t frontier;
-  bitmap_t next;
-  frontier.set(root);
-  visited.set(root);
-  size_t level = 0;
-
-  std::cout << "Level \t Frontiers" << std::endl;
-  while (frontier.any()) {
-    std::cout << level << " \t " << frontier.count() << std::endl;
-    next.reset();
-    for (uint64_t src = 0; src < frontier.size(); ++src) {
-      if (!frontier.test(src)) continue;
-      for (const auto dst : graph[src]) {
-        if (!visited.test(dst)) next.set(dst);
-      } // edge list
-    } // frontier
-    visited |= next;
-    std::swap(frontier, next);
-    next.reset();
-    ++level;
-  } // BFS loop
+  return total_num_killed;
 }
 
 inline uint32_t hash32(uint32_t a) {
@@ -188,6 +196,39 @@ inline uint32_t hash32(uint32_t a) {
 void print_time() {
   std::time_t result = std::time(nullptr);
   std::cout << std::asctime(std::localtime(&result));
+}
+
+void find_parent(const graph_bank<max_vid, 256> &graph,
+                 const vid_t actual_max_vid,
+                 const std::vector<uint64_t> &left_degree,
+                 const std::vector<uint16_t> &max_depth,
+                 const std::vector<uint64_t> &num_kill,
+                 std::vector<vid_t> &parent)
+{
+  bitmap_t frontier;
+  bitmap_t next;
+
+  for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
+    if (left_degree[vid] > 0 && num_kill[vid] > 0) {
+      frontier.set(vid);
+      parent[vid] = vid;
+    }
+  }
+
+  while (frontier.any()) {
+    next.reset();
+    for (uint64_t src = 0; src < frontier.size(); ++src) {
+      if (!frontier.test(src)) continue;
+      for (const auto dst : graph[src]) {
+        if (left_degree[dst] == 0 && max_depth[dst] < max_depth[src]) {
+          next.set(dst);
+          parent[dst] = parent[src];
+        }
+      } // edge list
+    } // frontier
+    std::swap(frontier, next);
+    next.reset();
+  } // BFS loop
 }
 
 int main(int argc, char **argv) {
@@ -232,7 +273,6 @@ int main(int argc, char **argv) {
   std::cout << "Extend edge list" << std::endl;
 #pragma omp parallel for
   for (uint64_t i = 0; i < graph.size(); ++i) {
-    if (num_edges[i] > (1 << 30)) std::cout << i << " " << num_edges[i] << std::endl;
     graph[i].reserve(num_edges[i]);
   }
   print_time();
@@ -266,40 +306,24 @@ int main(int argc, char **argv) {
   num_edges.resize(0);
   print_time();
 
-#pragma omp parallel for
-  for (uint64_t i = 0; i < graph.size(); ++i) {
-    auto &edge_list = graph[i];
-    std::sort(edge_list.begin(), edge_list.end());
-    auto end = std::unique(edge_list.begin(), edge_list.end());
-    edge_list.resize(std::distance(edge_list.begin(), end));
+  std::vector<uint64_t> degree(actual_max_vid + 1, 0);
+  std::vector<uint16_t> max_depth(actual_max_vid + 1, 0);
+  std::vector<uint64_t> num_kill(actual_max_vid + 1, 0);
+  for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
+    degree[vid] = graph[vid].size();
   }
-  std::cout << "\nRemoving duplicated edges done" << std::endl;
+  const size_t num_killed = compute_2_core(graph, actual_max_vid, degree, max_depth, num_kill);
+  std::cout << "\n2 core num killed: " << num_killed << std::endl;
   print_time();
 
-  bitmap_t visited;
-  bfs(graph, visited);
+  std::vector<vid_t> parent(actual_max_vid + 1, std::numeric_limits<vid_t>::max());
+  find_parent(graph, actual_max_vid, degree, max_depth, num_kill, parent);
   print_time();
 
-  std::cout << "\nDump edge" << std::endl;
-  for (size_t i = 0; i < edge_list_file.size(); ++i) {
-    auto const pos = edge_list_file[i].find_last_of('/');
-    const auto fname = edge_list_file[i].substr(pos); // will return something "/xxx" if the input is "/aa/bb/xxx"
-    std::ofstream ofs(out_path + fname);
-
-    vid_t start;
-    vid_t end;
-    std::tie(start, end) = cal_range(0, actual_max_vid, i, edge_list_file.size());
-    std::cout << "[ " << start << " ~ " << end << " ] : " << out_path + fname << std::endl;
-    for (vid_t src = start; src <= end; ++src) {
-      if (!visited.test(src)) continue;
-      for (const auto &dst : graph[src]) {
-        if (src == dst) continue;
-        if (src != dst && hash32(src) == hash32(dst)) std::abort();
-        if (hash32(src) < hash32(dst)) ofs << src << " " << dst << "\n";
-        // if (src < dst) ofs << src << " " << dst << "\n";
-      }
-    }
-    ofs.close();
+  std::cout << "\nDump info" << std::endl;
+  std::ofstream ofs(out_path);
+  for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
+    ofs << vid << " " << (degree[vid] > 0) << " " << max_depth[vid] << " " << num_kill[vid] << " " << parent[vid] << "\n";
   }
 
   std::cout << "Done" << std::endl;

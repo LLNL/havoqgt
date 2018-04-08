@@ -110,7 +110,8 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::string &backup_filename,
                     std::string &ecc_output_filename,
                     std::vector<uint64_t> &source_id_list,
-                    std::set<int>& use_algorithm)
+                    std::set<int>& use_algorithm,
+                    std::string& two_core_info_filename)
 {
   if (havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
@@ -124,7 +125,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:e:a:h")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:b:e:a:c:h")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
@@ -158,6 +159,11 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
           use_algorithm.insert(std::stoi(buf.c_str()));
         break;
       }
+
+
+      case 'c':
+        two_core_info_filename = optarg;
+        break;
 
       default:
         std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
@@ -249,8 +255,9 @@ int main(int argc, char **argv)
     std::string ecc_output_filename;
     std::vector<uint64_t> parsed_source_id_list;
     std::set<int> use_algorithm;
+    std::string two_core_info_filename;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list, use_algorithm);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list, use_algorithm, two_core_info_filename);
     MPI_Barrier(MPI_COMM_WORLD);
 
     if (!backup_filename.empty()) {
@@ -268,8 +275,10 @@ int main(int argc, char **argv)
     // -------------------------------------------------------------------------------------------------------------- //
     //                                        Compute exact ecc
     // -------------------------------------------------------------------------------------------------------------- //
-    const double total_start_time = MPI_Wtime();
     exact_eccentricity_t eeec(*graph, use_algorithm);
+    eeec.load_2core_info(two_core_info_filename);
+
+    const double total_start_time = MPI_Wtime();
     eeec.run();
     const double total_end_time = MPI_Wtime();
     if (mpi_rank == 0) std::cout << "Total execution time: " << total_end_time - total_start_time << std::endl;
