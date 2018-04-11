@@ -904,7 +904,7 @@ class exact_eccentricity {
       }
     }
 
-    mpi_all_reduce_inplace(source_height, std::greater<size_t>(), MPI_COMM_WORLD);
+    mpi_all_reduce_inplace(source_height, std::greater<uint16_t>(), MPI_COMM_WORLD);
 
     const auto ret_vrtx = bound_ecc_for_leaf_helper(source_height, m_graph.vertices_begin(), m_graph.vertices_end());
     const auto ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());

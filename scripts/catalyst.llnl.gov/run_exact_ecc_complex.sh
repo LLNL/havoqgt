@@ -27,7 +27,7 @@ function make_script
     echo "${option}" >> ${sh_file}
 
     echo "srun --ntasks-per-node=${procs} --distribution=block ./src/transfer_graph ${graph_path} /dev/shm/" >> ${sh_file}
-    echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=${procs} --distribution=block ./src/${exe_file_name} -i /dev/shm/graph  -e ${ecc_file_name} ${source_selection_algorithms}" >> ${sh_file}
+    echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=${procs} --distribution=block ./src/${exe_file_name} -i /dev/shm/graph  -e ${ecc_file_name} ${source_selection_algorithms} -c ${two_core_file_name}" >> ${sh_file}
 }
 
 function compile()
@@ -43,7 +43,7 @@ function compile()
 # Main
 # ---------------------------------------------------------------------------------------------------- #
 base_graph_path="${storage_path}/${graph_name}"
-ecc_out_path="${storage_path}/ecc/${graph_name}/"
+ecc_out_path="${storage_path}/${graph_name}/ecc/"
 
 unset USE_TAKE
 unset USE_TAKE_PRUNING
@@ -72,6 +72,7 @@ do
         sh_file="run_${graph_name}_n${num_nodes}_k${k}_${tag}.sh"
         exe_file_name="run_exact_ecc_k${k}_${tag}"
         ecc_file_name="${ecc_out_path}/ecc_k${k}_${tag}"
+        two_core_file_name="${base_graph_path}/2core_table"
         graph_path="${base_graph_path}/n${num_nodes}/graph"
 
         make_script
