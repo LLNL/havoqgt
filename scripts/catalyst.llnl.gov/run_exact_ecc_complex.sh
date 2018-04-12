@@ -46,19 +46,19 @@ base_graph_path="${storage_path}/${graph_name}"
 ecc_out_path="${storage_path}/${graph_name}/ecc/"
 
 unset USE_TAKE
-unset USE_TAKE_PRUNING
-unset USE_TAKE_TREE
+unset USE_TAKE_PRUN
+unset USE_ADP_TAKE_PRUN
 
 if [ "${tag}" == "tk" ]; then
     option="export USE_TAKE=1" ## 1 is a dummy value
     source_selection_algorithms=""
-elif [ "${tag}" == "tk_tr" ]; then
-    option="export USE_TAKE_TREE=1" ## 1 is a dummy value
-    source_selection_algorithms=""
 elif [ "${tag}" == "adp_tk_pr" ]; then
-    option="export USE_TAKE_PRUNING=1" ## 1 is a dummy value
+    option="export USE_TAKE_PRUN=1" ## 1 is a dummy value
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
 elif [ "${tag}" == "adp" ]; then
+    source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
+elif [ "${tag}" == "adp_new" ]; then
+    option="export USE_NEW_ADP=10"
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
 elif [ "${tag}" == "adp_at" ]; then
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"

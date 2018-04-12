@@ -217,8 +217,23 @@ class exact_eccentricity {
       // -------------------- Select source -------------------- //
       {
         const double time_start = MPI_Wtime();
-        if (m_progress_info.iteration_no == 0) select_initial_source();
-        else adaptively_select_source();
+        if (std::getenv("USE_TAKE")) {
+          if (m_progress_info.iteration_no == 0) {
+            select_initial_source_by_take_algorithm();
+          } else {
+            select_source_by_take_algorithm();
+          }
+        } else {
+          if (m_progress_info.iteration_no == 0) {
+            select_initial_source();
+          } else {
+            if (std::getenv("USE_NEW_ADP"))
+              adaptively_select_source_2();
+            else
+              select_source_by_take_algorithm();
+          }
+        }
+
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) {
@@ -268,7 +283,7 @@ class exact_eccentricity {
       if (m_progress_info.num_unsolved == 0) return;
 
       // -------------------- Pruning -------------------- //
-      if (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_PRUNING")) {
+      if (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_PRUN")) {
         const double time_start = MPI_Wtime();
         const size_t num_solved = solve_single_degree_vertices();
         const double time_end = MPI_Wtime();
@@ -419,15 +434,15 @@ class exact_eccentricity {
   // source selection score functions
   // -------------------------------------------------------------------------------------------------------------- //
   void set_strategy(const std::set<int> &use_algorithm) {
-    if (use_algorithm.count(0) || std::getenv("USE_TAKE") || std::getenv("USE_TAKE_TREE"))
+    if (use_algorithm.count(0) || std::getenv("USE_TAKE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return max_upper(vertex);
       });
-    if (use_algorithm.count(1) || std::getenv("USE_TAKE") || std::getenv("USE_TAKE_TREE"))
+    if (use_algorithm.count(1) || std::getenv("USE_TAKE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return min_lower(vertex);
       });
-    if (use_algorithm.count(2) || std::getenv("USE_TAKE") || std::getenv("USE_TAKE_TREE"))
+    if (use_algorithm.count(2) || std::getenv("USE_TAKE"))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return degree_score(vertex);
       });
@@ -521,59 +536,25 @@ class exact_eccentricity {
   // -------------------------------------------------------------------------------------------------------------- //
   // select source
   // -------------------------------------------------------------------------------------------------------------- //
-#if 0
-  void select_articulation_point() {
-    const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
-      return (m_2core_vertex_data[vertex].get_alive() && m_2core_vertex_data[vertex].get_num_cut() > 0);
-    };
-
-    auto source_candidate_list = select_source(k_num_sources, is_candidate,
-                                               {[this](const vertex_locator_t vertex) -> uint64_t {
-                                                 return articulation_score(vertex);
-                                               }});
-    source_info_t new_source_info;
-    for (auto candidate : source_candidate_list) {
-      new_source_info.uniquely_add_source(candidate, 0);
-    }
-    m_source_info = std::move(new_source_info);
-  }
-#endif
-
-  void select_initial_source() {
-    // const int min_degree = (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_PRUNING")) ? 1 : 2;
+  // ---------------------------------------- For Take's source selection algorithm ---------------------------------------- //
+  void select_initial_source_by_take_algorithm() {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return (m_graph.degree(vertex) >= 1);
     };
 
-    if (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_TREE")) {
-      select_source_by_take_algorithm(is_candidate);
-    } else {
-      select_source_by_all_strategy_equally(is_candidate);
-    }
+    select_source_by_take_algorithm(is_candidate);
   }
 
-  void adaptively_select_source() {
-    // const int min_degree = (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_PRUNING")) ? 1 : 2;
-
+  void select_source_by_take_algorithm() {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return m_kbfs.vertex_data().visited_by(vertex, 0)
           && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
-      // && (m_graph.degree(vertex) >= min_degree);
     };
-
-    if (std::getenv("USE_TAKE") || std::getenv("USE_TAKE_TREE")) {
-      select_source_by_take_algorithm(is_candidate);
-    } else {
-      // ---------- Set contribution score based on #bounded ---------- //
-      std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
-      for (uint32_t i = 0; i < m_source_info.num_source(); ++i)
-        strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
-
-      select_source_by_contribution_score(is_candidate, strategy_contribution_score);
-    }
-  }
+    select_source_by_take_algorithm(is_candidate);
+  };
 
   void select_source_by_take_algorithm(const std::function<bool(const vertex_locator_t)> &is_candidate) {
+
     auto source_candidate_list = select_source(k_num_sources, is_candidate,
                                                {m_source_score_function_list[m_progress_info.iteration_no % 2],
                                                 m_source_score_function_list[2]});
@@ -582,6 +563,92 @@ class exact_eccentricity {
       new_source_info.uniquely_add_source(candidate, m_progress_info.iteration_no % 2);
     }
     m_source_info = std::move(new_source_info);
+  }
+
+  // ---------------------------------------- For new adaptive source selection algoritm ---------------------------------------- //
+  void adaptively_select_source_2() {
+    static std::vector<uint32_t> strategy_num_to_use(m_source_score_function_list.size(), 0);
+
+    const int num_inner_iterations = std::stoi(std::getenv("USE_NEW_ADP"));
+    const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
+      return m_kbfs.vertex_data().visited_by(vertex, 0)
+          && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
+    };
+
+    if (m_progress_info.iteration_no % num_inner_iterations == 0) {
+      select_source_by_all_strategy_equally(is_candidate);
+      return;
+    }
+
+    if (m_progress_info.iteration_no % num_inner_iterations == 1) {
+      // ---------- Set contribution score based on #bounded ---------- //
+      static std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
+      for (uint32_t i = 0; i < m_source_info.num_source(); ++i) {
+        contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
+      }
+      {
+        int mpi_rank(0);
+        CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+        if (mpi_rank == 0) {
+          std::cout << "Contribution score: ";
+          for (auto n : contribution_score) std::cout << n << " ";
+          std::cout << std::endl;
+        }
+      }
+
+      // ---------- Compute how many sources to be selected by each strategy using discrete_distribution ---------- //
+      for (auto &n : contribution_score) n += 1; // To avoid the case where all contirubtion scores are 0
+      std::discrete_distribution<uint32_t> distribution(contribution_score.begin(),
+                                                        contribution_score.end());
+
+      std::mt19937 rnd(m_progress_info.num_solved); // seed can be any number but must be same among the all processes
+      for (uint32_t i = 0; i < num_inner_iterations; ++i) {
+        const uint32_t strategy_id = distribution(rnd);
+        ++strategy_num_to_use[strategy_id];
+      }
+    }
+
+    uint32_t strategy_id = 0;
+    for (; strategy_id < m_source_score_function_list.size(); ++strategy_id) {
+      if (strategy_num_to_use[strategy_id] > 0) {
+        --strategy_num_to_use[strategy_id];
+        break;
+      }
+    }
+    if (strategy_id == m_source_score_function_list.size()) {
+      std::cerr << __FUNCTION__ << " logic error " << std::endl;
+      std::abort();
+    }
+
+    auto source_candidate_list = select_source(k_num_sources, is_candidate,
+                                               {m_source_score_function_list[strategy_id]});
+    source_info_t new_source_info;
+    for (auto candidate : source_candidate_list) {
+      new_source_info.uniquely_add_source(candidate, strategy_id);
+    }
+    m_source_info = std::move(new_source_info);
+  }
+
+  // ---------------------------------------- For adaptive source selection algoritm ---------------------------------------- //
+  void select_initial_source() {
+    const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
+      return (m_graph.degree(vertex) >= 1);
+    };
+    select_source_by_all_strategy_equally(is_candidate);
+  }
+
+  void adaptively_select_source() {
+    const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
+      return m_kbfs.vertex_data().visited_by(vertex, 0)
+          && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
+    };
+
+    // ---------- Set contribution score based on #bounded ---------- //
+    std::vector<size_t> strategy_contribution_score(m_source_score_function_list.size(), 0);
+    for (uint32_t i = 0; i < m_source_info.num_source(); ++i)
+      strategy_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
+
+    select_source_by_contribution_score(is_candidate, strategy_contribution_score);
   }
 
   void select_source_by_all_strategy_equally(const std::function<bool(const vertex_locator_t)> &is_candidate) {
@@ -641,11 +708,6 @@ class exact_eccentricity {
 
       std::vector<vertex_locator_t> source_candidate_list = select_source(new_total_num_sources, is_candidate,
                                                                           {m_source_score_function_list[strategy_id]});
-//      std::vector<vertex_locator_t> source_candidate_list = select_source(new_total_num_sources, is_candidate,
-//                                                                          {m_source_score_function_list[strategy_id],
-//                                                                           [this](const vertex_locator_t vertex) -> uint64_t {
-//                                                                             return degree_score(vertex);
-//                                                                           }});
       // ----- Merge sources ----- //
       for (auto candidate : source_candidate_list) {
         new_source_info.uniquely_add_source(candidate, strategy_id);
@@ -655,6 +717,7 @@ class exact_eccentricity {
     m_source_info = std::move(new_source_info);
   }
 
+  // ---------------------------------------- General methods for source selection ---------------------------------------- //
   std::vector<vertex_locator_t>
   select_source(const size_t max_num_sources,
                 const std::function<bool(const vertex_locator_t)> &is_candidate,
@@ -907,7 +970,8 @@ class exact_eccentricity {
     mpi_all_reduce_inplace(source_height, std::greater<uint16_t>(), MPI_COMM_WORLD);
 
     const auto ret_vrtx = bound_ecc_for_leaf_helper(source_height, m_graph.vertices_begin(), m_graph.vertices_end());
-    const auto ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
+    const auto
+        ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
 
     size_t num_solved = ret_vrtx.first + ret_ctrl.first;
     size_t num_unsolved = ret_vrtx.second + ret_ctrl.second;
@@ -928,7 +992,7 @@ class exact_eccentricity {
     size_t local_num_pruned = 0;
     auto alg_data = std::forward_as_tuple(m_ecc_vertex_data, m_2core_vertex_data, local_num_pruned);
     auto vq = create_visitor_queue<take_pruning_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph,
-                                                                                                   alg_data);
+                                                                                                  alg_data);
     vq.init_visitor_traversal_new();
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1136,7 +1200,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::take_prunin
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
       if (!eitr.target().is_delegate()) // Don't send visitor to delegates because they are obviously not degree 1 vertices
         vis_queue->queue_visitor(take_pruning_visitor(eitr.target(),
-                                                       std::get<index::ecc_data>(alg_data).lower(vertex)));
+                                                      std::get<index::ecc_data>(alg_data).lower(vertex)));
     }
 
     return true; // trigger bcast from masters of delegates (label:FLOW1)
@@ -1153,7 +1217,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::take_prunin
       for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
         if (!eitr.target().is_delegate()) // Don't send visitor to delegates because they are obviously not degree 1 vertices
           vis_queue->queue_visitor(take_pruning_visitor(eitr.target(),
-                                                         std::get<index::ecc_data>(alg_data).lower(vertex)));
+                                                        std::get<index::ecc_data>(alg_data).lower(vertex)));
       }
     } else {
       // ----- Update ecc of 1 degree vertices ----- //
@@ -1294,10 +1358,13 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
   template <typename AlgData>
   bool pre_visit(AlgData &alg_data) const {
     if (std::get<index::k_core_data>(alg_data)[vertex].get_alive())
-      return false; // skip allive vertices
+      return false; // skip alive vertices
 
-    if (std::get<index::k_core_data>(alg_data)[vertex].get_height() > height)
+    if (height < std::get<index::k_core_data>(alg_data)[vertex].get_height())
       return false; // only goes to the leaf side
+
+    if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc)
+      return false;
 
     return true;
   }
@@ -1327,11 +1394,12 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
       std::abort();
     }
 
+    if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc) {
+      std::cerr << std::get<index::ecc_data>(alg_data).upper(vertex) << " < " << ecc << std::endl;
+      std::abort(); // Logic error
+    }
+
     if (std::get<index::ecc_data>(alg_data).lower(vertex) != std::get<index::ecc_data>(alg_data).upper(vertex)) {
-      if (std::get<index::ecc_data>(alg_data).upper(vertex) < ecc) {
-        std::cerr << std::get<index::ecc_data>(alg_data).upper(vertex) << " < " << ecc << std::endl;
-        std::abort(); // Logic error
-      }
 
       std::get<index::ecc_data>(alg_data).lower(vertex) = std::get<index::ecc_data>(alg_data).upper(vertex) = ecc;
       std::get<index::ecc_data>(alg_data).solved_status(vertex) = ecc_vertex_data_t::k_tree;
@@ -1340,7 +1408,6 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
       if (my_height == 0) return false; // we are at a leaf
 
       for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
-
         vis_queue->queue_visitor(hanging_tree_visitor(eitr.target(),
                                                       ecc + static_cast<uint16_t>(1),
                                                       my_height - static_cast<uint16_t>(1)));
