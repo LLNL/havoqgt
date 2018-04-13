@@ -47,7 +47,7 @@ ecc_out_path="${storage_path}/${graph_name}/ecc/"
 
 unset USE_TAKE
 unset USE_TAKE_PRUN
-unset USE_ADP_TAKE_PRUN
+unset USE_NEW_ADP
 
 if [ "${tag}" == "tk" ]; then
     option="export USE_TAKE=1" ## 1 is a dummy value

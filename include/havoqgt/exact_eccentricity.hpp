@@ -582,7 +582,7 @@ class exact_eccentricity {
 
     if (m_progress_info.iteration_no % num_inner_iterations == 1) {
       // ---------- Set contribution score based on #bounded ---------- //
-      static std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
+      std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
       for (uint32_t i = 0; i < m_source_info.num_source(); ++i) {
         contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
       }
@@ -601,6 +601,7 @@ class exact_eccentricity {
       std::discrete_distribution<uint32_t> distribution(contribution_score.begin(),
                                                         contribution_score.end());
 
+      std::fill(strategy_num_to_use.begin(), strategy_num_to_use.end(), 0);
       std::mt19937 rnd(m_progress_info.num_solved); // seed can be any number but must be same among the all processes
       for (uint32_t i = 0; i < num_inner_iterations; ++i) {
         const uint32_t strategy_id = distribution(rnd);
@@ -889,10 +890,9 @@ class exact_eccentricity {
 
         if (lower == upper) {
           ++m_source_info.num_solved_list[k];
-          solved = true;
           m_ecc_vertex_data.solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-
-          break;
+          solved = true;
+          // break;
         }
       }
       num_solved += solved;
@@ -944,7 +944,7 @@ class exact_eccentricity {
         if (lower == upper) {
           solved = true;
           m_ecc_vertex_data.solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-          break;
+          // break;
         }
       }
       num_solved += solved;
