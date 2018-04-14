@@ -197,7 +197,6 @@ int main(int argc, char **argv) {
     edge_list_file.emplace_back(argv[i]);
   }
 
-  size_t count_edges = 0;
   uint64_t actual_max_vid = 0;
   print_time();
 
@@ -210,9 +209,13 @@ int main(int argc, char **argv) {
       std::cout << "Open " << f << std::endl;
       if (!ifs.is_open()) std::abort();
 
-      uint64_t src;
-      uint64_t dst;
-      while (ifs >> src >> dst) {
+      for (std::string line; std::getline(ifs, line);) {
+        std::istrstream is(line);
+
+        uint64_t src;
+        uint64_t dst;
+        is >> src >> dst;
+
         if (src > max_vid || dst > max_vid) {
           std::abort();
         }
@@ -237,6 +240,8 @@ int main(int argc, char **argv) {
   }
   print_time();
 
+  size_t count_edges = 0;
+  size_t count_self_loop_edges = 0;
 #pragma omp parallel for reduction(+:count_edges), reduction(max:actual_max_vid)
   for (size_t i = 0; i < edge_list_file.size(); ++i) {
     const auto &f = edge_list_file[i];
@@ -244,11 +249,20 @@ int main(int argc, char **argv) {
     std::cout << "Open " << f << std::endl;
     if (!ifs.is_open()) std::abort();
 
-    uint64_t src;
-    uint64_t dst;
-    while (ifs >> src >> dst) {
+    for (std::string line; std::getline(ifs, line);) {
+      std::istrstream is(line);
+
+      uint64_t src;
+      uint64_t dst;
+      is >> src >> dst;
+
       if (src > max_vid || dst > max_vid) {
         std::abort();
+      }
+
+      if (src == dst) {
+        ++count_self_loop_edges;
+        continue;
       }
 
       graph.add(src, dst);
@@ -263,6 +277,7 @@ int main(int argc, char **argv) {
   std::cout << "Edge loading done" << std::endl;
   std::cout << "Actual max id: " << actual_max_vid << std::endl;
   std::cout << "Edges: " << count_edges << std::endl;
+  std::cout << "Self loop edges: " << count_self_loop_edges << std::endl;
   num_edges.resize(0);
   print_time();
 
