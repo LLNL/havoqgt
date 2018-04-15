@@ -72,6 +72,8 @@
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/kth_core_new.hpp>
 
+#define USE_DEGREE_FIRST 1
+
 namespace havoqgt {
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
 class exact_eccentricity_vertex_data {
@@ -91,7 +93,7 @@ class exact_eccentricity_vertex_data {
       : m_graph(graph),
         m_lower(graph),
         m_upper(graph),
-        m_solved_status(graph),
+        m_just_solved_status(graph),
         m_num_unsolved_neighbors(graph) {
 #ifdef DEBUG
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
@@ -105,7 +107,7 @@ class exact_eccentricity_vertex_data {
   }
 
   void reset_for_each_iteration() {
-    m_solved_status.reset(0);
+    m_just_solved_status.reset(0);
     m_num_unsolved_neighbors.reset(0);
   }
 
@@ -123,11 +125,11 @@ class exact_eccentricity_vertex_data {
     return m_upper[vertex];
   }
 
-  uint8_t &solved_status(const typename graph_t::vertex_locator vertex) {
+  uint8_t &just_solved_status(const typename graph_t::vertex_locator vertex) {
 #ifdef DEBUG
     assert(vertex.owner() == static_cast<uint32_t>(m_mpi_rank) || vertex.is_delegate());
 #endif
-    return m_solved_status[vertex];
+    return m_just_solved_status[vertex];
   }
 
   uint32_t &num_unsolved_neighbors(const typename graph_t::vertex_locator vertex) {
@@ -138,7 +140,7 @@ class exact_eccentricity_vertex_data {
   const graph_t &m_graph;
   ecc_t m_lower;
   ecc_t m_upper;
-  flag_t m_solved_status;
+  flag_t m_just_solved_status;
   count_t m_num_unsolved_neighbors;
 #ifdef DEBUG
   int m_mpi_rank;
@@ -230,7 +232,7 @@ class exact_eccentricity {
             if (std::getenv("USE_NEW_ADP"))
               adaptively_select_source_2();
             else
-              select_source_by_take_algorithm();
+              adaptively_select_source();
           }
         }
 
@@ -575,12 +577,20 @@ class exact_eccentricity {
           && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
 
-    if (m_progress_info.iteration_no % num_inner_iterations == 0) {
+#if USE_DEGREE_FIRST
+    if (m_progress_info.iteration_no % num_inner_iterations == 1) {
+#else
+      if (m_progress_info.iteration_no % num_inner_iterations == 0) {
+#endif
       select_source_by_all_strategy_equally(is_candidate);
       return;
     }
 
-    if (m_progress_info.iteration_no % num_inner_iterations == 1) {
+#if USE_DEGREE_FIRST
+    if (m_progress_info.iteration_no % num_inner_iterations == 2) {
+#else
+      if (m_progress_info.iteration_no % num_inner_iterations == 1) {
+#endif
       // ---------- Set contribution score based on #bounded ---------- //
       std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
       for (uint32_t i = 0; i < m_source_info.num_source(); ++i) {
@@ -635,7 +645,21 @@ class exact_eccentricity {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return (m_graph.degree(vertex) >= 1);
     };
+
+#if !USE_DEGREE_FIRST
     select_source_by_all_strategy_equally(is_candidate);
+#else
+    auto source_candidate_list = select_source(k_num_sources,
+                                               is_candidate,
+                                               {[this](const vertex_locator_t vertex) -> uint64_t {
+                                                 return degree_score(vertex);
+                                               }});
+    source_info_t new_source_info;
+    for (auto candidate : source_candidate_list) {
+      new_source_info.uniquely_add_source(candidate, 0);
+    }
+    m_source_info = std::move(new_source_info);
+#endif
   }
 
   void adaptively_select_source() {
@@ -854,7 +878,7 @@ class exact_eccentricity {
       auto &source = m_source_info.source_list[k];
       if (source.owner() == static_cast<uint32_t>(mpi_rank) || source.is_delegate()) {
         m_ecc_vertex_data.lower(source) = m_ecc_vertex_data.upper(source) = m_source_info.ecc_list[k];
-        m_ecc_vertex_data.solved_status(source) = ecc_vertex_data_t::k_source;
+        m_ecc_vertex_data.just_solved_status(source) = ecc_vertex_data_t::k_source;
       }
     }
 
@@ -866,43 +890,11 @@ class exact_eccentricity {
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
-  // bound_ecc
+  // bounding algorithm
   // -------------------------------------------------------------------------------------------------------------- //
-  template <typename iterator_t>
-  std::pair<size_t, size_t> bound_ecc_helper(iterator_t vitr, iterator_t end) {
-    size_t num_solved(0);
-    size_t num_unsolved(0);
 
-    for (; vitr != end; ++vitr) {
-      if (!m_kbfs.vertex_data().visited_by(*vitr, 0)) continue; // skip unvisited vertices
-
-      level_t &lower = m_ecc_vertex_data.lower(*vitr);
-      level_t &upper = m_ecc_vertex_data.upper(*vitr);
-      if (lower == upper) continue; // Exact ecc has been already found
-
-      bool solved = false;
-      for (size_t k = 0; k < m_source_info.num_source(); ++k) {
-        const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
-        const level_t k_ecc = m_source_info.ecc_list[k];
-
-        lower = std::max(lower, std::max(level, static_cast<uint16_t>(k_ecc - level)));
-        upper = std::min(upper, static_cast<uint16_t>(k_ecc + level));
-
-        if (lower == upper) {
-          ++m_source_info.num_solved_list[k];
-          m_ecc_vertex_data.solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-          solved = true;
-          // break;
-        }
-      }
-      num_solved += solved;
-      num_unsolved += !solved;
-    }
-
-    return std::make_pair(num_solved, num_unsolved);
-  }
-
-  std::pair<size_t, size_t> bound_ecc() {
+  std::pair<size_t, size_t>
+  bound_ecc() {
     const auto ret_vrtx = bound_ecc_helper(m_graph.vertices_begin(), m_graph.vertices_end());
     const auto ret_ctrl = bound_ecc_helper(m_graph.controller_begin(), m_graph.controller_end());
 
@@ -916,12 +908,8 @@ class exact_eccentricity {
     return std::make_pair(num_solved, num_unsolved);
   }
 
-  // -------------------------------------------------------------------------------------------------------------- //
-  // bound_ecc_for_leaf
-  // -------------------------------------------------------------------------------------------------------------- //
   template <typename iterator_t>
-  std::pair<size_t, size_t> bound_ecc_for_leaf_helper(std::vector<uint16_t> &height,
-                                                      iterator_t vitr, iterator_t end) {
+  std::pair<size_t, size_t> bound_ecc_helper(iterator_t vitr, iterator_t end) {
     size_t num_solved(0);
     size_t num_unsolved(0);
 
@@ -932,28 +920,63 @@ class exact_eccentricity {
       level_t &upper = m_ecc_vertex_data.upper(*vitr);
       if (lower == upper) continue; // Exact ecc has been already found
 
-      bool solved = false;
+      const level_t old_lower = lower;
+      const level_t old_upper = upper;
       for (size_t k = 0; k < m_source_info.num_source(); ++k) {
-        if (height[k] == 0) continue;
-        const level_t level = m_kbfs.vertex_data().level(*vitr)[k] + height[k];
-        const level_t k_ecc = m_source_info.ecc_list[k] + height[k];
 
-        lower = std::max(lower, std::max(level, static_cast<uint16_t>(k_ecc - level)));
-        upper = std::min(upper, static_cast<uint16_t>(k_ecc + level));
+        const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
+        const level_t ecc = m_source_info.ecc_list[k];
+
+        lower = compute_lower(lower, level, ecc);
+        upper = compute_upper(upper, level, ecc);
 
         if (lower == upper) {
-          solved = true;
-          m_ecc_vertex_data.solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-          // break;
+          break;
         }
       }
-      num_solved += solved;
-      num_unsolved += !solved;
+
+      if (lower == upper) {
+        m_ecc_vertex_data.just_solved_status(*vitr) = ecc_vertex_data_t::k_bound;
+        ++num_solved;
+
+        // ----- Compute contribution score ----- //
+        for (size_t k = 0; k < m_source_info.num_source(); ++k) {
+          const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
+          const level_t ecc = m_source_info.ecc_list[k];
+
+          if (old_lower != lower && lower == compute_lower_candidate(level, ecc)) {
+            ++m_source_info.num_solved_list[k];
+          } else if (old_upper != upper && upper == compute_upper_candidate(level, ecc)) {
+            ++m_source_info.num_solved_list[k];
+          }
+        }
+      } else {
+        ++num_unsolved;
+      }
     }
 
     return std::make_pair(num_solved, num_unsolved);
   }
 
+  level_t compute_lower_candidate(const level_t distance, const level_t ecc) {
+    return std::max(distance, static_cast<uint16_t>(ecc - distance));
+  }
+
+  level_t compute_lower(const level_t current_lower, const level_t distance, const level_t ecc) {
+    return std::max(current_lower, compute_lower_candidate(distance, ecc));
+  }
+
+  level_t compute_upper_candidate(const level_t distance, const level_t ecc) {
+    return static_cast<uint16_t>(distance + ecc);
+  }
+
+  level_t compute_upper(const level_t current_upper, const level_t distance, const level_t ecc) {
+    return std::min(current_upper, compute_upper_candidate(distance, ecc));
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // bound_ecc_for_leaf
+  // -------------------------------------------------------------------------------------------------------------- //
   std::pair<size_t, size_t> bound_ecc_for_leaf() {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -970,14 +993,52 @@ class exact_eccentricity {
     mpi_all_reduce_inplace(source_height, std::greater<uint16_t>(), MPI_COMM_WORLD);
 
     const auto ret_vrtx = bound_ecc_for_leaf_helper(source_height, m_graph.vertices_begin(), m_graph.vertices_end());
-    const auto
-        ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
+    const auto ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
 
     size_t num_solved = ret_vrtx.first + ret_ctrl.first;
     size_t num_unsolved = ret_vrtx.second + ret_ctrl.second;
 
     num_solved = mpi_all_reduce(num_solved, std::plus<size_t>(), MPI_COMM_WORLD);
     num_unsolved = mpi_all_reduce(num_unsolved, std::plus<size_t>(), MPI_COMM_WORLD);
+
+    return std::make_pair(num_solved, num_unsolved);
+  }
+
+  template <typename iterator_t>
+  std::pair<size_t, size_t> bound_ecc_for_leaf_helper(const std::vector<uint16_t> &height,
+                                                      iterator_t vitr, iterator_t end) {
+    size_t num_solved(0);
+    size_t num_unsolved(0);
+
+    for (; vitr != end; ++vitr) {
+      if (!m_kbfs.vertex_data().visited_by(*vitr, 0)) continue; // skip unvisited vertices
+
+      level_t &lower = m_ecc_vertex_data.lower(*vitr);
+      level_t &upper = m_ecc_vertex_data.upper(*vitr);
+      if (lower == upper) continue; // Exact ecc has been already found
+
+      for (size_t k = 0; k < m_source_info.num_source(); ++k) {
+        if (height[k] == 0) continue;
+
+        const level_t level = m_kbfs.vertex_data().level(*vitr)[k] + height[k];
+        const level_t ecc = m_source_info.ecc_list[k] + height[k];
+
+        lower = compute_lower(lower, level, ecc);
+        upper = compute_upper(upper, level, ecc);
+
+        if (lower == upper) {
+          break;
+        }
+      }
+
+      if (lower == upper) {
+        ++num_solved;
+        m_ecc_vertex_data.just_solved_status(*vitr) = ecc_vertex_data_t::k_bound;
+      } else {
+        ++num_unsolved;
+      }
+
+    }
 
     return std::make_pair(num_solved, num_unsolved);
   }
@@ -1020,9 +1081,9 @@ class exact_eccentricity {
     return global_num_pruned;
   }
 
-  // -------------------------------------------------------------------------------------------------------------- //
-  // count_unsolved_neighbors
-  // -------------------------------------------------------------------------------------------------------------- //
+// -------------------------------------------------------------------------------------------------------------- //
+// count_unsolved_neighbors
+// -------------------------------------------------------------------------------------------------------------- //
   void count_unsolved_neighbors() {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -1033,9 +1094,9 @@ class exact_eccentricity {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  // -------------------------------------------------------------------------------------------------------------- //
-  // compute_diff_score
-  // -------------------------------------------------------------------------------------------------------------- //
+// -------------------------------------------------------------------------------------------------------------- //
+// compute_diff_score
+// -------------------------------------------------------------------------------------------------------------- //
   template <typename iterator_t>
   void compute_diff_score_histgram_helper(const size_t max_diff, std::vector<size_t> &histgram,
                                           iterator_t vitr, iterator_t end) {
@@ -1059,9 +1120,9 @@ class exact_eccentricity {
     return histgram;
   }
 
-  // -------------------------------------------------------------------------------------------------------------- //
-  // collect information about unsolved vertices
-  // -------------------------------------------------------------------------------------------------------------- //
+// -------------------------------------------------------------------------------------------------------------- //
+// collect information about unsolved vertices
+// -------------------------------------------------------------------------------------------------------------- //
   template <typename iterator_t>
   void collect_unsolved_vertices_statistics_helper(std::map<size_t, size_t> &degree_count,
                                                    std::map<size_t, size_t> &level_count,
@@ -1194,7 +1255,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::take_prunin
     // -------------------------------------------------- //
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
-    if (std::get<index::ecc_data>(alg_data).solved_status(vertex) != ecc_vertex_data_t::k_source) return false;
+    if (std::get<index::ecc_data>(alg_data).just_solved_status(vertex) != ecc_vertex_data_t::k_source) return false;
     if (std::get<index::core_info>(alg_data)[vertex].get_num_cut() == 0) return false;
 
     for (auto eitr = g.edges_begin(vertex), end = g.edges_end(vertex); eitr != end; ++eitr) {
@@ -1332,7 +1393,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
     // -------------------------------------------------- //
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
-    if (std::get<index::ecc_data>(alg_data).solved_status(vertex) != ecc_vertex_data_t::k_source)
+    if (std::get<index::ecc_data>(alg_data).just_solved_status(vertex) != ecc_vertex_data_t::k_source)
       return false; // skip non source vertices
 
     if (std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() == 0)
@@ -1402,7 +1463,7 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
     if (std::get<index::ecc_data>(alg_data).lower(vertex) != std::get<index::ecc_data>(alg_data).upper(vertex)) {
 
       std::get<index::ecc_data>(alg_data).lower(vertex) = std::get<index::ecc_data>(alg_data).upper(vertex) = ecc;
-      std::get<index::ecc_data>(alg_data).solved_status(vertex) = ecc_vertex_data_t::k_tree;
+      std::get<index::ecc_data>(alg_data).just_solved_status(vertex) = ecc_vertex_data_t::k_tree;
       ++std::get<index::num_solved>(alg_data);
 
       if (my_height == 0) return false; // we are at a leaf

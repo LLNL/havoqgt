@@ -255,8 +255,15 @@ int main(int argc, char **argv) {
       uint64_t dst;
       while (ifs >> src >> dst) {
         if (src > max_vid || dst > max_vid) {
+          std::cerr << "src > max_vid || dst > max_vid" << std::endl;
           std::abort();
         }
+
+        if (src == dst) {
+          std::cerr << "src == dst" << std::endl;
+          std::abort();
+        }
+
 #pragma omp atomic
         ++num_edges[src];
 #pragma omp atomic
