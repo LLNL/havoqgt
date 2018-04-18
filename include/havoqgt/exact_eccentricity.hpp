@@ -985,7 +985,7 @@ class exact_eccentricity {
     for (size_t k = 0; k < m_source_info.num_source(); ++k) {
       const auto src = m_source_info.source_list[k];
       if (src.owner() == mpi_rank) {
-        if (m_ecc_vertex_data.lower(src) >= m_2core_vertex_data[src].get_height())
+        if (m_ecc_vertex_data.lower(src) > m_2core_vertex_data[src].get_height())
           source_height[k] = m_2core_vertex_data[src].get_height();
       }
     }
@@ -1399,8 +1399,8 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
     if (std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() == 0)
       return false; // skip as it does not have trees
 
-    if (std::get<index::k_core_data>(alg_data)[vertex].get_height() > std::get<index::ecc_data>(alg_data).lower(vertex))
-      return false; // skip vertices who have higher trees than their ecc values
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_height() >= std::get<index::ecc_data>(alg_data).lower(vertex))
+      return false; // skip vertices who have squal or higher trees than their ecc values
 
     if (std::get<index::k_core_data>(alg_data)[vertex].get_height() == 0) {
       std::cerr << "std::get<index::k_core_data>(alg_data)[vertex].get_height() == 0" << std::endl;

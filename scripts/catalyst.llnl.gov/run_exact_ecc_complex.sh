@@ -4,7 +4,9 @@
 # Command line options
 # ---------------------------------------------------------------------------------------------------- #
 graph_name=$1
-tag=$2
+num_nodes=$2
+tag=$3
+k=$4
 
 # ---------------------------------------------------------------------------------------------------- #
 # Configurations
@@ -64,20 +66,14 @@ elif [ "${tag}" == "adp_at" ]; then
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"
 fi
 
-for ((num_nodes=64; num_nodes<=64; num_nodes*=2))
-do
-    for ((k=64; k<=64; k*=2))
-    do
-        sbatch_out="sbatch_${graph_name}_n${num_nodes}_k${k}_${tag}.out"
-        sh_file="run_${graph_name}_n${num_nodes}_k${k}_${tag}.sh"
-        exe_file_name="run_exact_ecc_k${k}_${tag}"
-        ecc_file_name="${ecc_out_path}/ecc_k${k}_${tag}"
-        two_core_file_name="${base_graph_path}/2core_table"
-        graph_path="${base_graph_path}/n${num_nodes}/graph"
+sbatch_out="sbatch_${graph_name}_n${num_nodes}_k${k}_${tag}.out"
+sh_file="run_${graph_name}_n${num_nodes}_k${k}_${tag}.sh"
+exe_file_name="run_exact_ecc_k${k}_${tag}"
+ecc_file_name="${ecc_out_path}/ecc_k${k}_${tag}"
+two_core_file_name="${base_graph_path}/2core_table"
+graph_path="${base_graph_path}/n${num_nodes}/graph"
 
-        make_script
-        compile ${k}
+make_script
+compile ${k}
 
-        sbatch ${sh_file}
-    done
-done
+sbatch ${sh_file}
