@@ -62,7 +62,8 @@ elif [ "${tag}" == "adp" ]; then
 elif [ "${tag}" == "adp_new" ]; then
     option="export USE_NEW_ADP=10"
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [ "${tag}" == "adp_at" ]; then
+elif [ "${tag}" == "adp_new_sh" ]; then
+    option="export USE_NEW_ADP=10"
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"
 fi
 

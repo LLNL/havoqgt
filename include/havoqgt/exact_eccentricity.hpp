@@ -468,7 +468,11 @@ class exact_eccentricity {
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return random_score(vertex);
       });
-    if (use_algorithm.count(8)) // remove
+    if (use_algorithm.count(8))
+      m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
+        return middle_shell_score(vertex);
+      });
+    if (use_algorithm.count(9)) // remove
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return articulation_score(vertex);
       });
@@ -533,6 +537,16 @@ class exact_eccentricity {
 
   uint64_t articulation_score(const vertex_locator_t vertex) {
     return m_2core_vertex_data[vertex].get_num_cut();
+  }
+
+  uint64_t middle_shell_score(const vertex_locator_t vertex) {
+    uint64_t total(0);
+    for (size_t k = 0; k < m_source_info.num_source(); ++k) {
+      if (m_kbfs.vertex_data().level(vertex)[k] <= m_source_info.ecc_list[k] / 2) {
+        total += m_graph.degree(vertex);
+      }
+    }
+    return total;
   }
 
   // -------------------------------------------------------------------------------------------------------------- //
