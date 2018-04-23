@@ -153,30 +153,34 @@ size_t compute_2_core(const graph_bank<max_vid, 256> &graph,
                       std::vector<uint16_t> &max_depth,
                       std::vector<uint64_t> &num_kill)
 {
+  std::vector<uint64_t> tmp_left_degree(left_degree);
   size_t total_num_killed = 0;
   uint16_t depth = 1;
+
   std::cout << "depth num_killed" << std::endl;
   while (true) {
-    bool cont = false;
+    bool someone_killed = false;
     size_t num_killed = 0;
     for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
       if (left_degree[vid] == 1) {
-        --left_degree[vid];
+        left_degree[vid] = tmp_left_degree[vid] = 0;  // kill the vertex
         ++num_killed;
-        for (vid_t trg : graph[vid]) {
+        for (vid_t trg : graph[vid]) { // remove edges
           if (left_degree[trg] > 0) {
-            --left_degree[trg];
+            assert(tmp_left_degree[trg] > 0); // sanitary check
+            --tmp_left_degree[trg];
             num_kill[trg] += num_kill[vid] + 1;
             max_depth[trg] = depth;
           }
         }
-        cont = true;
+        someone_killed = true;
       }
     }
-    if (!cont) break;
+    if (!someone_killed) break;
     std::cout << depth << " " << num_killed << std::endl;
     ++depth;
     total_num_killed += num_killed;
+    left_degree = tmp_left_degree;
   }
 
   return total_num_killed;
@@ -330,6 +334,7 @@ int main(int argc, char **argv) {
   std::cout << "\nDump info" << std::endl;
   std::ofstream ofs(out_path);
   for (vid_t vid = 0; vid < actual_max_vid + 1; ++vid) {
+    /// vertex id, 1: alive or 0: dead, max depth, num killed, parent id (root vertice has it id, non-root vertices has a random number)
     ofs << vid << " " << (degree[vid] > 0) << " " << max_depth[vid] << " " << num_kill[vid] << " " << parent[vid] << "\n";
   }
 

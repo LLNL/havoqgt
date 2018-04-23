@@ -50,7 +50,6 @@ ecc_out_path="${storage_path}/${graph_name}/ecc/"
 unset USE_TAKE
 unset USE_TAKE_PRUN
 unset USE_NEW_ADP
-
 if [ "${tag}" == "tk" ]; then
     option="export USE_TAKE=1" ## 1 is a dummy value
     source_selection_algorithms=""
@@ -62,9 +61,6 @@ elif [ "${tag}" == "adp" ]; then
 elif [ "${tag}" == "adp_new" ]; then
     option="export USE_NEW_ADP=10"
     source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [ "${tag}" == "adp_new_sh" ]; then
-    option="export USE_NEW_ADP=10"
-    source_selection_algorithms="-a 0:1:2:3:4:5:6:7:8"
 fi
 
 sbatch_out="sbatch_${graph_name}_n${num_nodes}_k${k}_${tag}.out"
