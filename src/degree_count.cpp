@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 
   std::ofstream ofs(out_path);
   for (uint64_t i = 0; i < degree_table.size(); ++i) {
-    ofs << i << "\t" << degree_table[i] << std::endl;
+    ofs << i << "\t" << degree_table[i] << "\n";
   }
   ofs.close();
 
