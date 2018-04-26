@@ -44,19 +44,18 @@ int main(int argc, char **argv) {
       const auto &f = edge_list_file[i];
       std::ifstream ifs(f);
       std::cout << "Open " << f << std::endl;
-      if (!ifs.is_open()) std::abort();
+      if (!ifs.is_open()) {
+        std::cerr << "Can not open: " << f << std::endl;
+        std::abort();
+      }
 
       unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
       std::mt19937_64 gen(seed);
       std::uniform_int_distribution<uint64_t> dis(0, num_out_files - 1);
 
-      for (std::string line; std::getline(ifs, line);) {
-        std::istrstream is(line.c_str());
-
-        uint64_t src;
-        uint64_t dst;
-        is >> src >> dst;
-
+      uint64_t src;
+      uint64_t dst;
+      while(ifs >> src >> dst) {
         const uint64_t target_file_no = dis(gen);
         while (!omp_test_lock(&m_locks[target_file_no]));
         *out_file_list[target_file_no] << src << " " << dst << "\n";

@@ -29,21 +29,21 @@ int main(int argc, char **argv) {
       std::cout << "Open " << f << std::endl;
       if (!ifs.is_open()) std::abort();
 
-      for (std::string line; std::getline(ifs, line);) {
-        std::istrstream is(line.c_str());
-
-        uint64_t src;
-        uint64_t dst;
-        is >> src >> dst;
-
+      uint64_t src;
+      uint64_t dst;
+      while(ifs >> src >> dst) {
 #pragma omp atomic
         ++degree_table[src];
+#pragma omp atomic
+        ++degree_table[dst];
       }
     }
   }
+  std::cout << "Count done" << std::endl;
 
   std::ofstream ofs(out_path);
   for (uint64_t i = 0; i < degree_table.size(); ++i) {
+    if (degree_table[i] == 0) continue;
     ofs << i << "\t" << degree_table[i] << "\n";
   }
   ofs.close();
