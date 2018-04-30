@@ -48,9 +48,6 @@
  * purposes.
  *
  */
-//
-// Created by Iwabuchi, Keita on 2/4/18.
-//
 
 #ifndef HAVOQGT_EXACT_ECCENTRICITY_HPP
 #define HAVOQGT_EXACT_ECCENTRICITY_HPP
@@ -71,8 +68,6 @@
 #include <havoqgt/detail/hash.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/kth_core_new.hpp>
-
-#define USE_DEGREE_FIRST 1
 
 #define USE_NEW_MAX_U 0
 
@@ -186,8 +181,10 @@ class exact_eccentricity {
         m_source_info(),
         m_source_score_function_list(),
         m_progress_info(),
-        m_2core_vertex_data(graph) {
+        m_2core_vertex_data(graph),
+        m_strategy_num_to_use() {
     set_strategy(use_algorithm);
+    m_strategy_num_to_use.resize(m_source_score_function_list.size(), 0);
   }
 
   void load_2core_info(const std::string path) {
@@ -289,7 +286,11 @@ class exact_eccentricity {
         if (mpi_rank == 0) {
           std::cout << "Bounding algorithm took: " << time_end - time_start << std::endl;
           std::cout << "#solved:   " << m_progress_info.num_solved << std::endl;
-          std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
+          // std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
+        }
+        if (m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.since_last_sampling > 1) {
+          m_progress_info.since_last_sampling += m_strategy_num_to_use[m_source_info.strategy_list[0]];
+          m_strategy_num_to_use[m_source_info.strategy_list[0]] = 0;
         }
       }
       if (m_progress_info.num_unsolved == 0) return;
@@ -314,7 +315,7 @@ class exact_eccentricity {
           const double time_end = MPI_Wtime();
           if (mpi_rank == 0) {
             std::cout << "Solve hanging tree took: " << time_end - time_start << std::endl;
-            std::cout << "#solved_tree: " << num_solved << std::endl;
+            std::cout << "#solved_by_tree: " << num_solved << std::endl;
             std::cout << "------------------------------------------------------" << std::endl;
           }
           m_progress_info.num_solved += num_solved;
@@ -330,14 +331,18 @@ class exact_eccentricity {
           if (mpi_rank == 0) {
             std::cout << "Bounding for leaf took: " << time_end - time_start << std::endl;
             std::cout << "#solved_by_leaf:   " << num_solved << std::endl;
-            std::cout << "#unsolved_by_leaf: " << num_unsolved << std::endl;
+            // std::cout << "#unsolved_by_leaf: " << num_unsolved << std::endl;
           }
           m_progress_info.num_solved += num_solved;
           m_progress_info.num_unsolved -= num_solved;
         }
       }
+      if (mpi_rank == 0) {
+        std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
+      }
+      
       if (m_progress_info.num_unsolved == 0) return;
-
+      
       // -------------------- unsolved neighbors -------------------- //
       {
         const double time_start = MPI_Wtime();
@@ -453,6 +458,7 @@ class exact_eccentricity {
     size_t iteration_no{0}; // Iteration No
     size_t num_solved{0}; // num solved veritces at the level; not total value
     size_t num_unsolved{0}; // num unsolved vertices
+    size_t since_last_sampling{0};
   };
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -610,7 +616,7 @@ class exact_eccentricity {
 
   // ---------------------------------------- For new adaptive source selection algoritm ---------------------------------------- //
   void adaptively_select_source_2() {
-    static std::vector<uint32_t> strategy_num_to_use(m_source_score_function_list.size(), 0);
+   
 
     const int num_inner_iterations = std::stoi(std::getenv("USE_NEW_ADP"));
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
@@ -618,20 +624,15 @@ class exact_eccentricity {
           && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
 
-#if USE_DEGREE_FIRST
-    if (m_progress_info.iteration_no % num_inner_iterations == 1) {
-#else
-      if (m_progress_info.iteration_no % num_inner_iterations == 0) {
-#endif
+    if (m_progress_info.since_last_sampling == 0 || m_progress_info.since_last_sampling == num_inner_iterations) {
       select_source_by_all_strategy_equally(is_candidate);
+      m_progress_info.since_last_sampling = 1;
       return;
     }
 
-#if USE_DEGREE_FIRST
-    if (m_progress_info.iteration_no % num_inner_iterations == 2) {
-#else
-      if (m_progress_info.iteration_no % num_inner_iterations == 1) {
-#endif
+
+    if (m_progress_info.since_last_sampling == 1) {
+
       // ---------- Set contribution score based on #bounded ---------- //
       std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
       for (uint32_t i = 0; i < m_source_info.num_source(); ++i) {
@@ -652,18 +653,18 @@ class exact_eccentricity {
       std::discrete_distribution<uint32_t> distribution(contribution_score.begin(),
                                                         contribution_score.end());
 
-      std::fill(strategy_num_to_use.begin(), strategy_num_to_use.end(), 0);
-      std::mt19937 rnd(m_progress_info.num_solved); // seed can be any number but must be same among the all processes
+      std::fill(m_strategy_num_to_use.begin(), m_strategy_num_to_use.end(), 0);
+      std::mt19937 rnd(m_progress_info.num_unsolved); // seed can be any number but must be same among the all processes
       for (uint32_t i = 0; i < num_inner_iterations; ++i) {
         const uint32_t strategy_id = distribution(rnd);
-        ++strategy_num_to_use[strategy_id];
+        ++m_strategy_num_to_use[strategy_id];
       }
     }
 
     uint32_t strategy_id = 0;
     for (; strategy_id < m_source_score_function_list.size(); ++strategy_id) {
-      if (strategy_num_to_use[strategy_id] > 0) {
-        --strategy_num_to_use[strategy_id];
+      if (m_strategy_num_to_use[strategy_id] > 0) {
+        --m_strategy_num_to_use[strategy_id];
         break;
       }
     }
@@ -679,6 +680,8 @@ class exact_eccentricity {
       new_source_info.uniquely_add_source(candidate, strategy_id);
     }
     m_source_info = std::move(new_source_info);
+
+    ++m_progress_info.since_last_sampling;
   }
 
   // ---------------------------------------- For adaptive source selection algoritm ---------------------------------------- //
@@ -686,10 +689,7 @@ class exact_eccentricity {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return (m_graph.degree(vertex) >= 1);
     };
-
-#if !USE_DEGREE_FIRST
-    select_source_by_all_strategy_equally(is_candidate);
-#else
+    
     auto source_candidate_list = select_source(k_num_sources,
                                                is_candidate,
                                                {[this](const vertex_locator_t vertex) -> uint64_t {
@@ -700,7 +700,6 @@ class exact_eccentricity {
       new_source_info.uniquely_add_source(candidate, 0);
     }
     m_source_info = std::move(new_source_info);
-#endif
   }
 
   void adaptively_select_source() {
@@ -1287,6 +1286,7 @@ class exact_eccentricity {
   source_score_function_list_t m_source_score_function_list;
   progress_info_t m_progress_info;
   kth_core_vertex_data_t m_2core_vertex_data;
+  std::vector<uint32_t> m_strategy_num_to_use;
 };
 
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
