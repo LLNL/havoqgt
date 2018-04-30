@@ -67,7 +67,10 @@
 #include <omp.h>
 #endif
 
-constexpr size_t max_vid = 1ULL << 20; //3563602788
+#ifndef MAX_ID
+#define MAX_ID 3563602788
+#endif
+constexpr size_t max_vid = MAX_ID;
 
 int main(int argc, char **argv) {
   std::string table_path(argv[1]);
@@ -111,7 +114,7 @@ int main(int argc, char **argv) {
       if (src > max_vid || dst > max_vid) {
         std::abort();
       }
-      if (is_alive_table[src]) {
+      if (is_alive_table[src] && is_alive_table[dst]) {
         ofs << src << " " << dst << "\n";
         ++count_dumped_edges;
       }

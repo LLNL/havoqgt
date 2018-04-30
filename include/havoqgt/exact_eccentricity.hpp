@@ -74,6 +74,8 @@
 
 #define USE_DEGREE_FIRST 1
 
+#define USE_NEW_MAX_U 0
+
 namespace havoqgt {
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
 class exact_eccentricity_vertex_data {
@@ -94,7 +96,8 @@ class exact_eccentricity_vertex_data {
         m_lower(graph),
         m_upper(graph),
         m_just_solved_status(graph),
-        m_num_unsolved_neighbors(graph) {
+        m_num_unsolved_neighbors(graph),
+        m_cnt_farthest_vertex(graph) {
 #ifdef DEBUG
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
 #endif
@@ -103,6 +106,7 @@ class exact_eccentricity_vertex_data {
   void init() {
     m_lower.reset(std::numeric_limits<level_t>::min());
     m_upper.reset(std::numeric_limits<level_t>::max());
+    m_cnt_farthest_vertex.reset(0);
     reset_for_each_iteration();
   }
 
@@ -136,12 +140,18 @@ class exact_eccentricity_vertex_data {
     return m_num_unsolved_neighbors[vertex];
   }
 
+  uint32_t &cnt_farthest_vertex(const typename graph_t::vertex_locator vertex) {
+    return m_cnt_farthest_vertex[vertex];
+  }
+
  private:
   const graph_t &m_graph;
   ecc_t m_lower;
   ecc_t m_upper;
   flag_t m_just_solved_status;
   count_t m_num_unsolved_neighbors;
+  count_t m_cnt_farthest_vertex;
+
 #ifdef DEBUG
   int m_mpi_rank;
 #endif
@@ -339,6 +349,19 @@ class exact_eccentricity {
         }
       }
 
+      // -------------------- count farthest vertices -------------------- //
+      {
+#if USE_NEW_MAX_U
+        const double time_start = MPI_Wtime();
+        count_farthest_vertices();
+        const double time_end = MPI_Wtime();
+        if (mpi_rank == 0) {
+          std::cout << "Count farthest vertices took: " << time_end - time_start << std::endl;
+          std::cout << "------------------------------------------------------" << std::endl;
+        }
+#endif
+      }
+
       // -------------------- Progress report -------------------- //
       {
         auto histgram = compute_diff_score_histgram(4);
@@ -524,7 +547,11 @@ class exact_eccentricity {
   }
 
   uint64_t max_upper(const vertex_locator_t vertex) {
+#if USE_NEW_MAX_U
+    return m_ecc_vertex_data.upper(vertex) * (m_ecc_vertex_data.cnt_farthest_vertex(vertex) > 0);
+#else
     return m_ecc_vertex_data.upper(vertex);
+#endif
   }
 
   uint64_t random_score(const vertex_locator_t vertex) {
@@ -1007,7 +1034,8 @@ class exact_eccentricity {
     mpi_all_reduce_inplace(source_height, std::greater<uint16_t>(), MPI_COMM_WORLD);
 
     const auto ret_vrtx = bound_ecc_for_leaf_helper(source_height, m_graph.vertices_begin(), m_graph.vertices_end());
-    const auto ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
+    const auto
+        ret_ctrl = bound_ecc_for_leaf_helper(source_height, m_graph.controller_begin(), m_graph.controller_end());
 
     size_t num_solved = ret_vrtx.first + ret_ctrl.first;
     size_t num_unsolved = ret_vrtx.second + ret_ctrl.second;
@@ -1106,6 +1134,27 @@ class exact_eccentricity {
     auto vq = create_visitor_queue<unsolved_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
     vq.init_visitor_traversal_new();
     MPI_Barrier(MPI_COMM_WORLD);
+  }
+
+  // -------------------------------------------------------------------------------------------------------------- //
+  // count_farthest_vertices
+  // -------------------------------------------------------------------------------------------------------------- //
+  void count_farthest_vertices() {
+    auto count_farthest = [&](const vertex_locator_t &vertex) {
+      for (size_t i = 0; i < m_source_info.num_source(); ++i) {
+        if (m_kbfs.vertex_data().level(vertex)[i] == m_source_info.ecc_list[i])
+          ++m_ecc_vertex_data.cnt_farthest_vertex(vertex);
+      }
+    };
+
+    for (auto itr = m_graph.vertices_begin(), end = m_graph.vertices_end();
+        itr != end; ++itr) {
+      count_farthest(*itr);
+    }
+    for (auto itr = m_graph.controller_begin(), end = m_graph.controller_end();
+         itr != end; ++itr) {
+      count_farthest(*itr);
+    }
   }
 
 // -------------------------------------------------------------------------------------------------------------- //
@@ -1413,7 +1462,8 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
     if (std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() == 0)
       return false; // skip as it does not have trees
 
-    if (std::get<index::k_core_data>(alg_data)[vertex].get_height() >= std::get<index::ecc_data>(alg_data).lower(vertex))
+    if (std::get<index::k_core_data>(alg_data)[vertex].get_height()
+        >= std::get<index::ecc_data>(alg_data).lower(vertex))
       return false; // skip vertices who have squal or higher trees than their ecc values
 
     if (std::get<index::k_core_data>(alg_data)[vertex].get_height() == 0) {
