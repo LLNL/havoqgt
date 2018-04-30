@@ -69,7 +69,7 @@
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/kth_core_new.hpp>
 
-#define USE_NEW_MAX_U 0
+bool use_new_max_u;
 
 namespace havoqgt {
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
@@ -96,6 +96,7 @@ class exact_eccentricity_vertex_data {
 #ifdef DEBUG
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
 #endif
+    use_new_max_u = std::getenv("USE_NEW_MAX_U");
   }
 
   void init() {
@@ -291,6 +292,7 @@ class exact_eccentricity {
         if (m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.since_last_sampling > 1) {
           m_progress_info.since_last_sampling += m_strategy_num_to_use[m_source_info.strategy_list[0]];
           m_strategy_num_to_use[m_source_info.strategy_list[0]] = 0;
+          if (mpi_rank == 0) std::cout << "Skip rest of " << m_source_info.strategy_list[0] << std::endl;
         }
       }
       if (m_progress_info.num_unsolved == 0) return;
@@ -356,7 +358,6 @@ class exact_eccentricity {
 
       // -------------------- count farthest vertices -------------------- //
       {
-#if USE_NEW_MAX_U
         const double time_start = MPI_Wtime();
         count_farthest_vertices();
         const double time_end = MPI_Wtime();
@@ -364,7 +365,6 @@ class exact_eccentricity {
           std::cout << "Count farthest vertices took: " << time_end - time_start << std::endl;
           std::cout << "------------------------------------------------------" << std::endl;
         }
-#endif
       }
 
       // -------------------- Progress report -------------------- //
@@ -553,11 +553,10 @@ class exact_eccentricity {
   }
 
   uint64_t max_upper(const vertex_locator_t vertex) {
-#if USE_NEW_MAX_U
+  if (use_new_max_u)
     return m_ecc_vertex_data.upper(vertex) * (m_ecc_vertex_data.cnt_farthest_vertex(vertex) > 0);
-#else
+  else
     return m_ecc_vertex_data.upper(vertex);
-#endif
   }
 
   uint64_t random_score(const vertex_locator_t vertex) {
