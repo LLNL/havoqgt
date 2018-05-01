@@ -200,6 +200,7 @@ class exact_eccentricity {
     
     set_strategy(use_algorithm);
     m_strategy_num_to_use.resize(m_source_score_function_list.size(), 0);
+    m_contribution_score.resize(m_source_score_function_list.size());
   }
 
   void load_2core_info(const std::string path) {
@@ -303,11 +304,13 @@ class exact_eccentricity {
           std::cout << "#solved:   " << m_progress_info.num_solved << std::endl;
           // std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
         }
-        if (use_skip_strategy && m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.inner_iteration_cnt > 1) {
-          size_t strategy_no = m_source_info.strategy_list[0];
-          m_progress_info.inner_iteration_cnt += m_strategy_num_to_use[strategy_no];
-          m_strategy_num_to_use[strategy_no] = 0;
-          if (mpi_rank == 0) std::cout << "Skip rest of " << strategy_no << std::endl;
+        const size_t strategy_id = m_source_info.strategy_list[0];
+        if (use_skip_strategy &&
+            m_progress_info.inner_iteration_cnt > 1 && 
+            m_progress_info.num_solved < (m_contribution_score[strategy_id] / 100ULL)) {
+          m_progress_info.inner_iteration_cnt += m_strategy_num_to_use[strategy_id];
+          m_strategy_num_to_use[strategy_id] = 0;
+          if (mpi_rank == 0) std::cout << "Skip rest of " << strategy_id << std::endl;
         }
       }
       if (m_progress_info.num_unsolved == 0) return;
@@ -648,24 +651,24 @@ class exact_eccentricity {
     if (m_progress_info.inner_iteration_cnt == 1) {
 
       // ---------- Set contribution score based on #bounded ---------- //
-      std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
+      std::fill(m_contribution_score.begin(), m_contribution_score.end(), 0);
       for (uint32_t i = 0; i < m_source_info.num_source(); ++i) {
-        contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
+        m_contribution_score[m_source_info.strategy_list[i]] += m_source_info.num_solved_list[i];
       }
       {
         int mpi_rank(0);
         CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
         if (mpi_rank == 0) {
           std::cout << "Contribution score: ";
-          for (auto n : contribution_score) std::cout << n << " ";
+          for (auto n : m_contribution_score) std::cout << n << " ";
           std::cout << std::endl;
         }
       }
 
       // ---------- Compute how many sources to be selected by each strategy using discrete_distribution ---------- //
-      for (auto &n : contribution_score) n += 1; // To avoid the case where all contirubtion scores are 0
-      std::discrete_distribution<uint32_t> distribution(contribution_score.begin(),
-                                                        contribution_score.end());
+      for (auto &n : m_contribution_score) n += 1; // To avoid the case where all contirubtion scores are 0
+      std::discrete_distribution<uint32_t> distribution(m_contribution_score.begin(),
+                                                        m_contribution_score.end());
 
       std::fill(m_strategy_num_to_use.begin(), m_strategy_num_to_use.end(), 0);
       std::mt19937 rnd(m_progress_info.num_unsolved); // seed can be any number but must be same among the all processes
@@ -996,8 +999,7 @@ class exact_eccentricity {
             const level_t ecc = m_source_info.ecc_list[k];
             if (lower == compute_lower_candidate(level, ecc)) {
               ++m_source_info.num_solved_list[k];
-            }
-            if (upper == compute_upper_candidate(level, ecc)) {
+            } else if (upper == compute_upper_candidate(level, ecc)) {
               ++m_source_info.num_solved_list[k];
             }
           }
@@ -1321,6 +1323,7 @@ class exact_eccentricity {
   progress_info_t m_progress_info;
   kth_core_vertex_data_t m_2core_vertex_data;
   std::vector<uint32_t> m_strategy_num_to_use;
+  std::vector<size_t> m_contribution_score;
 };
 
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
