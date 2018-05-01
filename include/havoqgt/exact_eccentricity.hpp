@@ -495,9 +495,9 @@ class exact_eccentricity {
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
         return degree_score(vertex);
       });
-    if (use_algorithm.count(3)) // remove
+    if (use_algorithm.count(3))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
-        return shell_score(vertex);
+        return sum_level(vertex);
       });
     if (use_algorithm.count(4))
       m_source_score_function_list.emplace_back([this](const vertex_locator_t vertex) -> uint64_t {
@@ -545,10 +545,13 @@ class exact_eccentricity {
     return m_graph.degree(vertex);
   }
 
-  uint64_t shell_score(const vertex_locator_t vertex) {
+  uint64_t sum_level(const vertex_locator_t vertex) {
     uint64_t total(0);
     for (size_t k = 0; k < m_source_info.num_source(); ++k) {
-      total += m_kbfs.vertex_data().level(vertex)[k];
+      if (use_new_max_u)
+        total += m_kbfs.vertex_data().level(vertex)[k] * (m_ecc_vertex_data.cnt_farthest_vertex(vertex) > 0);
+      else
+        total += m_kbfs.vertex_data().level(vertex)[k];
     }
     return total;
   }
