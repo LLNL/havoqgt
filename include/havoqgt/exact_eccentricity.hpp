@@ -303,10 +303,11 @@ class exact_eccentricity {
           std::cout << "#solved:   " << m_progress_info.num_solved << std::endl;
           // std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
         }
-        if (use_skip_strategy && m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.since_last_sampling > 1) {
-          m_progress_info.since_last_sampling += m_strategy_num_to_use[m_source_info.strategy_list[0]];
-          m_strategy_num_to_use[m_source_info.strategy_list[0]] = 0;
-          if (mpi_rank == 0) std::cout << "Skip rest of " << m_source_info.strategy_list[0] << std::endl;
+        if (use_skip_strategy && m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.inner_iteration_cnt > 1) {
+          size_t strategy_no = m_source_info.strategy_list[0];
+          m_progress_info.inner_iteration_cnt += m_strategy_num_to_use[strategy_no];
+          m_strategy_num_to_use[strategy_no] = 0;
+          if (mpi_rank == 0) std::cout << "Skip rest of " << strategy_no << std::endl;
         }
       }
       if (m_progress_info.num_unsolved == 0) return;
@@ -472,7 +473,7 @@ class exact_eccentricity {
     size_t iteration_no{0}; // Iteration No
     size_t num_solved{0}; // num solved veritces at the level; not total value
     size_t num_unsolved{0}; // num unsolved vertices
-    size_t since_last_sampling{0};
+    size_t inner_iteration_cnt{0};
   };
 
   // -------------------------------------------------------------------------------------------------------------- //
@@ -637,14 +638,14 @@ class exact_eccentricity {
           && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
 
-    if (m_progress_info.since_last_sampling == 0 || m_progress_info.since_last_sampling == num_inner_iterations) {
+    if (m_progress_info.inner_iteration_cnt == 0 || m_progress_info.inner_iteration_cnt == num_inner_iterations) {
       select_source_by_all_strategy_equally(is_candidate);
-      m_progress_info.since_last_sampling = 1;
+      m_progress_info.inner_iteration_cnt = 1;
       return;
     }
 
 
-    if (m_progress_info.since_last_sampling == 1) {
+    if (m_progress_info.inner_iteration_cnt == 1) {
 
       // ---------- Set contribution score based on #bounded ---------- //
       std::vector<size_t> contribution_score(m_source_score_function_list.size(), 0);
@@ -668,7 +669,7 @@ class exact_eccentricity {
 
       std::fill(m_strategy_num_to_use.begin(), m_strategy_num_to_use.end(), 0);
       std::mt19937 rnd(m_progress_info.num_unsolved); // seed can be any number but must be same among the all processes
-      for (uint32_t i = 0; i < num_inner_iterations; ++i) {
+      for (uint32_t i = 0; i < num_inner_iterations - 1; ++i) {
         const uint32_t strategy_id = distribution(rnd);
         ++m_strategy_num_to_use[strategy_id];
       }
@@ -694,7 +695,7 @@ class exact_eccentricity {
     }
     m_source_info = std::move(new_source_info);
 
-    ++m_progress_info.since_last_sampling;
+    ++m_progress_info.inner_iteration_cnt;
   }
 
   // ---------------------------------------- For adaptive source selection algoritm ---------------------------------------- //

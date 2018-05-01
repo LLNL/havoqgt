@@ -306,7 +306,10 @@ int main(int argc, char **argv) {
           std::cout << "Hash error" << std::endl;
           std::abort();
         }
-        if (hash32(src) < hash32(dst)) ofs << src << " " << dst << "\n";
+        if (hash32(src) < hash32(dst)) {
+          ofs << src << " " << dst << "\n";
+          ++count_dumped_edges;
+        }
       }
     }
     ofs.close();
