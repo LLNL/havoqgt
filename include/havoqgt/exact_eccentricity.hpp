@@ -70,6 +70,8 @@
 #include <havoqgt/kth_core_new.hpp>
 
 bool use_new_max_u;
+bool use_skip_strategy;
+bool use_soft_contribution_score;
 
 namespace havoqgt {
 template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
@@ -96,7 +98,6 @@ class exact_eccentricity_vertex_data {
 #ifdef DEBUG
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
 #endif
-    use_new_max_u = std::getenv("USE_NEW_MAX_U");
   }
 
   void init() {
@@ -184,6 +185,19 @@ class exact_eccentricity {
         m_progress_info(),
         m_2core_vertex_data(graph),
         m_strategy_num_to_use() {
+    int mpi_rank(0);
+    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+    
+    use_new_max_u = (std::getenv("USE_NEW_MAX_U") > 0);
+    use_skip_strategy  = (std::getenv("USE_SKIP_STRATEGY") > 0);
+    use_soft_contribution_score = (std::getenv("USE_SOFT_CONT_SCORE") > 0);
+    
+    if (mpi_rank == 0) {
+      std::cout << "use_new_max_u: " << use_new_max_u << std::endl;
+      std::cout << "use_skip_strategy: " << use_skip_strategy << std::endl;
+      std::cout << "use_soft_contribution_score: " << use_soft_contribution_score << std::endl;
+    }
+    
     set_strategy(use_algorithm);
     m_strategy_num_to_use.resize(m_source_score_function_list.size(), 0);
   }
@@ -289,7 +303,7 @@ class exact_eccentricity {
           std::cout << "#solved:   " << m_progress_info.num_solved << std::endl;
           // std::cout << "#unsolved: " << m_progress_info.num_unsolved << std::endl;
         }
-        if (m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.since_last_sampling > 1) {
+        if (use_skip_strategy && m_progress_info.num_solved < m_source_info.num_source() && m_progress_info.since_last_sampling > 1) {
           m_progress_info.since_last_sampling += m_strategy_num_to_use[m_source_info.strategy_list[0]];
           m_strategy_num_to_use[m_source_info.strategy_list[0]] = 0;
           if (mpi_rank == 0) std::cout << "Skip rest of " << m_source_info.strategy_list[0] << std::endl;
@@ -974,24 +988,44 @@ class exact_eccentricity {
         }
       }
 
-      if (lower == upper) {
-        m_ecc_vertex_data.just_solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-        ++num_solved;
-
-        // ----- Compute contribution score ----- //
-        for (size_t k = 0; k < m_source_info.num_source(); ++k) {
-          const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
-          const level_t ecc = m_source_info.ecc_list[k];
-
-          if (old_lower != lower && lower == compute_lower_candidate(level, ecc)) {
-            ++m_source_info.num_solved_list[k];
-          } else if (old_upper != upper && upper == compute_upper_candidate(level, ecc)) {
-            ++m_source_info.num_solved_list[k];
+       if (use_soft_contribution_score) {
+        if (old_lower < lower || upper < old_upper) {
+          for (size_t k = 0; k < m_source_info.num_source(); ++k) {
+            const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
+            const level_t ecc = m_source_info.ecc_list[k];
+            if (lower == compute_lower_candidate(level, ecc)) {
+              ++m_source_info.num_solved_list[k];
+            }
+            if (upper == compute_upper_candidate(level, ecc)) {
+              ++m_source_info.num_solved_list[k];
+            }
           }
         }
+       } else {
+        if (lower == upper) {
+          m_ecc_vertex_data.just_solved_status(*vitr) = ecc_vertex_data_t::k_bound;
+          ++num_solved;
+
+          // ----- Compute contribution score ----- //
+          for (size_t k = 0; k < m_source_info.num_source(); ++k) {
+            const level_t level = m_kbfs.vertex_data().level(*vitr)[k];
+            const level_t ecc = m_source_info.ecc_list[k];
+
+            if (old_lower != lower && lower == compute_lower_candidate(level, ecc)) {
+              ++m_source_info.num_solved_list[k];
+            } else if (old_upper != upper && upper == compute_upper_candidate(level, ecc)) {
+              ++m_source_info.num_solved_list[k];
+            }
+          }
+        }
+      }
+      
+      if (lower == upper) {
+        ++num_solved;
       } else {
         ++num_unsolved;
       }
+      
     }
 
     return std::make_pair(num_solved, num_unsolved);
