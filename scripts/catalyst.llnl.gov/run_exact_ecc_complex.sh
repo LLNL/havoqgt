@@ -87,18 +87,12 @@ unset USE_SKIP_STRATEGY
 if [ "${tag}" == "tk" ]; then
     option="export USE_TAKE=1" ## 1 is a dummy value
     source_selection_algorithms=""
-elif [ "${tag}" == "adp_new" ]; then
-    option="export USE_NEW_ADP=$sampling_rate"
-    source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [ "${tag}" == "adp_new_maxu" ]; then
-    option="export USE_NEW_ADP=$sampling_rate; export USE_NEW_MAX_U=1"
-    source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [ "${tag}" == "adp_new_softcont" ]; then
-    option="export USE_NEW_ADP=$sampling_rate; export USE_SOFT_CONT_SCORE=1"
-    source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
-elif [ "${tag}" == "adp_new_all" ]; then
-    option="export USE_NEW_ADP=$sampling_rate; export USE_NEW_MAX_U=1; export USE_SOFT_CONT_SCORE=1; export USE_SKIP_STRATEGY=1"
-    source_selection_algorithms="-a 0:1:2:3:4:5:6:7"
+elif [ "${tag}" == "ds_fix" ]; then
+    option="export USE_DS_FIX=1"
+    source_selection_algorithms=""
+elif [ "${tag}" == "ds_adp" ]; then
+    option="export USE_DS_ADP=1"
+    source_selection_algorithms="-a 0:1:2:3:4:5"
 else
     echo "Invalid tag ${tag}"
     exit
