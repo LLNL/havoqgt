@@ -90,9 +90,18 @@ if [ "${tag}" == "tk" ]; then
 elif [ "${tag}" == "ds_fix" ]; then
     option="export USE_DS_FIX=1"
     source_selection_algorithms=""
+elif [ "${tag}" == "ds_fix_tree" ]; then
+    option="export USE_DS_FIX=1; export USE_TREE=1"
+    source_selection_algorithms=""
+elif [ "${tag}" == "ds_fix_ms_tree" ]; then
+    option="export USE_DS_FIX=1; export USE_DS_FIX_MS=1; export USE_TREE=1"
+    source_selection_algorithms=""
 elif [ "${tag}" == "ds_adp" ]; then
     option="export USE_DS_ADP=1"
     source_selection_algorithms="-a 0:1:2:3:4:5"
+elif [ "${tag}" == "ds_adp_ms_tree" ]; then
+    option="export USE_DS_ADP=1; export USE_TREE=1"
+    source_selection_algorithms="-a 0:1:2:3:4:5:6"
 else
     echo "Invalid tag ${tag}"
     exit

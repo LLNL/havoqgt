@@ -69,13 +69,15 @@
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/kth_core_new.hpp>
 
-bool use_tk;
+#define TREE_FROM_ONLY_SOURCES 0
+bool use_tk = false;
 //bool use_new_max_u;
 //bool use_skip_strategy;
-bool use_soft_contribution_score;
-bool use_ds_fix;
-bool use_ds_adp;
+bool use_soft_contribution_score = false;
+bool use_ds_fix = false;
+bool use_ds_adp = false;
 bool use_hanging_tree = false;
+bool use_ds_fix_middle_shel = false;
 
 const int k_strategy_id_degree = 99;
 const int k_strategy_id_ds = 999;
@@ -207,10 +209,12 @@ class exact_eccentricity {
     use_ds_fix = (std::getenv("USE_DS_FIX") > 0);
     use_ds_adp = (std::getenv("USE_DS_ADP") > 0);
     use_hanging_tree = (std::getenv("USE_TREE") > 0);
+    use_ds_fix_middle_shel = (std::getenv("USE_DS_FIX_MS") > 0);
     if (mpi_rank == 0) {
       std::cout << "use_tk: " << use_tk << std::endl;
       std::cout << "use_soft_contribution_score: " << use_soft_contribution_score << std::endl;
       std::cout << "use_ds_fix  " << use_ds_fix << std::endl;
+      std::cout << "use_ds_fix_middle_shel  " << use_ds_fix_middle_shel << std::endl;
       std::cout << "use_ds_adp  " << use_ds_adp << std::endl;
       std::cout << "use_hanging_tree  " << use_hanging_tree << std::endl;
     }
@@ -387,9 +391,9 @@ class exact_eccentricity {
         std::cout << "#unsolved:\t" << m_progress_info.num_unsolved << std::endl;
         std::cout << "------------------------------------------------------" << std::endl;
       }
-      
+
       if (m_progress_info.num_unsolved == 0) return;
-      
+
       // -------------------- unsolved neighbors -------------------- //
       if (use_ds_adp) {
         const double time_start = MPI_Wtime();
@@ -597,7 +601,7 @@ class exact_eccentricity {
     uint64_t total(0);
     for (size_t k = 0; k < m_source_info.num_source(); ++k) {
       if (m_kbfs.vertex_data().level(vertex)[k] <= m_source_info.ecc_list[k] / 2) {
-        total += m_graph.degree(vertex);
+        total += m_graph.degree(vertex) * m_kbfs.vertex_data().level(vertex)[k];
       }
     }
     return total;
@@ -692,19 +696,29 @@ class exact_eccentricity {
           && !m_ecc_vertex_data.farthest_vertex(vertex);
     };
 
+    using func_list_t = std::vector<std::function<uint64_t(const vertex_locator_t)>>;
+    func_list_t score_function_list;
+    if (use_ds_fix_middle_shel) {
+      score_function_list = func_list_t({
+          [this](const vertex_locator_t vertex) -> uint64_t {
+            return middle_shell_score(vertex);
+          }});
+    } else {
+      score_function_list = func_list_t({
+                                        [this](const vertex_locator_t vertex) -> uint64_t {
+                                          return diff_score(vertex);
+                                        },
+                                        [this](const vertex_locator_t vertex) -> uint64_t {
+                                          return min_lower(vertex);
+                                        },
+                                        [this](const vertex_locator_t vertex) -> uint64_t {
+                                          return degree_score(vertex);
+                                        }});
+    }
+
     auto source_candidate_list = select_source(k_num_sources - new_source_info.num_source(),
                                                is_candidate,
-                                               {
-                                                   [this](const vertex_locator_t vertex) -> uint64_t {
-                                                     return diff_score(vertex);
-                                                   },
-                                                   [this](const vertex_locator_t vertex) -> uint64_t {
-                                                     return min_lower(vertex);
-                                                   },
-                                                   [this](const vertex_locator_t vertex) -> uint64_t {
-                                                     return degree_score(vertex);
-                                                   }
-                                               });
+                                               score_function_list);
 
     for (auto candidate : source_candidate_list) {
       new_source_info.uniquely_add_source(candidate, 0);
@@ -1045,13 +1059,13 @@ class exact_eccentricity {
           }
         }
       }
-      
+
       if (lower == upper) {
         ++num_solved;
       } else {
         ++num_unsolved;
       }
-      
+
     }
 
     return std::make_pair(num_solved, num_unsolved);
@@ -1592,8 +1606,13 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tre
     // -------------------------------------------------- //
     // This function issues visitors for neighbors (scatter step)
     // -------------------------------------------------- //
+#if TREE_FROM_ONLY_SOURCES
     if (std::get<index::ecc_data>(alg_data).just_solved_status(vertex) != ecc_vertex_data_t::k_source)
       return false; // skip non source vertices
+#else
+    if (!std::get<index::ecc_data>(alg_data).just_solved_status(vertex))
+      return false; // skip non just solved vertices
+#endif
 
     if (std::get<index::k_core_data>(alg_data)[vertex].get_num_cut() == 0)
       return false; // skip as it does not have trees
