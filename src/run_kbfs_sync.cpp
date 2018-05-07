@@ -51,7 +51,7 @@
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/k_breadth_first_search_sync.hpp>
+#include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 #include <havoqgt/fixed_size_unordered_map.hpp>
@@ -71,6 +71,19 @@
 #include <boost/interprocess/managed_heap_memory.hpp>
 
 using namespace havoqgt;
+
+#ifdef NUM_SOURCES
+constexpr uint32_t k_num_sources = NUM_SOURCES;
+#else
+constexpr uint32_t k_num_sources = 8;
+#endif
+using level_t = uint16_t;
+
+using segment_manager_t = havoqgt::distributed_db::segment_manager_type;
+using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+using kbfs_t = havoqgt::k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
+// using kbfs_vertex_data_t = typename havoqgt::kbfs_t::vertex_data_t;
+
 
 void usage()  {
   if(havoqgt_env()->world_comm().rank() == 0) {
@@ -129,8 +142,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
+
 
   int mpi_rank(0), mpi_size(0);
 
@@ -167,8 +179,8 @@ int main(int argc, char** argv) {
 
     havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
-    graph_type *graph = ddb.get_segment_manager()->
-      find<graph_type>("graph_obj").first;
+    graph_t *graph = ddb.get_segment_manager()->
+      find<graph_t>("graph_obj").first;
     assert(graph != nullptr);
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -181,30 +193,16 @@ int main(int argc, char** argv) {
 
     // BFS Experiments
     {
-
-      graph_type::vertex_data<uint16_t, std::allocator<uint16_t>> bfs_max_level_data(*graph);
-      graph_type::vertex_data<uint16_t, std::allocator<uint16_t>> next_bfs_max_level_data(*graph);
-      graph_type::vertex_data<visit_bitmap_t, std::allocator<visit_bitmap_t>> bfs_visit_bitmap(*graph);
-      graph_type::vertex_data<visit_bitmap_t, std::allocator<visit_bitmap_t>> next_bfs_visit_bitmap(*graph);
-      graph_type::vertex_data<bool, std::allocator<bool>> bfs_visit_flag(*graph);
-      graph_type::vertex_data<bool, std::allocator<bool>> next_bfs_visit_flag(*graph);
-
+      kbfs_t kbfs(*graph);
       MPI_Barrier(MPI_COMM_WORLD);
-      if (mpi_rank == 0) {
-        std::cout << "BFS data allocated.  Starting BFS from vertex: ";
-        for (const auto& s : source_vertex_list) {
-          std::cout << " " << s;
-        }
-        std::cout << std::endl;
-      }
 
       //  Run BFS experiments
       double time(0);
       int count(0);
-      std::vector<graph_type::vertex_locator> source_list;
+      std::vector<graph_t::vertex_locator> source_list;
       for (auto& source_vertex : source_vertex_list) {
         uint64_t isource = source_vertex;
-        graph_type::vertex_locator source = graph->label_to_locator(isource);
+        graph_t::vertex_locator source = graph->label_to_locator(isource);
         uint64_t global_degree(0);
         do {
           uint64_t local_degree = 0;
@@ -234,92 +232,18 @@ int main(int argc, char** argv) {
         source_list.push_back(source);
       }
 
-      bfs_max_level_data.reset(0);
-      next_bfs_max_level_data.reset(0);
-      bfs_visit_bitmap.reset(visit_bitmap_t());
-      next_bfs_visit_bitmap.reset(visit_bitmap_t());
-      bfs_visit_flag.reset(false);
-      next_bfs_visit_flag.reset(false);
-
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      const uint16_t max_level = havoqgt::k_breadth_first_search(graph,
-                                                                 bfs_max_level_data, next_bfs_max_level_data,
-                                                                 bfs_visit_bitmap, next_bfs_visit_bitmap,
-                                                                 bfs_visit_flag, next_bfs_visit_flag,
-                                                                 source_list);
+      kbfs.run(source_list);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
 
-      uint64_t visited_total(0);
-      // for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
-      for (uint16_t level = 0; level <= max_level; ++level) {
-        uint64_t local_count(0);
-        graph_type::vertex_iterator vitr;
-        for (vitr = graph->vertices_begin();
-             vitr != graph->vertices_end();
-             ++vitr) {
-          if (bfs_max_level_data[*vitr] == level) {
-            if (graph->degree(*vitr) > 0) ++local_count;
-          }
-        }
-
-        // Count the controllers!
-        graph_type::controller_iterator citr;
-        for (citr = graph->controller_begin();
-             citr != graph->controller_end();
-             ++citr) {
-          if (bfs_max_level_data[*citr] == level) {
-            if (graph->degree(*citr) > 0) ++local_count;
-          }
-        }
-
-        uint64_t global_count = mpi_all_reduce(local_count,
-                                               std::plus<uint64_t>(), MPI_COMM_WORLD);
-        visited_total += global_count;
-        if (mpi_rank == 0 && global_count > 0) {
-          std::cout << "Level " << level << ": " << global_count << std::endl;
-        }
-        // if (global_count == 0) {
-        //   break;
-        // }
-      }  // end for level
-
       if (mpi_rank == 0) {
-        if (visited_total > 1) {
-          std::cout
-            << "Visited total = " << visited_total << std::endl
-            << "BFS Time = " << time_end - time_start << std::endl;
-          time += time_end - time_start;
-          ++count;
-        }
+        std::cout << "kBFS_time\t" << time_end - time_start << std::endl;
       }
-      if (mpi_rank == 0) {
-        std::cout << "Count BFS = " << count << std::endl;
-        std::cout << "AVERAGE BFS = " << time / double(count) << std::endl;
-      }
-//
-//      {
-//        std::vector<size_t> local_count(100, 0);
-//        for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
-//          auto vector = bfs_max_level_data[*vitr];
-//          std::sort(vector.begin(), vector.end());
-//          auto itr = std::unique(vector.begin(), vector.end());
-//          if (vector[0] == std::numeric_limits<uint16_t>::max()) continue;
-//          ++local_count[std::distance(vector.begin(), itr)];
-//        }
-//
-//        if (mpi_rank == 0) std::cout << "num_appearance\tcount" << std::endl;
-//        for (uint16_t i = 0; i < local_count.size(); ++i) {
-//          uint64_t global_sum = mpi_all_reduce(local_count[i], std::plus<uint64_t>(), MPI_COMM_WORLD);
-//          if (mpi_rank == 0) {
-//            std::cout << i << "\t" << global_sum << std::endl;
-//          }
-//        }
-//      }
 
-    }  // End BFS Test
+    }  // End BFS
   }  // END Main MPI
   havoqgt::havoqgt_finalize();
 

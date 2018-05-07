@@ -93,12 +93,12 @@ elif [ "${tag}" == "ds_fix" ]; then
 elif [ "${tag}" == "ds_fix_tree" ]; then
     option="export USE_DS_FIX=1; export USE_TREE=1"
     source_selection_algorithms=""
-elif [ "${tag}" == "ds_fix_ms_tree" ]; then
-    option="export USE_DS_FIX=1; export USE_DS_FIX_MS=1; export USE_TREE=1"
+elif [ "${tag}" == "ds_fix_ms" ]; then
+    option="export USE_DS_FIX=1; export USE_DS_FIX_MS=1"
     source_selection_algorithms=""
-elif [ "${tag}" == "ds_adp" ]; then
+elif [ "${tag}" == "ds_adp_ms" ]; then
     option="export USE_DS_ADP=1"
-    source_selection_algorithms="-a 0:1:2:3:4:5"
+    source_selection_algorithms="-a 0:1:2:3:4:5:6"
 elif [ "${tag}" == "ds_adp_ms_tree" ]; then
     option="export USE_DS_ADP=1; export USE_TREE=1"
     source_selection_algorithms="-a 0:1:2:3:4:5:6"
