@@ -633,7 +633,7 @@ class exact_eccentricity {
 
   source_info_t select_source_by_take_algorithm(const std::function<bool(const vertex_locator_t)> &is_candidate) {
 
-    std::vector<std::function<uint64_t(const vertex_locator_t)>> source_selection_strategy(3);
+    std::vector<std::function<uint64_t(const vertex_locator_t)>> source_selection_strategy(2);
 
     if (m_progress_info.iteration_no % 2 == 0)
       source_selection_strategy[0] = [this](const vertex_locator_t vertex) -> uint64_t {
