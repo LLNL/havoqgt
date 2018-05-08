@@ -273,6 +273,24 @@ int main(int argc, char **argv)
     }
 
     // -------------------------------------------------------------------------------------------------------------- //
+    //                                        Touch graph
+    // -------------------------------------------------------------------------------------------------------------- //
+    {
+      if (mpi_rank == 0) std::cout << "Touching graph" << std::endl;
+      size_t sum = 0;
+      for (auto itr = graph->vertices_begin(), end = graph->vertices_end();
+          itr != end; ++itr) {
+        sum += graph->degree(*itr);
+      }
+      for (auto itr = graph->controller_begin(), end = graph->controller_end();
+           itr != end; ++itr) {
+        sum += graph->degree(*itr);
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+      if (mpi_rank == 0) std::cout << "Touching graph done" << std::endl;
+    }
+
+    // -------------------------------------------------------------------------------------------------------------- //
     //                                        Compute exact ecc
     // -------------------------------------------------------------------------------------------------------------- //
     exact_eccentricity_t eeec(*graph, use_algorithm);

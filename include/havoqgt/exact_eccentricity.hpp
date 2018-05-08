@@ -273,17 +273,23 @@ class exact_eccentricity {
           if (m_progress_info.iteration_no == 0) {
             new_source_info = select_initial_source_by_degree();
           } else if (m_progress_info.num_unsolved <= k_num_sources) {
-            new_source_info = select_all_left_sources();
+            new_source_info = select_left_sources(m_progress_info.num_unsolved);
           } else {
             new_source_info = select_source_by_double_sweep_fixed();
+          }
+          if (m_progress_info.num_unsolved > 0 && new_source_info.num_source() == 0) {
+            new_source_info = select_left_sources(std::min(m_progress_info.num_unsolved, (size_t)k_num_sources));
           }
         } else if (use_ds_adp) {
           if (m_progress_info.iteration_no == 0) {
             new_source_info = select_initial_source_by_degree();
           } else if (m_progress_info.num_unsolved <= k_num_sources) {
-            new_source_info = select_all_left_sources();
+            new_source_info = select_left_sources(m_progress_info.num_unsolved);
           } else {
             new_source_info = select_source_by_double_sweep_adptive();
+          }
+          if (m_progress_info.num_unsolved > 0 && new_source_info.num_source() == 0) {
+            new_source_info = select_left_sources(std::min(m_progress_info.num_unsolved, (size_t)k_num_sources));
           }
         } else {
           if (mpi_comm_rank() == 0)
@@ -656,14 +662,14 @@ class exact_eccentricity {
     return new_source_info;
   }
 
-// ---------------------------------------- select_all_left_sources ---------------------------------------- //
-  source_info_t select_all_left_sources() {
+// ---------------------------------------- select_left_sources ---------------------------------------- //
+  source_info_t select_left_sources(const size_t max_num_to_select) {
     const auto is_candidate = [this](const vertex_locator_t &vertex) -> bool {
       return m_kbfs.vertex_data().visited_by(vertex, 0)
           && (m_ecc_vertex_data.lower(vertex) != m_ecc_vertex_data.upper(vertex));
     };
 
-    auto source_candidate_list = select_source(m_progress_info.num_unsolved,
+    auto source_candidate_list = select_source(max_num_to_select,
                                                is_candidate,
                                                {[this](const vertex_locator_t vertex) -> uint64_t {
                                                  return degree_score(vertex);
