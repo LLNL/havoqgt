@@ -1076,7 +1076,6 @@ class exact_eccentricity {
       } else {
         if (lower == upper) {
           m_ecc_vertex_data.just_solved_status(*vitr) = ecc_vertex_data_t::k_bound;
-          ++num_solved;
 
           // ----- Compute contribution score ----- //
           for (size_t k = 0; k < m_source_info.num_source(); ++k) {
