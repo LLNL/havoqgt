@@ -463,6 +463,11 @@ class exact_eccentricity {
         ofs << m_graph.locator_to_label(*vitr) << " " << m_ecc_vertex_data.lower(*vitr) << "\n";
     }
 
+    for (auto vitr = m_graph.controller_begin(), end = m_graph.controller_end(); vitr != end; ++vitr) {
+      if (m_kbfs.vertex_data().visited_by(*vitr, 0))
+        ofs << m_graph.locator_to_label(*vitr) << " " << m_ecc_vertex_data.lower(*vitr) << "\n";
+    }
+
     ofs.close();
   }
 

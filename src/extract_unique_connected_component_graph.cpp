@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
  * Produced at the Lawrence Livermore National Laboratory.
  * Written by Roger Pearce <rpearce@llnl.gov>.
@@ -211,12 +211,9 @@ int main(int argc, char **argv) {
       std::cout << "Open " << f << std::endl;
       if (!ifs.is_open()) std::abort();
 
-      for (std::string line; std::getline(ifs, line);) {
-        std::istrstream is(line.c_str());
-
-        uint64_t src;
-        uint64_t dst;
-        is >> src >> dst;
+      uint64_t src;
+      uint64_t dst;
+      while (ifs >> src >> dst) {
 
         if (src == dst) {
           ++count_self_loop_edges;
@@ -258,12 +255,9 @@ int main(int argc, char **argv) {
     std::cout << "Open " << f << std::endl;
     if (!ifs.is_open()) std::abort();
 
-    for (std::string line; std::getline(ifs, line);) {
-      std::istrstream is(line.c_str());
-
-      uint64_t src;
-      uint64_t dst;
-      is >> src >> dst;
+    uint64_t src;
+    uint64_t dst;
+    while (ifs >> src >> dst) {
 
       if (src == dst) continue;
 
@@ -282,7 +276,7 @@ int main(int argc, char **argv) {
   assert(count_edges * 2 == std::accumulate(num_edges.begin(), num_edges.end(), 0ULL));
   std::cout << "Edge loading done" << std::endl;
   std::cout << "Actual max id: " << actual_max_vid << std::endl;
-  std::cout << "Edges: " << count_edges << std::endl;
+  std::cout << "Edges(w/o self loop): " << count_edges << std::endl;
   num_edges.resize(0);
   print_time();
 
@@ -305,6 +299,10 @@ int main(int argc, char **argv) {
     auto const pos = edge_list_file[i].find_last_of('/');
     const auto fname = edge_list_file[i].substr(pos); // will return something "/xxx" if the input is "/aa/bb/xxx"
     std::ofstream ofs(out_path + fname);
+    if (!ofs.is_open()) {
+      std::cout << "Can not open" << out_path + fname << std::endl;
+      std::abort();
+    }
 
     vid_t start;
     vid_t end;
