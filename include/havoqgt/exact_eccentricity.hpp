@@ -226,6 +226,12 @@ class exact_eccentricity {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
+    if (!use_hanging_tree) {
+      if (mpi_rank == 0)
+        std::cout << "!!!! skip " << __FUNCTION__ << std::endl;
+      return;
+    }
+
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
       std::cerr << "Can not open " << path << std::endl;
