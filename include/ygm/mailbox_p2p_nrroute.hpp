@@ -1,5 +1,5 @@
-#include <YGM/comm_exchanger.hpp>
-#include <YGM/mpi.hpp>
+#include <ygm/comm_exchanger.hpp>
+#include <ygm/mpi.hpp>
 
 #include <assert.h>
 #include <stdint.h>
