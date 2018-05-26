@@ -173,7 +173,7 @@ void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
   }
    
   auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(&g, alg_data);
-  vq.init_visitor_traversal_new();
+  vq.init_visitor_traversal();
   next_rank.all_reduce();
 }
 

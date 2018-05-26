@@ -583,7 +583,7 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
     {
       auto alg_data = std::forward_as_tuple(core2_degree, core2_alive);
       auto vq = create_visitor_queue<core2_visitor<graph_type>, lifo_queue>(&g, alg_data);
-      vq.init_visitor_traversal_new();
+      vq.init_visitor_traversal();
     }
     double end_time = MPI_Wtime();
     if(mpi_rank == 0) {
@@ -608,7 +608,7 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
   {
     auto alg_data = std::forward_as_tuple(core2_degree, core2_directed, g);
     auto vq = create_visitor_queue<directed_core2<graph_type>, lifo_queue>(&g, alg_data);
-    vq.init_visitor_traversal_new();
+    vq.init_visitor_traversal();
   }
   double end_time = MPI_Wtime();
   if(mpi_rank == 0) {
@@ -729,7 +729,7 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
   {
     auto alg_data = std::forward_as_tuple(core2_directed, local_triangle_count, local_wedge_count/*, count_wedges_created, count_wedges_checked, count_triangles_found*/);
     auto vq = create_visitor_queue<core2_wedges<graph_type>, lifo_queue>(&g, alg_data);
-    vq.init_visitor_traversal_new();
+    vq.init_visitor_traversal();
   }
   MPI_Barrier(MPI_COMM_WORLD);
   double end_time = MPI_Wtime();
