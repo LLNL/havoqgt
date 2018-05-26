@@ -57,7 +57,7 @@
 #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/reservable_priority_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
-#include <ygm/mailbox_atav_noroute.hpp>
+#include <ygm/mailbox_p2p_noroute.hpp>
 #include <vector>
 #include <iterator>
 #include <sched.h>
@@ -87,16 +87,24 @@ class visitor_queue {
     visitor_queue* m_vq;
   };
 
-  typedef mailbox_atav_noroute<visitor_type,mailbox_recv> mailbox_type;
+  typedef mailbox_p2p_noroute<visitor_type,mailbox_recv> mailbox_type;
 
 
 public:
   visitor_queue(TGraph* _graph, AlgData& _alg_data)
     : m_ptr_graph(_graph)
     , m_alg_data(_alg_data) {
-      m_p_mailbox = new mailbox_type(mailbox_recv(this),1024*1024);
+      char* env_batch = getenv("YGM_BATCH_SIZE");
+      int ygm_batch = 1024*1024;
+      if(env_batch != NULL) {
+        ygm_batch = atoi(env_batch);
+      }
       m_world_rank = havoqgt_env()->world_comm().rank();
       m_world_size = havoqgt_env()->world_comm().size();
+      if(m_world_rank == 0) {
+        std::cout << "YGM_BATCH_SIZE = " << ygm_batch << std::endl;
+      }
+      m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch);
   }
 
   ~visitor_queue() {
