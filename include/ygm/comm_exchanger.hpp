@@ -18,9 +18,9 @@ class comm_exchanger {
   }
 
   void queue(int rank, const MSG &msg) {
-    if (m_local_count == 0) {
-      init_recv_counts();
-    }
+    //if (m_local_count == 0) {
+    //  init_recv_counts();
+    //}
     ++m_local_count;
     m_vec_send[rank].push_back(msg);
   }
