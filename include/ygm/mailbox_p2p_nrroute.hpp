@@ -66,7 +66,7 @@ class mailbox_p2p_nrroute {
   }
 
   void send_bcast(Data data) {
-    std::cout << "send_bcast" << std::endl;
+    //std::cout << "send_bcast" << std::endl;
     for (uint32_t i = 0; i < m_remote_size; i++) {
       if (i == m_remote_rank) continue;
       m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
@@ -107,8 +107,8 @@ class mailbox_p2p_nrroute {
     //std::cout << "Rank " << m_mpi_rank << ": do_exchange() first total = " << total << std::endl;
     total += m_local_exchanger.exchange(
         [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
-    if(m_mpi_rank == 0)
-      std::cout << "Rank " << m_mpi_rank << ": do_exchange() = " << total << std::endl;
+    //if(m_mpi_rank == 0)
+    //  std::cout << "Rank " << m_mpi_rank << ": do_exchange() = " << total << std::endl;
 
     m_send_count = 0;
     return total;
