@@ -372,7 +372,7 @@ private:
 
 
   bool empty() {
-    return m_localqueue_owned.empty() && m_localqueue_delegates.empty();
+    return m_localqueue_owned.empty() && m_localqueue_delegates.empty() && m_local_controller_queue.empty();
   }
 
 /*  void init_visitor_traversal() {

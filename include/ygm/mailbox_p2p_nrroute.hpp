@@ -63,23 +63,21 @@ class mailbox_p2p_nrroute {
   }
 
   void send_bcast(Data data) {
+    std::cout << "send_bcast" << std::endl;
     for (uint32_t i = 0; i < m_remote_size; i++) {
-      if (i == m_remote_rank) {
-        for (uint32_t j = 0; j < m_local_size; j++) {
-          if (j == m_local_rank) continue;
-          m_local_exchanger.queue(
-              j, message{1, 0, j, uint32_t(m_remote_rank), data});
-          ++m_send_count;
-        }
-        continue;
-      }
-      m_remote_exchanger.queue(i,
-                               message{1, 0, uint32_t(m_local_rank), i, data});
-      ++m_send_count >= m_batch_size;
+      if (i == m_remote_rank) continue;
+      m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
+      ++m_send_count;
     }
+    for (uint32_t j = 0; j < m_local_size; j++) {
+      if (j == m_local_rank) continue;
+      m_local_exchanger.queue(j, message{1, 0, 0, 0, data});
+      ++m_send_count;
+    }
+
     if(m_send_count >= m_batch_size) do_exchange();
     // bcast to self
-    m_recv_func(true,data);
+    //m_recv_func(true,data);
   }
 
   bool global_empty() { return do_exchange() == 0; }
@@ -90,16 +88,13 @@ class mailbox_p2p_nrroute {
     m_total_sent += m_send_count;
     m_send_count = 0;
     uint64_t total = m_remote_exchanger.exchange([&](const message &msg) {
-      if (msg.local == m_local_rank && msg.node == m_remote_rank) {
-        // we are the destination
-        if (msg.bcast) {
-          for (uint32_t i = 0; i < m_local_size; i++) {
-            if (i == m_local_rank) continue;
-            m_local_exchanger.queue(
-                i, message{1, 0, i, uint32_t(m_remote_rank), msg.data});
-          }
+      if (msg.bcast) {
+        for (uint32_t i = 0; i < m_local_size; i++) {
+          if (i == m_local_rank) m_recv_func(msg.bcast, msg.data);
+          m_local_exchanger.queue(i, message{1, 0, 0, 0, msg.data});
         }
-        // retire the message
+      } else if (msg.local == m_local_rank && msg.node == m_remote_rank) {
+        // we are the destination
         m_recv_func(msg.bcast, msg.data);
       } else {
         // forwarding with local exchange
