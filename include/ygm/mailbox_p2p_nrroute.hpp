@@ -104,6 +104,7 @@ class mailbox_p2p_nrroute {
         m_local_exchanger.queue(msg.local, msg);
       }
     });
+    std::cout << "Rank " << m_mpi_rank << ": do_exchange() first total = " << total << std::endl;
     total += m_local_exchanger.exchange(
         [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
     std::cout << "Rank " << m_mpi_rank << ": do_exchange() = " << total << std::endl;
