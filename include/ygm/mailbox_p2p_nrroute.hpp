@@ -37,6 +37,9 @@ class mailbox_p2p_nrroute {
     CHK_MPI(MPI_Comm_rank(m_local_comm, &m_local_rank));
     CHK_MPI(MPI_Comm_size(m_remote_comm, &m_remote_size));
     CHK_MPI(MPI_Comm_rank(m_remote_comm, &m_remote_rank));
+    if(m_mpi_rank == 0) {
+      std::cout << "m_local_size = " << m_local_size << ", m_remote_size = " << m_remote_size << std::endl;
+    }
   }
 
   ~mailbox_p2p_nrroute() {
