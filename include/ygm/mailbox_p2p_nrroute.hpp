@@ -90,7 +90,6 @@ class mailbox_p2p_nrroute {
   uint64_t do_exchange() {
     m_count_exchanges++;
     m_total_sent += m_send_count;
-    m_send_count = 0;
     uint64_t total = m_remote_exchanger.exchange([&](const message &msg) {
       if (msg.bcast) {
         for (uint32_t i = 0; i < m_local_size; i++) {
@@ -110,6 +109,8 @@ class mailbox_p2p_nrroute {
         [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
     if(m_mpi_rank == 0)
       std::cout << "Rank " << m_mpi_rank << ": do_exchange() = " << total << std::endl;
+
+    m_send_count = 0;
     return total;
   }
  
