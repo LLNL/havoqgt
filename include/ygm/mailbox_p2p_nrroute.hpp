@@ -106,6 +106,7 @@ class mailbox_p2p_nrroute {
     });
     total += m_local_exchanger.exchange(
         [&](const message &msg) { m_recv_func(msg.bcast, msg.data); });
+    if(m_mpi_rank == 0) {std::cout << "do_exchange() = " << total << std::endl;}
     return total;
   }
 
