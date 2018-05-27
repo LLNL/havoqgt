@@ -7,7 +7,7 @@
 
 template <typename MSG>
 class comm_exchanger {
-  using count_pair = std::pair<size_t, size_t>;
+  using count_pair = std::pair<uint64_t, uint64_t>;
 
  public:
   comm_exchanger(MPI_Comm comm, int tag)
@@ -26,10 +26,10 @@ class comm_exchanger {
   }
 
   // RETURNS:  Total exchange count of communicator
-  // WARNING:  Could optimzie not to send to self....   However, more general
+  // WARNING:  Could optimize not to send to self....   However, more general
   // this way....
   template <typename RecvHandlerFunc>
-  uint64_t exchange(RecvHandlerFunc recv_func, uint32_t extracount=0) {
+  uint64_t exchange(RecvHandlerFunc recv_func, uint64_t extracount=0) {
     init_recv_counts();
 
     std::deque<std::tuple<MPI_Request, MSG *, size_t>>
