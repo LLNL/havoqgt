@@ -88,7 +88,7 @@ class visitor_queue {
     visitor_queue* m_vq;
   };
 
-  typedef mailbox_p2p_noroute<visitor_type,mailbox_recv> mailbox_type;
+  typedef mailbox_p2p_nrroute<visitor_type,mailbox_recv> mailbox_type;
 
 
 public:
@@ -108,7 +108,7 @@ public:
       auto local_comm = build_node_local_comm();
       auto remote_comm = build_node_remote_comm(local_comm);
       auto bremote_comm = build_node_bremote_comm(local_comm);
-      m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch/*, local_comm, remote_comm*/);
+      m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch, local_comm, remote_comm);
   }
 
   ~visitor_queue() {

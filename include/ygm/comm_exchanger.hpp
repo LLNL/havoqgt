@@ -41,7 +41,7 @@ class comm_exchanger {
     for (int i = 0; i < m_comm_size; ++i) {
       count_pair to_send;
       to_send.first = m_vec_send[i].size();
-      to_send.second = m_local_count + extracount;
+      to_send.second = m_local_count + extracount;  //FIXME, should count this better
       CHK_MPI(
           MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, i, m_tag, m_comm));
     }
