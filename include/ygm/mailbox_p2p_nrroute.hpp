@@ -86,6 +86,7 @@ class mailbox_p2p_nrroute {
   bool global_empty() { return do_exchange() == 0; }
 
  private:
+  /// WARNING, this count return is kinda flaky, not good...
   uint64_t do_exchange() {
     m_count_exchanges++;
     m_total_sent += m_send_count;
@@ -103,7 +104,7 @@ class mailbox_p2p_nrroute {
         // forwarding with local exchange
         m_local_exchanger.queue(msg.local, msg);
       }
-    });
+    }, m_send_count);
     std::cout << "Rank " << m_mpi_rank << ": do_exchange() first total = " << total << std::endl;
     total += m_local_exchanger.exchange(
         [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
