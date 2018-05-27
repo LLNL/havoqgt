@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
   if (mpi_rank == 0) {
     std::cout << "Graph Loaded Ready." << std::endl;
   }
-  graph->print_graph_statistics();
+  //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
 
   uint64_t count = new_triangle_count(*graph, stat_filename.c_str());
