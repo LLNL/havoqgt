@@ -52,10 +52,13 @@ class mailbox_p2p_noroute {
     for (uint32_t i = 0; i < m_mpi_size; i++) {
       if (i == m_mpi_rank) continue;
       m_exchanger.queue(i, message{1, 0, i, data});
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
-      }
+      ++m_send_count;
     }
+    if (m_send_count >= m_batch_size) {
+      do_exchange();
+    }
+    // bcast to self
+    m_recv_func(true,data);
   }
 
   bool global_empty() { return do_exchange() == 0; }

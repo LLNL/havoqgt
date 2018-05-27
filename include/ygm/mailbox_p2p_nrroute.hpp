@@ -69,16 +69,17 @@ class mailbox_p2p_nrroute {
           if (j == m_local_rank) continue;
           m_local_exchanger.queue(
               j, message{1, 0, j, uint32_t(m_remote_rank), data});
-          if (++m_send_count >= m_batch_size) do_exchange();
+          ++m_send_count;
         }
         continue;
       }
       m_remote_exchanger.queue(i,
                                message{1, 0, uint32_t(m_local_rank), i, data});
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
-      }
+      ++m_send_count >= m_batch_size;
     }
+    if(m_send_count >= m_batch_size) do_exchange();
+    // bcast to self
+    m_recv_func(true,data);
   }
 
   bool global_empty() { return do_exchange() == 0; }
