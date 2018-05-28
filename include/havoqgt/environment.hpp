@@ -69,11 +69,11 @@ namespace havoqgt {
 class old_environment {
 public:
   old_environment() {
-    m_mailbox_num_irecv   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_IRECV", 8);
-    m_mailbox_num_isend   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_ISEND", 8);
-    m_mailbox_aggregation = get_env_var<uint32_t>("HAVOQGT_MAILBOX_AGGREGATION", 1024);
-    m_mailbox_tree_aggregation = get_env_var<uint32_t>("HAVOQGT_MAILBOX_TREE_AGGREGATION", 64);
-    m_mailbox_print_stats = get_env_var<bool>    ("HAVOQGT_MAILBOX_PRINT_STATS", false);
+    // m_mailbox_num_irecv   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_IRECV", 8);
+    // m_mailbox_num_isend   = get_env_var<uint32_t>("HAVOQGT_MAILBOX_NUM_ISEND", 8);
+    // m_mailbox_aggregation = get_env_var<uint32_t>("HAVOQGT_MAILBOX_AGGREGATION", 1024);
+    // m_mailbox_tree_aggregation = get_env_var<uint32_t>("HAVOQGT_MAILBOX_TREE_AGGREGATION", 64);
+    // m_mailbox_print_stats = get_env_var<bool>    ("HAVOQGT_MAILBOX_PRINT_STATS", false);
   }
 
   uint32_t mailbox_num_irecv()   const { return m_mailbox_num_irecv; }
@@ -97,11 +97,11 @@ private:
 
 inline void
 old_environment::print() const {
-  std::cout << "HAVOQGT_MAILBOX_NUM_IRECV        "<< " = " << m_mailbox_num_irecv << std::endl;
-  std::cout << "HAVOQGT_MAILBOX_NUM_ISEND        "<< " = " << m_mailbox_num_isend << std::endl;
-  std::cout << "HAVOQGT_MAILBOX_AGGREGATION      "<< " = " << m_mailbox_aggregation << std::endl;
-  std::cout << "HAVOQGT_MAILBOX_TREE_AGGREGATION "<< " = " << m_mailbox_tree_aggregation << std::endl;
-  std::cout << "HAVOQGT_MAILBOX_PRINT_STATS      "<< " = " << m_mailbox_print_stats << std::endl;
+  // std::cout << "HAVOQGT_MAILBOX_NUM_IRECV        "<< " = " << m_mailbox_num_irecv << std::endl;
+  // std::cout << "HAVOQGT_MAILBOX_NUM_ISEND        "<< " = " << m_mailbox_num_isend << std::endl;
+  // std::cout << "HAVOQGT_MAILBOX_AGGREGATION      "<< " = " << m_mailbox_aggregation << std::endl;
+  // std::cout << "HAVOQGT_MAILBOX_TREE_AGGREGATION "<< " = " << m_mailbox_tree_aggregation << std::endl;
+  // std::cout << "HAVOQGT_MAILBOX_PRINT_STATS      "<< " = " << m_mailbox_print_stats << std::endl;
 }
 
 template <typename T>
