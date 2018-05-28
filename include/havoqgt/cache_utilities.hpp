@@ -55,6 +55,9 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <assert.h>
+#include <stdio.h>
 
 template<typename Vector>
 char * get_address(Vector &vec) {
