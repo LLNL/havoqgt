@@ -67,6 +67,9 @@ class delegate_partitioned_graph<SegementManager>::vertex_iterator
   vertex_iterator& operator++();
   vertex_iterator operator++(int);
 
+  vertex_iterator& operator--();
+  vertex_iterator operator--(int);
+
   bool is_equal(const vertex_iterator& x) const;
 
   friend bool operator==(const vertex_iterator& x,
@@ -133,6 +136,27 @@ typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
 delegate_partitioned_graph<SegmentManager>::vertex_iterator::operator++(int) {
   vertex_iterator to_return = *this;
   ++m_owned_vert_index;
+  update_locator();
+  return to_return;
+}
+
+template <typename SegmentManager>
+inline
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator&
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::operator--() {
+  assert(m_owned_vert_index > 0);
+  --m_owned_vert_index;
+  update_locator();
+  return *this;
+}
+
+template <typename SegmentManager>
+inline
+typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
+delegate_partitioned_graph<SegmentManager>::vertex_iterator::operator--(int) {
+  assert(m_owned_vert_index > 0);
+  vertex_iterator to_return = *this;
+  --m_owned_vert_index;
   update_locator();
   return to_return;
 }

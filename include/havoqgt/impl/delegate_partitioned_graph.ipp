@@ -1805,11 +1805,17 @@ inline
 typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
 delegate_partitioned_graph<SegmentManager>::
 vertices_end() const {
+  //TODO:  Would better to stor the end, instead of recomputing each time...
   size_t last_index = m_owned_info.empty() ? 0 : m_owned_info.size()-1;
-  while(last_index > 1 && (m_owned_info[last_index-1].low_csr_idx == m_owned_info[last_index].low_csr_idx)) {
-    --last_index;
+  auto itr_to_return = vertex_iterator(last_index,this);
+  while(locator_to_label(*itr_to_return) > m_global_max_vertex) {
+    --itr_to_return; 
   }
-  return vertex_iterator(last_index,this);
+  //This approach has a bug if last/largest vertex is zero degree
+  //while(last_index > 1 && (m_owned_info[last_index-1].low_csr_idx == m_owned_info[last_index].low_csr_idx)) {
+  //  --last_index;
+  //}
+  return ++itr_to_return;
 }
 
 template <typename SegmentManager>

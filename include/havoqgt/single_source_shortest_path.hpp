@@ -128,14 +128,17 @@ public:
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {  
     if(m_path <= std::get<0>(alg_data)[vertex]) 
     {
+      std::stringstream line;
+      //line << "Visiting vertex: " << g.locator_to_label(vertex);
       typedef typename Graph::edge_iterator eitr_type;
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
         path_type weight = std::get<1>(alg_data)[eitr];
-        //std::cout << "Visiting neighbor: " << g.locator_to_label(neighbor) << std::endl;
+        //line << ", Sending to neighbor: " << g.locator_to_label(neighbor) << " dist = " << weight+m_path;
         sssp_visitor new_visitor( neighbor, weight + m_path);
         vis_queue->queue_visitor(new_visitor);
       }
+      //std::cout << line.str() << std::endl;
       return true;
     }
     return false;
