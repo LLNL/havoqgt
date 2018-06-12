@@ -1,5 +1,5 @@
-#include <comm_exchanger.hpp>
-#include <mpi.hpp>
+#include <ygm/comm_exchanger.hpp>
+#include <ygm/mpi.hpp>
 
 #include <assert.h>
 #include <stdint.h>
@@ -11,6 +11,7 @@
 
 using std::vector;
 
+namespace ygm {
 template <typename Data, typename RecvHandlerFunc>
 class mailbox_p2p_nlroute {
   struct message {
@@ -19,7 +20,7 @@ class mailbox_p2p_nlroute {
     uint32_t local : 6;
     uint32_t node : 24;  // Supports addressing <= 16777216 nodes w/ <= 64 cores
     Data     data;
-  } __attribute__((packed));
+  };  //__attribute__((packed));
 
  public:
   mailbox_p2p_nlroute(RecvHandlerFunc recv_func, size_t batch_size,
@@ -39,6 +40,12 @@ class mailbox_p2p_nlroute {
     CHK_MPI(MPI_Comm_rank(m_remote_comm, &m_remote_rank));
   }
 
+  ~mailbox_p2p_nlroute() {
+    if (m_mpi_rank == 0) {
+      std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
+    }
+  }
+
   void send(uint32_t dest, Data data) {
     if (dest == m_mpi_rank) {
       m_recv_func(false, data);
@@ -50,58 +57,55 @@ class mailbox_p2p_nlroute {
       } else {
         m_local_exchanger.queue(local, message{0, 0, local, node, data});
       }
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
-      }
+      if (++m_send_count >= m_batch_size) { do_exchange(); }
     }
   }
 
   void send_bcast(Data data) {
-    for (uint32_t i = 0; i < m_local_size; i++) {
-      if (i == m_local_rank) {
-        for (uint32_t j = 0; j < m_remote_size; j++) {
-          if (j == m_remote_rank) continue;
-          m_remote_exchanger.queue(
-              j, message{1, 0, uint32_t(m_local_rank), j, data});
-          if (++m_send_count >= m_batch_size) do_exchange();
-        }
-        continue;
-      }
-      m_local_exchanger.queue(i,
-                              message{1, 0, i, uint32_t(m_remote_rank), data});
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
-      }
+    for (uint32_t j = 0; j < m_local_size; j++) {
+      if (j == m_local_rank) continue;
+      m_local_exchanger.queue(j, message{1, 0, 0, 0, data});
+      ++m_send_count;
     }
+    for (uint32_t i = 0; i < m_remote_size; i++) {
+      if (i == m_remote_rank) continue;
+      m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
+      ++m_send_count;
+    }
+    if (m_send_count >= m_batch_size) do_exchange();
+    // bcast to self
+    // m_recv_func(true,data);
   }
 
-  bool global_empty() { return do_exchange(); }
+  bool global_empty() { return do_exchange() == 0; }
 
  private:
+  /// WARNING, this count return is kinda flaky, not good...
   uint64_t do_exchange() {
     m_count_exchanges++;
     m_total_sent += m_send_count;
-    m_send_count = 0;
     uint64_t total(0);
-    total += m_local_exchanger.exchange([&](const message &msg) {
-      if (msg.local == m_local_rank && msg.node == m_remote_rank) {
-        // we are the destination
-        if (msg.bcast) {
-          for (uint32_t i = 0; i < m_remote_size; i++) {
-            if (i == m_remote_rank) continue;
-            m_remote_exchanger.queue(
-                i, message{1, 0, uint32_t(m_local_rank), i, msg.data});
+    total += m_local_exchanger.exchange(
+        [&](const message &msg) {
+          if (msg.bcast) {
+            for (uint32_t i = 0; i < m_remote_size; i++) {
+              if (i == m_remote_rank)
+                m_recv_func(msg.bcast, msg.data);
+              else
+                m_remote_exchanger.queue(i, msg);
+            }
+          } else if (msg.local == m_local_rank && msg.node == m_remote_rank) {
+            // we are the destination
+            m_recv_func(msg.bcast, msg.data);
+          } else {
+            // forwarding within remote exchange
+            m_remote_exchanger.queue(msg.node, msg);
           }
-        }
-        // retire the message
-        m_recv_func(msg.bcast, msg.data);
-      } else {
-        // forwarding with remote exchange
-        m_remote_exchanger.queue(msg.node, msg);
-      }
-    });
+        },
+        m_send_count);
     total += m_remote_exchanger.exchange(
-        [&](const message &msg) { m_recv_func(msg.bcast, msg.data); });
+        [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
+    m_send_count = 0;
     return total;
   }
 
@@ -135,3 +139,4 @@ class mailbox_p2p_nlroute {
   //     return vm;
   //   }
 };
+}  // namespace ygm

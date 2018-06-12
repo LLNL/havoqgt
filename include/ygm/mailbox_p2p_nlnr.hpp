@@ -11,6 +11,7 @@
 
 using std::vector;
 
+namespace ygm {
 template <typename Data, typename RecvHandlerFunc>
 class mailbox_p2p_nlnr {
   struct message {
@@ -19,7 +20,7 @@ class mailbox_p2p_nlnr {
     uint32_t local : 6;
     uint32_t node : 24;  // Supports addressing <= 16777216 nodes w/ <= 64 cores
     Data     data;
-  };
+  };  //__attribute__((packed));
 
  public:
   mailbox_p2p_nlnr(RecvHandlerFunc recv_func, size_t batch_size,
@@ -43,8 +44,8 @@ class mailbox_p2p_nlnr {
     m_parity = m_remote_rank & 1;
   }
 
-    ~mailbox_p2p_nlnr() {
-    if(m_mpi_rank == 0) {
+  ~mailbox_p2p_nlnr() {
+    if (m_mpi_rank == 0) {
       std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     }
   }
@@ -80,67 +81,74 @@ class mailbox_p2p_nlnr {
 
   // Verify that node/core address is not needed.
   void send_bcast(Data data) {
-    for (uint32_t i = 0; i < m_local_size; i++) {
-      if (i == m_local_rank) {
-        for (uint32_t j = 0; j < m_remote_size; j++) {
-          if (j == m_remote_rank) continue;
-          if ((m_local_rank != m_layer_rank && (m_parity == (j & 1)))) continue;
-          m_remote_exchanger.queue(j, message{1, 0, 0, 0, data});
-          if (++m_send_count >= m_batch_size) do_exchange();
-        }
-        continue;
-      }
-      m_first_local_exchanger.queue(i, message{1, 0, 0, 0, data});
-      if (++m_send_count >= m_batch_size) do_exchange();
+    for (uint32_t j = 0; j < m_local_size; j++) {
+      if (j == m_local_rank) continue;
+      m_first_local_exchanger.queue(j, message{1, 0, 0, 0, data});
+      ++m_send_count;
     }
+    for (uint32_t i = 0; i < m_remote_size; i++) {
+      if (i == m_remote_rank) continue;
+      if (m_local_rank != m_layer_rank && m_parity == (i & 1)) continue;
+      m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
+      ++m_send_count;
+    }
+    if (m_send_count >= m_batch_size) do_exchange();
+    // bcast to self
+    // m_recv_func(true,data);
   }
 
   bool global_empty() { return do_exchange() == 0; }
 
  private:
+  /// WARNING, this count return is kinda flaky, not good...
   uint64_t do_exchange() {
     m_count_exchanges++;
     m_total_sent += m_send_count;
-    m_send_count = 0;
     uint64_t total(0);
     // first local exchange
-    total += m_first_local_exchanger.exchange([&](const message &msg) {
-      if (msg.bcast) {
-        for (uint32_t i = 0; i < m_remote_size; i++) {
-          if (i == m_remote_rank) continue;
-          if ((m_local_rank != m_layer_rank && (m_parity == (i & 1)))) continue;
-          m_remote_exchanger.queue(i, msg);
-        }
-        m_recv_func(msg.bcast, msg.data);
-      } else {
-        // !!! right now, msg.node holds the remote id, not the node id !!!
-        m_remote_exchanger.queue(msg.node, msg);
-      }
-    });
+    total += m_first_local_exchanger.exchange(
+        [&](const message &msg) {
+          if (msg.bcast) {
+            for (uint32_t i = 0; i < m_remote_size; i++) {
+              if (i == m_remote_rank)
+                m_recv_func(msg.bcast, msg.data);
+              else if (m_local_rank == m_layer_rank || m_parity != (i & 1))
+                m_remote_exchanger.queue(i, msg);
+            }
+          } else {
+            // !!! right now, msg.node holds the remote id, not the node id !!!
+            m_remote_exchanger.queue(msg.node, msg);
+          }
+        },
+        m_send_count);
     // remote exchange
-    total += m_remote_exchanger.exchange([&](const message &msg) {
-      if (msg.bcast) {
-        for (uint32_t i = 0; i < m_local_size; i++) {
-          if (i == m_local_rank) continue;
-          m_second_local_exchanger.queue(i, msg);
-        }
-        m_recv_func(msg.bcast, msg.data);
-      } else {
-        if (msg.local == m_local_rank) {
-          m_recv_func(msg.bcast, msg.data);
-        } else {
-          // right now not modifying the msg's fields. Will probably need to do
-          // this in a general implementation.
-          m_second_local_exchanger.queue(msg.local, msg);
-          // m_second_local_exchanger.queue(msg.local,
-          //                                msg{0, 0, msg.local, m_node_rank,
-          //                                msg.data});
-        }
-      }
-    });
+    total += m_remote_exchanger.exchange(
+        [&](const message &msg) {
+          if (msg.bcast) {
+            for (uint32_t i = 0; i < m_local_size; i++) {
+              if (i == m_local_rank)
+                m_recv_func(msg.bcast, msg.data);
+              else
+                m_second_local_exchanger.queue(i, msg);
+            }
+          } else {
+            if (msg.local == m_local_rank) {
+              m_recv_func(msg.bcast, msg.data);
+            } else {
+              // right now not modifying the msg's fields. Will probably need to
+              // do this in a general implementation.
+              m_second_local_exchanger.queue(msg.local, msg);
+              // m_second_local_exchanger.queue(msg.local,
+              //                                msg{0, 0, msg.local,
+              //                                m_node_rank, msg.data});
+            }
+          }
+        },
+        m_send_count);
     // second local exchange
     total += m_second_local_exchanger.exchange(
-        [&](const message &msg) { m_recv_func(msg.bcast, msg.data); });
+        [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
+    m_send_count = 0;
     return total;
   }
 
@@ -178,3 +186,4 @@ class mailbox_p2p_nlnr {
   //     return vm;
   //   }
 };
+}  // namespace ygm

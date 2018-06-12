@@ -64,15 +64,17 @@
 #include <numeric>
 #include <stdint.h>
 
+#include <ygm/mpi.hpp>
 
-#define CHK_MPI(a) { if (a != MPI_SUCCESS) {\
-                      char* error_string = NULL; \
-                      int len = 0; \
-                      MPI_Error_string(a, error_string, &len); \
-                      std::cerr << __FILE__ << ", line " << __LINE__  \
-                           <<" MPI ERROR = " << error_string << std::endl; \
-                           exit(-1); \
-                     } }
+
+// #define CHK_MPI(a) { if (a != MPI_SUCCESS) {\
+//                       char* error_string = NULL; \
+//                       int len = 0; \
+//                       MPI_Error_string(a, error_string, &len); \
+//                       std::cerr << __FILE__ << ", line " << __LINE__  \
+//                            <<" MPI ERROR = " << error_string << std::endl; \
+//                            exit(-1); \
+//                      } }
 
 
 namespace havoqgt {

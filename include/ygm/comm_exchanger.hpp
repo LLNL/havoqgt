@@ -5,9 +5,11 @@
 #include <tuple>
 #include <vector>
 
+namespace ygm {
+
 template <typename MSG>
 class comm_exchanger {
-  using count_pair = std::pair<uint64_t, uint64_t>;
+  using count_pair = std::pair<size_t, size_t>;
 
  public:
   comm_exchanger(MPI_Comm comm, int tag)
@@ -18,18 +20,16 @@ class comm_exchanger {
   }
 
   void queue(int rank, const MSG &msg) {
-    //if (m_local_count == 0) {
-    //  init_recv_counts();
-    //}
+    // if (m_local_count == 0) { init_recv_counts(); }
     ++m_local_count;
     m_vec_send[rank].push_back(msg);
   }
 
   // RETURNS:  Total exchange count of communicator
-  // WARNING:  Could optimize not to send to self....   However, more general
+  // WARNING:  Could optimzie not to send to self....   However, more general
   // this way....
   template <typename RecvHandlerFunc>
-  uint64_t exchange(RecvHandlerFunc recv_func, uint64_t extracount=0) {
+  uint64_t exchange(RecvHandlerFunc recv_func, uint64_t extracount = 0) {
     init_recv_counts();
 
     std::deque<std::tuple<MPI_Request, MSG *, size_t>>
@@ -41,7 +41,8 @@ class comm_exchanger {
     for (int i = 0; i < m_comm_size; ++i) {
       count_pair to_send;
       to_send.first = m_vec_send[i].size();
-      to_send.second = m_local_count + extracount;  //FIXME, should count this better
+      to_send.second =
+          m_local_count + extracount;  // FIXME, should count this better
       CHK_MPI(
           MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, i, m_tag, m_comm));
     }
@@ -95,9 +96,7 @@ class comm_exchanger {
         if (flag) {
           MSG *  recvbuff = std::get<1>(req_tuple);
           size_t recv_size = std::get<2>(req_tuple) / sizeof(MSG);
-          for (size_t i = 0; i < recv_size; ++i) {
-            recv_func(recvbuff[i]);
-          }
+          for (size_t i = 0; i < recv_size; ++i) { recv_func(recvbuff[i]); }
           free(recvbuff);
         } else {
           q_req_irecv_data.push_back(req_tuple);
@@ -112,9 +111,7 @@ class comm_exchanger {
     }
 
     // clear send queues
-    for (size_t i = 0; i < m_vec_send.size(); ++i) {
-      m_vec_send[i].clear();
-    }
+    for (size_t i = 0; i < m_vec_send.size(); ++i) { m_vec_send[i].clear(); }
     m_local_count = 0;
 
     return to_return;
@@ -149,3 +146,4 @@ class comm_exchanger {
   std::vector<count_pair>                 m_vec_recv_counts;
   std::deque<std::pair<MPI_Request, int>> m_req_irecv_counts;  // req, rank
 };
+}  // namespace ygm

@@ -11,6 +11,7 @@
 
 using std::vector;
 
+namespace ygm {
 template <typename Data, typename RecvHandlerFunc>
 class mailbox_p2p_noroute {
   struct message {
@@ -18,21 +19,21 @@ class mailbox_p2p_noroute {
     uint32_t interrupt : 1;
     uint32_t dest : 30;
     Data     data;
-  };
+  };  //__attribute__((packed));
 
  public:
-  mailbox_p2p_noroute(RecvHandlerFunc recv_func, size_t batch_size)
+  mailbox_p2p_noroute(RecvHandlerFunc recv_func, size_t batch_size,
+                      MPI_Comm local_comm, MPI_Comm remote_comm)
       : m_recv_func(recv_func),
         m_batch_size(batch_size),
         m_max_alloc(0),
         m_exchanger(MPI_COMM_WORLD, 1) {  // should change tag eventually
     CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size));
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
-    // CHK_MPI(MPI_Comm_size(local_comm, &m_local_size));
   }
 
   ~mailbox_p2p_noroute() {
-    if(m_mpi_rank == 0) {
+    if (m_mpi_rank == 0) {
       std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     }
   }
@@ -42,9 +43,7 @@ class mailbox_p2p_noroute {
       m_recv_func(false, data);
     } else {
       m_exchanger.queue(dest, message{0, 0, dest, data});
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
-      }
+      if (++m_send_count >= m_batch_size) { do_exchange(); }
     }
   }
 
@@ -54,11 +53,9 @@ class mailbox_p2p_noroute {
       m_exchanger.queue(i, message{1, 0, i, data});
       ++m_send_count;
     }
-    if (m_send_count >= m_batch_size) {
-      do_exchange();
-    }
+    if (m_send_count >= m_batch_size) { do_exchange(); }
     // bcast to self
-    m_recv_func(true,data);
+    // m_recv_func(true, data);
   }
 
   bool global_empty() { return do_exchange() == 0; }
@@ -95,3 +92,4 @@ class mailbox_p2p_noroute {
   //     return vm;
   //   }
 };
+}  // namespace ygm

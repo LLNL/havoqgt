@@ -6,17 +6,19 @@
 #include <unistd.h>
 #include <iostream>
 
-// #define CHK_MPI(a)                                               \
-//   {                                                              \
-//     if (a != MPI_SUCCESS) {                                      \
-//       char *error_string = NULL;                                 \
-//       int len = 0;                                               \
-//       MPI_Error_string(a, error_string, &len);                   \
-//       std::cerr << __FILE__ << ", line " << __LINE__             \
-//                 << " MPI ERROR = " << error_string << std::endl; \
-//       exit(-1);                                                  \
-//     }                                                            \
-//   }
+#define CHK_MPI(a)                                               \
+  {                                                              \
+    if (a != MPI_SUCCESS) {                                      \
+      char *error_string = NULL;                                 \
+      int   len = 0;                                             \
+      MPI_Error_string(a, error_string, &len);                   \
+      std::cerr << __FILE__ << ", line " << __LINE__             \
+                << " MPI ERROR = " << error_string << std::endl; \
+      exit(-1);                                                  \
+    }                                                            \
+  }
+
+namespace ygm {
 
 /// @warning  This algorithm is O(P) because its general purpose.   Could be
 ///           Specialized to improve performance.
@@ -28,8 +30,8 @@ inline MPI_Comm build_node_local_comm() {
 
   MPI_Comm local_comm;
 
-  int min_shm_rank = -1;
-  int shm_com_size = 0;
+  int         min_shm_rank = -1;
+  int         shm_com_size = 0;
   const char *shm_name = "build_node_local_comm";
   shm_unlink(shm_name);
   CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
@@ -42,9 +44,9 @@ inline MPI_Comm build_node_local_comm() {
                        MPI_STATUS_IGNORE));
       // std::cout << "Rank " << mpi_rank << " Ready" << std::endl;
     }
-    int shm_fd = -1;
+    int       shm_fd = -1;
     const int shm_size = 4096;
-    bool this_rank_created = false;
+    bool      this_rank_created = false;
 
     shm_fd = shm_open(shm_name, O_RDWR, 0666);
     if (shm_fd == -1) {
@@ -125,7 +127,7 @@ inline MPI_Comm build_node_remote_comm(MPI_Comm local_comm) {
   CHK_MPI(MPI_Comm_rank(local_comm, &remote_color));
 
   MPI_Comm remote_comm;
-  int key = mpi_rank;
+  int      key = mpi_rank;
   CHK_MPI(MPI_Comm_split(MPI_COMM_WORLD, remote_color, key, &remote_comm));
 
   return remote_comm;
@@ -141,7 +143,7 @@ inline MPI_Comm build_node_bremote_comm(MPI_Comm local_comm) {
 
   int color = std::max(local_offset, node_offset) * local_size +
               std::min(local_offset, node_offset);
-  int key = mpi_rank;
+  int      key = mpi_rank;
   MPI_Comm bremote_comm;
 
   // std::cout << "Rank = " << mpi_rank << " color = " << color
@@ -155,3 +157,4 @@ inline MPI_Comm build_node_bremote_comm(MPI_Comm local_comm) {
 
   return bremote_comm;
 }
+}  // namespace ygm

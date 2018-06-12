@@ -88,7 +88,7 @@ class visitor_queue {
     visitor_queue* m_vq;
   };
 
-  typedef mailbox_p2p_nrroute<visitor_type,mailbox_recv> mailbox_type;
+  typedef ygm::mailbox_p2p_nrroute<visitor_type,mailbox_recv> mailbox_type;
 
 
 public:
@@ -105,9 +105,9 @@ public:
       if(m_world_rank == 0) {
         std::cout << "YGM_BATCH_SIZE = " << ygm_batch << std::endl;
       }
-      auto local_comm = build_node_local_comm();
-      auto remote_comm = build_node_remote_comm(local_comm);
-      auto bremote_comm = build_node_bremote_comm(local_comm);
+      auto local_comm = ygm::build_node_local_comm();
+      auto remote_comm = ygm::build_node_remote_comm(local_comm);
+      auto bremote_comm = ygm::build_node_bremote_comm(local_comm);
       m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch, local_comm, remote_comm);
   }
 
