@@ -61,7 +61,7 @@
 #include <stdint.h>
 #include <iostream>
 
-#include <havoqgt/environment.hpp>
+
 
 namespace havoqgt {
 
@@ -161,10 +161,10 @@ public:
   /// @todo Add undirected flag
   parallel_edge_list_reader(const std::vector< std::string >& filenames, bool undirected)
     : m_undirected(undirected) {
-    int shm_rank  = havoqgt_env()->node_local_comm().rank();
-    int shm_size  = havoqgt_env()->node_local_comm().size();
-    int node_rank = havoqgt_env()->node_offset_comm().rank();
-    int node_size = havoqgt_env()->node_offset_comm().size();
+    int shm_rank  = comm_nl().rank();
+    int shm_size  = comm_nl().size();
+    int node_rank = comm_nr().rank();
+    int node_size = comm_nr().size();
     m_local_edge_count = 0;
     m_global_max_vertex = 0;      
     m_has_edge_data = false;
@@ -178,7 +178,7 @@ public:
     }
 
     size_t global_num_files = mpi_all_reduce(m_local_filenames.size(), std::plus<size_t>(), MPI_COMM_WORLD);
-    if(havoqgt_env()->world_comm().rank() == 0) {
+    if(comm_world().rank() == 0) {
       std::cout << "Ingesting from " << global_num_files << " files." << std::endl;   
 
       // rank 0 reads the first input file and determines if edge data exists 

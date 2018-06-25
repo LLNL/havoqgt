@@ -49,7 +49,7 @@
  *
  */
 
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/triangle_count.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -76,12 +76,11 @@ int main(int argc, char** argv) {
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     std::cout << "CMD line:";
@@ -89,7 +88,6 @@ int main(int argc, char** argv) {
       std::cout << " " << argv[i];
     }
     std::cout << std::endl;
-    havoqgt::get_environment().print();
     //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -130,7 +128,7 @@ int main(int argc, char** argv) {
   }
 
   }  // END Main MPI
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }

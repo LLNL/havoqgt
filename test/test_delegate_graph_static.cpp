@@ -157,12 +157,11 @@ TEST(my_test, test_Delegate_Graph_Weighted_Edges_Verify_Delegates) {
 GTEST_API_ int main(int argc, char **argv) {
   // set up environment
   int mpi_rank(0), mpi_size(0), to_return;
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     //havoqgt::get_environment().print();
@@ -177,7 +176,7 @@ GTEST_API_ int main(int argc, char **argv) {
 
   // delete the generated files
 
-  havoqgt::havoqgt_finalize();
+  ;
 
   return to_return;
 }

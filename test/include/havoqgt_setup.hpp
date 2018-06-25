@@ -4,7 +4,7 @@
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/distributed_db.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/parallel_edge_list_reader.hpp>
 
 using namespace havoqgt;

@@ -55,6 +55,7 @@
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <boost/container/deque.hpp>
 
 namespace havoqgt { 
 

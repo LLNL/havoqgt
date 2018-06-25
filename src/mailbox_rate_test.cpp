@@ -49,7 +49,7 @@
  *
  */
 
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/mpi.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/mailbox.hpp>
@@ -79,7 +79,7 @@ public:
        m_hop_state++;
      }
      m_dest = m_hop_state % s_mpi_size;
-    } while(m_dest ==  havoqgt_env()->world_comm().rank());  
+    } while(m_dest ==  comm_world().rank());  
   }
 
   msg_hopper() {}
@@ -105,7 +105,7 @@ public:
         to_return.m_hop_state++;
       }
       to_return.m_dest = to_return.m_hop_state % s_mpi_size;
-    } while (to_return.m_dest ==  havoqgt_env()->world_comm().rank());
+    } while (to_return.m_dest ==  comm_world().rank());
     return to_return;
   }
 
@@ -134,7 +134,7 @@ public:
       ptd->inc_completed();
       //std::cout << "Hop Finished!!!" << std::endl;
     } else {
-      //std::cout << "Just received hop " << value.m_hop_count << ", rank = " << havoqgt_env()->world_comm().rank() << std::endl;
+      //std::cout << "Just received hop " << value.m_hop_count << ", rank = " << comm_world().rank() << std::endl;
       T next = value.next();
       ppending->push_back(next);
     }
@@ -157,11 +157,11 @@ public:
 
 int main(int argc, char** argv) {
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     havoqgt::get_environment();
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
+    int mpi_rank = comm_world().rank();
+    int mpi_size = comm_world().size();
     if(mpi_rank == 0) {
       havoqgt::get_environment().print();
     }
@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
     boost::counting_iterator<uint64_t> seq_beg(uint64_t(mpi_rank) * count_per_rank);
     boost::counting_iterator<uint64_t> seq_end(uint64_t(mpi_rank+1) * count_per_rank);
 
-    havoqgt_env()->world_comm().barrier();   
+    comm_world().barrier();   
     double time_start = MPI_Wtime();
 
     do {
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
       mailbox.flush_buffers_if_idle();
     } while(!pending.empty() || !mailbox.is_idle() || !td.test_for_termination());
 
-    havoqgt_env()->world_comm().barrier();   
+    comm_world().barrier();   
     double time_end = MPI_Wtime();
 
     if(mpi_rank == 0) {
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
     }
 
   }
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }

@@ -51,7 +51,7 @@
 #ifndef __HAVOQGT_IMP_LOG_STEP_HPP__
 #define __HAVOQGT_IMP_LOG_STEP_HPP__
 
-#include <havoqgt/environment.hpp>
+
 
 namespace havoqgt {
 
@@ -66,7 +66,7 @@ class LogStep {
       time_ = MPI_Wtime();
       std::cout << "Starting:  " << stp_str_ << std::endl << std::flush;
     }
-    if (mpi_rank_ % havoqgt_env()->node_local_comm().size()  == 0) {
+    if (mpi_rank_ % comm_nl().size()  == 0) {
       get_io_stat_info(mb_read_, mb_written_);
       std::cout << "\t[" << mpi_rank_ << "] Dirty Pages: " << get_dirty_pages()
         << "kb." << std::endl << std::flush;
@@ -83,7 +83,7 @@ class LogStep {
       std::cout << "Finished: " << stp_str_ <<  " in " << time_ << " seconds."
         << std::endl << std::flush;
     }
-    if (mpi_rank_ % havoqgt_env()->node_local_comm().size() == 0) {
+    if (mpi_rank_ % comm_nl().size() == 0) {
       int read = -1;
       int written = -1;
       get_io_stat_info(read, written);

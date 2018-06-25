@@ -23,52 +23,45 @@ class mailbox_p2p_nrroute {
   };  //__attribute__((packed));
 
  public:
-  mailbox_p2p_nrroute(RecvHandlerFunc recv_func, size_t batch_size,
-                      MPI_Comm local_comm, MPI_Comm remote_comm)
+  mailbox_p2p_nrroute(RecvHandlerFunc recv_func, size_t batch_size)
       : m_recv_func(recv_func),
         m_batch_size(batch_size),
         m_max_alloc(0),
-        m_local_comm(local_comm),
-        m_remote_comm(remote_comm),
-        m_local_exchanger(local_comm, 1),
-        m_remote_exchanger(remote_comm, 2) {  // should change tag eventually
-    CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &m_mpi_size));
-    CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &m_mpi_rank));
-    CHK_MPI(MPI_Comm_size(m_local_comm, &m_local_size));
-    CHK_MPI(MPI_Comm_rank(m_local_comm, &m_local_rank));
-    CHK_MPI(MPI_Comm_size(m_remote_comm, &m_remote_size));
-    CHK_MPI(MPI_Comm_rank(m_remote_comm, &m_remote_rank));
-  }
+        // should change tag eventually
+        m_local_exchanger(comm_nl().mpi_comm(), 1),
+        m_remote_exchanger(comm_nr().mpi_comm(), 2) {}
 
   ~mailbox_p2p_nrroute() {
-    if (m_mpi_rank == 0) {
+    if (comm_world().rank() == 0) {
       std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     }
   }
 
   void send(uint32_t dest, Data data) {
-    if (dest == m_mpi_rank) {
+    if (dest == comm_world().rank()) {
       m_recv_func(false, data);
     } else {
-      uint32_t local = dest % m_local_size;
-      uint32_t node = dest / m_local_size;
-      if (node == m_remote_rank) {
+      uint32_t local = dest % comm_nl().size();
+      uint32_t node  = dest / comm_nl().size();
+      if (node == comm_nr().rank()) {
         m_local_exchanger.queue(local, message{0, 0, local, node, data});
       } else {
         m_remote_exchanger.queue(node, message{0, 0, local, node, data});
       }
-      if (++m_send_count >= m_batch_size) { do_exchange(); }
+      if (++m_send_count >= m_batch_size) {
+        do_exchange();
+      }
     }
   }
 
   void send_bcast(Data data) {
-    for (uint32_t i = 0; i < m_remote_size; i++) {
-      if (i == m_remote_rank) continue;
+    for (uint32_t i = 0; i < comm_nr().size(); i++) {
+      if (i == comm_nr().rank()) continue;
       m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
       ++m_send_count;
     }
-    for (uint32_t j = 0; j < m_local_size; j++) {
-      if (j == m_local_rank) continue;
+    for (uint32_t j = 0; j < comm_nl().size(); j++) {
+      if (j == comm_nl().rank()) continue;
       m_local_exchanger.queue(j, message{1, 0, 0, 0, data});
       ++m_send_count;
     }
@@ -87,13 +80,14 @@ class mailbox_p2p_nrroute {
     uint64_t total = m_remote_exchanger.exchange(
         [&](const message &msg) {
           if (msg.bcast) {
-            for (uint32_t i = 0; i < m_local_size; i++) {
-              if (i == m_local_rank)
+            for (uint32_t i = 0; i < comm_nl().size(); i++) {
+              if (i == comm_nl().rank())
                 m_recv_func(msg.bcast, msg.data);
               else
                 m_local_exchanger.queue(i, msg);
             }
-          } else if (msg.local == m_local_rank && msg.node == m_remote_rank) {
+          } else if (msg.local == comm_nl().rank() &&
+                     msg.node == comm_nr().rank()) {
             // we are the destination
             m_recv_func(msg.bcast, msg.data);
           } else {
@@ -116,16 +110,8 @@ class mailbox_p2p_nrroute {
   size_t                  m_batch_size;
   uint64_t                m_max_alloc;
   uint64_t                m_count_exchanges = 0;
-  uint32_t                m_total_sent = 0;
-  int                     m_mpi_size;
-  int                     m_mpi_rank;
-  MPI_Comm                m_local_comm;
-  int                     m_local_size;
-  int                     m_local_rank;
-  MPI_Comm                m_remote_comm;
-  int                     m_remote_size;
-  int                     m_remote_rank;
-  // int                  m_local_size;
+  uint32_t                m_total_sent      = 0;
+
   // uint32_t m_total_recv = 0;
 
   //  public:

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/breadth_first_search.hpp>
@@ -76,15 +76,13 @@ TEST(test_static_bfs, test_static_bfs) {
 GTEST_API_ int main(int argc, char **argv) {
   // set up environment
   int mpi_rank(0), mpi_size(0), to_return;
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    //havoqgt::get_environment().print();
     //print_system_info(false); 
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -96,7 +94,7 @@ GTEST_API_ int main(int argc, char **argv) {
 
   // delete the generated files
 
-  havoqgt::havoqgt_finalize();
+  ;
 
   return to_return;
 }

@@ -106,7 +106,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
 
-  processes_per_node = havoqgt_env()->node_local_comm().size();
+  processes_per_node = comm_nl().size();
   node_partitions = std::min(_node_partitions,uint64_t(processes_per_node));
   edge_chunk_size = _chunk_size;
 
@@ -208,7 +208,7 @@ delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
   CHK_MPI( MPI_Comm_size(m_mpi_comm, &m_mpi_size) );
   CHK_MPI( MPI_Comm_rank(m_mpi_comm, &m_mpi_rank) );
   
-  processes_per_node = havoqgt_env()->node_local_comm().size();
+  processes_per_node = comm_nl().size();
   node_partitions = std::min(_node_partitions,uint64_t(processes_per_node));
   edge_chunk_size = _chunk_size;
 

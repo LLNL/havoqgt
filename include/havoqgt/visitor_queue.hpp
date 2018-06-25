@@ -52,11 +52,12 @@
 #ifndef HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
 #define HAVOQGT_MPI_VISITOR_QUEUE_HPP_INCLUDED
 
-#include <havoqgt/new_mailbox.hpp>
-#include <havoqgt/mailbox.hpp>
-#include <havoqgt/termination_detection.hpp>
+// #include <havoqgt/new_mailbox.hpp>
+// #include <havoqgt/mailbox.hpp>
+// #include <havoqgt/termination_detection.hpp>
 #include <havoqgt/detail/reservable_priority_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <havoqgt/mpi.hpp>
 #include <ygm/mailbox_p2p_noroute.hpp>
 #include <ygm/mailbox_p2p_nrroute.hpp>
 #include <vector>
@@ -100,15 +101,12 @@ public:
       if(env_batch != NULL) {
         ygm_batch = atoi(env_batch);
       }
-      m_world_rank = havoqgt_env()->world_comm().rank();
-      m_world_size = havoqgt_env()->world_comm().size();
+      m_world_rank = comm_world().rank();
+      m_world_size = comm_world().size();
       if(m_world_rank == 0) {
         std::cout << "YGM_BATCH_SIZE = " << ygm_batch << std::endl;
       }
-      auto local_comm = ygm::build_node_local_comm();
-      auto remote_comm = ygm::build_node_remote_comm(local_comm);
-      auto bremote_comm = ygm::build_node_bremote_comm(local_comm);
-      m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch, local_comm, remote_comm);
+      m_p_mailbox = new mailbox_type(mailbox_recv(this),ygm_batch);
   }
 
   ~visitor_queue() {

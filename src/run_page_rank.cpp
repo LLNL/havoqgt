@@ -49,7 +49,7 @@
  *
  */
 
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/page_rank.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -72,7 +72,7 @@
 using namespace havoqgt;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
          << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
@@ -81,7 +81,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -123,15 +123,13 @@ int main(int argc, char** argv) {
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    //havoqgt::get_environment().print();
     //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -177,7 +175,7 @@ int main(int argc, char** argv) {
   // }
   
   }  // END Main MPI
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }

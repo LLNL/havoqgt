@@ -53,7 +53,7 @@
 #include <boost/function.hpp>
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <iostream>
@@ -72,7 +72,7 @@
 using namespace havoqgt;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
          << " -s <int>    - RMAT graph Scale (default 17)\n"
          << " -o <string> - output graph base filename\n"
@@ -82,7 +82,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, uint64_t& scale, std::string& output_filename) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -123,19 +123,18 @@ int main(int argc, char** argv) {
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt_init(&argc, &argv);
+  init(&argc, &argv);
   {
     std::string                output_filename;
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
-    havoqgt::get_environment();
-
+    int mpi_rank = comm_world().rank();
+    int mpi_size = comm_world().size();
+    
     if (mpi_rank == 0) {
 
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
+    
     }
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
 
     uint64_t      num_vertices = 1;
     uint64_t      vert_scale;
@@ -196,7 +195,7 @@ int main(int argc, char** argv) {
       std::cout << "Edges should be = " << num_vertices * 16 << std::endl;
       std::cout << "global_edges_generated = " << global_edges_generated << std::endl;
       std::cout << "% duplicate = " << double(global_edges_generated) / double(global_num_edges) << std::endl;
-      //std::cout << "havoqgt_env()->node_local_comm().size() = " << havoqgt_env()->node_local_comm().size() << std::endl;
+      //std::cout << "comm_nl().size() = " << comm_nl().size() << std::endl;
     }
 
     //
@@ -207,20 +206,20 @@ int main(int argc, char** argv) {
       fname << output_filename << "_" << mpi_rank << "_of_" << mpi_size;
       std::ofstream ofs(fname.str().c_str());
       ofs.rdbuf()->pubsetbuf(&vec.front(), vec.size());
-      //for(size_t i=0; i< havoqgt_env()->node_local_comm().size(); ++i) {
-      //    if(i == havoqgt_env()->node_local_comm().rank()) {
+      //for(size_t i=0; i< comm_nl().size(); ++i) {
+      //    if(i == comm_nl().rank()) {
       for(auto& edge : local_edges) {
         ofs << edge.first << " " << edge.second << "\n" << edge.second << " " << edge.first <<  "\n";
       }
       //    }
 
-    //havoqgt_env()->world_comm().barrier();
+    //comm_world().barrier();
     //  }
     }
 
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
   } //END Main MPI
-  havoqgt_finalize();
+  ;
   return 0;
 }
