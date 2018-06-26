@@ -13,5 +13,5 @@ cmake ../../ \
   -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
   -DCMAKE_BUILD_TYPE=Release \
   -DHAVOQGT_BUILD_TEST="ON" \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -O3"
+  -DCMAKE_CXX_FLAGS="-std=c++14 -O3 -lstdc++fs"
 

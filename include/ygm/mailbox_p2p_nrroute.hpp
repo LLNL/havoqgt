@@ -32,6 +32,7 @@ class mailbox_p2p_nrroute {
         m_remote_exchanger(comm_nr().mpi_comm(), 2) {}
 
   ~mailbox_p2p_nrroute() {
+    wait_empty();
     if (comm_world().rank() == 0) {
       std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     }
@@ -71,6 +72,11 @@ class mailbox_p2p_nrroute {
   }
 
   bool global_empty() { return do_exchange() == 0; }
+
+  void wait_empty() {
+    do {
+    } while (!global_empty());
+  }
 
  private:
   /// WARNING, this count return is kinda flaky, not good...

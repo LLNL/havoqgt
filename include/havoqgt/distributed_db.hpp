@@ -78,8 +78,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-
-
 namespace havoqgt {
 
 /**
@@ -303,7 +301,7 @@ class distributed_db {
   /**
    *
    */
-  ~distributed_db() {
+  ~distributed_db() noexcept(false) {
     //
     // Mark clean close
     std::pair<header*, std::size_t> ret =
