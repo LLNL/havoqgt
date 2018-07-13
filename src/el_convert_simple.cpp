@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
   uint64_t              local_parse_count(0);
   uint64_t              local_recv_count(0);
   uint64_t              local_set_count(0);
-  auto recvr = [&partitioned_edges, &local_recv_count](bool bcast,
+  auto recvr = [&partitioned_edges, &local_recv_count](auto* mail, bool bcast,
                                                        const edge_type& edge) {
     partitioned_edges.push_back(edge);
     ++local_recv_count;

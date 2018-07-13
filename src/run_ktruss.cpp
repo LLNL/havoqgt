@@ -61,7 +61,7 @@
 
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/new_triangle_count.hpp>
+#include <havoqgt/ktruss.hpp>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>

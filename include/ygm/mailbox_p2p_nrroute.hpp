@@ -34,41 +34,34 @@ class mailbox_p2p_nrroute {
   ~mailbox_p2p_nrroute() {
     wait_empty();
     if (comm_world().rank() == 0) {
-      std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
+      // std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     }
+    // std::cout << whoami() << " m_local_send = " << m_local_send
+    //          << ", m_local_bcast = " << m_local_bcast << std::endl;
   }
 
-  void send(uint32_t dest, Data data) {
+  void send(uint32_t dest, const Data& data) {
+    ++m_local_send;
     if (dest == comm_world().rank()) {
-      m_recv_func(false, data);
+      m_recv_func(this, false, data);
     } else {
-      uint32_t local = dest % comm_nl().size();
-      uint32_t node  = dest / comm_nl().size();
-      if (node == comm_nr().rank()) {
-        m_local_exchanger.queue(local, message{0, 0, local, node, data});
+      if (in_exchange) {
+        m_send_queue.push_back(std::make_pair(dest, data));
       } else {
-        m_remote_exchanger.queue(node, message{0, 0, local, node, data});
-      }
-      if (++m_send_count >= m_batch_size) {
-        do_exchange();
+        do_send(dest, data);
+        if (m_send_count >= m_batch_size) do_exchange();
       }
     }
   }
 
-  void send_bcast(Data data) {
-    for (uint32_t i = 0; i < comm_nr().size(); i++) {
-      if (i == comm_nr().rank()) continue;
-      m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
-      ++m_send_count;
+  void send_bcast(const Data& data) {
+    ++m_local_bcast;
+    if (in_exchange) {
+      m_bcast_queue.push_back(data);
+    } else {
+      do_send_bcast(data);
+      if (m_send_count >= m_batch_size) do_exchange();
     }
-    for (uint32_t j = 0; j < comm_nl().size(); j++) {
-      if (j == comm_nl().rank()) continue;
-      m_local_exchanger.queue(j, message{1, 0, 0, 0, data});
-      ++m_send_count;
-    }
-    if (m_send_count >= m_batch_size) do_exchange();
-    // bcast to self
-    // m_recv_func(true,data);
   }
 
   bool global_empty() { return do_exchange() == 0; }
@@ -79,23 +72,55 @@ class mailbox_p2p_nrroute {
   }
 
  private:
+  void do_send(uint32_t dest, const Data& data) {
+    assert(dest != comm_world().rank());
+    uint32_t local = dest % comm_nl().size();
+    uint32_t node  = dest / comm_nl().size();
+    if (node == comm_nr().rank()) {
+      m_local_exchanger.queue(local, message{0, 0, local, node, data});
+    } else {
+      m_remote_exchanger.queue(node, message{0, 0, local, node, data});
+    }
+    ++m_send_count;
+    // if (++m_send_count >= m_batch_size) {
+    //   do_exchange();
+    // }
+  }
+
+  void do_send_bcast(const Data& data) {
+    for (uint32_t i = 0; i < comm_nr().size(); i++) {
+      if (i == comm_nr().rank()) continue;
+      m_remote_exchanger.queue(i, message{1, 0, 0, 0, data});
+      ++m_send_count;
+    }
+    for (uint32_t j = 0; j < comm_nl().size(); j++) {
+      if (j == comm_nl().rank()) continue;
+      m_local_exchanger.queue(j, message{1, 0, 0, 0, data});
+      ++m_send_count;
+    }
+    // if (m_send_count >= m_batch_size) do_exchange();
+    // bcast to self
+    // m_recv_func(true,data);
+  }
+
   /// WARNING, this count return is kinda flaky, not good...
   uint64_t do_exchange() {
+    in_exchange = true;
     m_count_exchanges++;
     m_total_sent += m_send_count;
     uint64_t total = m_remote_exchanger.exchange(
-        [&](const message &msg) {
+        [&](const message& msg) {
           if (msg.bcast) {
             for (uint32_t i = 0; i < comm_nl().size(); i++) {
               if (i == comm_nl().rank())
-                m_recv_func(msg.bcast, msg.data);
+                m_recv_func(this, msg.bcast, msg.data);
               else
                 m_local_exchanger.queue(i, msg);
             }
           } else if (msg.local == comm_nl().rank() &&
                      msg.node == comm_nr().rank()) {
             // we are the destination
-            m_recv_func(msg.bcast, msg.data);
+            m_recv_func(this, msg.bcast, msg.data);
           } else {
             // forwarding with local exchange
             m_local_exchanger.queue(msg.local, msg);
@@ -103,8 +128,30 @@ class mailbox_p2p_nrroute {
         },
         m_send_count);
     total += m_local_exchanger.exchange(
-        [&](const message &msg) { m_recv_func(msg.bcast, msg.data); }, total);
+        [&](const message& msg) { m_recv_func(this, msg.bcast, msg.data); },
+        total);
     m_send_count = 0;
+
+    //
+    // push out recursive queued
+    auto queue_size = m_send_queue.size() + m_bcast_queue.size();
+    if (queue_size > 0) {
+      std::cout << whoami()
+                << " recursive m_send_queue.size() = " << m_send_queue.size()
+                << " m_bcast_queue.size() = " << m_bcast_queue.size()
+                << " exchange total = " << total << std::endl;
+    }
+    for (const auto& p : m_send_queue) {
+      do_send(p.first, p.second);
+    }
+    for (const auto& d : m_bcast_queue) {
+      do_send_bcast(d);
+    }
+    m_send_queue.clear();
+    m_bcast_queue.clear();
+    in_exchange = false;
+    // std::cout << whoami() << " - ending exchange, total = " << total
+    //          << std::endl;
     return total;
   }
 
@@ -117,6 +164,13 @@ class mailbox_p2p_nrroute {
   uint64_t                m_max_alloc;
   uint64_t                m_count_exchanges = 0;
   uint32_t                m_total_sent      = 0;
+
+  uint64_t m_local_send  = 0;
+  uint64_t m_local_bcast = 0;
+
+  bool                                   in_exchange = false;
+  std::vector<std::pair<uint32_t, Data>> m_send_queue;
+  std::vector<Data>                      m_bcast_queue;
 
   // uint32_t m_total_recv = 0;
 

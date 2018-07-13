@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
     std::deque<edge_type> local_edges;
     uint64_t              local_edges_generated(0);
     uint64_t              local_edges_recv(0);
-    auto recvr = [&local_edges, &local_edges_recv](bool bcast,
+    auto recvr = [&local_edges, &local_edges_recv](auto* mail, bool bcast,
                                                    const edge_type& edge) {
       local_edges.push_back(edge);
       ++local_edges_recv;
