@@ -1011,8 +1011,8 @@ uint64_t ktruss_round(TGraph& g) {
       }
       global_edges_deleted +=
           comm_world().all_reduce(local_edges_deleted, MPI_SUM);
-      if (global_edges_deleted == 0 /*||
-          (global_edges_deleted < 100 && round < global_max_round / 2)*/) {
+      if (global_edges_deleted == 0 ||
+          (global_edges_deleted < 100 && round < log_bins.size() - 1)) {
         // allow to go to next round
         ++round;
       } else {
