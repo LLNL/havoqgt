@@ -517,45 +517,45 @@ class core2_wedges {
   template <typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
-    if (std::get<3>(alg_data)[vertex] <= std::get<4>(alg_data)) {
-      if (std::get<0>(alg_data)[vertex].size() > 1) {
-        for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
-          for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
-            if (pair_a.second.target_degree < pair_b.second.target_degree ||
-                (pair_a.second.target_degree == pair_b.second.target_degree &&
-                 pair_a.first < pair_b.first)) {
-              my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
-              vis_queue->queue_visitor(new_visitor);
-              // std::get<3>(alg_data)[vertex]++;
-              // fake ++std::get<1>(alg_data);  //fake counting here
-            }
+    // if (std::get<3>(alg_data)[vertex] <= std::get<4>(alg_data)) {
+    if (std::get<0>(alg_data)[vertex].size() > 1) {
+      for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
+        for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
+          if (pair_a.second.target_degree < pair_b.second.target_degree ||
+              (pair_a.second.target_degree == pair_b.second.target_degree &&
+               pair_a.first < pair_b.first)) {
+            my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
+            vis_queue->queue_visitor(new_visitor);
+            // std::get<3>(alg_data)[vertex]++;
+            // fake ++std::get<1>(alg_data);  //fake counting here
           }
         }
-        /*for(auto itr_i = std::get<0>(alg_data)[vertex].begin(); itr_i !=
-        std::get<0>(alg_data)[vertex].end(); ++itr_i) {
-          for(auto itr_j = itr_i+1; itr_j !=
-        std::get<0>(alg_data)[vertex].end();
-        ++itr_j) {
-            auto pair_a = *itr_i;
-            auto pair_b = *itr_j;
-            if(pair_a.second < pair_b.second ||
-              (pair_a.second == pair_b.second && pair_a.first < pair_b.first)) {
-                my_type new_visitor(g.label_to_locator(pair_a.first),
-        pair_b.first);
-                //vis_queue->queue_visitor(new_visitor);
-                ++std::get<1>(alg_data);  //fake counting here
-            } else {
-              my_type new_visitor(g.label_to_locator(pair_b.first),
-        pair_a.first);
-              //vis_queue->queue_visitor(new_visitor);
-               ++std::get<1>(alg_data);  //fake counting here
-            }
-          }
-        }*/
-
-        //        ++std::get<1>(alg_data);  //fake counting here
       }
+      /*for(auto itr_i = std::get<0>(alg_data)[vertex].begin(); itr_i !=
+      std::get<0>(alg_data)[vertex].end(); ++itr_i) {
+        for(auto itr_j = itr_i+1; itr_j !=
+      std::get<0>(alg_data)[vertex].end();
+      ++itr_j) {
+          auto pair_a = *itr_i;
+          auto pair_b = *itr_j;
+          if(pair_a.second < pair_b.second ||
+            (pair_a.second == pair_b.second && pair_a.first < pair_b.first)) {
+              my_type new_visitor(g.label_to_locator(pair_a.first),
+      pair_b.first);
+              //vis_queue->queue_visitor(new_visitor);
+              ++std::get<1>(alg_data);  //fake counting here
+          } else {
+            my_type new_visitor(g.label_to_locator(pair_b.first),
+      pair_a.first);
+            //vis_queue->queue_visitor(new_visitor);
+             ++std::get<1>(alg_data);  //fake counting here
+          }
+        }
+      }*/
+
+      //        ++std::get<1>(alg_data);  //fake counting here
     }
+    //}
     return false;
   }
 
@@ -945,11 +945,29 @@ uint64_t ktruss_round(TGraph& g) {
                 << dod_round_start_time - dod_round_end_time << std::endl;
       std::cout << "global_max_round = " << global_max_round << std::endl;
     }
+    //
+    // repack into log bins
+    uint64_t num_bins = 0;
+    {
+      auto tmp_max_round = global_max_round;
+      while (tmp_max_round >>= 1) ++num_bins;
+    }
+    std::cout << "Creating " << num_bins + 1 << " bins " << std::endl;
+    std::vector<std::vector<vertex_locator>> log_bins(num_bins + 1);
+    for (uint32_t old_round = 0; old_round <= global_max_round; ++old_round) {
+      auto   tmp_old_round = old_round;
+      size_t bin           = 0;
+      while (tmp_old_round >>= 1) ++bin;
+      for (auto& loc : map_round_local_vertex[old_round]) {
+        log_bins[bin].push_back(loc);
+      }
+    }
+
     ///////  END COMPUTE ROUND PER KCORE
     uint64_t global_edges_deleted(0);
     uint64_t local_edges_remain(0);
-    for (uint32_t round = 0; round <= global_max_round; /*no incr*/) {
-      auto& sources = map_round_local_vertex[round];
+    for (uint32_t round = 0; round < log_bins.size(); /*no incr*/) {
+      auto& sources = log_bins[round];
 
       // if (comm_world().rank() == 0)
       //   std::cout << "Starting Round " << round << " of " << global_max_round
@@ -994,8 +1012,8 @@ uint64_t ktruss_round(TGraph& g) {
       }
       global_edges_deleted +=
           comm_world().all_reduce(local_edges_deleted, MPI_SUM);
-      if (global_edges_deleted == 0 ||
-          (global_edges_deleted < 100 && round < global_max_round / 2)) {
+      if (global_edges_deleted == 0 /*||
+          (global_edges_deleted < 100 && round < global_max_round / 2)*/) {
         // allow to go to next round
         ++round;
       } else {
@@ -1017,7 +1035,7 @@ uint64_t ktruss_round(TGraph& g) {
         if (comm_world().rank() == 0) {
           std::cout << "Restarting -- Deleted " << global_edges_deleted
                     << " edges"
-                    << " round " << round << " of " << global_max_round
+                    << " round " << round << " of " << log_bins.size()
                     << std::endl;
         }
         global_edges_deleted = 0;
