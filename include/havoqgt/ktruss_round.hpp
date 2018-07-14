@@ -952,7 +952,6 @@ uint64_t ktruss_round(TGraph& g) {
       auto tmp_max_round = global_max_round;
       while (tmp_max_round >>= 1) ++num_bins;
     }
-    std::cout << "Creating " << num_bins + 1 << " bins " << std::endl;
     std::vector<std::vector<vertex_locator>> log_bins(num_bins + 1);
     for (uint32_t old_round = 0; old_round <= global_max_round; ++old_round) {
       auto   tmp_old_round = old_round;
