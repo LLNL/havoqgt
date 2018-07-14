@@ -869,10 +869,11 @@ uint64_t ktruss_round(TGraph& g) {
   // MPI_Abort(MPI_COMM_WORLD, -1);
   //
   // 3)  Build wedges & count
-
+  double   total_ktruss_start_time = MPI_Wtime();
   uint64_t global_edges_remain(0);
   int      k = 3;
   do {
+    double single_ktruss_start_time = MPI_Wtime();
     ///////  RECOMPUTE ROUND PER KCORE
     //
     //  Compute "round" information
@@ -941,8 +942,8 @@ uint64_t ktruss_round(TGraph& g) {
         comm_world().all_reduce(local_max_round, MPI_MAX);
     if (comm_world().rank() == 0) {
       std::cout << "Starting ktruss k = " << k << std::endl;
-      std::cout << "dod_round_time = "
-                << dod_round_start_time - dod_round_end_time << std::endl;
+      // std::cout << "dod_round_time = "
+      // << dod_round_start_time - dod_round_end_time << std::endl;
       std::cout << "global_max_round = " << global_max_round << std::endl;
     }
     //
@@ -1042,10 +1043,13 @@ uint64_t ktruss_round(TGraph& g) {
       }
     }
     global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
+    double single_ktruss_end_time = MPI_Wtime();
 
     if (comm_world().rank() == 0) {
       std::cout << "K = " << k
                 << "   global_edges_remain = " << global_edges_remain
+                << " TIME = "
+                << single_ktruss_end_time - single_ktruss_start_time
                 << std::endl;
     }
     ++k;  // compute next k.
@@ -1081,6 +1085,11 @@ uint64_t ktruss_round(TGraph& g) {
     }
     global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
   } while (global_edges_remain > 0);
+  double total_ktruss_end_time = MPI_Wtime();
+  if (comm_world().rank() == 0) {
+    std::cout << "TOTAL KTRUSS TIME = "
+              << total_ktruss_end_time - total_ktruss_start_time << std::endl;
+  }
 
   // uint64_t global_triangle_count = mpi_all_reduce(
   //     local_triangle_count, std::plus<uint64_t>(), MPI_COMM_WORLD);

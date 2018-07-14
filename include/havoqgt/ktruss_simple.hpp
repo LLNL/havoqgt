@@ -869,12 +869,13 @@ uint64_t ktruss_simple(TGraph& g) {
   // MPI_Abort(MPI_COMM_WORLD, -1);
   //
   // 3)  Build wedges & count
+  double   total_ktruss_start_time = MPI_Wtime();
   uint64_t global_edges_remain(0);
   int      k = 3;
   do {
     uint64_t global_edges_deleted(0);
     uint64_t local_edges_remain(0);
-
+    double   single_ktruss_start_time = MPI_Wtime();
     do {
       uint64_t local_edges_deleted(0);
       local_edges_remain = 0;
@@ -955,10 +956,13 @@ uint64_t ktruss_simple(TGraph& g) {
     } while (global_edges_deleted > 0);
 
     global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
+    double single_ktruss_end_time = MPI_Wtime();
 
     if (comm_world().rank() == 0) {
       std::cout << "K = " << k
                 << "   global_edges_remain = " << global_edges_remain
+                << " TIME = "
+                << single_ktruss_end_time - single_ktruss_start_time
                 << std::endl;
     }
     ++k;  // compute next k.
@@ -994,6 +998,11 @@ uint64_t ktruss_simple(TGraph& g) {
     }
     global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
   } while (global_edges_remain > 0);
+  double total_ktruss_end_time = MPI_Wtime();
+  if (comm_world().rank() == 0) {
+    std::cout << "TOTAL KTRUSS TIME = "
+              << total_ktruss_end_time - total_ktruss_start_time << std::endl;
+  }
 
   return 0;
 }
