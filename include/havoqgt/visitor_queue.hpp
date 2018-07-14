@@ -239,6 +239,25 @@ class visitor_queue {
              !m_p_mailbox->global_empty());
   }
 
+  void init_visitor_traversal(
+      const std::vector<vertex_locator>& local_sources) {
+    auto sitr = local_sources.begin();
+    do {
+      if (sitr != local_sources.end()) {
+        visitor_type v(*sitr);
+        do_init_visit(v);
+        ++sitr;
+      }
+      process_pending_controllers();
+      while (!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+      }
+    } while (sitr != local_sources.end() || !empty() ||
+             !m_p_mailbox->global_empty());
+  }
+
   void queue_visitor(const visitor_type& v) {
     // std::cout << "queue_visitor()" << std::endl;
     if (v.vertex.is_delegate()) {
@@ -443,7 +462,7 @@ template <typename TVisitor, template <typename T> class Queue, typename TGraph,
 visitor_queue<TVisitor, Queue, TGraph, AlgData> create_visitor_queue(
     TGraph* g, AlgData& alg_data) {
   typedef visitor_queue<TVisitor, Queue, TGraph, AlgData> visitor_queue_type;
-  visitor_queue_type                                      vq(g, alg_data);
+  visitor_queue_type vq(g, alg_data);
   return vq;
 }
 

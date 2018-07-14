@@ -61,7 +61,7 @@
 
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/ktruss.hpp>
+#include <havoqgt/ktruss_simple.hpp>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -85,13 +85,12 @@ void usage() {
               << " -i <string>   - input graph base filename (required)\n"
               << " -b <string>   - backup graph base filename.  If set, "
                  "\"input\" graph will be deleted if it exists\n"
-              << " -s <string>   - statistics output base filename (required)\n"
               << " -h            - print help and exit\n\n";
   }
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& input_filename,
-                    std::string& backup_filename, std::string& stat_filename) {
+                    std::string& backup_filename) {
   if (comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -101,18 +100,13 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
   }
 
   bool found_input_filename = false;
-  bool found_stat_filename  = false;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:b:h ")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
-        break;
-      case 's':
-        found_stat_filename = true;
-        stat_filename       = optarg;
         break;
       case 'i':
         found_input_filename = true;
@@ -127,7 +121,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
         break;
     }
   }
-  if (prn_help || !found_input_filename || !found_stat_filename) {
+  if (prn_help || !found_input_filename) {
     usage();
     exit(-1);
   }
@@ -153,9 +147,8 @@ int main(int argc, char** argv) {
 
     std::string graph_input;
     std::string backup_filename;
-    std::string stat_filename;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, stat_filename);
+    parse_cmd_line(argc, argv, graph_input, backup_filename);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (backup_filename.size() > 0) {
@@ -175,10 +168,7 @@ int main(int argc, char** argv) {
     graph->print_graph_statistics();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    uint64_t count = new_triangle_count(*graph, stat_filename.c_str());
-    if (mpi_rank == 0) {
-      std::cout << "Graph has " << count << " triangles." << std::endl;
-    }
+    ktruss_simple(*graph);
 
   }  // END Main MPI
   ;

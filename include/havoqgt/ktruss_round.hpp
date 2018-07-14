@@ -58,9 +58,7 @@
  * purposes.
  *
  */
-
-#ifndef HAVOQGT_MPI_TRIANGLE_COUNT_HPP_INCLUDED
-#define HAVOQGT_MPI_TRIANGLE_COUNT_HPP_INCLUDED
+#pragma include once
 
 #include <boost/container/deque.hpp>
 #include <fstream>
@@ -104,6 +102,122 @@ class lifo_queue {
   bool empty() const { return m_data.empty(); }
 
   void clear() { m_data.clear(); }
+};
+
+template <typename Graph>
+class vis_dod_in_degree {
+ public:
+  typedef vis_dod_in_degree<Graph>       my_type;
+  typedef typename Graph::vertex_locator vertex_locator;
+
+  vis_dod_in_degree() : vertex() {}
+
+  vis_dod_in_degree(vertex_locator v) : vertex(v) {}
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        return true;
+      }
+    }
+    std::get<1>(alg_data)[vertex]++;
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
+                  AlgData& alg_data) const {
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        std::cerr << "vis_dod_in_degree() -- delegate slaves shouldn't be here"
+                  << std::endl;
+        exit(-1);
+      }
+    }
+    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
+      vertex_locator neighbor = dodedge.first;
+      my_type        new_visitor(neighbor);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    std::cerr << "vis_dod_in_degree() -- no visit()" << std::endl;
+    exit(-1);
+  }
+
+  vertex_locator vertex;
+};
+
+template <typename Graph>
+class vis_dod_round {
+ public:
+  typedef vis_dod_round<Graph>           my_type;
+  typedef typename Graph::vertex_locator vertex_locator;
+
+  vis_dod_round() : vertex() {}
+  vis_dod_round(vertex_locator v) : vertex(v), round(0) {}
+  vis_dod_round(vertex_locator v, uint32_t r) : vertex(v), round(r) {}
+
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        return true;
+      }
+    }
+    if (std::get<1>(alg_data)[vertex] == 0) {
+      std::cerr << "vis_dod_round counting error" << std::endl;
+    }
+    std::get<2>(alg_data)[vertex] =
+        std::max(round, std::get<2>(alg_data)[vertex]);
+    if (--std::get<1>(alg_data)[vertex] == 0) {
+      // all in-edges have reported in, time to set my round
+      std::get<2>(alg_data)[vertex]++;
+      return true;
+    }
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
+                  AlgData& alg_data) const {
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        std::cerr << "vis_dod_in_degree() -- delegate slaves shouldn't be here"
+                  << std::endl;
+        exit(-1);
+      }
+    }
+    if (std::get<1>(alg_data)[vertex] != 0) return false;
+    if (std::get<2>(alg_data)[vertex] != 0) return false;
+    std::get<2>(alg_data)[vertex] = 1;
+    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
+      vertex_locator neighbor = dodedge.first;
+      my_type        new_visitor(neighbor, 1);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    if (std::get<1>(alg_data)[vertex] != 0) {
+      std::cerr << "vis_dod_round visit() -- not all in edges reported"
+                << std::endl;
+    }
+    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
+      vertex_locator neighbor = dodedge.first;
+      my_type        new_visitor(neighbor, std::get<2>(alg_data)[vertex]);
+      vis_queue->queue_visitor(new_visitor);
+    }
+    return false;
+  }
+
+  vertex_locator vertex;
+  uint32_t       round;
 };
 
 template <typename Graph>
@@ -403,40 +517,44 @@ class core2_wedges {
   template <typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
-    if (std::get<0>(alg_data)[vertex].size() > 1) {
-      for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
-        for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
-          if (pair_a.second.target_degree < pair_b.second.target_degree ||
-              (pair_a.second.target_degree == pair_b.second.target_degree &&
-               pair_a.first < pair_b.first)) {
-            my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
-            vis_queue->queue_visitor(new_visitor);
-            // std::get<3>(alg_data)[vertex]++;
-            // fake ++std::get<1>(alg_data);  //fake counting here
+    if (std::get<3>(alg_data)[vertex] <= std::get<4>(alg_data)) {
+      if (std::get<0>(alg_data)[vertex].size() > 1) {
+        for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
+          for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
+            if (pair_a.second.target_degree < pair_b.second.target_degree ||
+                (pair_a.second.target_degree == pair_b.second.target_degree &&
+                 pair_a.first < pair_b.first)) {
+              my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
+              vis_queue->queue_visitor(new_visitor);
+              // std::get<3>(alg_data)[vertex]++;
+              // fake ++std::get<1>(alg_data);  //fake counting here
+            }
           }
         }
-      }
-      /*for(auto itr_i = std::get<0>(alg_data)[vertex].begin(); itr_i !=
-      std::get<0>(alg_data)[vertex].end(); ++itr_i) {
-        for(auto itr_j = itr_i+1; itr_j != std::get<0>(alg_data)[vertex].end();
-      ++itr_j) {
-          auto pair_a = *itr_i;
-          auto pair_b = *itr_j;
-          if(pair_a.second < pair_b.second ||
-            (pair_a.second == pair_b.second && pair_a.first < pair_b.first)) {
-              my_type new_visitor(g.label_to_locator(pair_a.first),
-      pair_b.first);
+        /*for(auto itr_i = std::get<0>(alg_data)[vertex].begin(); itr_i !=
+        std::get<0>(alg_data)[vertex].end(); ++itr_i) {
+          for(auto itr_j = itr_i+1; itr_j !=
+        std::get<0>(alg_data)[vertex].end();
+        ++itr_j) {
+            auto pair_a = *itr_i;
+            auto pair_b = *itr_j;
+            if(pair_a.second < pair_b.second ||
+              (pair_a.second == pair_b.second && pair_a.first < pair_b.first)) {
+                my_type new_visitor(g.label_to_locator(pair_a.first),
+        pair_b.first);
+                //vis_queue->queue_visitor(new_visitor);
+                ++std::get<1>(alg_data);  //fake counting here
+            } else {
+              my_type new_visitor(g.label_to_locator(pair_b.first),
+        pair_a.first);
               //vis_queue->queue_visitor(new_visitor);
-              ++std::get<1>(alg_data);  //fake counting here
-          } else {
-            my_type new_visitor(g.label_to_locator(pair_b.first), pair_a.first);
-            //vis_queue->queue_visitor(new_visitor);
-             ++std::get<1>(alg_data);  //fake counting here
+               ++std::get<1>(alg_data);  //fake counting here
+            }
           }
-        }
-      }*/
+        }*/
 
-      //        ++std::get<1>(alg_data);  //fake counting here
+        //        ++std::get<1>(alg_data);  //fake counting here
+      }
     }
     return false;
   }
@@ -529,7 +647,7 @@ struct vertex_locator_hash {
 };
 
 template <typename TGraph>
-uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
+uint64_t ktruss_round(TGraph& g) {
   typedef TGraph                          graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
 
@@ -739,75 +857,173 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
     }
   }
 
+  // for (uint32_t round = 0; round < global_max_round + 1; ++round) {
+  //   size_t global_round_size =
+  //       comm_world().all_reduce(map_round_local_vertex[round].size(),
+  //       MPI_SUM);
+  //   if (comm_world().rank() == 0) {
+  //     std::cout << "Round " << round << " size = " << global_round_size
+  //               << std::endl;
+  //   }
+  // }
+  // MPI_Abort(MPI_COMM_WORLD, -1);
   //
   // 3)  Build wedges & count
+
   uint64_t global_edges_remain(0);
   int      k = 3;
   do {
+    ///////  RECOMPUTE ROUND PER KCORE
+    //
+    //  Compute "round" information
+    typename graph_type::template vertex_data<uint32_t,
+                                              std::allocator<uint32_t>>
+        dod_in_degree(g);
+    dod_in_degree.reset(0);
+    typename graph_type::template vertex_data<uint32_t,
+                                              std::allocator<uint32_t>>
+        dod_round(g);
+    dod_round.reset(1);
+    MPI_Barrier(MPI_COMM_WORLD);
+    double dod_in_degree_start_time = MPI_Wtime();
+    {
+      auto alg_data = std::forward_as_tuple(core2_directed, dod_in_degree);
+      auto vq = create_visitor_queue<vis_dod_in_degree<graph_type>, lifo_queue>(
+          &g, alg_data);
+      vq.init_visitor_traversal();
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    double   dod_in_degree_end_time = MPI_Wtime();
+    uint64_t local_count_zero_in_degree(0);
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      if (dod_in_degree[*vitr] == 0) {
+        ++local_count_zero_in_degree;
+        dod_round[*vitr] = 0;
+      }
+    }
+    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+      if (dod_in_degree[*vitr] == 0) {
+        ++local_count_zero_in_degree;
+        dod_round[*vitr] = 0;
+      }
+    }
+    uint64_t global_count_zero_in_degree =
+        comm_world().all_reduce(local_count_zero_in_degree, MPI_SUM);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    double dod_round_start_time = MPI_Wtime();
+    {
+      auto alg_data =
+          std::forward_as_tuple(core2_directed, dod_in_degree, dod_round);
+      auto vq = create_visitor_queue<vis_dod_round<graph_type>, lifo_queue>(
+          &g, alg_data);
+      vq.init_visitor_traversal();
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    double   dod_round_end_time = MPI_Wtime();
+    uint32_t local_max_round(0);
+    std::map<uint32_t, std::vector<vertex_locator>> map_round_local_vertex;
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      --dod_round[*vitr];
+      local_max_round = std::max(local_max_round, dod_round[*vitr]);
+      if (core2_directed[*vitr].size() > 0) {  // skip zero out degree verts
+        map_round_local_vertex[dod_round[*vitr]].push_back(*vitr);
+      }
+    }
+    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+      --dod_round[*vitr];
+      local_max_round = std::max(local_max_round, dod_round[*vitr]);
+      if (core2_directed[*vitr].size() > 0) {  // skip zero out degree verts
+        map_round_local_vertex[dod_round[*vitr]].push_back(*vitr);
+      }
+    }
+    uint32_t global_max_round =
+        comm_world().all_reduce(local_max_round, MPI_MAX);
+    if (comm_world().rank() == 0) {
+      std::cout << "Starting ktruss k = " << k << std::endl;
+      std::cout << "dod_round_time = "
+                << dod_round_start_time - dod_round_end_time << std::endl;
+      std::cout << "global_max_round = " << global_max_round << std::endl;
+    }
+    ///////  END COMPUTE ROUND PER KCORE
     uint64_t global_edges_deleted(0);
     uint64_t local_edges_remain(0);
-    do {
+    for (uint32_t round = 0; round <= global_max_round; /*no incr*/) {
+      auto& sources = map_round_local_vertex[round];
+
+      // if (comm_world().rank() == 0)
+      //   std::cout << "Starting Round " << round << " of " << global_max_round
+      //             << std::endl;
+
       uint64_t local_edges_deleted(0);
-      local_edges_remain = 0;
       uint64_t local_triangle_count(0), local_wedge_count(0);
       MPI_Barrier(MPI_COMM_WORLD);
       double start_time = MPI_Wtime();
       {
         auto alg_data = std::forward_as_tuple(
-            core2_directed, local_triangle_count,
-            local_wedge_count /*, count_wedges_created, count_wedges_checked, count_triangles_found*/);
+            core2_directed, local_triangle_count, local_wedge_count, dod_round,
+            round /*, count_wedges_created, count_wedges_checked, count_triangles_found*/);
         auto vq = create_visitor_queue<core2_wedges<graph_type>, lifo_queue>(
             &g, alg_data);
-        vq.init_visitor_traversal();
+        vq.init_visitor_traversal(sources);
       }
       MPI_Barrier(MPI_COMM_WORLD);
       double   end_time           = MPI_Wtime();
       uint64_t global_wedge_count = mpi_all_reduce(
           local_wedge_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
-      if (mpi_rank == 0) {
-        std::cout << "TC on directed 2core time = " << end_time - start_time
-                  << std::endl;
-        std::cout << "Total wedges checked = " << global_wedge_count
-                  << std::endl;
-      }
+      // if (mpi_rank == 0) {
+      //   std::cout << "TC time = " << end_time - start_time
+      //             << "Total wedges checked = " << global_wedge_count
+      //             << std::endl;
+      // }
 
       uint64_t local_edge_triangle_count(0);
-      for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-        for (auto deitr = core2_directed[*vitr].begin();
-             deitr != core2_directed[*vitr].end();
+      for (vertex_locator round_source : sources) {
+        for (auto deitr = core2_directed[round_source].begin();
+             deitr != core2_directed[round_source].end();
              /* no incr*/) {
           if (deitr->second.edge_triangle_count >= k - 2) {
-            deitr->second.edge_triangle_count = 0;  // reset for next count
+            // deitr->second.edge_triangle_count = 0;  // reset for next count
             ++local_edges_remain;
             ++deitr;
           } else {
             ++local_edges_deleted;
-            deitr = core2_directed[*vitr].erase(deitr);  // remove
+            deitr = core2_directed[round_source].erase(deitr);  // remove
           }
         }
       }
-      for (auto citr = g.controller_begin(); citr != g.controller_end();
-           ++citr) {
-        for (auto deitr = core2_directed[*citr].begin();
-             deitr != core2_directed[*citr].end();
-             /* no incr*/) {
-          if (deitr->second.edge_triangle_count >= k - 2) {
-            deitr->second.edge_triangle_count = 0;  // reset for next count
-            ++local_edges_remain;
-            ++deitr;
-          } else {
-            ++local_edges_deleted;
-            deitr = core2_directed[*citr].erase(deitr);  // remove
-          }
-        }
-      }
-      global_edges_deleted =
+      global_edges_deleted +=
           comm_world().all_reduce(local_edges_deleted, MPI_SUM);
-      if (global_edges_deleted > 0 && comm_world().rank() == 0) {
-        std::cout << "Deleted " << global_edges_deleted << " edges"
-                  << std::endl;
+      if (global_edges_deleted == 0 ||
+          (global_edges_deleted < 100 && round < global_max_round / 2)) {
+        // allow to go to next round
+        ++round;
+      } else {
+        // clear and start all over :(
+        // erase for next count
+        local_edges_remain = 0;
+
+        for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+          for (auto& dode : core2_directed[*vitr]) {
+            dode.second.edge_triangle_count = 0;
+          }
+        }
+        for (auto citr = g.controller_begin(); citr != g.controller_end();
+             ++citr) {
+          for (auto& dode : core2_directed[*citr]) {
+            dode.second.edge_triangle_count = 0;
+          }
+        }
+        if (comm_world().rank() == 0) {
+          std::cout << "Restarting -- Deleted " << global_edges_deleted
+                    << " edges"
+                    << " round " << round << " of " << global_max_round
+                    << std::endl;
+        }
+        global_edges_deleted = 0;
+        round                = 0;
       }
-    } while (global_edges_deleted > 0);
+    }
     global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
 
     if (comm_world().rank() == 0) {
@@ -816,6 +1032,37 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
                 << std::endl;
     }
     ++k;  // compute next k.
+          //
+          // precut here for ++K and clear
+          // erase for next count
+    local_edges_remain = 0;
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      for (auto deitr = core2_directed[*vitr].begin();
+           deitr != core2_directed[*vitr].end();
+           /* no incr*/) {
+        if (deitr->second.edge_triangle_count >= k - 2) {
+          deitr->second.edge_triangle_count = 0;  // reset for next count
+          ++local_edges_remain;
+          ++deitr;
+        } else {
+          deitr = core2_directed[*vitr].erase(deitr);  // remove
+        }
+      }
+    }
+    for (auto citr = g.controller_begin(); citr != g.controller_end(); ++citr) {
+      for (auto deitr = core2_directed[*citr].begin();
+           deitr != core2_directed[*citr].end();
+           /* no incr*/) {
+        if (deitr->second.edge_triangle_count >= k - 2) {
+          deitr->second.edge_triangle_count = 0;  // reset for next count
+          ++local_edges_remain;
+          ++deitr;
+        } else {
+          deitr = core2_directed[*citr].erase(deitr);  // remove
+        }
+      }
+    }
+    global_edges_remain = comm_world().all_reduce(local_edges_remain, MPI_SUM);
   } while (global_edges_remain > 0);
 
   // uint64_t global_triangle_count = mpi_all_reduce(
@@ -824,5 +1071,3 @@ uint64_t new_triangle_count(TGraph& g, const char* deg_output_fname) {
 }
 
 }  // end namespace havoqgt
-
-#endif  // HAVOQGT_MPI_TRIANGLE_COUNT_HPP_INCLUDED
