@@ -485,6 +485,9 @@ class core2_wedges {
           if (std::get<0>(alg_data)[vertex].count(check_close) == 0 ||
               std::get<0>(alg_data)[vertex].count(from_vertex) == 0) {
             std::cerr << "Error in edge counting" << std::endl;
+          } else {
+            std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
+            std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count++;
           }
         }
         return false;
