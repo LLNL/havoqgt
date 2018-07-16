@@ -71,10 +71,11 @@
 namespace havoqgt {
 
 struct dogr_edge {
-  uint32_t target_degree       = 0;
-  uint32_t edge_triangle_count = 0;
-  uint32_t jk_close_count      = 0;
-  bool     mark_for_deletion   = 0;
+  uint32_t target_degree           = 0;
+  uint32_t edge_triangle_count     = 0;
+  uint32_t jk_close_count : 30     = 0;
+  uint32_t mark_for_deletion : 1   = 0;
+  uint32_t already_jk_unrolled : 1 = 0;
 };
 
 template <typename Visitor>
@@ -480,9 +481,13 @@ class core2_wedges {
         if (!Decompose) {
           std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
           std::get<0>(alg_data)[vertex][check_close].jk_close_count++;
+          std::get<5>(alg_data)[vertex].insert(check_close);
         } else {
-          std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
-          std::get<0>(alg_data)[vertex][check_close].jk_close_count--;
+          if (std::get<0>(alg_data)[vertex][check_close].edge_triangle_count >
+              0)
+            std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
+          if (std::get<0>(alg_data)[vertex][check_close].jk_close_count > 0)
+            std::get<0>(alg_data)[vertex][check_close].jk_close_count--;
         }
         return true;
       }
@@ -495,8 +500,12 @@ class core2_wedges {
           std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
           std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count++;
         } else {
-          std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
-          std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count--;
+          if (std::get<0>(alg_data)[vertex][check_close].edge_triangle_count >
+              0)
+            std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
+          if (std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count >
+              0)
+            std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count--;
         }
       }
     }
@@ -570,8 +579,85 @@ class core2_wedges {
   bool           do_check_close;
 };
 
-template <typename TGraph, typename DOGR>
-void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
+template <typename Graph>
+class unroll_iedges_visitor {
+ public:
+  typedef unroll_iedges_visitor<Graph>   my_type;
+  typedef typename Graph::vertex_locator vertex_locator;
+
+  unroll_iedges_visitor() : vertex() {}
+
+  unroll_iedges_visitor(vertex_locator v) : vertex(v) {}
+
+  unroll_iedges_visitor(vertex_locator v, vertex_locator j, vertex_locator k)
+      : vertex(v), jvertex(j), kvertex(k) {}
+
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        return true;
+      }
+    }
+    if (std::get<0>(alg_data)[vertex].count(kvertex) > 0) {
+      // kvertex exists, decrement j & k edges.
+      // if (!std::get<0>(alg_data)[vertex][jvertex].mark_for_deletion) {
+      if (std::get<0>(alg_data)[vertex].count(jvertex) > 0) {
+        if (std::get<0>(alg_data)[vertex][jvertex].edge_triangle_count > 0)
+          std::get<0>(alg_data)[vertex][jvertex].edge_triangle_count--;
+      }
+      //}
+      // if (!std::get<0>(alg_data)[vertex][kvertex].mark_for_deletion) {
+      if (std::get<0>(alg_data)[vertex][kvertex].edge_triangle_count > 0)
+        std::get<0>(alg_data)[vertex][kvertex].edge_triangle_count--;
+      //}
+    }
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
+                  AlgData& alg_data) const {
+    for (auto& adje : std::get<0>(alg_data)[vertex]) {
+      if (adje.second.mark_for_deletion && !adje.second.already_jk_unrolled &&
+          adje.second.jk_close_count > 0) {
+        adje.second.already_jk_unrolled = true;
+        // send notice to all i's
+        vertex_locator j = vertex;
+        vertex_locator k = adje.first;
+        std::get<2>(alg_data)++;
+        for (vertex_locator i : std::get<1>(alg_data)[vertex]) {
+          my_type new_visitor(i, j, k);
+          vis_queue->queue_visitor(new_visitor);
+        }
+      }
+    }
+    return false;
+  }
+
+  template <typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    std::cout << "Shoudn't be here" << std::endl;
+    exit(-1);
+  }
+
+  friend inline bool operator>(const unroll_iedges_visitor& v1,
+                               const unroll_iedges_visitor& v2) {
+    return false;
+  }
+
+  friend inline bool operator<(const unroll_iedges_visitor& v1,
+                               const unroll_iedges_visitor& v2) {
+    return false;
+  }
+
+  vertex_locator vertex;
+  vertex_locator jvertex;
+  vertex_locator kvertex;
+};
+
+template <typename TGraph, typename DOGR, typename IEDGES>
+void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
   //
   // reset all edges
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
@@ -579,6 +665,7 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
       kvp.second.edge_triangle_count = 0;
       kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
+      kvp.second.already_jk_unrolled = 0;
     }
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
@@ -586,6 +673,7 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
       kvp.second.edge_triangle_count = 0;
       kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
+      kvp.second.already_jk_unrolled = 0;
     }
   }
 
@@ -595,8 +683,8 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
   {
     int  k         = -1;  // dummy val
     int  cut_count = 0;   // dummy
-    auto alg_data  = std::forward_as_tuple(dogr, local_triangle_count,
-                                          local_wedge_count, k, cut_count);
+    auto alg_data  = std::forward_as_tuple(
+        dogr, local_triangle_count, local_wedge_count, k, cut_count, iedges);
     auto vq = create_visitor_queue<core2_wedges<TGraph, false>, lifo_queue>(
         &g, alg_data);
     vq.init_visitor_traversal();
@@ -613,46 +701,56 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
   //             << std::endl;
   // }
 }
-template <typename TGraph, typename DOGR>
-uint64_t count_edges(TGraph& g, DOGR& dogr) {
-  uint64_t local_edge_count(0);
-  for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-    local_edge_count += dogr[*vitr].size();
+
+template <typename TGraph, typename DOGR, typename IEDGES>
+uint64_t unroll_jk(TGraph& g, DOGR& dogr, IEDGES& iedges) {
+  uint64_t local_jk_cut_count(0);
+  {
+    auto alg_data = std::forward_as_tuple(dogr, iedges, local_jk_cut_count);
+    auto vq = create_visitor_queue<unroll_iedges_visitor<TGraph>, lifo_queue>(
+        &g, alg_data);
+    vq.init_visitor_traversal();
   }
-  for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
-    local_edge_count += dogr[*vitr].size();
-  }
-  return comm_world().all_reduce(local_edge_count, MPI_SUM);
+  return comm_world().all_reduce(local_jk_cut_count, MPI_SUM);
 }
 
-template <typename TGraph, typename DOGR>
-uint64_t decompose_truss(TGraph& g, DOGR& dogr, int k) {
-  uint64_t global_cut_count(0);
+template <typename TGraph, typename DOGR, typename IEDGES>
+uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
+  uint64_t global_jk_cut_count(0);
   do {
-    uint64_t local_cut_count = 0;
-    uint64_t local_triangle_count(0), local_wedge_count(0);
+    uint64_t global_cut_count(0);
+    do {
+      uint64_t local_cut_count = 0;
+      uint64_t local_triangle_count(0), local_wedge_count(0);
 
-    double start_time = MPI_Wtime();
-    {
-      auto alg_data = std::forward_as_tuple(
-          dogr, local_triangle_count, local_wedge_count, k, local_cut_count);
-      auto vq = create_visitor_queue<core2_wedges<TGraph, true>, lifo_queue>(
-          &g, alg_data);
-      vq.init_visitor_traversal();
-    }
-    global_cut_count = comm_world().all_reduce(local_cut_count, MPI_SUM);
-  } while (global_cut_count > 0);
+      double start_time = MPI_Wtime();
+      {
+        auto alg_data =
+            std::forward_as_tuple(dogr, local_triangle_count, local_wedge_count,
+                                  k, local_cut_count, iedges);
+        auto vq = create_visitor_queue<core2_wedges<TGraph, true>, lifo_queue>(
+            &g, alg_data);
+        vq.init_visitor_traversal();
+      }
+      global_cut_count = comm_world().all_reduce(local_cut_count, MPI_SUM);
+    } while (global_cut_count > 0);
+    global_jk_cut_count = unroll_jk(g, dogr, iedges);
+    // if (comm_world().rank() == 0) {
+    //   std::cout << "global_jk_cut_count = " << global_jk_cut_count <<
+    //   std::endl;
+    // }
+  } while (global_jk_cut_count > 0);
 
   //
   // Remove marked edges.
-  uint64_t local_jk_removed_count(0), local_total_removed_count(0);
+  uint64_t local_total_removed_count(0), local_remaining(0);
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
       if (itr->second.mark_for_deletion) {
         ++local_total_removed_count;
-        if (itr->second.jk_close_count > 0) ++local_jk_removed_count;
         itr = dogr[*vitr].erase(itr);
       } else {
+        ++local_remaining;
         ++itr;
       }
     }
@@ -661,9 +759,9 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, int k) {
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
       if (itr->second.mark_for_deletion) {
         ++local_total_removed_count;
-        if (itr->second.jk_close_count > 0) ++local_jk_removed_count;
         itr = dogr[*vitr].erase(itr);
       } else {
+        ++local_remaining;
         ++itr;
       }
     }
@@ -671,17 +769,16 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, int k) {
 
   uint64_t global_remove_count =
       comm_world().all_reduce(local_total_removed_count, MPI_SUM);
-  uint64_t global_jk_removed_count =
-      comm_world().all_reduce(local_jk_removed_count, MPI_SUM);
+  uint64_t global_remaining = comm_world().all_reduce(local_remaining, MPI_SUM);
   if (comm_world().rank() == 0) {
-    std::cout << "Removed " << global_remove_count << ", with "
-              << global_jk_removed_count << " jk edges." << std::endl;
+    std::cout << "Removed " << global_remove_count
+              << ", global_remaining = " << global_remaining << std::endl;
   }
-  return global_jk_removed_count;
+  return global_remaining;
 }
 
 template <typename TGraph>
-uint64_t ktruss_watchj(TGraph& g) {
+uint64_t ktruss_unroll(TGraph& g) {
   typedef TGraph                          graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
 
@@ -824,20 +921,18 @@ uint64_t ktruss_watchj(TGraph& g) {
     }
   }
 
+  typename graph_type::template vertex_data<
+      std::set<vertex_locator>, std::allocator<std::set<vertex_locator>>>
+      iedges(g);
   MPI_Barrier(MPI_COMM_WORLD);
   double watchj_start_time = MPI_Wtime();
-  count_all_triangles_from_scratch(g, core2_directed);
+  count_all_triangles_from_scratch(g, core2_directed, iedges);
   int      k = 3;
   uint64_t edges_remaining(0);
   do {
-    double   this_truss_start = MPI_Wtime();
-    uint64_t jk_count         = decompose_truss(g, core2_directed, k);
-    while (jk_count > 0) {
-      count_all_triangles_from_scratch(g, core2_directed);
-      jk_count = decompose_truss(g, core2_directed, k);
-    }
-    edges_remaining       = count_edges(g, core2_directed);
-    double this_truss_end = MPI_Wtime();
+    double this_truss_start = MPI_Wtime();
+    edges_remaining         = decompose_truss(g, core2_directed, iedges, k);
+    double this_truss_end   = MPI_Wtime();
     if (comm_world().rank() == 0) {
       std::cout << "K = " << k << ", edges_remaining = " << edges_remaining
                 << ", time = " << this_truss_end - this_truss_start
@@ -851,149 +946,6 @@ uint64_t ktruss_watchj(TGraph& g) {
     std::cout << "TOTAL KTRUSS TIME = " << watchj_end_time - watchj_start_time
               << std::endl;
   }
-
-  // //
-  // // 3)  Build wedges & count
-  // double   total_ktruss_start_time = MPI_Wtime();
-  // uint64_t global_edges_remain(0);
-  // int      k = 3;
-  // do {
-  //   uint64_t global_edges_deleted(0);
-  //   uint64_t local_edges_remain(0);
-  //   double   single_ktruss_start_time = MPI_Wtime();
-  //   do {
-  //     uint64_t local_edges_deleted(0);
-  //     local_edges_remain = 0;
-  //     count_all_triangles_from_scratch(g, core2_directed);
-
-  //     uint64_t local_was_jk_removed = 0;
-  //     uint64_t local_edge_triangle_count(0);
-  //     for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr)
-  //     {
-  //       for (auto deitr = core2_directed[*vitr].begin();
-  //            deitr != core2_directed[*vitr].end();
-  //            /* no incr*/) {
-  //         if (deitr->second.edge_triangle_count >= k - 2) {
-  //           // deitr->second.edge_triangle_count = 0;  // reset for next
-  //           count
-  //           ++local_edges_remain;
-  //           ++deitr;
-  //         } else {
-  //           ++local_edges_deleted;
-  //           if (deitr->second.was_jk) local_was_jk_removed++;
-  //           deitr = core2_directed[*vitr].erase(deitr);  // remove
-  //         }
-  //       }
-  //     }
-  //     for (auto citr = g.controller_begin(); citr != g.controller_end();
-  //          ++citr) {
-  //       for (auto deitr = core2_directed[*citr].begin();
-  //            deitr != core2_directed[*citr].end();
-  //            /* no incr*/) {
-  //         if (deitr->second.edge_triangle_count >= k - 2) {
-  //           // deitr->second.edge_triangle_count = 0;  // reset for next
-  //           count
-  //           ++local_edges_remain;
-  //           ++deitr;
-  //         } else {
-  //           ++local_edges_deleted;
-  //           if (deitr->second.was_jk) local_was_jk_removed++;
-  //           deitr = core2_directed[*citr].erase(deitr);  // remove
-  //         }
-  //       }
-  //     }
-  //     uint64_t global_was_jk_removed =
-  //         comm_world().all_reduce(local_was_jk_removed, MPI_SUM);
-  //     global_edges_deleted =
-  //         comm_world().all_reduce(local_edges_deleted, MPI_SUM);
-  //     if (global_edges_deleted > 0 && comm_world().rank() == 0) {
-  //       std::cout << "Deleted " << global_edges_deleted << " edges"
-  //                 << ", was_jk deleted = " << global_was_jk_removed
-  //                 << std::endl;
-  //     }
-  //     if (global_edges_deleted > 0) {
-  //       // erase for next count
-  //       for (auto vitr = g.vertices_begin(); vitr != g.vertices_end();
-  //       ++vitr) {
-  //         for (auto& dode : core2_directed[*vitr]) {
-  //           dode.second.edge_triangle_count = 0;
-  //           dode.second.was_jk              = false;
-  //         }
-  //       }
-  //       for (auto citr = g.controller_begin(); citr != g.controller_end();
-  //            ++citr) {
-  //         for (auto& dode : core2_directed[*citr]) {
-  //           dode.second.edge_triangle_count = 0;
-  //           dode.second.was_jk              = false;
-  //         }
-  //       }
-  //     }
-
-  //   } while (global_edges_deleted > 0);
-
-  //   global_edges_remain = comm_world().all_reduce(local_edges_remain,
-  //   MPI_SUM);
-  //   double single_ktruss_end_time = MPI_Wtime();
-
-  //   if (comm_world().rank() == 0) {
-  //     std::cout << "K = " << k
-  //               << "   global_edges_remain = " << global_edges_remain
-  //               << " TIME = "
-  //               << single_ktruss_end_time - single_ktruss_start_time
-  //               << std::endl;
-  //   }
-  //   ++k;  // compute next k.
-  //         //
-  //         // precut here for ++K and clear
-  //         // erase for next count
-  //   local_edges_remain            = 0;
-  //   uint64_t local_was_jk_removed = 0;
-  //   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-  //     for (auto deitr = core2_directed[*vitr].begin();
-  //          deitr != core2_directed[*vitr].end();
-  //          /* no incr*/) {
-  //       if (deitr->second.edge_triangle_count >= k - 2) {
-  //         deitr->second.edge_triangle_count = 0;  // reset for next count
-  //         deitr->second.was_jk              = false;
-  //         ++local_edges_remain;
-  //         ++deitr;
-  //       } else {
-  //         if (deitr->second.was_jk) local_was_jk_removed++;
-  //         deitr = core2_directed[*vitr].erase(deitr);  // remove
-  //       }
-  //     }
-  //   }
-  //   for (auto citr = g.controller_begin(); citr != g.controller_end();
-  //   ++citr) {
-  //     for (auto deitr = core2_directed[*citr].begin();
-  //          deitr != core2_directed[*citr].end();
-  //          /* no incr*/) {
-  //       if (deitr->second.edge_triangle_count >= k - 2) {
-  //         deitr->second.edge_triangle_count = 0;  // reset for next count
-  //         deitr->second.was_jk              = false;
-  //         ++local_edges_remain;
-  //         ++deitr;
-  //       } else {
-  //         if (deitr->second.was_jk) local_was_jk_removed++;
-  //         deitr = core2_directed[*citr].erase(deitr);  // remove
-  //       }
-  //     }
-  //   }
-  //   global_edges_remain = comm_world().all_reduce(local_edges_remain,
-  //   MPI_SUM);
-  //   uint64_t global_was_jk_removed =
-  //       comm_world().all_reduce(local_was_jk_removed, MPI_SUM);
-  //   if (comm_world().rank() == 0) {
-  //     std::cout << "global_was_jk_removed = " << global_was_jk_removed
-  //               << std::endl;
-  //   }
-  // } while (global_edges_remain > 0);
-  // double total_ktruss_end_time = MPI_Wtime();
-  // if (comm_world().rank() == 0) {
-  //   std::cout << "TOTAL KTRUSS TIME = "
-  //             << total_ktruss_end_time - total_ktruss_start_time <<
-  //             std::endl;
-  // }
 
   return 0;
 }
