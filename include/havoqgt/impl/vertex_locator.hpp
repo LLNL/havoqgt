@@ -110,8 +110,15 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
   void set_intercept(bool intercept) { m_is_intercept = intercept; }
 
   uint64_t hash() const {
-    return (uint64_t(m_owner_dest) << 39) | uint64_t(m_local_id) |
-           (uint64_t(m_is_delegate) << 60);
+    // return (uint64_t(m_owner_dest) << 39) | uint64_t(m_local_id) |
+    //        (uint64_t(m_is_delegate) << 60);
+    uint64_t key;
+    if (m_is_delegate) {
+      key = (uint64_t(1) << 60) | uint64_t(m_local_id);
+    } else {
+      key = (uint64_t(m_owner_dest) << 39) | uint64_t(m_local_id);
+    }
+    return hash64shift(key);
   }
 
   friend bool operator==(const vertex_locator& x, const vertex_locator& y) {
@@ -162,6 +169,17 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
   }
 
  private:
+  uint64_t hash64shift(uint64_t key) const {
+    key = (~key) + (key << 21);  // key = (key << 21) - key - 1;
+    key = key ^ (key >> 24);
+    key = (key + (key << 3)) + (key << 8);  // key * 265
+    key = key ^ (key >> 14);
+    key = (key + (key << 2)) + (key << 4);  // key * 21
+    key = key ^ (key >> 28);
+    key = key + (key << 31);
+    return key;
+  }
+
   friend class delegate_partitioned_graph;
   unsigned int m_is_delegate : 1;
 

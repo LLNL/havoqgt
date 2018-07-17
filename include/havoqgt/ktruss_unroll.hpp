@@ -62,20 +62,45 @@
 #pragma include once
 
 #include <boost/container/deque.hpp>
+#include <boost/container/flat_map.hpp>
+#include <boost/container/flat_set.hpp>
 #include <fstream>
 #include <havoqgt/visitor_queue.hpp>
-//#include <boost/container/flat_map.hpp>
 #include <map>
-#include <unordered_map>
 
 namespace havoqgt {
 
-struct dogr_edge {
-  uint32_t target_degree           = 0;
-  uint32_t edge_triangle_count     = 0;
-  uint32_t jk_close_count : 30     = 0;
+struct dod_graph_edge {
+  uint32_t target_degree = 0;
+};
+
+struct dod_graph_truss_edge {
+  dod_graph_truss_edge()
+      : target_degree(0),
+        edge_triangle_count(0),
+        jk_close_count(0),
+        mark_for_deletion(0),
+        already_jk_unrolled(0),
+        fully_deleted(0) {}
+  dod_graph_truss_edge(dod_graph_edge dge)
+      : target_degree(dge.target_degree),
+        edge_triangle_count(0),
+        jk_close_count(0),
+        mark_for_deletion(0),
+        already_jk_unrolled(0),
+        fully_deleted(0) {}
+  void decrement_edge() {
+    if (edge_triangle_count > 0) --edge_triangle_count;
+  }
+  void decreemnt_jk_count() {
+    if (jk_close_count > 0) --jk_close_count;
+  }
+  uint32_t target_degree : 29      = 0;
   uint32_t mark_for_deletion : 1   = 0;
   uint32_t already_jk_unrolled : 1 = 0;
+  uint32_t fully_deleted : 1       = 0;
+  uint32_t edge_triangle_count     = 0;
+  uint32_t jk_close_count          = 0;
 };
 
 template <typename Visitor>
@@ -108,121 +133,28 @@ class lifo_queue {
   void clear() { m_data.clear(); }
 };
 
-template <typename Graph>
-class vis_dod_in_degree {
- public:
-  typedef vis_dod_in_degree<Graph>       my_type;
-  typedef typename Graph::vertex_locator vertex_locator;
-
-  vis_dod_in_degree() : vertex() {}
-
-  vis_dod_in_degree(vertex_locator v) : vertex(v) {}
-  template <typename AlgData>
-  bool pre_visit(AlgData& alg_data) const {
-    if (vertex.is_delegate()) {
-      if (!vertex.is_delegate_master()) {
-        return true;
-      }
-    }
-    std::get<1>(alg_data)[vertex]++;
+template <typename VLOC>
+inline bool edge_order_gt(uint32_t deg_a, uint32_t deg_b, VLOC v_a, VLOC v_b) {
+  auto max_deg = std::max(deg_a, deg_b);
+  auto min_deg = std::min(deg_a, deg_b);
+  if (max_deg / (1.5f) > min_deg) {
+    return v_a.hash() > v_b.hash();
+  }
+  if (deg_a > deg_b) {
+    return true;
+  }
+  if (deg_a < deg_b) {
     return false;
+  } else {
+    return v_a.hash() > v_b.hash();
   }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
-                  AlgData& alg_data) const {
-    if (vertex.is_delegate()) {
-      if (!vertex.is_delegate_master()) {
-        std::cerr << "vis_dod_in_degree() -- delegate slaves shouldn't be here"
-                  << std::endl;
-        exit(-1);
-      }
-    }
-    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
-      vertex_locator neighbor = dodedge.first;
-      my_type        new_visitor(neighbor);
-      vis_queue->queue_visitor(new_visitor);
-    }
-    return false;
-  }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    std::cerr << "vis_dod_in_degree() -- no visit()" << std::endl;
-    exit(-1);
-  }
-
-  vertex_locator vertex;
-};
-
-template <typename Graph>
-class vis_dod_round {
- public:
-  typedef vis_dod_round<Graph>           my_type;
-  typedef typename Graph::vertex_locator vertex_locator;
-
-  vis_dod_round() : vertex() {}
-  vis_dod_round(vertex_locator v) : vertex(v), round(0) {}
-  vis_dod_round(vertex_locator v, uint32_t r) : vertex(v), round(r) {}
-
-  template <typename AlgData>
-  bool pre_visit(AlgData& alg_data) const {
-    if (vertex.is_delegate()) {
-      if (!vertex.is_delegate_master()) {
-        return true;
-      }
-    }
-    if (std::get<1>(alg_data)[vertex] == 0) {
-      std::cerr << "vis_dod_round counting error" << std::endl;
-    }
-    std::get<2>(alg_data)[vertex] =
-        std::max(round, std::get<2>(alg_data)[vertex]);
-    if (--std::get<1>(alg_data)[vertex] == 0) {
-      // all in-edges have reported in, time to set my round
-      std::get<2>(alg_data)[vertex]++;
-      return true;
-    }
-    return false;
-  }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
-                  AlgData& alg_data) const {
-    if (vertex.is_delegate()) {
-      if (!vertex.is_delegate_master()) {
-        std::cerr << "vis_dod_in_degree() -- delegate slaves shouldn't be here"
-                  << std::endl;
-        exit(-1);
-      }
-    }
-    if (std::get<1>(alg_data)[vertex] != 0) return false;
-    if (std::get<2>(alg_data)[vertex] != 0) return false;
-    std::get<2>(alg_data)[vertex] = 1;
-    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
-      vertex_locator neighbor = dodedge.first;
-      my_type        new_visitor(neighbor, 1);
-      vis_queue->queue_visitor(new_visitor);
-    }
-    return false;
-  }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    if (std::get<1>(alg_data)[vertex] != 0) {
-      std::cerr << "vis_dod_round visit() -- not all in edges reported"
-                << std::endl;
-    }
-    for (auto& dodedge : std::get<0>(alg_data)[vertex]) {
-      vertex_locator neighbor = dodedge.first;
-      my_type        new_visitor(neighbor, std::get<2>(alg_data)[vertex]);
-      vis_queue->queue_visitor(new_visitor);
-    }
-    return false;
-  }
-
-  vertex_locator vertex;
-  uint32_t       round;
-};
+  // if (from_degree > /*std::get<2>(alg_data).degree(
+  //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
+  //     (from_degree ==
+  //          /*std::get<2>(alg_data).degree(
+  //                 vertex)*/ std::get<0>(alg_data)[vertex] &&
+  //      vertex.hash() < from_vertex.hash())) {
+}
 
 template <typename Graph>
 class core2_visitor {
@@ -345,13 +277,13 @@ class directed_core2 {
   directed_core2(vertex_locator v) : vertex(v), init(true) {}
 
   directed_core2(vertex_locator v, vertex_locator _from, uint32_t _from_degree)
-      : vertex(v), from_label(_from), from_degree(_from_degree), init(false) {}
+      : vertex(v), from_vertex(_from), from_degree(_from_degree), init(false) {}
 
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
     // if(std::get<0>(alg_data)[vertex] >= 2) {
-    if (from_degree >= std::get<2>(alg_data).degree(
-                           vertex) /*std::get<0>(alg_data)[vertex]*/) {
+    if (from_degree >= /*std::get<2>(alg_data).degree(
+                           vertex)*/ std::get<0>(alg_data)[vertex]) {
       // previously returned true, but changing here --- return true;
       if (vertex.is_delegate()) {
         if (!vertex.is_delegate_master()) {
@@ -360,16 +292,18 @@ class directed_core2 {
       }
       if (std::get<0>(alg_data)[vertex] < 2) return false;
       // only here should be low-degree & masters
-      if (from_degree > std::get<2>(alg_data).degree(
-                            vertex) /*std::get<0>(alg_data)[vertex]*/
-          || (from_degree ==
-                  std::get<2>(alg_data).degree(
-                      vertex) /*std::get<0>(alg_data)[vertex]*/
-              && vertex < from_label)) {
+      if (edge_order_gt(from_degree, std::get<0>(alg_data)[vertex], vertex,
+                        from_vertex)) {
+        // if (from_degree > /*std::get<2>(alg_data).degree(
+        //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
+        //     (from_degree ==
+        //          /*std::get<2>(alg_data).degree(
+        //                 vertex)*/ std::get<0>(alg_data)[vertex] &&
+        //      vertex.hash() < from_vertex.hash())) {
         auto vv = vertex;
         vv.set_bcast(0);
         vv.set_intercept(0);
-        auto fl = from_label;
+        auto fl = from_vertex;
         fl.set_bcast(0);
         fl.set_intercept(0);
 
@@ -386,7 +320,7 @@ class directed_core2 {
                   AlgData& alg_data) const {
     if (std::get<0>(alg_data)[vertex] >= 2) {
       // if in 2core, send degree to neighbors
-      uint32_t my_degree = /*std::get<0>(alg_data)[vertex];*/ g.degree(vertex);
+      uint32_t my_degree = std::get<0>(alg_data)[vertex];  // g.degree(vertex);
       for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
            ++eitr) {
         vertex_locator neighbor = eitr.target();
@@ -405,7 +339,7 @@ class directed_core2 {
       if (std::get<0>(alg_data)[vertex] >= 2) {
         // if in 2core, send degree to neighbors
         uint32_t my_degree =
-            /*std::get<0>(alg_data)[vertex];*/ g.degree(vertex);
+            std::get<0>(alg_data)[vertex];  // g.degree(vertex);
         for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
              ++eitr) {
           vertex_locator neighbor = eitr.target();
@@ -416,20 +350,6 @@ class directed_core2 {
         return true;
       }
     }
-
-    //    if(from_degree > g.degree(vertex) /*std::get<0>(alg_data)[vertex]*/ ||
-    //      (from_degree == g.degree(vertex)/*std::get<0>(alg_data)[vertex]*/ &&
-    //      vertex < from_label )) {
-    //
-    //      auto vv = vertex;
-    //      vv.set_bcast(0);
-    //      vv.set_intercept(0);
-    //      auto fl = from_label;
-    //      fl.set_bcast(0);
-    //      fl.set_intercept(0);
-    //
-    //      std::get<1>(alg_data)[vv][fl] = from_degree;
-    //    }
     return false;
   }
 
@@ -444,7 +364,7 @@ class directed_core2 {
   }
 
   vertex_locator vertex;
-  vertex_locator from_label;
+  vertex_locator from_vertex;
   uint32_t       from_degree;
   bool           init;
 };
@@ -483,11 +403,8 @@ class core2_wedges {
           std::get<0>(alg_data)[vertex][check_close].jk_close_count++;
           std::get<5>(alg_data)[vertex].insert(check_close);
         } else {
-          if (std::get<0>(alg_data)[vertex][check_close].edge_triangle_count >
-              0)
-            std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
-          if (std::get<0>(alg_data)[vertex][check_close].jk_close_count > 0)
-            std::get<0>(alg_data)[vertex][check_close].jk_close_count--;
+          std::get<0>(alg_data)[vertex][check_close].decrement_edge();
+          std::get<0>(alg_data)[vertex][check_close].decreemnt_jk_count();
         }
         return true;
       }
@@ -500,12 +417,8 @@ class core2_wedges {
           std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
           std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count++;
         } else {
-          if (std::get<0>(alg_data)[vertex][check_close].edge_triangle_count >
-              0)
-            std::get<0>(alg_data)[vertex][check_close].edge_triangle_count--;
-          if (std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count >
-              0)
-            std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count--;
+          std::get<0>(alg_data)[vertex][check_close].decrement_edge();
+          std::get<0>(alg_data)[vertex][from_vertex].decreemnt_jk_count();
         }
       }
     }
@@ -519,6 +432,7 @@ class core2_wedges {
     if (Decompose) {
       int k = std::get<3>(alg_data);
       for (auto& pair_a : std::get<0>(alg_data)[vertex]) {
+        if (pair_a.second.fully_deleted) continue;
         if (!pair_a.second.mark_for_deletion &&
             pair_a.second.edge_triangle_count < k - 2) {
           pair_a.second.mark_for_deletion = true;
@@ -529,10 +443,15 @@ class core2_wedges {
     }
     if (std::get<0>(alg_data)[vertex].size() > 1) {
       for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
+        if (pair_a.second.fully_deleted) continue;
         for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
-          if (pair_a.second.target_degree < pair_b.second.target_degree ||
-              (pair_a.second.target_degree == pair_b.second.target_degree &&
-               pair_a.first < pair_b.first)) {
+          if (pair_b.second.fully_deleted) continue;
+          // if (pair_a.second.target_degree < pair_b.second.target_degree ||
+          //     (pair_a.second.target_degree == pair_b.second.target_degree &&
+          //      pair_a.first.hash() < pair_b.first.hash())) {
+          if (!edge_order_gt(pair_a.second.target_degree,
+                             pair_b.second.target_degree, pair_a.first,
+                             pair_b.first)) {
             if (!Decompose) {
               my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
               vis_queue->queue_visitor(new_visitor);
@@ -658,6 +577,11 @@ class unroll_iedges_visitor {
 
 template <typename TGraph, typename DOGR, typename IEDGES>
 void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
+  // typedef TGraph                          graph_type;
+  // typedef typename TGraph::vertex_locator vertex_locator;
+  // typename graph_type::template vertex_data<
+  //     std::set<vertex_locator>, std::allocator<std::set<vertex_locator>>>
+  //     iedges_tmp(g);
   //
   // reset all edges
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
@@ -689,6 +613,16 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
         &g, alg_data);
     vq.init_visitor_traversal();
   }
+
+  // for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+  //   iedges[*vitr].insert(iedges[*vitr].end(), iedges_tmp[*vitr].begin(),
+  //                        iedges_tmp[*vitr].end());
+  // }
+  // for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr)
+  // {
+  //   iedges[*vitr].insert(iedges[*vitr].end(), iedges_tmp[*vitr].begin(),
+  //                        iedges_tmp[*vitr].end());
+  // }
   // MPI_Barrier(MPI_COMM_WORLD);
   // double   end_time           = MPI_Wtime();
   // uint64_t global_wedge_count = mpi_all_reduce(
@@ -746,9 +680,15 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
   uint64_t local_total_removed_count(0), local_remaining(0);
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
+      if (itr->second.fully_deleted) {
+        ++itr;
+        continue;
+      }
       if (itr->second.mark_for_deletion) {
         ++local_total_removed_count;
-        itr = dogr[*vitr].erase(itr);
+        // itr = dogr[*vitr].erase(itr);
+        itr->second.fully_deleted = true;
+        ++itr;
       } else {
         ++local_remaining;
         ++itr;
@@ -757,9 +697,15 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
+      if (itr->second.fully_deleted) {
+        ++itr;
+        continue;
+      }
       if (itr->second.mark_for_deletion) {
         ++local_total_removed_count;
-        itr = dogr[*vitr].erase(itr);
+        // itr = dogr[*vitr].erase(itr);
+        itr->second.fully_deleted = true;
+        ++itr;
       } else {
         ++local_remaining;
         ++itr;
@@ -777,20 +723,17 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
   return global_remaining;
 }
 
-template <typename TGraph>
-uint64_t ktruss_unroll(TGraph& g) {
+template <typename TGraph, typename DODgraph>
+void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
   typedef TGraph                          graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
 
   int mpi_size(0), mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
-  //
-  // 1)  Calculate 2core degree.   0 degree means that vertex is not in 2core
   typename graph_type::template vertex_data<
-      std::map<vertex_locator, dogr_edge>,
-      std::allocator<std::map<vertex_locator, dogr_edge>>>
+      std::map<vertex_locator, dod_graph_edge>,
+      std::allocator<std::map<vertex_locator, dod_graph_edge>>>
       core2_directed(g);
   {
     typename graph_type::template vertex_data<uint32_t,
@@ -808,18 +751,19 @@ uint64_t ktruss_unroll(TGraph& g) {
         core2_degree[*ditr] = g.degree(*ditr);
       }
 
-      // /// This computes the 2core
-      double start_time = MPI_Wtime();
-      {
-        auto alg_data = std::forward_as_tuple(core2_degree, core2_alive);
-        auto vq = create_visitor_queue<core2_visitor<graph_type>, lifo_queue>(
-            &g, alg_data);
-        vq.init_visitor_traversal();
-      }
-      double end_time = MPI_Wtime();
-      if (mpi_rank == 0) {
-        std::cout << "2Core time = " << end_time - start_time << std::endl;
-      }
+      // // /// This computes the 2core
+      // double start_time = MPI_Wtime();
+      // {
+      //   auto alg_data = std::forward_as_tuple(core2_degree, core2_alive);
+      //   auto vq = create_visitor_queue<core2_visitor<graph_type>,
+      //   lifo_queue>(
+      //       &g, alg_data);
+      //   vq.init_visitor_traversal();
+      // }
+      // double end_time = MPI_Wtime();
+      // if (mpi_rank == 0) {
+      //   std::cout << "2Core time = " << end_time - start_time << std::endl;
+      // }
     }
 
     //
@@ -851,16 +795,29 @@ uint64_t ktruss_unroll(TGraph& g) {
 
     // (was) Sort Directed 2 core
     MPI_Barrier(MPI_COMM_WORLD);
-    uint64_t local_max_dod(0), local_max_deg(0);
+    uint64_t local_max_dod(0), local_max_deg(0), local_max_dod_orig_deg(0);
     start_time = MPI_Wtime();
     {
+      std::stringstream ss;
+      // ss << "degrees_" << comm_world().rank();
+      // std::ofstream ofs_degrees(ss.str().c_str());
       for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+        // ofs_degrees << core2_directed[*vitr].size() << " " << g.degree(*vitr)
+        //            << std::endl;
+        if (core2_directed[*vitr].size() > local_max_dod) {
+          local_max_dod_orig_deg = uint64_t(g.degree(*vitr));
+        }
         local_max_dod =
             std::max(local_max_dod, uint64_t(core2_directed[*vitr].size()));
         local_max_deg = std::max(local_max_deg, uint64_t(g.degree(*vitr)));
       }
       for (auto citr = g.controller_begin(); citr != g.controller_end();
            ++citr) {
+        // ofs_degrees << core2_directed[*citr].size() << " " << g.degree(*citr)
+        //            << std::endl;
+        if (core2_directed[*citr].size() > local_max_dod) {
+          local_max_dod_orig_deg = uint64_t(g.degree(*citr));
+        }
         local_max_dod =
             std::max(local_max_dod, uint64_t(core2_directed[*citr].size()));
         local_max_deg = std::max(local_max_deg, uint64_t(g.degree(*citr)));
@@ -876,6 +833,8 @@ uint64_t ktruss_unroll(TGraph& g) {
       std::cout << "Largest DOD out degree = " << global_max_dod << std::endl;
       std::cout << "Largest orig degree = " << global_max_deg << std::endl;
     }
+    std::cout << whoami() << " max_local_dod_deg = " << local_max_dod
+              << ", orig deg was " << local_max_dod_orig_deg << std::endl;
     {  // 4)  Compute distributions
       //
 
@@ -921,17 +880,44 @@ uint64_t ktruss_unroll(TGraph& g) {
     }
   }
 
+  // Copy edges into dod_graph_truss
+  for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+    dod_graph_truss[*vitr].insert(core2_directed[*vitr].begin(),
+                                  core2_directed[*vitr].end());
+  }
+  for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+  }
+}
+
+template <typename TGraph>
+uint64_t ktruss_unroll(TGraph& g) {
+  typedef TGraph                          graph_type;
+  typedef typename TGraph::vertex_locator vertex_locator;
+
+  int mpi_size(0), mpi_rank(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+
+  typename graph_type::template vertex_data<
+      boost::container::flat_map<vertex_locator, dod_graph_truss_edge>,
+      std::allocator<
+          boost::container::flat_map<vertex_locator, dod_graph_truss_edge>>>
+      dod_graph_truss(g);
+
+  construct_dod_graph(g, dod_graph_truss);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  double watchj_start_time = MPI_Wtime();
   typename graph_type::template vertex_data<
       std::set<vertex_locator>, std::allocator<std::set<vertex_locator>>>
       iedges(g);
-  MPI_Barrier(MPI_COMM_WORLD);
-  double watchj_start_time = MPI_Wtime();
-  count_all_triangles_from_scratch(g, core2_directed, iedges);
+  count_all_triangles_from_scratch(g, dod_graph_truss, iedges);
+
   int      k = 3;
   uint64_t edges_remaining(0);
   do {
     double this_truss_start = MPI_Wtime();
-    edges_remaining         = decompose_truss(g, core2_directed, iedges, k);
+    edges_remaining         = decompose_truss(g, dod_graph_truss, iedges, k);
     double this_truss_end   = MPI_Wtime();
     if (comm_world().rank() == 0) {
       std::cout << "K = " << k << ", edges_remaining = " << edges_remaining
