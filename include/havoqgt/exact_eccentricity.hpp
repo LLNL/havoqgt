@@ -1029,9 +1029,7 @@ class exact_eccentricity {
 // -------------------------------------------------------------------------------------------------------------- //
 // bounding algorithm
 // -------------------------------------------------------------------------------------------------------------- //
-
-  std::pair<size_t, size_t>
-  bound_ecc() {
+  std::pair<size_t, size_t> bound_ecc() {
     const auto ret_vrtx = bound_ecc_helper(m_graph.vertices_begin(), m_graph.vertices_end());
     const auto ret_ctrl = bound_ecc_helper(m_graph.controller_begin(), m_graph.controller_end());
 

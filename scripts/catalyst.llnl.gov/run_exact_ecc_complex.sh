@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
 
 # ---------------------------------------------------------------------------------------------------- #
+# Usages
+# ---------------------------------------------------------------------------------------------------- #
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	yt	 -n 	1	 -k 	64	 -t 	ds_fix	 -l 	20:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	rn	 -n 	8	 -k 	128	 -t 	ds_fix	 -l 	4:00:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	wk	 -n 	1	 -k 	64	 -t 	ds_fix	 -l 	20:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	ok	 -n 	8	 -k 	128	 -t 	ds_fix	 -l 	5:00:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	pt	 -n 	8	 -k 	128	 -t 	ds_fix	 -l 	2:00:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	wk2	 -n 	128	 -k 	128	 -t 	ds_fix	 -l 	9:00:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	fr	 -n 	64	 -k 	128	 -t 	ds_fix	 -l 	29:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	tw	 -n 	64	 -k 	128	 -t 	ds_fix	 -l 	4:00:00
+#sh scripts/run_exact_ecc_complex.sh 	  -g 	wb	 -n 	128	 -k 	4	 -t 	tk	 -l 	1:00:00	 -b
+
+# ---------------------------------------------------------------------------------------------------- #
 # Command line options
 # ---------------------------------------------------------------------------------------------------- #
 num_nodes=1
 k=128
 time_limit="29:00"
-sampling_rate=10
 
 while getopts "g:n:k:t:l:s:b" OPT
 do
@@ -16,7 +28,6 @@ do
     n) num_nodes=$OPTARG;;
     k) k=$OPTARG;;
     l) time_limit=$OPTARG;;
-    s) sampling_rate=$OPTARG;;
     b) use_big_msg_size=true; ;;
     :) echo  "[ERROR] Option argument is undefined.";;   #
     \?) echo "[ERROR] Undefined options.";;
@@ -59,7 +70,8 @@ function make_script
         echo "export HAVOQGT_MAILBOX_SHM_SIZE=16384" >> ${sh_file}
         echo "export HAVOQGT_MAILBOX_MPI_SIZE=131072" >> ${sh_file}
     fi
-    echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=${procs} --distribution=block ./src/${exe_file_name} -i /dev/shm/graph  -e ${ecc_file_name} ${source_selection_algorithms} -c ${two_core_file_name}" >> ${sh_file}
+    # removed  -c ${two_core_file_name}
+    echo "srun --drop-caches=pagecache -N${num_nodes} --ntasks-per-node=${procs} --distribution=block ./src/${exe_file_name} -i /dev/shm/graph  -e ${ecc_file_name} ${source_selection_algorithms}" >> ${sh_file}
 }
 
 function compile()
@@ -111,7 +123,7 @@ sbatch_out="sbatch_${graph_name}_n${num_nodes}_k${k}_${tag}.out"
 sh_file="run_${graph_name}_n${num_nodes}_k${k}_${tag}.sh"
 exe_file_name="run_exact_ecc_k${k}_${tag}"
 ecc_file_name="${ecc_out_path}/ecc_k${k}_${tag}"
-two_core_file_name="${base_graph_path}/2core_table"
+# two_core_file_name="${base_graph_path}/2core_table"
 graph_path="${base_graph_path}/n${num_nodes}/graph"
 
 make_script
