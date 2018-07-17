@@ -135,18 +135,18 @@ class lifo_queue {
 
 template <typename VLOC>
 inline bool edge_order_gt(uint32_t deg_a, uint32_t deg_b, VLOC v_a, VLOC v_b) {
-  auto max_deg = std::max(deg_a, deg_b);
-  auto min_deg = std::min(deg_a, deg_b);
-  if (max_deg / (1.5f) > min_deg) {
-    return v_a.hash() > v_b.hash();
-  }
+  // auto max_deg = std::max(deg_a, deg_b);
+  // auto min_deg = std::min(deg_a, deg_b);
+  // if (max_deg / (1.5f) > min_deg) {
+  //   return v_a.hash() > v_b.hash();
+  // }
   if (deg_a > deg_b) {
     return true;
   }
   if (deg_a < deg_b) {
     return false;
   } else {
-    return v_a.hash() > v_b.hash();
+    return v_b < v_a;
   }
   // if (from_degree > /*std::get<2>(alg_data).degree(
   //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
@@ -282,35 +282,34 @@ class directed_core2 {
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
     // if(std::get<0>(alg_data)[vertex] >= 2) {
-    if (from_degree >= /*std::get<2>(alg_data).degree(
-                           vertex)*/ std::get<0>(alg_data)[vertex]) {
-      // previously returned true, but changing here --- return true;
-      if (vertex.is_delegate()) {
-        if (!vertex.is_delegate_master()) {
-          return true;
-        }
-      }
-      if (std::get<0>(alg_data)[vertex] < 2) return false;
-      // only here should be low-degree & masters
-      if (edge_order_gt(from_degree, std::get<0>(alg_data)[vertex], vertex,
-                        from_vertex)) {
-        // if (from_degree > /*std::get<2>(alg_data).degree(
-        //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
-        //     (from_degree ==
-        //          /*std::get<2>(alg_data).degree(
-        //                 vertex)*/ std::get<0>(alg_data)[vertex] &&
-        //      vertex.hash() < from_vertex.hash())) {
-        auto vv = vertex;
-        vv.set_bcast(0);
-        vv.set_intercept(0);
-        auto fl = from_vertex;
-        fl.set_bcast(0);
-        fl.set_intercept(0);
-
-        std::get<1>(alg_data)[vv][fl].target_degree = from_degree;
-        // std::get<1>(alg_data)[vv].add(fl, from_degree);
+    if (from_degree < std::get<2>(alg_data).degree(vertex)) return false;
+    // previously returned true, but changing here --- return true;
+    if (vertex.is_delegate()) {
+      if (!vertex.is_delegate_master()) {
+        return true;
       }
     }
+    if (std::get<0>(alg_data)[vertex] < 2) return false;
+    // only here should be low-degree & masters
+    if (edge_order_gt(from_degree, std::get<2>(alg_data).degree(vertex),
+                      from_vertex, vertex)) {
+      // if (from_degree > /*std::get<2>(alg_data).degree(
+      //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
+      //     (from_degree ==
+      //          /*std::get<2>(alg_data).degree(
+      //                 vertex)*/ std::get<0>(alg_data)[vertex] &&
+      //      vertex.hash() < from_vertex.hash())) {
+      auto vv = vertex;
+      vv.set_bcast(0);
+      vv.set_intercept(0);
+      auto fl = from_vertex;
+      fl.set_bcast(0);
+      fl.set_intercept(0);
+
+      std::get<1>(alg_data)[vv][fl].target_degree = from_degree;
+      // std::get<1>(alg_data)[vv].add(fl, from_degree);
+    }
+    //}
     //}
     return false;
   }
@@ -320,7 +319,7 @@ class directed_core2 {
                   AlgData& alg_data) const {
     if (std::get<0>(alg_data)[vertex] >= 2) {
       // if in 2core, send degree to neighbors
-      uint32_t my_degree = std::get<0>(alg_data)[vertex];  // g.degree(vertex);
+      uint32_t my_degree = g.degree(vertex);
       for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
            ++eitr) {
         vertex_locator neighbor = eitr.target();
@@ -338,8 +337,7 @@ class directed_core2 {
     if (init) {
       if (std::get<0>(alg_data)[vertex] >= 2) {
         // if in 2core, send degree to neighbors
-        uint32_t my_degree =
-            std::get<0>(alg_data)[vertex];  // g.degree(vertex);
+        uint32_t my_degree = g.degree(vertex);
         for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
              ++eitr) {
           vertex_locator neighbor = eitr.target();
@@ -401,10 +399,17 @@ class core2_wedges {
         if (!Decompose) {
           std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
           std::get<0>(alg_data)[vertex][check_close].jk_close_count++;
-          std::get<5>(alg_data)[vertex].insert(check_close);
+          // std::get<5>(alg_data)[vertex].insert(from_vertex);  // i
+          std::get<5>(alg_data)[vertex][from_vertex]++;
         } else {
           std::get<0>(alg_data)[vertex][check_close].decrement_edge();
           std::get<0>(alg_data)[vertex][check_close].decreemnt_jk_count();
+          if (std::get<5>(alg_data)[vertex][from_vertex] == 1) {
+            std::get<5>(alg_data)[vertex].erase(from_vertex);
+          } else {
+            std::get<5>(alg_data)[vertex][from_vertex]--;
+          }
+          // if iedges was map, could decrement here
         }
         return true;
       }
@@ -418,7 +423,7 @@ class core2_wedges {
           std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count++;
         } else {
           std::get<0>(alg_data)[vertex][check_close].decrement_edge();
-          std::get<0>(alg_data)[vertex][from_vertex].decreemnt_jk_count();
+          std::get<0>(alg_data)[vertex][from_vertex].decrement_edge();
         }
       }
     }
@@ -440,15 +445,14 @@ class core2_wedges {
           std::get<4>(alg_data)++;
         }
       }
+      if (to_delete.size() == 0) return false;  // nothing to decompose
     }
     if (std::get<0>(alg_data)[vertex].size() > 1) {
       for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
         if (pair_a.second.fully_deleted) continue;
         for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
+          if (pair_a.first == pair_b.first) continue;
           if (pair_b.second.fully_deleted) continue;
-          // if (pair_a.second.target_degree < pair_b.second.target_degree ||
-          //     (pair_a.second.target_degree == pair_b.second.target_degree &&
-          //      pair_a.first.hash() < pair_b.first.hash())) {
           if (!edge_order_gt(pair_a.second.target_degree,
                              pair_b.second.target_degree, pair_a.first,
                              pair_b.first)) {
@@ -518,19 +522,18 @@ class unroll_iedges_visitor {
         return true;
       }
     }
-    if (std::get<0>(alg_data)[vertex].count(kvertex) > 0) {
-      // kvertex exists, decrement j & k edges.
-      // if (!std::get<0>(alg_data)[vertex][jvertex].mark_for_deletion) {
-      if (std::get<0>(alg_data)[vertex].count(jvertex) > 0) {
-        if (std::get<0>(alg_data)[vertex][jvertex].edge_triangle_count > 0)
-          std::get<0>(alg_data)[vertex][jvertex].edge_triangle_count--;
-      }
-      //}
-      // if (!std::get<0>(alg_data)[vertex][kvertex].mark_for_deletion) {
-      if (std::get<0>(alg_data)[vertex][kvertex].edge_triangle_count > 0)
-        std::get<0>(alg_data)[vertex][kvertex].edge_triangle_count--;
-      //}
+    // if (std::get<0>(alg_data)[vertex].count(kvertex) > 0) {
+    //   if(!std::get<0>(alg_data)[vertex][jvertex].fully_deleted || )
+    // if (!std::get<0>(alg_data)[vertex][jvertex].fully_deleted &&
+    //     !std::get<0>(alg_data)[vertex][kvertex].fully_deleted) {
+    // kvertex exists, decrement j & k edges.
+    // if (!std::get<0>(alg_data)[vertex][jvertex].mark_for_deletion) {
+    if (std::get<0>(alg_data)[vertex].count(jvertex) > 0 &&
+        std::get<0>(alg_data)[vertex].count(kvertex) > 0) {
+      std::get<0>(alg_data)[vertex][jvertex].decrement_edge();
+      std::get<0>(alg_data)[vertex][kvertex].decrement_edge();
     }
+    //}
     return false;
   }
 
@@ -538,17 +541,21 @@ class unroll_iedges_visitor {
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
     for (auto& adje : std::get<0>(alg_data)[vertex]) {
-      if (adje.second.mark_for_deletion && !adje.second.already_jk_unrolled &&
-          adje.second.jk_close_count > 0) {
-        adje.second.already_jk_unrolled = true;
+      if (adje.second.fully_deleted) continue;
+      if (adje.second.mark_for_deletion
+          /*&& !adje.second.already_jk_unrolled*/
+          && adje.second.jk_close_count > 0) {
+        // adje.second.already_jk_unrolled = true;
+        adje.second.jk_close_count = 0;
         // send notice to all i's
         vertex_locator j = vertex;
         vertex_locator k = adje.first;
         std::get<2>(alg_data)++;
-        for (vertex_locator i : std::get<1>(alg_data)[vertex]) {
-          my_type new_visitor(i, j, k);
+        for (auto& ic : std::get<1>(alg_data)[vertex]) {
+          my_type new_visitor(ic.first, j, k);
           vis_queue->queue_visitor(new_visitor);
         }
+        std::get<1>(alg_data)[vertex].clear();  // only do this once
       }
     }
     return false;
@@ -651,34 +658,39 @@ uint64_t unroll_jk(TGraph& g, DOGR& dogr, IEDGES& iedges) {
 template <typename TGraph, typename DOGR, typename IEDGES>
 uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
   uint64_t global_jk_cut_count(0);
+  // do {
+  uint64_t global_cut_count(0);
   do {
-    uint64_t global_cut_count(0);
-    do {
-      uint64_t local_cut_count = 0;
-      uint64_t local_triangle_count(0), local_wedge_count(0);
+    uint64_t local_cut_count = 0;
+    uint64_t local_triangle_count(0), local_wedge_count(0);
 
-      double start_time = MPI_Wtime();
-      {
-        auto alg_data =
-            std::forward_as_tuple(dogr, local_triangle_count, local_wedge_count,
-                                  k, local_cut_count, iedges);
-        auto vq = create_visitor_queue<core2_wedges<TGraph, true>, lifo_queue>(
-            &g, alg_data);
-        vq.init_visitor_traversal();
-      }
-      global_cut_count = comm_world().all_reduce(local_cut_count, MPI_SUM);
-    } while (global_cut_count > 0);
-    global_jk_cut_count = unroll_jk(g, dogr, iedges);
-    // if (comm_world().rank() == 0) {
-    //   std::cout << "global_jk_cut_count = " << global_jk_cut_count <<
-    //   std::endl;
-    // }
-  } while (global_jk_cut_count > 0);
+    double start_time = MPI_Wtime();
+    {
+      auto alg_data =
+          std::forward_as_tuple(dogr, local_triangle_count, local_wedge_count,
+                                k, local_cut_count, iedges);
+      auto vq = create_visitor_queue<core2_wedges<TGraph, true>, lifo_queue>(
+          &g, alg_data);
+      vq.init_visitor_traversal();
+    }
+    global_cut_count = comm_world().all_reduce(local_cut_count, MPI_SUM);
+    // if (global_cut_count > 0) {
+    global_cut_count += unroll_jk(g, dogr, iedges);
+    //}
+  } while (global_cut_count > 0);
+  // global_jk_cut_count =
+  // if (comm_world().rank() == 0) {
+  //   std::cout << "global_jk_cut_count = " << global_jk_cut_count <<
+  //   std::endl;
+  // }
+  //} while (global_jk_cut_count > 0);
 
   //
   // Remove marked edges.
-  uint64_t local_total_removed_count(0), local_remaining(0);
+  uint64_t local_total_removed_count(0), local_edges_remaining(0),
+      local_vertices_remaining(0);
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+    size_t vert_alive_degree(0);
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
       if (itr->second.fully_deleted) {
         ++itr;
@@ -686,16 +698,22 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
       }
       if (itr->second.mark_for_deletion) {
         ++local_total_removed_count;
-        // itr = dogr[*vitr].erase(itr);
         itr->second.fully_deleted = true;
         ++itr;
       } else {
-        ++local_remaining;
+        ++local_edges_remaining;
         ++itr;
+        ++vert_alive_degree;
       }
+    }
+    if (vert_alive_degree == 0) {
+      // dogr[*vitr].clear();
+    } else {
+      ++local_vertices_remaining;
     }
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+    size_t vert_alive_degree(0);
     for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
       if (itr->second.fully_deleted) {
         ++itr;
@@ -707,20 +725,31 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
         itr->second.fully_deleted = true;
         ++itr;
       } else {
-        ++local_remaining;
+        ++local_edges_remaining;
         ++itr;
+        ++vert_alive_degree;
       }
+    }
+    if (vert_alive_degree == 0) {
+      // dogr[*vitr].clear();
+    } else {
+      ++local_vertices_remaining;
     }
   }
 
   uint64_t global_remove_count =
       comm_world().all_reduce(local_total_removed_count, MPI_SUM);
-  uint64_t global_remaining = comm_world().all_reduce(local_remaining, MPI_SUM);
+  uint64_t global_edges_remaining =
+      comm_world().all_reduce(local_edges_remaining, MPI_SUM);
+  uint64_t global_vertices_remaining =
+      comm_world().all_reduce(local_vertices_remaining, MPI_SUM);
   if (comm_world().rank() == 0) {
     std::cout << "Removed " << global_remove_count
-              << ", global_remaining = " << global_remaining << std::endl;
+              << ", global_edges_remaining = " << global_edges_remaining
+              << ", global_vertices_remaining = " << global_vertices_remaining
+              << std::endl;
   }
-  return global_remaining;
+  return global_edges_remaining;
 }
 
 template <typename TGraph, typename DODgraph>
@@ -833,8 +862,8 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
       std::cout << "Largest DOD out degree = " << global_max_dod << std::endl;
       std::cout << "Largest orig degree = " << global_max_deg << std::endl;
     }
-    std::cout << whoami() << " max_local_dod_deg = " << local_max_dod
-              << ", orig deg was " << local_max_dod_orig_deg << std::endl;
+    // std::cout << whoami() << " max_local_dod_deg = " << local_max_dod
+    //           << ", orig deg was " << local_max_dod_orig_deg << std::endl;
     {  // 4)  Compute distributions
       //
 
@@ -909,7 +938,8 @@ uint64_t ktruss_unroll(TGraph& g) {
   MPI_Barrier(MPI_COMM_WORLD);
   double watchj_start_time = MPI_Wtime();
   typename graph_type::template vertex_data<
-      std::set<vertex_locator>, std::allocator<std::set<vertex_locator>>>
+      std::map<vertex_locator, uint32_t>,
+      std::allocator<std::map<vertex_locator, uint32_t>>>
       iedges(g);
   count_all_triangles_from_scratch(g, dod_graph_truss, iedges);
 
