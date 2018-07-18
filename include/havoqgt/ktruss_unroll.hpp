@@ -80,14 +80,12 @@ struct dod_graph_truss_edge {
         edge_triangle_count(0),
         jk_close_count(0),
         mark_for_deletion(0),
-        already_jk_unrolled(0),
         fully_deleted(0) {}
   dod_graph_truss_edge(dod_graph_edge dge)
       : target_degree(dge.target_degree),
         edge_triangle_count(0),
         jk_close_count(0),
         mark_for_deletion(0),
-        already_jk_unrolled(0),
         fully_deleted(0) {}
   void decrement_edge() {
     if (edge_triangle_count > 0) --edge_triangle_count;
@@ -95,12 +93,11 @@ struct dod_graph_truss_edge {
   void decreemnt_jk_count() {
     if (jk_close_count > 0) --jk_close_count;
   }
-  uint32_t target_degree : 29      = 0;
-  uint32_t mark_for_deletion : 1   = 0;
-  uint32_t already_jk_unrolled : 1 = 0;
-  uint32_t fully_deleted : 1       = 0;
-  uint32_t edge_triangle_count     = 0;
-  uint32_t jk_close_count          = 0;
+  uint32_t target_degree : 30    = 0;
+  uint32_t mark_for_deletion : 1 = 0;
+  uint32_t fully_deleted : 1     = 0;
+  uint32_t edge_triangle_count   = 0;
+  uint32_t jk_close_count        = 0;
 };
 
 template <typename Visitor>
@@ -453,9 +450,9 @@ class core2_wedges {
         for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
           if (pair_a.first == pair_b.first) continue;
           if (pair_b.second.fully_deleted) continue;
-          if (!edge_order_gt(pair_a.second.target_degree,
-                             pair_b.second.target_degree, pair_a.first,
-                             pair_b.first)) {
+          if (edge_order_gt(pair_b.second.target_degree,
+                            pair_a.second.target_degree, pair_b.first,
+                            pair_a.first)) {
             if (!Decompose) {
               my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
               vis_queue->queue_visitor(new_visitor);
@@ -464,7 +461,6 @@ class core2_wedges {
                   to_delete.count(pair_b.first) > 0) {
                 // if eather edge is ready to delete
                 // send delete request!
-                std::get<3>(alg_data);
                 my_type new_visitor(pair_a.first, pair_b.first, vertex, true);
                 vis_queue->queue_visitor(new_visitor);
               }
@@ -596,7 +592,6 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
       kvp.second.edge_triangle_count = 0;
       kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
-      kvp.second.already_jk_unrolled = 0;
     }
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
@@ -604,7 +599,6 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
       kvp.second.edge_triangle_count = 0;
       kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
-      kvp.second.already_jk_unrolled = 0;
     }
   }
 
@@ -657,8 +651,6 @@ uint64_t unroll_jk(TGraph& g, DOGR& dogr, IEDGES& iedges) {
 
 template <typename TGraph, typename DOGR, typename IEDGES>
 uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
-  uint64_t global_jk_cut_count(0);
-  // do {
   uint64_t global_cut_count(0);
   do {
     uint64_t local_cut_count = 0;
@@ -678,12 +670,6 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
     global_cut_count += unroll_jk(g, dogr, iedges);
     //}
   } while (global_cut_count > 0);
-  // global_jk_cut_count =
-  // if (comm_world().rank() == 0) {
-  //   std::cout << "global_jk_cut_count = " << global_jk_cut_count <<
-  //   std::endl;
-  // }
-  //} while (global_jk_cut_count > 0);
 
   //
   // Remove marked edges.
