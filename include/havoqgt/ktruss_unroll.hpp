@@ -78,26 +78,28 @@ struct dod_graph_truss_edge {
   dod_graph_truss_edge()
       : target_degree(0),
         edge_triangle_count(0),
-        jk_close_count(0),
         mark_for_deletion(0),
         fully_deleted(0) {}
   dod_graph_truss_edge(dod_graph_edge dge)
       : target_degree(dge.target_degree),
         edge_triangle_count(0),
-        jk_close_count(0),
         mark_for_deletion(0),
         fully_deleted(0) {}
   void decrement_edge() {
     if (edge_triangle_count > 0) --edge_triangle_count;
   }
-  void decreemnt_jk_count() {
-    if (jk_close_count > 0) --jk_close_count;
+  void increment_edge() {
+    if (edge_triangle_count ==
+        std::numeric_limits<decltype(edge_triangle_count)>::max()) {
+      std::cout << "WARNING: edge_triangle_count overflow!" << std::endl;
+    }
+    ++edge_triangle_count;
   }
-  uint32_t target_degree : 30    = 0;
-  uint32_t mark_for_deletion : 1 = 0;
-  uint32_t fully_deleted : 1     = 0;
-  uint32_t edge_triangle_count   = 0;
-  uint32_t jk_close_count        = 0;
+
+  uint32_t target_degree : 30;
+  uint32_t mark_for_deletion : 1;
+  uint32_t fully_deleted : 1;
+  uint32_t edge_triangle_count;
 };
 
 template <typename Visitor>
@@ -391,20 +393,22 @@ class core2_wedges {
     if (do_check_close) {       // Checking for closing edge (j,k)
       ++std::get<2>(alg_data);  // counts wedge checks
       if (std::get<0>(alg_data)[vertex].count(check_close) > 0) {
+        if (std::get<0>(alg_data)[vertex][check_close].fully_deleted) {
+          return false;
+        }
         ++std::get<1>(alg_data);  // counts total triangles
         // counts edge partipation in triangles
         if (!Decompose) {
-          std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
-          std::get<0>(alg_data)[vertex][check_close].jk_close_count++;
+          std::get<0>(alg_data)[vertex][check_close].increment_edge();
           // std::get<5>(alg_data)[vertex].insert(from_vertex);  // i
           std::get<5>(alg_data)[vertex][from_vertex]++;
         } else {
           std::get<0>(alg_data)[vertex][check_close].decrement_edge();
-          std::get<0>(alg_data)[vertex][check_close].decreemnt_jk_count();
-          if (std::get<5>(alg_data)[vertex][from_vertex] == 1) {
+          if (std::get<5>(alg_data)[vertex].count(from_vertex) == 0) {
+            std::cout << "NOT EXPECTED" << std::endl;
+          }
+          if (--(std::get<5>(alg_data)[vertex][from_vertex]) == 0) {
             std::get<5>(alg_data)[vertex].erase(from_vertex);
-          } else {
-            std::get<5>(alg_data)[vertex][from_vertex]--;
           }
           // if iedges was map, could decrement here
         }
@@ -416,8 +420,8 @@ class core2_wedges {
         std::cerr << "Error in edge counting" << std::endl;
       } else {
         if (!Decompose) {
-          std::get<0>(alg_data)[vertex][check_close].edge_triangle_count++;
-          std::get<0>(alg_data)[vertex][from_vertex].edge_triangle_count++;
+          std::get<0>(alg_data)[vertex][check_close].increment_edge();
+          std::get<0>(alg_data)[vertex][from_vertex].increment_edge();
         } else {
           std::get<0>(alg_data)[vertex][check_close].decrement_edge();
           std::get<0>(alg_data)[vertex][from_vertex].decrement_edge();
@@ -469,7 +473,6 @@ class core2_wedges {
         }
       }
     }
-
     return false;
   }
 
@@ -526,6 +529,12 @@ class unroll_iedges_visitor {
     // if (!std::get<0>(alg_data)[vertex][jvertex].mark_for_deletion) {
     if (std::get<0>(alg_data)[vertex].count(jvertex) > 0 &&
         std::get<0>(alg_data)[vertex].count(kvertex) > 0) {
+      if (std::get<0>(alg_data)[vertex][jvertex].mark_for_deletion ||
+          std::get<0>(alg_data)[vertex][kvertex].mark_for_deletion ||
+          std::get<0>(alg_data)[vertex][jvertex].fully_deleted ||
+          std::get<0>(alg_data)[vertex][kvertex].fully_deleted) {
+        return false;
+      }
       std::get<0>(alg_data)[vertex][jvertex].decrement_edge();
       std::get<0>(alg_data)[vertex][kvertex].decrement_edge();
     }
@@ -538,11 +547,8 @@ class unroll_iedges_visitor {
                   AlgData& alg_data) const {
     for (auto& adje : std::get<0>(alg_data)[vertex]) {
       if (adje.second.fully_deleted) continue;
-      if (adje.second.mark_for_deletion
-          /*&& !adje.second.already_jk_unrolled*/
-          && adje.second.jk_close_count > 0) {
-        // adje.second.already_jk_unrolled = true;
-        adje.second.jk_close_count = 0;
+      if (adje.second.mark_for_deletion &&
+          !std::get<1>(alg_data)[vertex].empty()) {
         // send notice to all i's
         vertex_locator j = vertex;
         vertex_locator k = adje.first;
@@ -551,7 +557,7 @@ class unroll_iedges_visitor {
           my_type new_visitor(ic.first, j, k);
           vis_queue->queue_visitor(new_visitor);
         }
-        std::get<1>(alg_data)[vertex].clear();  // only do this once
+        // std::get<1>(alg_data)[vertex].clear();  // only do this once
       }
     }
     return false;
@@ -590,14 +596,12 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr, IEDGES& iedges) {
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     for (auto& kvp : dogr[*vitr]) {
       kvp.second.edge_triangle_count = 0;
-      kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
     }
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
     for (auto& kvp : dogr[*vitr]) {
       kvp.second.edge_triangle_count = 0;
-      kvp.second.jk_close_count      = 0;
       kvp.second.mark_for_deletion   = 0;
     }
   }
@@ -650,10 +654,19 @@ uint64_t unroll_jk(TGraph& g, DOGR& dogr, IEDGES& iedges) {
 }
 
 template <typename TGraph, typename DOGR, typename IEDGES>
-uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
+void decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k,
+                     uint64_t& global_edges_remaining,
+                     uint64_t& global_vertices_remaining,
+                     uint64_t& global_triangles_remaining) {
   uint64_t global_cut_count(0);
+  uint64_t local_total_removed_count(0), local_edges_remaining(0),
+      local_vertices_remaining(0), local_triangles_remaining(0);
   do {
-    uint64_t local_cut_count = 0;
+    local_total_removed_count = 0;
+    local_edges_remaining     = 0;
+    local_vertices_remaining  = 0;
+    local_triangles_remaining = 0;
+    uint64_t local_cut_count  = 0;
     uint64_t local_triangle_count(0), local_wedge_count(0);
 
     double start_time = MPI_Wtime();
@@ -668,74 +681,59 @@ uint64_t decompose_truss(TGraph& g, DOGR& dogr, IEDGES& iedges, int k) {
     global_cut_count = comm_world().all_reduce(local_cut_count, MPI_SUM);
     // if (global_cut_count > 0) {
     global_cut_count += unroll_jk(g, dogr, iedges);
-    //}
-  } while (global_cut_count > 0);
 
-  //
-  // Remove marked edges.
-  uint64_t local_total_removed_count(0), local_edges_remaining(0),
-      local_vertices_remaining(0);
-  for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-    size_t vert_alive_degree(0);
-    for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
-      if (itr->second.fully_deleted) {
-        ++itr;
-        continue;
+    //
+    // Remove marked edges.
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      size_t vert_alive_degree(0);
+      for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); ++itr) {
+        if (itr->second.fully_deleted) {
+          continue;
+        }
+        if (itr->second.mark_for_deletion) {
+          ++local_total_removed_count;
+          itr->second.fully_deleted = true;
+        } else {
+          ++local_edges_remaining;
+          ++vert_alive_degree;
+          local_triangles_remaining += itr->second.edge_triangle_count;
+        }
       }
-      if (itr->second.mark_for_deletion) {
-        ++local_total_removed_count;
-        itr->second.fully_deleted = true;
-        ++itr;
+      if (vert_alive_degree == 0) {
+        dogr[*vitr].clear();
       } else {
-        ++local_edges_remaining;
-        ++itr;
-        ++vert_alive_degree;
+        ++local_vertices_remaining;
       }
     }
-    if (vert_alive_degree == 0) {
-      // dogr[*vitr].clear();
-    } else {
-      ++local_vertices_remaining;
-    }
-  }
-  for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
-    size_t vert_alive_degree(0);
-    for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); /*no inc*/) {
-      if (itr->second.fully_deleted) {
-        ++itr;
-        continue;
+    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+      size_t vert_alive_degree(0);
+      for (auto itr = dogr[*vitr].begin(); itr != dogr[*vitr].end(); ++itr) {
+        if (itr->second.fully_deleted) {
+          continue;
+        }
+        if (itr->second.mark_for_deletion) {
+          ++local_total_removed_count;
+          itr->second.fully_deleted = true;
+        } else {
+          ++local_edges_remaining;
+          ++vert_alive_degree;
+          local_triangles_remaining += itr->second.edge_triangle_count;
+        }
       }
-      if (itr->second.mark_for_deletion) {
-        ++local_total_removed_count;
-        // itr = dogr[*vitr].erase(itr);
-        itr->second.fully_deleted = true;
-        ++itr;
+      if (vert_alive_degree == 0) {
+        dogr[*vitr].clear();
       } else {
-        ++local_edges_remaining;
-        ++itr;
-        ++vert_alive_degree;
+        ++local_vertices_remaining;
       }
     }
-    if (vert_alive_degree == 0) {
-      // dogr[*vitr].clear();
-    } else {
-      ++local_vertices_remaining;
-    }
-  }
+  } while (comm_world().all_reduce(local_total_removed_count, MPI_SUM) > 0);
 
-  uint64_t global_remove_count =
-      comm_world().all_reduce(local_total_removed_count, MPI_SUM);
-  uint64_t global_edges_remaining =
+  global_edges_remaining =
       comm_world().all_reduce(local_edges_remaining, MPI_SUM);
-  uint64_t global_vertices_remaining =
+  global_vertices_remaining =
       comm_world().all_reduce(local_vertices_remaining, MPI_SUM);
-  if (comm_world().rank() == 0) {
-    std::cout << "Removed " << global_remove_count
-              << ", global_edges_remaining = " << global_edges_remaining
-              << ", global_vertices_remaining = " << global_vertices_remaining
-              << std::endl;
-  }
-  return global_edges_remaining;
+  global_triangles_remaining =
+      comm_world().all_reduce(local_triangles_remaining, MPI_SUM) / 3;
 }
 
 template <typename TGraph, typename DODgraph>
@@ -926,22 +924,26 @@ uint64_t ktruss_unroll(TGraph& g) {
   typename graph_type::template vertex_data<
       std::map<vertex_locator, uint32_t>,
       std::allocator<std::map<vertex_locator, uint32_t>>>
-      iedges(g);
-  count_all_triangles_from_scratch(g, dod_graph_truss, iedges);
-
+           iedges(g);
   int      k = 3;
-  uint64_t edges_remaining(0);
+  uint64_t global_edges_remaining(0);
   do {
-    double this_truss_start = MPI_Wtime();
-    edges_remaining         = decompose_truss(g, dod_graph_truss, iedges, k);
-    double this_truss_end   = MPI_Wtime();
+    uint64_t global_vertices_remaining(0), global_triangles_remaining(0);
+    double   this_truss_start = MPI_Wtime();
+    if (k == 3) {
+      count_all_triangles_from_scratch(g, dod_graph_truss, iedges);
+    }
+    decompose_truss(g, dod_graph_truss, iedges, k, global_edges_remaining,
+                    global_vertices_remaining, global_triangles_remaining);
+    double this_truss_end = MPI_Wtime();
     if (comm_world().rank() == 0) {
-      std::cout << "K = " << k << ", edges_remaining = " << edges_remaining
-                << ", time = " << this_truss_end - this_truss_start
-                << std::endl;
+      std::cout << "K= " << k << " edges_remaining= " << global_edges_remaining
+                << " vertices_remaining= " << global_vertices_remaining
+                << " triangles_remaining= " << global_triangles_remaining
+                << " time= " << this_truss_end - this_truss_start << std::endl;
     }
     ++k;
-  } while (edges_remaining > 0);
+  } while (global_edges_remaining > 0);
   MPI_Barrier(MPI_COMM_WORLD);
   double watchj_end_time = MPI_Wtime();
   if (comm_world().rank() == 0) {
