@@ -61,7 +61,7 @@
 
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/ktruss_watchj.hpp>
+#include <havoqgt/triangle_count_per_edge.hpp>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -90,7 +90,7 @@ void usage() {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& input_filename,
-                    std::string& backup_filename) {
+                    std::string& backup_filename, std::string& output_tc) {
   if (comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -103,7 +103,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:b:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:b:c:h ")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
@@ -114,6 +114,9 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
         break;
       case 'b':
         backup_filename = optarg;
+        break;
+      case 'c':
+        output_tc = optarg;
         break;
       default:
         std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
@@ -147,8 +150,9 @@ int main(int argc, char** argv) {
 
     std::string graph_input;
     std::string backup_filename;
+    std::string output_tc;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, output_tc);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (backup_filename.size() > 0) {
@@ -168,7 +172,7 @@ int main(int argc, char** argv) {
     graph->print_graph_statistics();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    ktruss_watchj(*graph);
+    triangle_count_per_edge(*graph, output_tc);
 
   }  // END Main MPI
   ;
