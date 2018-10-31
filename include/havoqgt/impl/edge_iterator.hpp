@@ -66,6 +66,9 @@ class delegate_partitioned_graph<SegementManager>::edge_iterator {
   edge_iterator& operator++();
   edge_iterator operator++(int);
 
+  edge_iterator& operator+=(const uint64_t offset);
+  edge_iterator operator+(const uint64_t offset) const;
+
   bool is_equal(const edge_iterator& x) const;
 
   friend bool operator==(const edge_iterator& x,
@@ -149,6 +152,23 @@ inline bool
 operator!=(const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& x,
            const typename delegate_partitioned_graph<SegmentManager>::edge_iterator& y) {
   return !(x.is_equal(y));
+}
+
+template <typename SegmentManager>
+inline
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator&
+delegate_partitioned_graph<SegmentManager>::edge_iterator::operator+=(const uint64_t offset) {
+  m_edge_offset += offset;
+  return *this;
+}
+
+template <typename SegmentManager>
+inline
+typename delegate_partitioned_graph<SegmentManager>::edge_iterator
+delegate_partitioned_graph<SegmentManager>::edge_iterator::operator+(const uint64_t offset) const {
+  auto wk(*this);
+  wk += offset;
+  return wk;
 }
 
 template <typename SegmentManager>

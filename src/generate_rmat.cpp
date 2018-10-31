@@ -232,6 +232,9 @@ int main(int argc, char** argv) {
     //
     // Calculate max degree
     uint64_t max_degree(0);
+    for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
+      max_degree = std::max(max_degree, graph->degree(*vitr));
+    }
     for (auto citr = graph->controller_begin(); citr != graph->controller_end(); ++citr) {
       max_degree = std::max(max_degree, graph->degree(*citr));
     }
