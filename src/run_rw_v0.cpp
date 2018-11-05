@@ -20,6 +20,7 @@ template <typename graph_type>
 class rw_algorithm_v0 {
  private:
   using vertex_locator = typename graph_type::vertex_locator;
+  using count_table_type = typename graph_type::template vertex_data<uint64_t, std::allocator<uint64_t>>;
 
  public:
   explicit rw_algorithm_v0(graph_type *const graph,
@@ -38,7 +39,10 @@ class rw_algorithm_v0 {
         m_count_walkers(0),
         m_gen(123),
         m_count_visited_goal(0),
-        m_warp_to_seed(warp_to_seed) {}
+        m_warp_to_seed(warp_to_seed),
+        m_num_visited_wk_table(*graph) {
+    m_num_visited_wk_table.reset(0);
+  }
 
   bool rw_launcher(const vertex_locator vertex) {
     if (vertex == m_seed_locator && m_count_walkers < m_num_walkers) {
@@ -86,6 +90,14 @@ class rw_algorithm_v0 {
     return m_count_visited_goal;
   }
 
+  void increment_visited_walkers(const vertex_locator vertex) {
+    ++m_num_visited_wk_table[vertex];
+  }
+
+  uint64_t num_visited_walkers(const vertex_locator vertex) const {
+    return m_num_visited_wk_table[vertex];
+  }
+
  private:
   graph_type *m_graph;
   vertex_locator m_seed_locator;
@@ -97,6 +109,7 @@ class rw_algorithm_v0 {
   std::mt19937 m_gen;
   uint64_t m_count_visited_goal;
   bool m_warp_to_seed;
+  count_table_type m_num_visited_wk_table;
 };
 
 template <typename graph_type>
@@ -141,16 +154,21 @@ class rw_visitor {
 
   template <typename visitor_queue_handle, typename alg_data_type>
   bool visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
-    vertex_locator target;
-    if (alg_data.russian_roulette()) { // Die at here and warp to somewhere
-      target = alg_data.warp_machine();
-      // std::cout << "Warp" << std::endl;
-    } else {
-      target = alg_data.neighbor_roulette(vertex);
-    }
-    // std::cout << g.locator_to_label(vertex) << " -> " << g.locator_to_label(target) << std::endl;
+    rw_visitor new_visitor;
 
-    rw_visitor new_visitor(target, num_visited + 1);
+    if (g.degree(vertex) == 0) {
+      vertex_locator target;
+      new_visitor = rw_visitor(alg_data.warp_machine(), num_visited);
+
+    } else {
+      if (alg_data.russian_roulette()) { // Die at here and warp to somewhere
+        new_visitor = rw_visitor(alg_data.warp_machine(), num_visited + 1);
+      } else {
+        new_visitor = rw_visitor(alg_data.neighbor_roulette(vertex), num_visited + 1);
+      }
+      alg_data.increment_visited_walkers(vertex);
+    }
+
     vis_queue->queue_visitor(new_visitor);
     return true;
   }
@@ -312,8 +330,9 @@ int main(int argc, char **argv) {
                    die_rate,
                    num_max_visits,
                    warp_to_seed);
-    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
     graph_type *graph = ddb.get_segment_manager()->find<graph_type>("graph_obj").first;
     assert(graph != nullptr);
 
@@ -344,6 +363,30 @@ int main(int argc, char **argv) {
     if (mpi_rank == 0) {
       std::cout << "Execution time: " << end_time - start_time << std::endl;
       std::cout << "#reached wk: " << global_num_arrived_goal << std::endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    std::map<uint64_t, uint64_t> top_vertices;
+    for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
+      const uint64_t num_visited = algorithm_data.num_visited_walkers(*vitr);
+      if (top_vertices.size() < 10) {
+        top_vertices.emplace(num_visited, graph->locator_to_label(*vitr));
+      } else if (top_vertices.begin()->first < num_visited) {
+        top_vertices.emplace(num_visited, graph->locator_to_label(*vitr));
+        top_vertices.erase(top_vertices.begin());
+      }
+    }
+
+    if (mpi_rank == 0) std::cout << "#visited : Vertex ID" << std::endl;
+    for (int i = 0; i < mpi_size; ++i) {
+      if (mpi_rank == i) {
+        std::cout << "--------------------" << std::endl;
+        for (const auto elem : top_vertices) {
+          std::cout << elem.first << " : " << elem.second << std::endl;
+        }
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
   }
 
