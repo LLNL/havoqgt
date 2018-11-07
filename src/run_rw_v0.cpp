@@ -8,6 +8,8 @@
 #include <random>
 #include <tuple>
 #include <cassert>
+#include <chrono>
+#include <sstream>
 
 #include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
@@ -15,6 +17,11 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+
+#define WRITE_LOG 1
+#if WRITE_LOG
+std::ofstream *ofs_log;
+#endif
 
 template <typename graph_type>
 class rw_algorithm_v0 {
@@ -28,16 +35,16 @@ class rw_algorithm_v0 {
                            const vertex_locator goal,
                            const std::size_t num_walkers,
                            const uint64_t die_rate,
-                           const uint64_t num_max_visits,
+                           const uint64_t max_walk_length,
                            const bool warp_to_seed)
       : m_graph(graph),
         m_seed_locator(seed),
         m_goal_locator(goal),
         m_num_walkers(num_walkers),
         m_die_rate(die_rate),
-        m_num_max_visits(num_max_visits),
+        m_max_walk_length(max_walk_length),
         m_count_walkers(0),
-        m_gen(123),
+        m_gen(std::chrono::system_clock::now().time_since_epoch().count()),
         m_count_visited_goal(0),
         m_warp_to_seed(warp_to_seed),
         m_num_visited_wk_table(*graph) {
@@ -78,8 +85,8 @@ class rw_algorithm_v0 {
     return edge.target();
   }
 
-  uint64_t max_visits() const {
-    return m_num_max_visits;
+  uint64_t max_walk_length() const {
+    return m_max_walk_length;
   }
 
   void increment_arrived_goal() {
@@ -98,13 +105,17 @@ class rw_algorithm_v0 {
     return m_num_visited_wk_table[vertex];
   }
 
+  graph_type *graph() {
+    return m_graph;
+  }
+
  private:
   graph_type *m_graph;
   vertex_locator m_seed_locator;
   vertex_locator m_goal_locator;
   uint64_t m_num_walkers;
   uint64_t m_die_rate;
-  uint64_t m_num_max_visits;
+  uint64_t m_max_walk_length;
   uint64_t m_count_walkers;
   std::mt19937 m_gen;
   uint64_t m_count_visited_goal;
@@ -118,36 +129,44 @@ class rw_visitor {
   using vertex_locator = typename graph_type::vertex_locator;
   rw_visitor()
       : vertex(),
-        num_visited(0) {}
+        walk_length(0) {}
 
   explicit rw_visitor(vertex_locator _vertex)
-      : vertex(_vertex), num_visited(0) {}
+      : vertex(_vertex), walk_length(0), id(-1) {}
 
-  rw_visitor(vertex_locator _vertex, int _num_visited)
-      : vertex(_vertex), num_visited(_num_visited) {}
+  rw_visitor(vertex_locator _vertex, int _walk_length, int _id)
+      : vertex(_vertex), walk_length(_walk_length), id(_id) {}
 
   template <typename visitor_queue_handle, typename alg_data_type>
   bool init_visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
-    bool launched = false;
+    int count = 0;
     while (alg_data.rw_launcher(vertex)) {
-      vis_queue->queue_visitor(rw_visitor(alg_data.neighbor_roulette(vertex), 0));
-      launched = true;
+      const auto target = alg_data.neighbor_roulette(vertex);
+#if WRITE_LOG
+      *ofs_log << "Start from " << g.locator_to_label(target) << std::endl;
+#endif
+      vis_queue->queue_visitor(rw_visitor(target, 0, count));
+      ++count;
     }
-    return launched;
+    return count > 0;
   }
 
   template <typename alg_data_type>
   bool pre_visit(alg_data_type &alg_data) const {
-    if (num_visited == alg_data.max_visits()) {
-      // std::cout << "Reached visit limit" << std::endl;
+    if (walk_length == alg_data.max_walk_length()) {
+#if WRITE_LOG
+      *ofs_log << "Has reached visit limit " << serialize(*(alg_data.graph())) << "\n";
+#endif
       return false;
     }
     if (alg_data.arrived_goal(vertex)) {
-      // std::cout << "Arrived goal" << std::endl;
       alg_data.increment_arrived_goal();
+#if WRITE_LOG
+      *ofs_log << "Has arrived goal " << serialize(*(alg_data.graph())) << "\n";
+#endif
       return false;
     }
-    assert(num_visited < alg_data.max_visits());
+    assert(walk_length < alg_data.max_walk_length());
 
     return true;
   }
@@ -156,15 +175,27 @@ class rw_visitor {
   bool visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
     rw_visitor new_visitor;
 
-    if (g.degree(vertex) == 0) {
-      vertex_locator target;
-      new_visitor = rw_visitor(alg_data.warp_machine(), num_visited);
+    if (g.degree(vertex) <= 1) {
+      auto target = alg_data.warp_machine();
+      new_visitor = rw_visitor(target, walk_length, id);
+#if WRITE_LOG
+      *ofs_log << "Dead end at " << serialize(g) << ". Restart from " << new_visitor.serialize(g)
+               << "\n";
+#endif
 
     } else {
       if (alg_data.russian_roulette()) { // Die at here and warp to somewhere
-        new_visitor = rw_visitor(alg_data.warp_machine(), num_visited + 1);
+        auto target = alg_data.warp_machine();
+        new_visitor = rw_visitor(target, walk_length + 1, id);
+#if WRITE_LOG
+        *ofs_log << "Warp " << serialize(g) << " -> " << new_visitor.serialize(g) << "\n";
+#endif
       } else {
-        new_visitor = rw_visitor(alg_data.neighbor_roulette(vertex), num_visited + 1);
+        auto target = alg_data.neighbor_roulette(vertex);
+        new_visitor = rw_visitor(target, walk_length + 1, id);
+#if WRITE_LOG
+        *ofs_log << "Visit " << serialize(g) << " -> " << new_visitor.serialize(g) << "\n";
+#endif
       }
       alg_data.increment_visited_walkers(vertex);
     }
@@ -181,8 +212,15 @@ class rw_visitor {
     return (v1.vertex < v2.vertex);
   }
 
+  std::string serialize(const graph_type& g) const {
+    std::stringstream ss;
+    ss << id  << " : " << walk_length << " : " << g.locator_to_label(vertex);
+    return ss.str();
+  }
+
   vertex_locator vertex;
-  int num_visited;
+  int walk_length;
+  int id;
 };
 
 void parse_cmd_line(int argc, char **argv,
@@ -191,7 +229,7 @@ void parse_cmd_line(int argc, char **argv,
                     uint64_t &goal_vertex,
                     uint64_t &num_walkers,
                     uint64_t &die_rate,
-                    uint64_t &num_max_visits,
+                    uint64_t &max_walk_length,
                     bool &warp_to_seed) {
   if (havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
@@ -207,12 +245,12 @@ void parse_cmd_line(int argc, char **argv,
   goal_vertex = 100;
   num_walkers = 1024;
   die_rate = 10;
-  num_max_visits = 128;
+  max_walk_length = 128;
   warp_to_seed = false;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:g:w:d:v:rh ")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:g:w:d:l:rh ")) != -1) {
     switch (c) {
       case 'h':prn_help = true;
         break;
@@ -227,9 +265,10 @@ void parse_cmd_line(int argc, char **argv,
         break;
       case 'd':die_rate = atoll(optarg);
         break;
-      case 'v':num_max_visits = atoll(optarg);
+      case 'l':max_walk_length = atoll(optarg);
         break;
       case 'r': warp_to_seed = true;
+        break;
       default:std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
         prn_help = true;
         break;
@@ -249,7 +288,7 @@ void parse_cmd_line(int argc, char **argv,
               << "\ngoal_vertex: " << goal_vertex
               << "\nnum_walkers: " << num_walkers
               << "\ndie_rate: " << die_rate
-              << "\nnum_max_visits: " << num_max_visits
+              << "\nmax_walk_length: " << max_walk_length
               << "\nwarp_to_seed: " << warp_to_seed << std::endl;
   }
 }
@@ -319,7 +358,7 @@ int main(int argc, char **argv) {
     uint64_t goal_vertex_id;
     uint64_t num_walkers;
     uint64_t die_rate;
-    uint64_t num_max_visits;
+    uint64_t max_walk_length;
     bool warp_to_seed;
     parse_cmd_line(argc,
                    argv,
@@ -328,7 +367,7 @@ int main(int argc, char **argv) {
                    goal_vertex_id,
                    num_walkers,
                    die_rate,
-                   num_max_visits,
+                   max_walk_length,
                    warp_to_seed);
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -347,7 +386,10 @@ int main(int argc, char **argv) {
     vertex_locator seed_vertex(graph->label_to_locator(seed_vertex_id));
     vertex_locator goal_vertex(graph->label_to_locator(goal_vertex_id));
     rw_algorithm_v0<graph_type>
-        algorithm_data(graph, seed_vertex, goal_vertex, num_walkers, die_rate, num_max_visits, warp_to_seed);
+        algorithm_data(graph, seed_vertex, goal_vertex, num_walkers, die_rate, max_walk_length, warp_to_seed);
+#if WRITE_LOG
+    ofs_log = new std::ofstream(std::string("./log_") + std::to_string(mpi_rank));
+#endif
     auto vq = havoqgt::create_visitor_queue<rw_visitor<graph_type>, havoqgt::detail::visitor_priority_queue>(graph,
                                                                                                              algorithm_data);
 
@@ -356,6 +398,10 @@ int main(int argc, char **argv) {
     vq.init_visitor_traversal();
     MPI_Barrier(MPI_COMM_WORLD);
     const double end_time = MPI_Wtime();
+#if WRITE_LOG
+    ofs_log->close();
+    delete ofs_log;
+#endif
 
     const uint64_t global_num_arrived_goal = havoqgt::mpi_all_reduce(algorithm_data.num_arrived_goal(),
                                                                      std::plus<uint64_t>(),

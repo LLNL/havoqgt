@@ -10,7 +10,7 @@ SEED=0
 GOAL=2
 NUM_WK=$((2**20))
 DIE_RATE=10
-MAX_VISTS=$((2**16))
+MAX_WK_LENGTH=$((2**16))
 WARP_TO_SEED=""
 
 while getopts "n:p:e:s:g:w:d:v:r" OPT
@@ -23,7 +23,7 @@ do
     g) GOAL=$OPTARG;;
     w) NUM_WK=$OPTARG;;
     d) DIE_RATE=$OPTARG;;
-    v) MAX_VISTS=$OPTARG;;
+    l) MAX_WK_LENGTH=$OPTARG;;
     r) WARP_TO_SEED="-r";;
     :) echo  "[ERROR] Option argument is undefined.";;   #
     \?) echo "[ERROR] Undefined options.";;
@@ -37,4 +37,4 @@ done
 srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} --distribution=block ./src/ingest_edge_list -o /dev/shm/graph -d $((2**30)) -f 3 ${EDGE_LiST_PREFX}*
 
 srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} --distribution=block --drop-caches=pagecache \
-./src/run_rw_v0 -i /dev/shm/graph -s ${SEED} -g ${GOAL} -w ${NUM_WK} -d ${DIE_RATE} -v ${MAX_VISTS} ${WARP_TO_SEED}
+./src/run_rw_v0 -i /dev/shm/graph -s ${SEED} -g ${GOAL} -w ${NUM_WK} -d ${DIE_RATE} -l ${MAX_WK_LENGTH} ${WARP_TO_SEED}
