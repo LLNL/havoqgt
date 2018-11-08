@@ -13,7 +13,7 @@ DIE_RATE=10
 MAX_WK_LENGTH=$((2**16))
 WARP_TO_SEED=""
 
-while getopts "n:p:e:s:g:w:d:v:r" OPT
+while getopts "n:p:e:s:g:w:d:l:r" OPT
 do
   case $OPT in
     n) NODES=$OPTARG;;

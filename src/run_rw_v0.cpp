@@ -18,7 +18,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-#define WRITE_LOG 1
+#define WRITE_LOG 0
 #if WRITE_LOG
 std::ofstream *ofs_log;
 #endif
@@ -416,7 +416,7 @@ int main(int argc, char **argv) {
     std::map<uint64_t, uint64_t> top_vertices;
     for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
       const uint64_t num_visited = algorithm_data.num_visited_walkers(*vitr);
-      if (top_vertices.size() < 10) {
+      if (top_vertices.size() < 10 && 0 < num_visited) {
         top_vertices.emplace(num_visited, graph->locator_to_label(*vitr));
       } else if (top_vertices.begin()->first < num_visited) {
         top_vertices.emplace(num_visited, graph->locator_to_label(*vitr));
@@ -424,15 +424,31 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (mpi_rank == 0) std::cout << "#visited : Vertex ID" << std::endl;
-    for (int i = 0; i < mpi_size; ++i) {
-      if (mpi_rank == i) {
-        std::cout << "--------------------" << std::endl;
-        for (const auto elem : top_vertices) {
-          std::cout << elem.first << " : " << elem.second << std::endl;
-        }
+    std::vector<uint64_t> local_top_count;
+    std::vector<uint64_t> local_top_id;
+    for (const auto elem : top_vertices) {
+      local_top_count.emplace_back(elem.first);
+      local_top_id.emplace_back(elem.second);
+    }
+
+    std::vector<uint64_t> global_top_count;
+    std::vector<uint64_t> global_top_id;
+    havoqgt::mpi_all_gather(local_top_count, global_top_count, MPI_COMM_WORLD);
+    havoqgt::mpi_all_gather(local_top_id, global_top_id, MPI_COMM_WORLD);
+
+    if (mpi_rank == 0) {
+      std::vector<std::pair<uint64_t, uint64_t>> global_top;
+      for (uint64_t i = 0; i < global_top_count.size(); ++i) {
+        global_top.emplace_back(std::make_pair(global_top_count.at(i), global_top_id.at(i)));
       }
-      MPI_Barrier(MPI_COMM_WORLD);
+      std::partial_sort(global_top.begin(), global_top.begin() + std::min((uint64_t)10, (uint64_t)global_top.size()), global_top.end(),
+          [](const std::pair<uint64_t, uint64_t>& lh, std::pair<uint64_t, uint64_t>& rh) -> bool {
+            return (lh.first > rh.first);
+      });
+      std::cout << "#visited : Vertex ID" << std::endl;
+      for (int i = 0; i < std::min((uint64_t)10, (uint64_t)global_top.size()); ++i) {
+        std::cout << global_top[i].first << " : " << global_top[i].second << std::endl;
+      }
     }
   }
 
