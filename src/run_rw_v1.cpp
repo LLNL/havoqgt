@@ -65,7 +65,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-#define WRITE_LOG 0
+#define WRITE_LOG 1
 #if WRITE_LOG
 std::ofstream *ofs_log;
 #define LOG_OUT (*ofs_log)
@@ -74,6 +74,7 @@ std::ofstream *ofs_log;
 
 static constexpr int k_num_history = 4;
 using rw_traversal_history_type = std::array<uint64_t, k_num_history>;
+static constexpr int num_top = 20;
 
 template <typename graph_type, typename history_type, int num_history>
 class rw_algorithm_v1 {
@@ -100,32 +101,36 @@ class rw_algorithm_v1 {
         m_num_launched_walkers(0),
         m_rnd_gen((uint32_t)std::chrono::system_clock::now().time_since_epoch().count()),
         m_warp_to_seed(warp_to_seed),
-        m_score_table(*graph),
+        m_die_score_table(*graph),
+        m_visit_score_table(*graph),
         m_history_select_prob_table(history_select_prob_table) {
-    m_score_table.reset(0);
+    m_die_score_table.reset(0);
+    m_visit_score_table.reset(0);
   }
 
   bool rw_launcher(const vertex_locator vertex) {
     if (m_graph->degree(vertex) == 0) return false;
 
     // Personalized model
-    if (m_personalized && m_seed_locator == vertex) {
-      return true;
-    }
-
-    std::uniform_int_distribution<int> dis(0, m_graph->num_local_vertices() - 1);
-    if (dis(m_rnd_gen) < m_num_local_walkers) {
-      ++m_num_launched_walkers;
-      return true;
+    if (m_personalized) {
+      if (m_seed_locator == vertex && m_num_launched_walkers < m_num_local_walkers) {
+        ++m_num_launched_walkers;
+        return true;
+      }
+    } else {
+      std::uniform_int_distribution<uint64_t> dis(0, m_graph->num_local_vertices() - 1);
+      if (dis(m_rnd_gen) < m_num_local_walkers) {
+        ++m_num_launched_walkers;
+        return true;
+      }
     }
 
     return false;
   }
 
-  history_type new_history(const vertex_locator vertex) {
+  history_type new_history() {
     history_type history;
-    for (int i = 0; i < num_history - 1; ++i) history[i] = m_graph->locator_to_label(warp_machine());
-    history[num_history - 1] = m_graph->locator_to_label(vertex);
+    for (int i = 0; i < num_history; ++i) history[i] = m_graph->locator_to_label(warp_machine());
     return history;
   }
 
@@ -149,13 +154,11 @@ class rw_algorithm_v1 {
 
   vertex_locator neighbor_roulette(const vertex_locator vertex, const history_type &history) {
     for (auto vitr = m_graph->vertices_begin(), end = m_graph->vertices_end(); vitr != end; ++vitr) {
-      for (int i = 0; i < num_history; ++i) {
+      for (int i = 0; i < num_history; ++i) { // NOTE: the last history is the previous vertex
         if (m_graph->locator_to_label(*vitr) != history[i]) continue;
 
         std::uniform_int_distribution<int> dis(0, 99);
-        if (m_history_select_prob_table[i] < dis(m_rnd_gen)) continue;
-
-        return *vitr;
+        if (dis(m_rnd_gen) < m_history_select_prob_table[i]) return *vitr;
       }
     }
 
@@ -166,12 +169,20 @@ class rw_algorithm_v1 {
     return m_max_walk_length;
   }
 
-  void increment_score(const vertex_locator vertex) {
-    ++m_score_table[vertex];
+  void increment_die_score(const vertex_locator vertex) {
+    ++m_die_score_table[vertex];
   }
 
-  uint64_t score(const vertex_locator vertex) const {
-    return m_score_table[vertex];
+  uint64_t die_score(const vertex_locator vertex) const {
+    return m_die_score_table[vertex];
+  }
+
+  void increment_visit_score(const vertex_locator vertex) {
+    ++m_visit_score_table[vertex];
+  }
+
+  uint64_t visit_score(const vertex_locator vertex) const {
+    return m_visit_score_table[vertex];
   }
 
   uint64_t num_num_launched_walkers() const {
@@ -179,11 +190,11 @@ class rw_algorithm_v1 {
   }
 
   bool personalized() const {
-    m_personalized;
+    return m_personalized;
   }
 
   vertex_locator seed() const {
-    m_seed_locator;
+    return m_seed_locator;
   }
 
   graph_type *graph() {
@@ -200,7 +211,8 @@ class rw_algorithm_v1 {
   uint64_t m_num_launched_walkers;
   std::mt19937 m_rnd_gen;
   bool m_warp_to_seed;
-  count_table_type m_score_table;
+  count_table_type m_die_score_table;
+  count_table_type m_visit_score_table;
   history_select_prob_table_type m_history_select_prob_table;
 };
 
@@ -222,17 +234,31 @@ class rw_visitor {
 
   template <typename visitor_queue_handle, typename alg_data_type>
   bool init_visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
-    if (alg_data.rw_launcher(vertex)) {
+    bool launched = false;
+    if (alg_data.personalized()) {
+      while (alg_data.rw_launcher(vertex)) {
 #if WRITE_LOG
-      LOG_OUT << "Start from " << g.locator_to_label(vertex) << std::endl;
+        LOG_OUT << "Personalized start from " << g.locator_to_label(vertex) << std::endl;
 #endif
-      vis_queue->queue_visitor(rw_visitor(vertex,
-                                          1,
-                                          g.locator_to_label(vertex),
-                                          alg_data.new_history(vertex)));
-      return true;
+        vis_queue->queue_visitor(rw_visitor(vertex,
+                                            1,
+                                            g.locator_to_label(vertex),
+                                            alg_data.new_history()));
+        launched = true;
+      }
+    } else {
+      if (alg_data.rw_launcher(vertex)) {
+#if WRITE_LOG
+        LOG_OUT << "Start from " << g.locator_to_label(vertex) << std::endl;
+#endif
+        vis_queue->queue_visitor(rw_visitor(vertex,
+                                            1,
+                                            g.locator_to_label(vertex),
+                                            alg_data.new_history()));
+        launched = true;
+      }
     }
-    return false;
+    return launched;
   }
 
   template <typename alg_data_type>
@@ -249,6 +275,7 @@ class rw_visitor {
 
   template <typename visitor_queue_handle, typename alg_data_type>
   bool visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
+    alg_data.increment_visit_score(vertex);
 
     if (g.degree(vertex) == 0) {
       auto target = alg_data.warp_machine();
@@ -276,10 +303,10 @@ class rw_visitor {
       }
     }
 
-    if (alg_data.russian_roulette()) { // Die at here and increment the score
-      alg_data.increment_score(vertex);
+    if (alg_data.russian_roulette()) { // Die at here and increment the die score
+      alg_data.increment_die_score(vertex);
 #if WRITE_LOG
-      LOG_OUT << "Increment score at " << serialize(g) << "\n";
+      LOG_OUT << "Increment die score at " << serialize(g) << "\n";
 #endif
       return false;
     }
@@ -314,9 +341,9 @@ class rw_visitor {
 
   std::string serialize(const graph_type &g) const {
     std::stringstream ss;
-    ss << id << ", " << walk_length << ", " << g.locator_to_label(vertex) << " : ";
+    ss << "id " << id << ", lenght " << walk_length << ", vertex " << g.locator_to_label(vertex) << ", history";
     for (int i = 0; i < num_history; ++i) {
-      ss << history[i] << " > ";
+      ss << " [" << i << "] " << history[i];
     }
     return ss.str();
   }
@@ -334,7 +361,8 @@ void parse_cmd_line(int argc, char **argv,
                     uint64_t &num_walkers,
                     uint64_t &die_rate,
                     uint64_t &max_walk_length,
-                    bool &warp_to_seed) {
+                    bool &warp_to_seed,
+                    std::array<int, k_num_history> &closing_rates) {
   if (havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -350,10 +378,12 @@ void parse_cmd_line(int argc, char **argv,
   die_rate = 10;
   max_walk_length = 128;
   warp_to_seed = false;
+  closing_rates.fill(100);
+  closing_rates[closing_rates.size() - 1] = 0;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:ps:w:d:l:rh ")) != -1) {
+  while ((c = getopt(argc, argv, "i:ps:w:d:l:rc:h")) != -1) {
     switch (c) {
       case 'h':prn_help = true;
         break;
@@ -372,6 +402,16 @@ void parse_cmd_line(int argc, char **argv,
         break;
       case 'r': warp_to_seed = true;
         break;
+      case 'c': {
+        std::stringstream ss(optarg);
+        std::string buf;
+        int count = 0;
+        while (std::getline(ss, buf, ':')) {
+          closing_rates[count] = std::stoi(buf);
+          ++count;
+        }
+        break;
+      }
       default:std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
         prn_help = true;
         break;
@@ -392,7 +432,10 @@ void parse_cmd_line(int argc, char **argv,
               << "\nnum_walkers: " << num_walkers
               << "\ndie_rate: " << die_rate
               << "\nmax_walk_length: " << max_walk_length
-              << "\nwarp_to_seed: " << warp_to_seed << std::endl;
+              << "\nwarp_to_seed: " << warp_to_seed
+              << "\nclosing_rates: ";
+    for (const auto item : closing_rates) std::cout << item << " ";
+    std::cout << std::endl;
   }
 }
 
@@ -438,6 +481,55 @@ uint64_t select_seed(const graph_type *const graph, const uint64_t candidate_ver
   return seed_id;
 }
 
+template <typename graph_type>
+void compute_global_top_scores(graph_type *const graph,
+                               const std::function<uint64_t(typename graph_type::vertex_locator)> &score_function) {
+  int mpi_rank(0), mpi_size(0);
+  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
+
+  std::map<uint64_t, uint64_t> top_vertices;
+  for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
+    const uint64_t score = score_function(*vitr);
+    // std::cout << graph->locator_to_label(*vitr) << " >> " << score << std::endl;
+    if (top_vertices.size() < num_top && 0 < score) {
+      top_vertices.emplace(score, graph->locator_to_label(*vitr));
+    } else if (top_vertices.begin()->first < score) {
+      top_vertices.emplace(score, graph->locator_to_label(*vitr));
+      top_vertices.erase(top_vertices.begin());
+    }
+  }
+
+  std::vector<uint64_t> local_top_score;
+  std::vector<uint64_t> local_top_id;
+  for (const auto elem : top_vertices) {
+    local_top_score.emplace_back(elem.first);
+    local_top_id.emplace_back(elem.second);
+  }
+
+  std::vector<uint64_t> global_top_score;
+  std::vector<uint64_t> global_top_id;
+  havoqgt::mpi_all_gather(local_top_score, global_top_score, MPI_COMM_WORLD);
+  havoqgt::mpi_all_gather(local_top_id, global_top_id, MPI_COMM_WORLD);
+
+  if (mpi_rank == 0) {
+    std::vector<std::pair<uint64_t, uint64_t>> global_top;
+    for (uint64_t i = 0; i < global_top_score.size(); ++i) {
+      global_top.emplace_back(std::make_pair(global_top_score.at(i), global_top_id.at(i)));
+    }
+    std::partial_sort(global_top.begin(),
+                      global_top.begin() + std::min((uint64_t)num_top, (uint64_t)global_top.size()),
+                      global_top.end(),
+                      [](const std::pair<uint64_t, uint64_t> &lh, std::pair<uint64_t, uint64_t> &rh) -> bool {
+                        return (lh.first > rh.first);
+                      });
+    std::cout << "Vertex ID : Score" << std::endl;
+    for (int i = 0; i < std::min((uint64_t)num_top, (uint64_t)global_top.size()); ++i) {
+      std::cout << global_top[i].second << " : " << global_top[i].first << std::endl;
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   using graph_type = havoqgt::delegate_partitioned_graph<havoqgt::distributed_db::segment_manager_type>;
   using vertex_locator = typename graph_type::vertex_locator;
@@ -463,6 +555,8 @@ int main(int argc, char **argv) {
     uint64_t die_rate;
     uint64_t max_walk_length;
     bool warp_to_seed;
+    std::array<int, k_num_history> closing_rates;
+
     parse_cmd_line(argc,
                    argv,
                    graph_input,
@@ -471,7 +565,8 @@ int main(int argc, char **argv) {
                    num_walkers,
                    die_rate,
                    max_walk_length,
-                   warp_to_seed);
+                   warp_to_seed,
+                   closing_rates);
 
     MPI_Barrier(MPI_COMM_WORLD);
     havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
@@ -484,18 +579,16 @@ int main(int argc, char **argv) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    vertex_locator seed_vertex;
-    std::array<int, k_num_history> history_select_prob_table{100, 100, 100, 100};
-    const std::size_t num_wk_per_process = num_walkers / mpi_size;
-    rw_algorithm_v1<graph_type, rw_traversal_history_type, k_num_history>
-        algorithm_data(graph,
-                       personalized,
-                       seed_vertex,
-                       num_wk_per_process,
-                       die_rate,
-                       max_walk_length,
-                       warp_to_seed,
-                       history_select_prob_table);
+    vertex_locator seed_vertex = graph->label_to_locator(seed_vertex_id);
+    const std::size_t num_wk_per_process = (personalized) ? num_walkers : num_walkers / mpi_size;
+    rw_algorithm_v1<graph_type, rw_traversal_history_type, k_num_history> algorithm_data(graph,
+                                                                                         personalized,
+                                                                                         seed_vertex,
+                                                                                         num_wk_per_process,
+                                                                                         die_rate,
+                                                                                         max_walk_length,
+                                                                                         warp_to_seed,
+                                                                                         closing_rates);
 #if WRITE_LOG
     ofs_log = new std::ofstream(std::string("./log_") + std::to_string(mpi_rank));
 #endif
@@ -515,53 +608,31 @@ int main(int argc, char **argv) {
     const uint64_t global_num_walkers = havoqgt::mpi_all_reduce(algorithm_data.num_num_launched_walkers(),
                                                                 std::plus<uint64_t>(),
                                                                 MPI_COMM_WORLD);
+    uint64_t local_total_die_score = 0;
+    for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
+      local_total_die_score += algorithm_data.die_score(*vitr);
+    }
+    const uint64_t global_total_die_score = havoqgt::mpi_all_reduce(algorithm_data.num_num_launched_walkers(),
+                                                                    std::plus<uint64_t>(),
+                                                                    MPI_COMM_WORLD);
     if (mpi_rank == 0) {
       std::cout << "Execution time: " << end_time - start_time << std::endl;
       std::cout << "#launched wk: " << global_num_walkers << std::endl;
+      std::cout << "sum of die score: " << global_total_die_score << std::endl;
     }
-
     MPI_Barrier(MPI_COMM_WORLD);
 
-    std::map<uint64_t, uint64_t> top_vertices;
-    for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
-      const uint64_t score = algorithm_data.score(*vitr);
-      // std::cout << graph->locator_to_label(*vitr) << " >> " << score << std::endl;
-      if (top_vertices.size() < 10 && 0 < score) {
-        top_vertices.emplace(score, graph->locator_to_label(*vitr));
-      } else if (top_vertices.begin()->first < score) {
-        top_vertices.emplace(score, graph->locator_to_label(*vitr));
-        top_vertices.erase(top_vertices.begin());
-      }
-    }
+    if (mpi_rank == 0) std::cout << "\nDie score" << std::endl;
+    compute_global_top_scores(graph, [&algorithm_data](vertex_locator vertex) -> uint64_t {
+      return algorithm_data.die_score(vertex);
+    });
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    std::vector<uint64_t> local_top_score;
-    std::vector<uint64_t> local_top_id;
-    for (const auto elem : top_vertices) {
-      local_top_score.emplace_back(elem.first);
-      local_top_id.emplace_back(elem.second);
-    }
-
-    std::vector<uint64_t> global_top_score;
-    std::vector<uint64_t> global_top_id;
-    havoqgt::mpi_all_gather(local_top_score, global_top_score, MPI_COMM_WORLD);
-    havoqgt::mpi_all_gather(local_top_id, global_top_id, MPI_COMM_WORLD);
-
-    if (mpi_rank == 0) {
-      std::vector<std::pair<uint64_t, uint64_t>> global_top;
-      for (uint64_t i = 0; i < global_top_score.size(); ++i) {
-        global_top.emplace_back(std::make_pair(global_top_score.at(i), global_top_id.at(i)));
-      }
-      std::partial_sort(global_top.begin(),
-                        global_top.begin() + std::min((uint64_t)10, (uint64_t)global_top.size()),
-                        global_top.end(),
-                        [](const std::pair<uint64_t, uint64_t> &lh, std::pair<uint64_t, uint64_t> &rh) -> bool {
-                          return (lh.first > rh.first);
-                        });
-      std::cout << "\n#visited : Vertex ID" << std::endl;
-      for (int i = 0; i < std::min((uint64_t)10, (uint64_t)global_top.size()); ++i) {
-        std::cout << global_top[i].first << " : " << global_top[i].second << std::endl;
-      }
-    }
+    if (mpi_rank == 0) std::cout << "\nVisit score" << std::endl;
+    compute_global_top_scores(graph, [&algorithm_data](vertex_locator vertex) -> uint64_t {
+      return algorithm_data.visit_score(vertex);
+    });
+    MPI_Barrier(MPI_COMM_WORLD);
   }
 
   return 0;
