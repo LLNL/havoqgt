@@ -4,7 +4,7 @@
 NODES=1
 PROCS_PER_NODE=24
 
-EDGE_LiST_PREFX="/dev/shm/edge"
+EDGE_LIST_PREFX="/dev/shm/edge"
 
 PERSONALIZED=""
 SEED=0
@@ -18,7 +18,7 @@ do
   case $OPT in
     n) NODES=$OPTARG;;
     p) PROCS_PER_NODE=$OPTARG;;
-    e) EDGE_LiST_PREFX=$OPTARG;;
+    e) EDGE_LIST_PREFX=$OPTARG;;
     s) SEED=$OPTARG PERSONALIZED="-p";;
     w) NUM_WK=$OPTARG;;
     d) DIE_RATE=$OPTARG;;
@@ -29,10 +29,10 @@ do
   esac
 done
 
-SCALE=20
-srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} ./src/generate_rmat_edge_list -s ${SCALE}  -o ${EDGE_LiST_PREFX}
+#SCALE=20
+#srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} ./src/generate_rmat_edge_list -s ${SCALE}  -o ${EDGE_LIST_PREFX}
 
-srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} --distribution=block ./src/ingest_edge_list -o /dev/shm/graph -d $((2**30)) -f 3 ${EDGE_LiST_PREFX}*
+srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} --distribution=block ./src/ingest_edge_list -o /dev/shm/graph -d $((2**30)) -f 3 ${EDGE_LIST_PREFX}*
 
 srun -N ${NODES} --ntasks-per-node=${PROCS_PER_NODE} --distribution=block --drop-caches=pagecache \
 ./src/run_rw_v1 -i /dev/shm/graph ${PERSONALIZED} -s ${SEED} -w ${NUM_WK} -d ${DIE_RATE} -l ${MAX_WK_LENGTH} ${WARP_TO_SEED}
