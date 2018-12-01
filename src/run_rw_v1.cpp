@@ -74,7 +74,7 @@ std::ofstream *ofs_log;
 
 static constexpr int k_num_history = 3; // 0:square; 1:triangle; 2:previous vertex
 using rw_traversal_history_type = std::array<uint64_t, k_num_history>;
-static constexpr int num_top = 20;
+static constexpr int num_top = 30;
 
 template <typename graph_type, typename history_type, int num_history>
 class rw_algorithm_v1 {
@@ -276,33 +276,6 @@ class rw_visitor {
   bool visit(graph_type &g, visitor_queue_handle vis_queue, alg_data_type &alg_data) const {
     alg_data.increment_num_visits(vertex);
 
-    if (g.degree(vertex) == 0) {
-      auto target = alg_data.warp_machine();
-      rw_visitor new_visitor = rw_visitor(target, walk_length + 1, id, append_history(g.locator_to_label(vertex)));
-#if WRITE_LOG
-      LOG_OUT << "Dead end (degree 0) at " << serialize(g) << ". Restart from " << new_visitor.serialize(g)
-              << "\n";
-#endif
-      vis_queue->queue_visitor(new_visitor);
-      return true;
-    }
-
-    if (g.degree(vertex) == 1) {
-      const auto vitr = g.vertices_begin();
-      const auto previous_vertex = history[std::min(walk_length - 1, num_history - 1)];
-      if (g.locator_to_label(*vitr) == previous_vertex) {
-        auto target = alg_data.warp_machine();
-        rw_visitor new_visitor = rw_visitor(target, walk_length + 1, id, append_history(g.locator_to_label(vertex)));
-#if WRITE_LOG
-        LOG_OUT << "Dead end (degree 1) at " << serialize(g)
-                << ". Restart from " << new_visitor.serialize(g)
-                << "\n";
-#endif
-        vis_queue->queue_visitor(new_visitor);
-        return true;
-      }
-    }
-
     if (alg_data.russian_roulette()) { // Die at here and increment the die score
       alg_data.increment_num_dead(vertex);
 #if WRITE_LOG
@@ -310,6 +283,33 @@ class rw_visitor {
 #endif
       return false;
     }
+
+    if (g.degree(vertex) == 0) {
+      auto target = alg_data.warp_machine();
+      rw_visitor new_visitor = rw_visitor(target, walk_length + 1, id, append_history(g.locator_to_label(vertex)));
+#if WRITE_LOG
+      LOG_OUT << "Dead end (out degree 0) at " << serialize(g) << ". Restart from " << new_visitor.serialize(g)
+              << "\n";
+#endif
+      vis_queue->queue_visitor(new_visitor);
+      return true;
+    }
+
+//    if (g.degree(vertex) == 1) {
+//      const auto vitr = g.vertices_begin();
+//      const auto previous_vertex = history[std::min(walk_length - 1, num_history - 1)];
+//      if (g.locator_to_label(*vitr) == previous_vertex) {
+//        auto target = alg_data.warp_machine();
+//        rw_visitor new_visitor = rw_visitor(target, walk_length + 1, id, append_history(g.locator_to_label(vertex)));
+//#if WRITE_LOG
+//        LOG_OUT << "Dead end (degree 1) at " << serialize(g)
+//                << ". Restart from " << new_visitor.serialize(g)
+//                << "\n";
+//#endif
+//        vis_queue->queue_visitor(new_visitor);
+//        return true;
+//      }
+//    }
 
     auto target = alg_data.neighbor_roulette(vertex, history);
     rw_visitor new_visitor = rw_visitor(target, walk_length + 1, id, append_history(g.locator_to_label(vertex)));
@@ -545,7 +545,7 @@ void dump_score(const graph_type *const graph, const std::string file_name,
 
   std::ofstream ofs(file_name + "_" + std::to_string(mpi_rank));
   for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
-    ofs << graph->locator_to_label(*vitr) << " " << score_function(*vitr) << "\n";
+    ofs << graph->locator_to_label(*vitr) << " " << std::fixed << score_function(*vitr) << "\n";
   }
   ofs.close();
 }
@@ -682,13 +682,13 @@ int main(int argc, char **argv) {
     if (!score_dump_file_prefix.empty()) {
       if (mpi_rank == 0) std::cout << "\nDumping dead score" << std::endl;
       dump_score<graph_type, double>(graph,
-                                     score_dump_file_prefix + std::string("_dead_score_") + std::to_string(global_num_walkers),
+                                     score_dump_file_prefix + std::string("_dead_score_") + std::to_string(num_walkers),
                                      dead_score_func);
       MPI_Barrier(MPI_COMM_WORLD);
 
       if (mpi_rank == 0) std::cout << "\nDumping visit score" << std::endl;
       dump_score<graph_type, double>(graph,
-                                     score_dump_file_prefix + std::string("_visit_score_") + std::to_string(global_num_walkers),
+                                     score_dump_file_prefix + std::string("_visit_score_") + std::to_string(num_walkers),
                                      visit_score_func);
       MPI_Barrier(MPI_COMM_WORLD);
     }
