@@ -694,5 +694,6 @@ int main(int argc, char **argv) {
     }
   }
 
+  std::cout << "Finished rw v1" << std::endl;
   return 0;
 }
