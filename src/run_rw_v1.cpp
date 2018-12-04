@@ -74,7 +74,7 @@ std::ofstream *ofs_log;
 
 static constexpr int k_num_history = 3; // 0:square; 1:triangle; 2:previous vertex
 using rw_traversal_history_type = std::array<uint64_t, k_num_history>;
-static constexpr int num_top = 30;
+//static constexpr int num_top = 30;
 
 template <typename graph_type, typename history_type, int num_history>
 class rw_algorithm_v1 {
@@ -363,7 +363,8 @@ void parse_cmd_line(int argc, char **argv,
                     uint64_t &max_walk_length,
                     bool &warp_to_seed,
                     std::array<int, k_num_history> &closing_rates,
-                    std::string &score_dump_file_prefix) {
+                    std::string &score_dump_file_prefix,
+                    uint64_t &num_top) {
   if (havoqgt::havoqgt_env()->world_comm().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -383,10 +384,11 @@ void parse_cmd_line(int argc, char **argv,
   closing_rates.fill(100);
   closing_rates[closing_rates.size() - 1] = 0; // Does not return to the previous vertex
   score_dump_file_prefix.clear();
+  num_top = 10;
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:ps:w:d:l:rc:o:h")) != -1) {
+  while ((c = getopt(argc, argv, "i:ps:w:d:l:rc:o:t:h")) != -1) {
     switch (c) {
       case 'h':prn_help = true;
         break;
@@ -395,13 +397,13 @@ void parse_cmd_line(int argc, char **argv,
         break;
       case 'p': personalized = true;
         break;
-      case 's': seed_vertex = atoll(optarg);
+      case 's': seed_vertex = std::stoll(optarg);
         break;
-      case 'w':num_walkers = atoll(optarg);
+      case 'w':num_walkers = std::stoll(optarg);
         break;
-      case 'd':die_rate = atoll(optarg);
+      case 'd':die_rate = std::stoll(optarg);
         break;
-      case 'l':max_walk_length = atoll(optarg);
+      case 'l':max_walk_length = std::stoll(optarg);
         break;
       case 'r': warp_to_seed = true;
         break;
@@ -416,6 +418,8 @@ void parse_cmd_line(int argc, char **argv,
         break;
       }
       case 'o':score_dump_file_prefix = optarg;
+        break;
+      case 't': num_top = std::stoll(optarg);
         break;
       default:std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
         prn_help = true;
@@ -439,6 +443,7 @@ void parse_cmd_line(int argc, char **argv,
               << "\nmax_walk_length: " << max_walk_length
               << "\nwarp_to_seed: " << warp_to_seed
               << "\nscore_dump_file_prefix: " << score_dump_file_prefix
+              << "\nnum_top: " << num_top
               << "\nclosing_rates: ";
     for (const auto item : closing_rates) std::cout << item << " ";
     std::cout << std::endl;
@@ -489,6 +494,8 @@ uint64_t select_seed(const graph_type *const graph, const uint64_t candidate_ver
 
 template <typename graph_type, typename score_type>
 void compute_global_top_scores(const graph_type *const graph,
+                               const uint64_t num_top,
+                               const std::string& dump_file_name,
                                const std::function<score_type(typename graph_type::vertex_locator)> &score_function) {
   int mpi_rank(0), mpi_size(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -529,15 +536,20 @@ void compute_global_top_scores(const graph_type *const graph,
                       [](const std::pair<score_type, uint64_t> &lh, std::pair<score_type, uint64_t> &rh) -> bool {
                         return (lh.first > rh.first);
                       });
-    std::cout << "Vertex ID : Score" << std::endl;
-    for (int i = 0; i < std::min((uint64_t)num_top, (uint64_t)global_top.size()); ++i) {
-      std::cout << global_top[i].second << " : " << global_top[i].first << std::endl;
+    std::ofstream ofs(dump_file_name);
+    if (!ofs.is_open()) {
+      std::cerr << "Can not open: " << dump_file_name << std::endl;
+      std::abort();
     }
+    for (int i = 0; i < std::min((uint64_t)num_top, (uint64_t)global_top.size()); ++i) {
+      ofs << global_top[i].second << " : " << global_top[i].first << std::endl;
+    }
+    ofs.close();
   }
 }
 
 template <typename graph_type, typename score_type>
-void dump_score(const graph_type *const graph, const std::string file_name,
+void dump_score(const graph_type *const graph, const std::string& file_name,
                 const std::function<score_type(typename graph_type::vertex_locator)> &score_function) {
   int mpi_rank(0), mpi_size(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
@@ -577,6 +589,7 @@ int main(int argc, char **argv) {
     bool warp_to_seed;
     std::array<int, k_num_history> closing_rates;
     std::string score_dump_file_prefix;
+    uint64_t num_top;
 
     parse_cmd_line(argc,
                    argv,
@@ -588,7 +601,8 @@ int main(int argc, char **argv) {
                    max_walk_length,
                    warp_to_seed,
                    closing_rates,
-                   score_dump_file_prefix);
+                   score_dump_file_prefix,
+                   num_top);
 
     MPI_Barrier(MPI_COMM_WORLD);
     havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
@@ -671,29 +685,38 @@ int main(int argc, char **argv) {
       return static_cast<double>(algorithm_data.num_visits(vertex)) / global_total_visits;
     };
 
-    if (mpi_rank == 0) std::cout << "\nDead score" << std::endl;
-    compute_global_top_scores<graph_type, double>(graph, dead_score_func);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    if (mpi_rank == 0) std::cout << "\nVisit score" << std::endl;
-    compute_global_top_scores<graph_type, double>(graph, visit_score_func);
-    MPI_Barrier(MPI_COMM_WORLD);
-
+    if (mpi_rank == 0) std::cout << "\nDumping the top dead scores" << std::endl;
     if (!score_dump_file_prefix.empty()) {
-      if (mpi_rank == 0) std::cout << "\nDumping dead score" << std::endl;
-      dump_score<graph_type, double>(graph,
-                                     score_dump_file_prefix + std::string("_dead_score_") + std::to_string(num_walkers),
-                                     dead_score_func);
+      compute_global_top_scores<graph_type, double>(graph, num_top,
+                                                    score_dump_file_prefix + std::string("_dead_score"),
+                                                    dead_score_func);
       MPI_Barrier(MPI_COMM_WORLD);
 
-      if (mpi_rank == 0) std::cout << "\nDumping visit score" << std::endl;
-      dump_score<graph_type, double>(graph,
-                                     score_dump_file_prefix + std::string("_visit_score_") + std::to_string(num_walkers),
-                                     visit_score_func);
+      if (mpi_rank == 0) std::cout << "\nDumping the top visit scores" << std::endl;
+      compute_global_top_scores<graph_type, double>(graph,
+                                                    num_top,
+                                                    score_dump_file_prefix + std::string("_visit_score"),
+                                                    visit_score_func);
       MPI_Barrier(MPI_COMM_WORLD);
     }
+
+//    if (!score_dump_file_prefix.empty()) {
+//      if (mpi_rank == 0) std::cout << "\nDumping all dead score" << std::endl;
+//      dump_score<graph_type, double>(graph,
+//                                     score_dump_file_prefix + std::string("_dead_score_") + std::to_string(num_walkers),
+//                                     dead_score_func);
+//      MPI_Barrier(MPI_COMM_WORLD);
+//
+//      if (mpi_rank == 0) std::cout << "\nDumping all visit score" << std::endl;
+//      dump_score<graph_type, double>(graph,
+//                                     score_dump_file_prefix + std::string("_visit_score_")
+//                                         + std::to_string(num_walkers),
+//                                     visit_score_func);
+//      MPI_Barrier(MPI_COMM_WORLD);
+//    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (mpi_rank == 0)   std::cout << "Finished rw v1" << std::endl;
   }
 
-  std::cout << "Finished rw v1" << std::endl;
   return 0;
 }

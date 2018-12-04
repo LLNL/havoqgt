@@ -22,15 +22,12 @@ def get_vertices_in_community(community_id, ref_file):
     return vertices_in_community
 
 
-def read_scores(file_list):
+def read_top_vertices(file):
     scores = []
-    for fn in file_list:
-        with open(fn, 'r') as f:
-            for line in f:
-                items = line.split()
-                scores.append((int(items[0]), float(items[1])))
-
-    scores.sort(key=operator.itemgetter(1), reverse=True)
+    with open(file, 'r') as f:
+        for line in f:
+            items = line.split()
+            scores.append(int(items[0]))
 
     return scores
 
@@ -45,21 +42,9 @@ def cal_precision(top_vertices, vertices_in_community):
 
 
 def main(argv):
-    seed = int(argv[1])
-    ref_file = argv[2]
-
-    community_id = find_seed_community_id(seed, ref_file)
-    print("community_id ", community_id)
-
-    vertices_in_community = get_vertices_in_community(community_id, ref_file)
-    print("#vertices in the community", len(vertices_in_community))
-
-    sorted_scores = read_scores(argv[3:])
-    top_vertices = []
-    for i in range(len(vertices_in_community)):
-        top_vertices.append(sorted_scores[i][0])
-
-    # print (top_vertices)
+    community_id = int(argv[1])
+    vertices_in_community = get_vertices_in_community(community_id, argv[2])
+    top_vertices = read_top_vertices(argv[3])
 
     print(cal_precision(top_vertices, vertices_in_community))
 
