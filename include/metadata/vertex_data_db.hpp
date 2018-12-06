@@ -10,7 +10,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt { ///namespace mpi {
 
 template<typename Visitor>
 class vertex_data_queue {
@@ -129,7 +129,8 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
   
   // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit the ones already in the queue
   //MPI_Barrier(MPI_COMM_WORLD); // TODO: deadlock
-  vq.init_visitor_traversal_new();
+  ///vq.init_visitor_traversal_new();
+  vq.init_visitor_traversal();
   MPI_Barrier(MPI_COMM_WORLD);
 //  std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
 }
@@ -198,8 +199,10 @@ template <typename TGraph, typename VertexMetaData, typename Vertex,
   typename VertexData>
 void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata, 
   std::string base_filename, size_t chunk_size) {
-  int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_size = havoqgt_env()->world_comm().size();
+  ///int mpi_rank = havoqgt_env()->world_comm().rank();
+  ///int mpi_size = havoqgt_env()->world_comm().size();
+  int mpi_rank = comm_world().rank();
+  int mpi_size = comm_world().size(); 
 
   if (mpi_rank == 0) {
     std::cout << "Building distributed vertex data db ... " << std::endl;
@@ -256,7 +259,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     
 } 
 
-}} //end namespace havoqgt::mpi
+} ///} //end namespace havoqgt::mpi
  
 
 #endif //HAVOQGT_VERTEX_DATA_DB_HPP_INCLUDED
