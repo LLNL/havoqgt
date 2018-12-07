@@ -1,5 +1,4 @@
-#ifndef HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_NEM_1_HPP_INCLUDED
-#define HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_NEM_1_HPP_INCLUDED
+#pragma once
 
 #include <deque>
 
@@ -946,6 +945,3 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
 }
 
 } ///} //end namespace havoqgt::mpi
-
-#endif //HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_NEM_1_HPP_INCLUDED
-

@@ -1,5 +1,4 @@
-#ifndef HAVOQGT_LABEL_PROPAGATION_PATTERN_MATCHING_NONUNIQUE_EE_HPP_INCLUDED
-#define HAVOQGT_LABEL_PROPAGATION_PATTERN_MATCHING_NONUNIQUE_EE_HPP_INCLUDED
+#pragma once
 
 #include <bitset>
 
@@ -1166,5 +1165,3 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 }  
 
 } // end namespace prunejuice ///} //end namespace havoqgt::mpi
-
-#endif //HAVOQGT_LABEL_PROPAGATION_PATTERN_MATCHING_NONUNIQUE_EE_HPP_INCLUDED 

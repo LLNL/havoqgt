@@ -1,5 +1,4 @@
-#ifndef HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_TDS_BATCH_4_HPP_INCLUDED
-#define HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_TDS_BATCH_4_HPP_INCLUDED
+#pragma once
 
 #include <array>
 #include <chrono>
@@ -1581,5 +1580,3 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
 #endif
 
 } ///} //end namespace havoqgt::mpi
-
-#endif //HAVOQGT_TOKEN_PASSING_PATTERN_MATCHING_NONUNIQUE_TDS_BATCH_4_HPP_INCLUDED
