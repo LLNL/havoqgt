@@ -22,7 +22,17 @@ class comm_exchanger {
   void queue(int rank, const MSG &msg) {
     // if (m_local_count == 0) { init_recv_counts(); }
     ++m_local_count;
+    // m_local_count += sizeof(MSG);
     m_vec_send[rank].push_back(msg);
+  }
+
+  std::size_t queue_bytes(int rank, const MSG &msg) {
+    // if (m_local_count == 0) { init_recv_counts(); }
+    ++m_local_count;
+    // m_local_count += sizeof(MSG);
+    m_vec_send[rank].push_back(msg);
+    // return sizeof(MSG);
+    return 1;
   }
 
   // RETURNS:  Total exchange count of communicator
@@ -33,7 +43,7 @@ class comm_exchanger {
     init_recv_counts();
 
     std::deque<std::tuple<MPI_Request, MSG *, size_t>>
-                             q_req_irecv_data;  // req, buff, recv_size
+        q_req_irecv_data;  // req, buff, recv_size
     std::vector<MPI_Request> vec_req_isend_data;
 
     uint64_t to_return = 0;
@@ -68,12 +78,12 @@ class comm_exchanger {
         int flag;
         CHK_MPI(MPI_Test(&(req_pair.first), &flag, MPI_STATUS_IGNORE));
         if (flag) {
-          int    recv_rank = req_pair.second;
+          int recv_rank = req_pair.second;
           size_t recv_size = m_vec_recv_counts[recv_rank].first * sizeof(MSG);
           to_return +=
               m_vec_recv_counts[recv_rank].second;  // add up global exc count
           if (recv_size > 0) {
-            MSG *       buff = (MSG *)malloc(recv_size);
+            MSG *buff = (MSG *)malloc(recv_size);
             MPI_Request req;
             CHK_MPI(MPI_Irecv((void *)buff, recv_size, MPI_BYTE, recv_rank,
                               m_tag, m_comm, &req));
@@ -94,7 +104,7 @@ class comm_exchanger {
         int flag;
         CHK_MPI(MPI_Test(&(std::get<0>(req_tuple)), &flag, MPI_STATUS_IGNORE));
         if (flag) {
-          MSG *  recvbuff = std::get<1>(req_tuple);
+          MSG *recvbuff = std::get<1>(req_tuple);
           size_t recv_size = std::get<2>(req_tuple) / sizeof(MSG);
           for (size_t i = 0; i < recv_size; ++i) { recv_func(recvbuff[i]); }
           free(recvbuff);
@@ -132,18 +142,18 @@ class comm_exchanger {
     }
   }
 
-  // Bassic Comm Data
+  // Basic Comm Data
   MPI_Comm m_comm;
-  int      m_comm_rank;
-  int      m_comm_size;
-  int      m_tag;
+  int m_comm_rank;
+  int m_comm_size;
+  int m_tag;
 
   // send queue
   std::vector<std::vector<MSG>> m_vec_send;
-  size_t                        m_local_count;
+  size_t m_local_count;
 
   // exchange data
-  std::vector<count_pair>                 m_vec_recv_counts;
+  std::vector<count_pair> m_vec_recv_counts;
   std::deque<std::pair<MPI_Request, int>> m_req_irecv_counts;  // req, rank
 };
 }  // namespace ygm
