@@ -1,7 +1,7 @@
 <h4>Distribute Pattern Matching on Large Metadata Graphs</h4>
 <p>We present an example of searching a pattern in a R-MAT generated graph using our program. The code is developed on top of HavoqGT.</p>
-<p>Clone (with SSH) the code from https://github.com/hpcresearchanddevelopment/patternmatching</p>
-<p>git clone git@github.com:hpcresearchanddevelopment/patternmatching.git</p>
+<p>Clone the code from https://github.com/LLNL/havoqgt/tree/develop_prunejuice</p>
+<p>git clone https://github.com/LLNL/havoqgt.git</p>
 <p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58; the code works fine with 1.57) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. Once you have checked out the code, make sure you are on the master branch.</p>
 <p>Go to the directory, patternmatching/build/quartz/:</p> 
 <p>cd  patternmatching/build/quartz/</p>
@@ -18,7 +18,7 @@
 
 <h4>Input Pattern</h4>
 <p>We will search the following Tree pattern on the graph we just created. The numeric values on each vertex is the label of the respective vertex.</p>
-<div align="center"><img src="https://github.com/hpcresearchanddevelopment/patternmatching/blob/master/examples/doc/tree_0011.png" width="200" height="200"></div>
+<div align="center"><img src="https://github.com/LLNL/havoqgt/blob/develop_prunejuice/examples/prunejuice/doc/tree_0011.png" width="200" height="200"></div>
 <p>We use degree information to create numeric vertex labels, computed using the formula ceil(log_2(d(v_i)+1)). Here, d(v_i) is the degree of a vertex v_i. The input pattern is available in the dircetory patternmatching/examples/rmat_log2_tree_pattern/.</p>
 
 <h4>Searching a Pattern</h4>
@@ -43,4 +43,4 @@
 <p>For the Tree pattern in this example, the last step in the execution enumerates the pattern in the pruned graph. The input for enumeration is the last entry in the file examples/rmat_log2_tree_pattern/0/pattern_non_local_constraint. Here, the same NLCC code walks the full template with work aggregation turned off. The subgraphs are output to the directory examples/results/0/all_ranks_subgraphs and are distributed among multiple files. </p>
 
 <h4>Constraint Generation</h4>
-<p>https://github.com/hpcresearchanddevelopment/patternmatching/tree/master/examples/constraint_generator</p>
+<p>https://github.com/LLNL/havoqgt/tree/develop_prunejuice/examples/prunejuice/constraint_generator</p>
