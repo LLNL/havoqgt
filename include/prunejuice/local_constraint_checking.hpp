@@ -838,7 +838,9 @@ template <typename TGraph, typename AlgData, typename VertexStateMap,
 void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data, 
   VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
   VertexActive& vertex_active, 
-  VertexIteration& vertex_iteration, uint64_t superstep, bool global_init_step, bool& global_not_finished, TemplateVertex& template_vertices, VertexUint8MapCollection& vertex_active_edges_map) {
+  VertexIteration& vertex_iteration, uint64_t superstep, bool global_init_step, 
+  bool& global_not_finished, bool& not_finished, 
+  TemplateVertex& template_vertices, VertexUint8MapCollection& vertex_active_edges_map) {
 
   typedef typename TGraph::vertex_iterator vertex_iterator;
   typedef typename TGraph::vertex_locator vertex_locator;
@@ -975,8 +977,16 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
  
   }
 
+  // termination detection
   if (vertex_remove_from_map_list.size() > 0) {
-    global_not_finished = true;
+    //global_not_finished = true;
+    if (!global_not_finished) {
+      global_not_finished = true;
+    }
+
+    if (!not_finished) {
+      not_finished = true;
+    }
   }
 
   for (auto v : vertex_remove_from_map_list) {
@@ -1009,7 +1019,7 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
 
   // edge elimination
   // handle delegates 
-  // erase edges / reset edge active state for next iteration   
+  // erase edges / reset edge active state for next iteration      
   for(vertex_iterator vitr = g->delegate_vertices_begin();
     vitr != g->delegate_vertices_end(); ++vitr) {
     vertex_locator vertex = *vitr;
@@ -1025,13 +1035,23 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         << std::endl; // Test
         if (!itr->second) {
           itr = vertex_active_edges_map[vertex].erase(itr); // C++11  
+ 
+          // termination detection  
+          if (!global_not_finished) {
+            global_not_finished = true;
+          }
+
+          if (!not_finished) {
+            not_finished = true;
+          } 
+
         } else {
           itr->second = 0; 
           ++itr; 
 	}    
       } // for  
     } // else
-  } //for  
+  } //for 
   
   MPI_Barrier(MPI_COMM_WORLD);
 }   
@@ -1084,6 +1104,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       std::cout << "Label Propagation | Superstep #" << superstep;
     }
 
+    bool not_finished = false; // local not finished flag
+
     //MPI_Barrier(MPI_COMM_WORLD); 
     double time_start = MPI_Wtime();
     ///vq.init_visitor_traversal_new(); 
@@ -1102,14 +1124,28 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
  
     verify_and_update_vertex_state<TGraph, decltype(alg_data), VertexStateMapGeneric,
       PatternGraph, VertexActive, VertexIteration, BitSet, TemplateVertex>(g, alg_data, vertex_state_map_generic, pattern_graph, 
-      vertex_active, vertex_iteration, superstep, global_init_step, global_not_finished, template_vertices, vertex_active_edges_map);
+      vertex_active, vertex_iteration, superstep, global_init_step, global_not_finished, not_finished, template_vertices, vertex_active_edges_map);
     //MPI_Barrier(MPI_COMM_WORLD);
     //std::cout << "MPI Rank : " << mpi_rank <<  " - vertex_state_map_generic.size() : " << vertex_state_map_generic.size() << std::endl; // Test
-   
+  
+    // local terminatiion detection
+    not_finished = havoqgt::mpi_all_reduce(not_finished, std::greater<uint8_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+    //
+ 
     double time_end = MPI_Wtime();
     if (mpi_rank == 0) {
       //std::cout << "Superstep #" << superstep <<  " Time " << time_end - time_start << std::endl;
       std::cout << " | Time : " << time_end - time_start << std::endl;
+    }
+
+    if (mpi_rank == 0) {
+      std::cout << "Label Propagation | Local Finish Status : ";
+      if (not_finished) {
+        std::cout << "Continue" << std::endl;
+      } else {
+        std::cout << "Stop" << std::endl;
+      }
     }
 
 #ifdef OUTPUT_RESULT
@@ -1159,6 +1195,9 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     lp_visitor_count = 0; // reset for next iteration 
 
     // TODO: global reduction on global_not_finished before next iteration
+    if (!not_finished) { // Important : this must come after output/file write  
+      break;
+    } 
     
   } // for 
   // end of BSP execution  
