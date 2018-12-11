@@ -1089,7 +1089,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   if (mpi_rank == 0) {
-    std::cout << "Label Propagation ... " << std::endl; 
+    std::cout << "Local Constraint Checking ... " << std::endl; 
   } 
 
   // beiginning of BSP execution
@@ -1101,7 +1101,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       //std::cout << "Superstep #" << superstep << std::endl;
-      std::cout << "Label Propagation | Superstep #" << superstep;
+      //std::cout << "Local Constraint Checking | Superstep #" << superstep;
+      std::cout << "Local Constraint Checking | Iteration #" << superstep;
     }
 
     bool not_finished = false; // local not finished flag
@@ -1140,7 +1141,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     }
 
     if (mpi_rank == 0) {
-      std::cout << "Label Propagation | Local Finish Status : ";
+      std::cout << "Local Constraint Checking | Local Finished Status : ";
       if (not_finished) {
         std::cout << "Continue" << std::endl;
       } else {

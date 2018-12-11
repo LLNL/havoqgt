@@ -9,16 +9,16 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-// TODO: improve
-static bool enable_token_aggregation = true;
-static bool enable_vertex_token_source_cache = false;
-static bool path_checking_filter = false; //true;
-static uint64_t visitor_count;
-static uint64_t path_count = 0;
-
 ///namespace havoqgt { ///namespace mpi {
 
 namespace prunejuice {
+
+// TODO: improve
+static bool enable_token_aggregation = true;
+static bool enable_vertex_token_source_cache = false; // TODO: delete
+static bool path_checking_filter = false; //true;
+static uint64_t visitor_count;
+static uint64_t path_count = 0;
 
 template<typename Visitor>
 class tppm_queue_tds {
@@ -1018,7 +1018,8 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   PatternGraph& pattern_graph, PatternUtilities& pattern_utilities, size_t pl, 
   VertexUint8Map& token_source_map, 
   VertexSetCollection& vertex_token_source_set,
-  std::vector<uint8_t>::reference pattern_found, 
+  std::vector<uint8_t>::reference pattern_found,
+  std::uint64_t batch_size, 
   std::ofstream& paths_result_file, uint64_t& message_count) {
 
   visitor_count = 0;
@@ -1031,7 +1032,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   //size_t& superstep_ref = superstep_var;  
 
   if (mpi_rank == 0) {
-    std::cout << "Token Passing [" << pl << "] ... " << std::endl;
+    std::cout << "Token Passing [" << pl << "] | Template Driven Search ... " << std::endl;
   }
 
   // TODO: temporary patch
@@ -1046,11 +1047,11 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   auto pattern_aggregation_steps = pattern_utilities.aggregation_steps[pl];
   // TODO: temporary patch
   
-  // TODO: remove
+  // TODO: delete 
   uint8_t vertex_rank = 0; // dummy 
   uint8_t edge_metadata = 0; // dummy
   uint8_t superstep_var = 0; // dummy 
-  // TODO: remove
+  // TODO: delete
 
   uint64_t max_itr_count = std::get<2>(pattern_utilities.input_patterns[pl]);
   //uint64_t itr_count = 0; // superstep_var
@@ -1255,10 +1256,12 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   //visitor_set_receive->clear();
   //visitor_set_send->clear();
 
-  // using the vertex_data class for aggregation
+  // using the vertex_data class for aggregation - one set per vertex
   typedef DelegateGraphVertexDataSTDAllocator<VisitorSet> VertexVisitorSetCollection;   
   VertexVisitorSetCollection visitor_set_receive(*g); 
   visitor_set_receive.clear();
+
+  /////////////////////////////////////////////////////////////////////////////
 
   // batching
 
@@ -1343,24 +1346,20 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   ///  MPI_COMM_WORLD);
   havoqgt::mpi_all_reduce(token_source_set.size(), std::plus<size_t>(),
     MPI_COMM_WORLD);
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (mpi_rank == 0) {
-    std::cout << "Token Passing [" << pl << "] | Global Token Source Count : "
-      << global_token_source_set_size << std::endl;
-  }  
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this? 
 
   // batch parameters
   uint64_t max_batch_size = mpi_size;  
-  uint64_t max_ranks_per_itr = mpi_size / 36;
+  //uint64_t max_ranks_per_itr = mpi_size / 36; // quartz
+  uint64_t max_ranks_per_itr = batch_size; 
 
   // IMDB patterns_B_2
   //if (pl >= 14) {
   // WDC_patterns_12_tree_C_2, C_4 - pruned graph
-  if (pl >= 0) {
+///-  if (pl >= 0) {
   //if (pl == 11) {
   //if (pl == 8) {
-    max_ranks_per_itr = mpi_size; //mpi_size; //128;
+///-    max_ranks_per_itr = mpi_size; //mpi_size; //128;
     /*if (mpi_size / 36 == 64) {
       max_ranks_per_itr = 64; // 1; in SC paper
       if (pl == 9) {
@@ -1373,7 +1372,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
     if (mpi_size / 36 == 256) {
       max_ranks_per_itr = 256; // 256; in SC paper
     }*/
-  } //else { batch_token_source_map.clear(); return;} // Test
+///-  } //else { batch_token_source_map.clear(); return;} // Test
   // WDC_patterns_12_D
   //if (pl >= 4) { 
   //  max_ranks_per_itr = 1; 
@@ -1381,22 +1380,32 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
 
   uint64_t batch_count = 0;
   
-  if (mpi_rank == 0) {  
+  //if (mpi_rank == 0) {  
+  //  std::cout << "Token Passing [" << pl << "] | Batch Size : "
+  //    << max_ranks_per_itr << std::endl; 
+  //}   
+
+  if (mpi_rank == 0) {
     std::cout << "Token Passing [" << pl << "] | Batch Size : "
-      << max_ranks_per_itr << std::endl; 
-  }   
+      << max_ranks_per_itr << " | Global Token Source Count : "
+      << global_token_source_set_size << std::endl;
+  }  
 
   // batch processing
-  for (auto batch_size = 0;  batch_size < max_batch_size;
-    batch_size+=max_ranks_per_itr) {
+   
+  for (auto batch_mpi_rank = 0;  batch_mpi_rank < max_batch_size;
+    batch_mpi_rank+=max_ranks_per_itr) {
+
+    auto batch_max_mpi_rank = (batch_mpi_rank + max_ranks_per_itr - 1) <= (mpi_size - 1) ? 
+      (batch_mpi_rank + max_ranks_per_itr - 1) : (mpi_size - 1); 
 
     double time_start = MPI_Wtime();
 
     batch_token_source_map.clear();  
-    assert(batch_size + max_ranks_per_itr <= mpi_size);
+    assert(batch_mpi_rank + max_ranks_per_itr <= mpi_size);
 
     // setup batch token source map
-    if (mpi_rank >= batch_size && mpi_rank < (batch_size + max_ranks_per_itr)) {
+    if (mpi_rank >= batch_mpi_rank && mpi_rank < (batch_mpi_rank + max_ranks_per_itr)) {
       for (auto vitr = token_source_set.begin(); vitr != token_source_set.end();) {
         auto find_token_source = batch_token_source_map.find(*vitr);
         if (find_token_source == batch_token_source_map.end()) {
@@ -1418,18 +1427,18 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
 
     MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
-    size_t global_batch_token_source_map_size = 1; 
+    size_t global_batch_token_source_map_size = 1; // TODO: ? 
     //  havoqgt::mpi::mpi_all_reduce(batch_token_source_map.size(), 
     //  std::plus<size_t>(), MPI_COMM_WORLD);
     //MPI_Barrier(MPI_COMM_WORLD);
 
-    if (global_batch_token_source_map_size == 0) {
+    if (global_batch_token_source_map_size == 0) { // skip distributed processing
       if (mpi_rank == 0) {
         std::cout << "Token Passing [" << pl << "] | Batch #" << batch_count
-        << " | MPI Ranks : " << batch_size << " - "
-        << (batch_size + max_ranks_per_itr - 1)
-        << " | Global Batch Token Source Count : "
-        << global_batch_token_source_map_size
+        << " | MPI Ranks : " << batch_mpi_rank << " - " << batch_max_mpi_rank
+        //<< (batch_mpi_rank + max_ranks_per_itr - 1)
+        //<< " | Global Batch Token Source Count : "
+        //<< global_batch_token_source_map_size
         <<  " | Skipping." << std::endl;
       }
       batch_count++;
@@ -1439,28 +1448,32 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
 
     if (mpi_rank == 0) {
       std::cout << "Token Passing [" << pl << "] | Batch #" << batch_count
-      << " | MPI Ranks : " << batch_size << " - "
-      << (batch_size + max_ranks_per_itr - 1)
-      << " | Global Batch Token Source Count : "
-      << global_batch_token_source_map_size
+      << " | MPI Ranks : " << batch_mpi_rank << " - " << batch_max_mpi_rank
+      //<< (batch_mpi_rank + max_ranks_per_itr - 1)
+      //<< " | Global Batch Token Source Count : "
+      //<< global_batch_token_source_map_size
       <<  " | Asynchronous Traversal ..." << std::endl;
     }
 
+    ///////////////////////////////////////////////////////////////////////////
+
     // token passing
-///////////////////////////////////////////////////////////////////////////////
+   
     //visitor_set_receive->clear();
     visitor_set_receive.clear();
     vertex_sequence_number.reset(0);
-    path_count = 0; // TODO: uncomment
+    path_count = 0; 
 
     //typedef tppm_visitor_tds<TGraph, Vertex, BitSet> visitor_type;
     auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
-      pattern_graph, vertex_state_map, batch_token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
+      pattern_graph, vertex_state_map, batch_token_source_map, pattern_cycle_length, pattern_valid_cycle, 
+      pattern_found, 
       edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
       pattern_selected_vertices, paths_result_file, pattern_enumeration_indices, visitor_set_receive,
       superstep_var, vertex_sequence_number, pattern_aggregation_steps);
 
-    auto vq = create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue_tds>(g, alg_data);
+    auto vq = create_visitor_queue<visitor_type, 
+      /*havoqgt::detail::visitor_priority_queue*/tppm_queue_tds>(g, alg_data);
 
     ///vq.init_visitor_traversal_new();
     //vq.init_visitor_traversal_new_batch();
@@ -1469,6 +1482,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
     MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
      
     // Test
+    // TODO: this is actually useful for analysis, uncomment
     uint64_t batch_global_path_count = 0;
     //havoqgt::mpi::mpi_all_reduce(path_count,
     //std::plus<uint64_t>(), MPI_COMM_WORLD);
@@ -1477,27 +1491,29 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
     global_path_count+=path_count;
 
     if (mpi_rank == 0) {
-      std::cout << "Token Passing [" << pl << "] | Batch #" << batch_count 
-      << " | Global Batch Pattern Count : " << batch_global_path_count << std::endl;
+      //std::cout << "Token Passing [" << pl << "] | Batch #" << batch_count 
+      //<< " | Global Batch Pattern Count : " << batch_global_path_count 
+      //<< std::endl;
     }
     // Test
 
-///////////////////////////////////////////////////////////////////////////////
     // token passing
-        
+     
+    ///////////////////////////////////////////////////////////////////////////
+       
     double time_end = MPI_Wtime(); 
     if (mpi_rank == 0) {
       std::cout << "Token Passing [" << pl << "] | Batch #" << batch_count
-      << " | MPI Ranks : " << batch_size << " - "
-      << (batch_size + max_ranks_per_itr - 1)
-      << " | Global Batch Token Source Count : "
-      << global_batch_token_source_map_size
+      << " | MPI Ranks : " << batch_mpi_rank << " - " << batch_max_mpi_rank
+      //<< (batch_mpi_rank + max_ranks_per_itr - 1)
+      //<< " | Global Batch Token Source Count : "
+      //<< global_batch_token_source_map_size
       <<  " | Time : " << time_end - time_start << std::endl; 
     }     
   
     // TODO: remove the invalid vertices here?
 
-    // update token_source_map   
+    // update the global token_source_map   
     for (auto& s : batch_token_source_map) {
       auto find_token_source = token_source_map.find(s.first);
       if (find_token_source ==  token_source_map.end()) {
@@ -1513,10 +1529,14 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
     MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
  
     batch_count++;    
-  } // for   
+  } // for  
+
+  // batch processing 
   
   // batching 
 
+  /////////////////////////////////////////////////////////////////////////////
+  
   // Test
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
@@ -1531,13 +1551,12 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
-    std::cout << "Token Passing [" << pl << "] | Global Pattern Count : " << global_path_count << std::endl; 
+    std::cout << "Token Passing [" << pl << "] | Global Subpattern Count : " 
+      << global_path_count << std::endl; 
   }
   // Test
  
-  message_count = visitor_count;     
-
-  // end of method
+  message_count = visitor_count;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -5,14 +5,14 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-static bool enable_vertex_token_source = true;
-static uint64_t tp_visitor_count = 0;
-
 using namespace havoqgt;
 
 ///namespace havoqgt { ///namespace mpi {
 
 namespace prunejuice {
+
+static bool enable_vertex_token_source = true;
+static uint64_t tp_visitor_count = 0;
 
 template<typename Visitor>
 class tppm_queue {
@@ -928,6 +928,14 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   //std::cout << "token_passing_pattern_matching_new.hpp" << std::endl;
   
   tp_visitor_count = 0;
+
+  int mpi_rank = comm_world().rank();
+  int mpi_size = comm_world().size();
+
+  if (mpi_rank == 0) {
+    std::cout << "Token Passing ... " << std::endl;
+    //std::cout << "Token Passing [" << pl << "] ... " << std::endl;
+  } 
 
   typedef tppm_visitor<TGraph, BitSet> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
