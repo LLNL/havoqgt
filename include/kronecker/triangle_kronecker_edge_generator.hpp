@@ -10,11 +10,12 @@
 #include <vector>
 #include <ygm/mpi.hpp>
 
-template <typename C1, typename C2, typename Small_Vertex = uint32_t>
+template <typename C1, typename C2, typename edge_data_type = uint8_t,
+          typename Small_Index = uint32_t>
 class triangle_kronecker_edge_generator {
-  typedef uint64_t                      vertex_descriptor;
-  typedef std::pair<uint64_t, uint64_t> value_type;
-  typedef value_type                    edge_type;
+  typedef uint64_t                                       vertex_descriptor;
+  typedef std::tuple<uint64_t, uint64_t, edge_data_type> value_type;
+  typedef value_type                                     edge_type;
 
   class input_iterator_type
       : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t,
@@ -110,8 +111,8 @@ class triangle_kronecker_edge_generator {
         m_graph2_adj_lists(num_vertices_graph2) {
     m_graph1_itr += ygm::comm_world().rank();
 
-    Small_Vertex row, col;
-    int64_t      val;
+    Small_Vertex   row, col;
+    edge_data_type val;
     for (auto& edge : m_graph1) {
       row = std::get<0>(edge);
       col = std::get<1>(edge);
@@ -143,7 +144,7 @@ class triangle_kronecker_edge_generator {
 
   bool undirected() { return m_undirected; }
 
-  uint64_t query(uint64_t row, uint64_t col) {
+  edge_data_type query(uint64_t row, uint64_t col) {
     Small_Vertex row1, row2, col1, col2;
 
     row1 = row / m_num_vertices_graph2;
@@ -166,16 +167,20 @@ class triangle_kronecker_edge_generator {
 
  private:
   edge_type generate_edge() {
-    uint64_t     row, col;
-    Small_Vertex row1, col1, row2, col2;
+    uint64_t       row, col;
+    Small_Vertex   row1, col1, row2, col2;
+    edge_data_type val1, val2, val;
 
     row1 = std::get<0>(*m_graph1_itr);
     col1 = std::get<1>(*m_graph1_itr);
+    val1 = std::get<2>(*m_graph1_itr);
     row2 = std::get<0>(*m_graph2_itr);
     col2 = std::get<1>(*m_graph2_itr);
+    val2 = std::get<2>(*m_graph2_itr);
 
     row = row1 * m_num_vertices_graph2 + row2;
     col = col1 * m_num_vertices_graph2 + col2;
+    val = val1 * val2;
 
     m_graph2_itr++;
     if (m_graph2_itr == m_graph2.end()) {
@@ -186,7 +191,7 @@ class triangle_kronecker_edge_generator {
       m_graph1_itr += increments;
     }
 
-    return std::make_pair(row, col);
+    return std::make_tuple(row, col, val);
   }
 
   C1           m_graph1;
@@ -197,8 +202,8 @@ class triangle_kronecker_edge_generator {
   Small_Vertex m_num_vertices_graph2;
   Small_Vertex m_graph1_pos;
 
-  std::vector<std::map<Small_Vertex, int32_t> > m_graph1_adj_lists;
-  std::vector<std::map<Small_Vertex, int32_t> > m_graph2_adj_lists;
+  std::vector<std::map<Small_Vertex, edge_data_type> > m_graph1_adj_lists;
+  std::vector<std::map<Small_Vertex, edge_data_type> > m_graph2_adj_lists;
 
   typename C1::iterator m_graph1_itr;
   typename C2::iterator m_graph2_itr;

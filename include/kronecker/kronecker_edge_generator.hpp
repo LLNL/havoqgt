@@ -2,16 +2,68 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <havoqgt/detail/hash.hpp>
 #include <iostream>
 #include <iterator>
+#include <map>
+#include <sstream>
 #include <tuple>
+#include <vector>
 #include <ygm/mpi.hpp>
 
-template <typename GRAPH1, typename GRAPH2>
+template <typename T, typename W>
+T read_graph_file(std::string                       filename,
+                  std::vector<std::tuple<T, T, W>>& edge_list) {
+  std::ifstream filestream(filename);
+  T             num_vertices;
+
+  if (filestream.is_open()) {
+    std::string line;
+    if (!std::getline(filestream, line)) {
+      std::cerr << "Empty file\n";
+      exit(-1);
+    }
+    std::istringstream iss(line);
+    iss >> num_vertices;
+    if (line.find(" ") != line.npos) {
+      std::cout << iss.str() << std::endl;
+      std::cerr << "First line of input has too many values\n";
+      exit(-1);
+    }
+    while (std::getline(filestream, line)) {
+      iss = std::istringstream(line);
+      T src, dest;
+      W wgt;
+      if (!(iss >> src >> dest >> wgt)) {
+        std::cerr << "Malformed line in input\n";
+        exit(-1);
+      } else {
+        edge_list.push_back(std::make_tuple(src, dest, wgt));
+      }
+    }
+    filestream.close();
+  } else {
+    std::cerr << "Unable to open file " << filename << std::endl;
+    exit(-1);
+  }
+
+  return num_vertices;
+}
+
+template <typename edge_data_type = uint8_t, typename Small_Index = uint32_t,
+          typename C1 =
+              std::vector<std::tuple<Small_Index, Small_Index, edge_data_type>>,
+          typename C2 =
+              std::vector<std::tuple<Small_Index, Small_Index, edge_data_type>>>
 class kronecker_edge_generator {
-  typedef uint64_t                      vertex_descriptor;
-  typedef std::pair<uint64_t, uint64_t> value_type;
-  typedef value_type                    edge_type;
+ public:
+  typedef uint64_t                                       vertex_descriptor;
+  typedef std::tuple<uint64_t, uint64_t, edge_data_type> value_type;
+  typedef value_type                                     edge_type;
+  typedef edge_data_type                                 edge_data_value_type;
 
   class input_iterator_type
       : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t,
@@ -64,11 +116,10 @@ class kronecker_edge_generator {
         std::swap(std::get<0>(m_current), std::get<1>(m_current));
         m_make_undirected = false;
       } else {
-        uint64_t row, col;
         do {
           ++m_count;
           if (*this == m_ptr_kron->end())
-            break;  /// Ends when last edge of Kronecker is skipped
+            break;  /// Ends even if last edge of Kronecker is skipped
           m_current = m_ptr_kron->generate_edge();
         } while (!valid_edge());
         m_make_undirected = true;
@@ -76,10 +127,9 @@ class kronecker_edge_generator {
     }
 
     bool valid_edge() {
-      return true;  /// Can add option to check for self-loops here
+      return true;  /// Can filter edges here
     }
 
-   protected:
     kronecker_edge_generator* m_ptr_kron;
     uint64_t                  m_count;
     edge_type                 m_current;
@@ -87,14 +137,15 @@ class kronecker_edge_generator {
   };
 
  public:
-  kronecker_edge_generator(GRAPH1 graph1, GRAPH2 graph2,
-                           uint64_t num_vertices_graph1,
-                           uint64_t num_vertices_graph2,
-                           bool     undirected = false)
+  kronecker_edge_generator(C1 graph1, C2 graph2,
+                           Small_Index num_vertices_graph1,
+                           Small_Index num_vertices_graph2,
+                           bool scramble = false, bool undirected = false)
       : m_graph1(graph1),
         m_graph2(graph2),
         m_num_vertices_graph1(num_vertices_graph1),
         m_num_vertices_graph2(num_vertices_graph2),
+        m_scramble(scramble),
         m_undirected(undirected),
         m_local_edge_count(
             graph1.size() * graph2.size() / ygm::comm_world().size() +
@@ -102,11 +153,42 @@ class kronecker_edge_generator {
              (graph1.size() % ygm::comm_world().size()) * graph2.size())),
         m_graph1_itr(m_graph1.begin()),
         m_graph2_itr(m_graph2.begin()),
-        m_graph1_pos(ygm::comm_world().rank()) {
+        m_graph1_pos(ygm::comm_world().rank()),
+        m_has_edge_data(true) {
+    m_vertex_scale =
+        (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
     m_graph1_itr += ygm::comm_world().rank();
   }
 
-  input_iterator_type begin() { return input_iterator_type(this, 0); }
+  kronecker_edge_generator(std::string filename1, std::string filename2,
+                           bool scramble = false, bool undirected = false)
+      : m_scramble(scramble),
+        m_undirected(undirected),
+        m_graph1_pos(ygm::comm_world().rank()),
+        m_has_edge_data(true) {
+    m_num_vertices_graph1 = read_graph_file(filename1, m_graph1);
+    m_num_vertices_graph2 = read_graph_file(filename2, m_graph2);
+    m_local_edge_count =
+        m_graph1.size() * m_graph2.size() / ygm::comm_world().size() +
+        (ygm::comm_world().rank() <
+         (m_graph1.size() % ygm::comm_world().size()) * m_graph2.size());
+    m_graph1_itr = m_graph1.begin();
+    m_graph2_itr = m_graph2.begin();
+    m_graph1_itr += ygm::comm_world().rank();
+
+    m_vertex_scale =
+        (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
+    std::cout << "Vertex Scale: " << m_vertex_scale << std::endl;
+  }
+
+  input_iterator_type begin() {
+    // Reset iterators to prepare to read
+    m_graph1_itr = m_graph1.begin();
+    m_graph2_itr = m_graph2.begin();
+    m_graph1_pos = ygm::comm_world().rank();
+    m_graph1_itr += ygm::comm_world().rank();
+    return input_iterator_type(this, 0);
+  }
 
   input_iterator_type end() {
     return input_iterator_type(this, m_local_edge_count);
@@ -120,37 +202,53 @@ class kronecker_edge_generator {
 
   bool undirected() { return m_undirected; }
 
+  bool has_edge_data() { return m_has_edge_data; }
+
  private:
   edge_type generate_edge() {
-    uint64_t row, col, row1, col1, row2, col2;
+    uint64_t       row, col;
+    Small_Index    row1, col1, row2, col2;
+    edge_data_type val1, val2, val;
+
     row1 = std::get<0>(*m_graph1_itr);
     col1 = std::get<1>(*m_graph1_itr);
+    val1 = std::get<2>(*m_graph1_itr);
     row2 = std::get<0>(*m_graph2_itr);
     col2 = std::get<1>(*m_graph2_itr);
+    val2 = std::get<2>(*m_graph2_itr);
 
     row = row1 * m_num_vertices_graph2 + row2;
     col = col1 * m_num_vertices_graph2 + col2;
+    val = val1 * val2;
 
     m_graph2_itr++;
     if (m_graph2_itr == m_graph2.end()) {
       m_graph2_itr = m_graph2.begin();
 
-      int increments = std::min(uint64_t(ygm::comm_world().size()),
+      int increments = std::min(Small_Index(ygm::comm_world().size()),
                                 m_num_vertices_graph1 - m_graph1_pos);
       m_graph1_itr += increments;
     }
 
-    return std::make_pair(row, col);
+    if (m_scramble) {
+      row = havoqgt::detail::hash_nbits(row, m_vertex_scale);
+      col = havoqgt::detail::hash_nbits(col, m_vertex_scale);
+    }
+
+    return std::make_tuple(row, col, val);
   }
 
-  GRAPH1   m_graph1;
-  GRAPH2   m_graph2;
-  uint64_t m_local_edge_count;  /// Local edge count
-  bool     m_undirected;
-  uint64_t m_num_vertices_graph1;
-  uint64_t m_num_vertices_graph2;
-  uint64_t m_graph1_pos;
+  C1          m_graph1;
+  C2          m_graph2;
+  uint64_t    m_local_edge_count;  /// Local edge count
+  bool        m_scramble;
+  bool        m_undirected;
+  bool        m_has_edge_data;
+  Small_Index m_num_vertices_graph1;
+  Small_Index m_num_vertices_graph2;
+  Small_Index m_graph1_pos;
+  uint64_t    m_vertex_scale;
 
-  typename GRAPH1::iterator m_graph1_itr;
-  typename GRAPH2::iterator m_graph2_itr;
+  typename C1::iterator m_graph1_itr;
+  typename C2::iterator m_graph2_itr;
 };

@@ -148,7 +148,7 @@ inline uint64_t hash_nbits(uint64_t input, int n) {
   // std::cout << input << std::endl;
   return input;
 }
-}
-}  // end namespace havoqgt::detail
+}  // namespace detail
+}  // namespace havoqgt
 
 #endif

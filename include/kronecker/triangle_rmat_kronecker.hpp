@@ -10,7 +10,7 @@
 
 void read_graph_file(
     std::string                                            filename,
-    std::vector<std::tuple<uint64_t, uint64_t, uint32_t>>& edge_list) {
+    std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>& edge_list) {
   std::ifstream filestream(filename);
 
   if (filestream.is_open()) {
@@ -31,8 +31,8 @@ void read_graph_file(
 }
 
 triangle_kronecker_edge_generator<
-    std::vector<std::tuple<uint64_t, uint64_t, uint32_t>>,
-    std::vector<std::tuple<uint64_t, uint64_t, uint32_t>>>
+    std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>,
+    std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>, uint64_t>
 rmat_kronecker(int scale) {
   std::string graph_prefix = "/p/lustre1/steil1/graphs/";
 
@@ -44,7 +44,7 @@ rmat_kronecker(int scale) {
   graph_filename1 = graph_prefix + "rmat_" + std::to_string(scale1) + "_a";
   graph_filename2 = graph_prefix + "rmat_" + std::to_string(scale2) + "_b";
 
-  std::vector<std::tuple<uint64_t, uint64_t, uint32_t>> edge_list1, edge_list2;
+  std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> edge_list1, edge_list2;
 
   if (ygm::comm_world().rank() == 0) {
     std::cout << "Reading graphs" << std::endl;
@@ -72,8 +72,8 @@ rmat_kronecker(int scale) {
     std::cout << "Constructing Kronecker product" << std::endl;
   }
   triangle_kronecker_edge_generator<
-      std::vector<std::tuple<uint64_t, uint64_t, uint32_t>>,
-      std::vector<std::tuple<uint64_t, uint64_t, uint32_t>>>
+      std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>,
+      std::vector<std::tuple<uint64_t, uint64_t, uint64_t>>, uint64_t>
       kron(edge_list1, edge_list2, edge_list1.size(), edge_list2.size(), false);
 
   return kron;
