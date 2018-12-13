@@ -55,7 +55,7 @@
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <kronecker/kronecker_edge_generator.hpp>
+#include <havoqgt/kronecker_edge_generator.hpp>
 
 #include <assert.h>
 #include <unistd.h>
