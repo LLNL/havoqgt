@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
           alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
           delegate_threshold, partition_passes, chunk_size, gt_tc);
 
-      triangle_count_per_edge(*graph, "output");
+      triangle_count_per_edge(*graph, "");
       comm_world().barrier();
     }  // Complete build distributed_db
 
