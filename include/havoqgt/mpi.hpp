@@ -159,7 +159,8 @@ MPI_Op mpi_typeof(std::logical_or<T>) {
 }
 
 void mpi_yield_barrier(MPI_Comm mpi_comm) {
-  MPI_Request request;
+  CHK_MPI(MPI_Barrier(mpi_comm));
+  /*MPI_Request request;
   CHK_MPI(MPI_Ibarrier(mpi_comm, &request));
 
   for (;;) {
@@ -171,7 +172,7 @@ void mpi_yield_barrier(MPI_Comm mpi_comm) {
     } else {
       sched_yield();
     }
-  }
+  }*/
 }
 
 // no std:: equivalent for MPI_BAND, MPI_BOR, MPI_LXOR, MPI_BXOR, MPI_MAXLOC,
