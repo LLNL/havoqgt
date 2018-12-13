@@ -90,10 +90,10 @@ T read_graph_file(std::string                       filename,
       exit(-1);
     }
     while (std::getline(filestream, line)) {
-      iss = std::istringstream(line);
+      std::istringstream iss2(line);
       T src, dest;
       W wgt;
-      if (!(iss >> src >> dest >> wgt)) {
+      if (!(iss2 >> src >> dest >> wgt)) {
         std::cerr << "Malformed line in input\n";
         exit(-1);
       } else {
