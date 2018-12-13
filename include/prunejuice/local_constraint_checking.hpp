@@ -834,7 +834,8 @@ public:
 };
 
 template <typename TGraph, typename AlgData, typename VertexStateMap, 
-  typename PatternGraph, typename VertexActive, typename VertexIteration, typename BitSet, typename TemplateVertex, typename VertexUint8MapCollection>
+  typename PatternGraph, typename VertexActive, typename VertexIteration, 
+  typename BitSet, typename TemplateVertex, typename VertexUint8MapCollection>
 void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data, 
   VertexStateMap& vertex_state_map, PatternGraph& pattern_graph, 
   VertexActive& vertex_active, 
@@ -858,7 +859,16 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         auto find_vertex = vertex_state_map.find(g->locator_to_label(vertex));
         if (find_vertex == vertex_state_map.end()) { 
           vertex_active[vertex] = false;    
-          vertex_active_edges_map[vertex].clear(); // edge elimination 
+          vertex_active_edges_map[vertex].clear(); // edge elimination
+
+          if (!global_not_finished) {
+            global_not_finished = true;
+          }
+
+          if (!not_finished) {
+            not_finished = true;
+          }
+
         } 
       } 
     }
@@ -871,6 +881,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         if (find_vertex == vertex_state_map.end()) {
           vertex_active[vertex] = false;
           vertex_active_edges_map[vertex].clear(); // edge elimination
+
+          if (!global_not_finished) {
+            global_not_finished = true;
+          }
+
+          if (!not_finished) {
+            not_finished = true;
+          }
+ 
         }
       }
       // skip the delegates, reduction on vertex_active will take care of them 
@@ -945,6 +964,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
           //std::cout << tmp_pattern_vertex_edges << " not same as " << tmp_bitset << " " << tb << std::endl;//<< v.second.template_neighbors << std::endl; // Test
           //std::cout << tmp_pattern_vertex_edges << " not same as " << tmp_bitset << " " << v.second.template_neighbors << std::endl; // Test          
           //std::cout << v.second.template_vertices << " - " << v.first << std::endl;
+          
+          if (!global_not_finished) {
+            global_not_finished = true;
+          }
+
+          if (!not_finished) {
+            not_finished = true;
+          }
+
         } 
 
       } // if
@@ -956,6 +984,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
       vertex_active_edges_map[v_locator].clear(); // edge elimination 
       //template_vertices[v_locator] = 0;  
       //std::cout << "removing " << v.second.template_vertices << " - " << v.first << std::endl;
+
+      if (!global_not_finished) {
+        global_not_finished = true;
+      }
+
+      if (!not_finished) {
+        not_finished = true;
+      }
+
     } else {
       template_vertices[v_locator] = v.second.template_vertices.to_ulong();
       v.second.template_neighbors.reset(); // reset for next iteration
@@ -967,6 +1004,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         itr != vertex_active_edges_map[v_locator].end();) {
         if (!itr->second) {
           itr = vertex_active_edges_map[v_locator].erase(itr); // C++11  
+          
+          if (!global_not_finished) {
+            global_not_finished = true;
+          }
+
+          if (!not_finished) {
+            not_finished = true;
+          }
+
         } else {
           itr->second = 0; 
           ++itr; 
@@ -989,7 +1035,7 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
     }
   }
 
-  for (auto v : vertex_remove_from_map_list) {
+  for (auto v : vertex_remove_from_map_list) { // TODO: replace this with C++ map erase
     if (vertex_state_map.erase(v) < 1) {
       std::cerr << "Error: failed to remove an element from the map." 
         << std::endl;  
@@ -1028,6 +1074,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
     }
     if (!vertex_active[vertex]) {
       vertex_active_edges_map[vertex].clear();
+
+      if (!global_not_finished) {
+        global_not_finished = true;
+      }
+
+      if (!not_finished) {
+        not_finished = true;
+      }
+
     } else {  
       for (auto itr = vertex_active_edges_map[vertex].begin(); 
         itr != vertex_active_edges_map[vertex].end();) {
@@ -1073,6 +1128,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   int mpi_rank = comm_world().rank();
   uint64_t superstep_var = 0; // TODO: change type to size_t
   uint64_t& superstep_ref = superstep_var;
+  bool not_finished = false; // local not finished flag
 
   typedef uint64_t Vertex; // TODO: pass from main 
   //typedef std::bitset<max_bit_vector_size> BitSet;
@@ -1105,7 +1161,8 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
       std::cout << "Local Constraint Checking | Iteration #" << superstep;
     }
 
-    bool not_finished = false; // local not finished flag
+    //bool not_finished = false; // local not finished flag
+    not_finished = false; // local not finished flag
 
     //MPI_Barrier(MPI_COMM_WORLD); 
     double time_start = MPI_Wtime();
