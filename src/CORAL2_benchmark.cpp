@@ -117,7 +117,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
   chunk_size                 = 8 * 1024;
   undirected                 = false;
 
-  char c;
+  int c;
   bool prn_help = false;
   while ((c = getopt(argc, argv, "o:d:p:f:c:u:h ")) != -1) {
     switch (c) {
