@@ -1,14 +1,23 @@
-#ifndef HAVOQGT_VERTEX_DATA_DB_HPP_INCLUDED
-#define HAVOQGT_VERTEX_DATA_DB_HPP_INCLUDED
+#pragma once
+
+#include <filesystem> // C++17, -lstdc++fs is required
+#include <fstream>
+#include <iostream>
+#include <regex>
+#include <sstream>
+//#include <experimental/filesystem> // C++17, -lstdc++fs is required
 
 //#define BOOST_FILESYSTEM_VERSION 3
 //#define BOOST_FILESYSTEM_NO_DEPRECATED 
 
-#include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
+//#include <boost/filesystem.hpp>
+//#include <boost/regex.hpp>
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
+
+namespace stdfs = std::filesystem;
+//namespace stdfs = std::experimental::filesystem;
 
 namespace havoqgt { ///namespace mpi {
 
@@ -89,15 +98,18 @@ public:
     } 
 
     std::get<0>(alg_data)[vertex] = vertex_data;    
-    //std::cout << "Visiting " << g.locator_to_label(vertex) << " " << std::get<0>(alg_data)[vertex] << std::endl; // test  
+    //std::cout << "Visiting " << g.locator_to_label(vertex) << " " 
+    //  << std::get<0>(alg_data)[vertex] << std::endl; // test  
     return true;
   } 
 
-  friend inline bool operator>(const vertex_data_visitor& v1, const vertex_data_visitor& v2) {
+  friend inline bool operator>(const vertex_data_visitor& v1, 
+    const vertex_data_visitor& v2) {
     return false;
   }
 
-  friend inline bool operator<(const vertex_data_visitor& v1, const vertex_data_visitor& v2) {
+  friend inline bool operator<(const vertex_data_visitor& v1, 
+    const vertex_data_visitor& v2) {
     return false;
   }
 
@@ -106,18 +118,20 @@ public:
   bool do_update_vertex_data;
 };
 
-template <typename TGraph, typename VertexMetaData, typename VertexEntry, 
+template <typename TGraph, typename VertexMetadata, typename VertexEntry, 
   typename VertexDataType>
-void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata, 
+void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata, 
   VertexEntry& vertex_entry) {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
   typedef vertex_data_visitor<TGraph, VertexDataType> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata);
-  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  auto vq = create_visitor_queue<visitor_type, 
+    havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
-//  std::cout << "MPI Rank " << mpi_rank << " queuing local vertex entries ... " << std::endl;  
+//  std::cout << "MPI Rank " << mpi_rank 
+//    << " queuing local vertex entries ... " << std::endl;  
   for (auto entry : vertex_entry) {
     auto vertex = std::get<0>(entry);
     auto vertex_data = std::get<1>(entry);
@@ -125,9 +139,12 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     visitor_type new_visitor(vertex_location, vertex_data); 
     vq.queue_visitor(new_visitor); 
   }
-//  std::cout << "MPI Rank " << mpi_rank << " done queuing ... building distributed vertex data db ... " << std::endl;
+  //std::cout << "MPI Rank " << mpi_rank 
+  //  << " done queuing ... building distributed vertex data db ... " 
+  //  << std::endl;
   
-  // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit the ones already in the queue
+  // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit 
+  // the ones already in the queue
   //MPI_Barrier(MPI_COMM_WORLD); // TODO: deadlock
   ///vq.init_visitor_traversal_new();
   vq.init_visitor_traversal();
@@ -135,7 +152,7 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
 //  std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
 }
 
-bool get_files_in_dir(boost::filesystem::path& dir_path, 
+/*bool get_files_in_dir(boost::filesystem::path& dir_path, 
   std::vector<std::string>& file_paths, std::string wildcard) {
   const boost::regex filename_filter(wildcard + ".*");  
 
@@ -163,12 +180,52 @@ bool get_files_in_dir(boost::filesystem::path& dir_path,
       return true;
     } 
   }  
-} 
+}*/ 
 
-template <typename TGraph, typename VertexMetaData, typename Vertex, 
+bool get_files_in_dir(stdfs::path& dir_path, 
+  std::vector<std::string>& file_paths, std::string wildcard) {
+  //const boost::regex filename_filter(wildcard + ".*"); 
+  const std::regex filename_filter(wildcard + ".*"); // TODO: improve 
+
+  if(!stdfs::exists(dir_path) || 
+    !stdfs::is_directory(dir_path)) {
+    std::cerr << "Error: Invalid directory path." << std::endl;
+    return false;    
+  } else {
+    //boost::smatch what;
+    std::smatch what; 
+    stdfs::directory_iterator end_itr; 
+    // default-constructed iterator, also known as the end iterator
+    for (stdfs::directory_iterator itr(dir_path); itr != end_itr; ++itr) {
+      auto filename = itr->path().filename().string(); 
+      // Important : 
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // 2329. regex_match() with match_results should forbid temporary strings
+      /// Prevent unsafe attempts to get match_results from a temporary string.
+      if (!stdfs::is_regular_file(itr->status())) {
+        continue; 
+      //} else if ( !boost::regex_match(itr->path().filename().string(), what, 
+      //  filename_filter) ) {
+      //  continue;
+        } else if ( !std::regex_match(filename, what, filename_filter) ) {
+        continue;  
+      } else { 
+        file_paths.push_back(itr->path().string()); 
+      }
+    }
+     
+    if (file_paths.size() < 1) { 
+      return false; 
+    } else {
+      return true;
+    } 
+  }  
+}
+
+template <typename TGraph, typename VertexMetadata, typename Vertex, 
   typename VertexData>
 void read_file_and_build_vertex_data_db(std::string vertex_data_input_filename, 
-  size_t chunk_size, TGraph* g, VertexMetaData& vertex_metadata) {
+  size_t chunk_size, TGraph* g, VertexMetadata& vertex_metadata) {
 
   typedef std::vector<std::tuple<Vertex, VertexData>> VertexEntry;
   VertexEntry vertex_entry;
@@ -185,19 +242,19 @@ void read_file_and_build_vertex_data_db(std::string vertex_data_input_filename,
   }
   vertex_data_input_file.close();
 
-  vertex_data_db<TGraph, VertexMetaData, VertexEntry, VertexData>
+  vertex_data_db<TGraph, VertexMetadata, VertexEntry, VertexData>
     (g, vertex_metadata, vertex_entry);
 
   // TODO: process in chunks. 
-  // Important: same issue as number of files per-rank.
-  // For now, make sure each vertex data file is not too big.
-  // It can handle any number of files, so reading files in chunks is not 
+  // Important : same issue as number of files per rank.
+  // For now, make sure a vertex data file is not too big.
+  // It can handle arbitrary number of files, so reading a file in chunks is not
   // important. 
 }
 
-template <typename TGraph, typename VertexMetaData, typename Vertex, 
+template <typename TGraph, typename VertexMetadata, typename Vertex, 
   typename VertexData>
-void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata, 
+void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata, 
   std::string base_filename, size_t chunk_size) {
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
   ///int mpi_size = havoqgt_env()->world_comm().size();
@@ -205,21 +262,25 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
   int mpi_size = comm_world().size(); 
 
   if (mpi_rank == 0) {
-    std::cout << "Building distributed vertex data db ... " << std::endl;
+    std::cout << "Building Distributed Vertex Metadata Store ... " << std::endl;
   }
 
-  boost::filesystem::path dir_path(base_filename);
+  //boost::filesystem::path dir_path(base_filename);
+  //std::string wildcard = dir_path.filename().string();
+  //dir_path.remove_filename();
+  
+  stdfs::path dir_path = base_filename;
   std::string wildcard = dir_path.filename().string();
   dir_path.remove_filename();
- 
-  std::vector<std::string> file_paths;  
+
+  std::vector<std::string> file_paths; 
 
   if(!get_files_in_dir(dir_path, file_paths, wildcard)) {
     std::cerr << "Error: Failed to read input files." << std::endl;    
     return; 
   }
 
-  // Important: if not all the ranks have the same number of files to process 
+  // Important : if not all the ranks have the same number of files to process 
   size_t max_files_per_rank = 0;
   if (file_paths.size() < mpi_size) {
     max_files_per_rank = 1;  
@@ -232,7 +293,8 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
     }
   }
   if (mpi_rank == 0) {
-    std::cout << "Maximum number of files per-rank " << 
+    std::cout << "Total number of files : " << file_paths.size() << std::endl;
+    std::cout << "Maximum number of files per rank : " << 
       max_files_per_rank << std::endl; 
   }
 
@@ -245,7 +307,8 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
 //    std::cout << "MPI Rank " << mpi_rank << " processing file [" << i << "] " 
 //      << file_paths[i] << " ... " << std::endl;
 
-    read_file_and_build_vertex_data_db<TGraph, VertexMetaData, Vertex, VertexData>
+    read_file_and_build_vertex_data_db
+      <TGraph, VertexMetadata, Vertex, VertexData>
       (file_paths[i], chunk_size, g, vertex_metadata);
 
     if (i + mpi_size < file_paths.size()) {
@@ -254,12 +317,9 @@ void vertex_data_db(TGraph* g, VertexMetaData& vertex_metadata,
   } 
 
   if (mpi_rank == 0) {
-    std::cout << "Done building vertex data db." << std::endl;
+    std::cout << "Done Building Vertex Metadata Store." << std::endl;
   }   
     
-} 
+}
 
 } ///} //end namespace havoqgt::mpi
- 
-
-#endif //HAVOQGT_VERTEX_DATA_DB_HPP_INCLUDED
