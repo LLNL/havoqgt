@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
       segment_manager_t* segment_manager = ddb.get_segment_manager();
       bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-      graph_type::edge_data<gt_tc_type, std::allocator<gt_tc_type>> gt_tc;
+      /*graph_type::edge_data<gt_tc_type, std::allocator<gt_tc_type>> gt_tc;*/
 
       // Setup Kronecker generator
       kronecker_edge_generator<gt_tc_type> kron(
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
       }
       graph_type* graph = segment_manager->construct<graph_type>("graph_obj")(
           alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
-          delegate_threshold, partition_passes, chunk_size, gt_tc);
+          delegate_threshold, partition_passes, chunk_size /*, gt_tc*/);
 
       graph->print_graph_statistics();
 
