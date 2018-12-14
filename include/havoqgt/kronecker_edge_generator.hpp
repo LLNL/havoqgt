@@ -140,9 +140,10 @@ class kronecker_edge_generator {
       : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t,
                              const edge_type*, const edge_type&> {
    public:
-    input_iterator_type(kronecker_edge_generator* ptr_kron, uint64_t count)
+    input_iterator_type(kronecker_edge_generator* ptr_kron, uint64_t count,
+                        bool empty)
         : m_ptr_kron(ptr_kron), m_count(count), m_make_undirected(false) {
-      if (m_count == 0) {
+      if (!empty && m_count == 0) {
         get_next();
         m_count = 0;
       }
@@ -262,11 +263,12 @@ class kronecker_edge_generator {
     m_graph2_itr = m_graph2.begin();
     m_graph1_pos = ygm::comm_world().rank();
     m_graph1_itr += ygm::comm_world().rank();
-    return input_iterator_type(this, 0);
+    return input_iterator_type(this, 0, m_local_edge_count == 0);
   }
 
   input_iterator_type end() {
-    return input_iterator_type(this, m_local_edge_count);
+    return input_iterator_type(this, m_local_edge_count,
+                               m_local_edge_count == 0);
   }
 
   uint64_t max_vertex_id() {
