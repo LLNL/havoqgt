@@ -208,22 +208,25 @@ int main(int argc, char** argv) {
           alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
           delegate_threshold, partition_passes, chunk_size, gt_tc);
 
+      graph->print_graph_statistics();
+
       uint64_t global_tc = triangle_count_per_edge(*graph, "");
-      if (comm_world().rank() == 0) {
-        std::cout << "global_tc = " << global_tc << std::endl;
-      }
       uint64_t global_gt_tc(0);
-      {
-        kronecker_edge_generator<gt_tc_type> kron(
-            input_filename1, input_filename2, scramble, false);
-        for (auto edgetuple : kron) {
-          global_gt_tc += std::get<2>(edgetuple);
-        }
+      for (auto edgetuple : kron) {
+        global_gt_tc += std::get<2>(edgetuple);
       }
+      global_gt_tc /= 2;  // Each edge is counted twice from kron stream
 
       global_gt_tc = comm_world().all_reduce(global_gt_tc, MPI_SUM);
       if (comm_world().rank() == 0) {
-        std::cout << "global_gt_tc = " << global_gt_tc / 2 << std::endl;
+        if (global_tc == global_gt_tc) {
+          std::cout << "!!PASSED!!" << std::endl;
+          std::cout << "Global Triangle Count = " << global_gt_tc / 3
+                    << std::endl;
+        } else {
+          std::cout << "?? FAILED ??" << std::endl;
+          std::cout << global_gt_tc << " != " << global_tc << std::endl;
+        }
       }
       comm_world().barrier();
     }  // Complete build distributed_db
