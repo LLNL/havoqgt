@@ -689,6 +689,8 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
     std::cout << "TC Time = " << end_time - start_time << std::endl;
   }
 
+  //
+  // Print output if file path is provided
   if (output_tc.length() > 0) {
     std::stringstream ssoutfname;
     ssoutfname << output_tc << "_" << mpi_rank << "_of_" << mpi_size;
@@ -707,6 +709,8 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
     }
   }
 
+  //
+  // Count total triangle edge count to return
   uint64_t count_to_return(0);
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     for (auto& kvp : dod_graph_truss[*vitr]) {
