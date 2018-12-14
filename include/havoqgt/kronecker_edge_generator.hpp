@@ -115,11 +115,10 @@ T read_graph_file(std::string filename,
 
 namespace havoqgt {
 
-template <typename edge_data_type = uint8_t, typename Small_Index = uint32_t,
-          typename C1 =
-              std::vector<std::tuple<Small_Index, Small_Index, edge_data_type>>,
-          typename C2 =
-              std::vector<std::tuple<Small_Index, Small_Index, edge_data_type>>>
+template <
+    typename edge_data_type = uint8_t,
+    typename C1 = std::vector<std::tuple<uint64_t, uint64_t, edge_data_type>>,
+    typename C2 = std::vector<std::tuple<uint64_t, uint64_t, edge_data_type>>>
 class kronecker_edge_generator {
  public:
   typedef uint64_t vertex_descriptor;
@@ -199,20 +198,20 @@ class kronecker_edge_generator {
   };
 
  public:
-  kronecker_edge_generator(C1 graph1, C2 graph2,
-                           Small_Index num_vertices_graph1,
-                           Small_Index num_vertices_graph2,
-                           bool scramble = false, bool undirected = false)
+  kronecker_edge_generator(C1 graph1, C2 graph2, uint64_t num_vertices_graph1,
+                           uint64_t num_vertices_graph2, bool scramble = false,
+                           bool undirected = false)
       : m_graph1(graph1),
         m_graph2(graph2),
         m_num_vertices_graph1(num_vertices_graph1),
         m_num_vertices_graph2(num_vertices_graph2),
         m_scramble(scramble),
         m_undirected(undirected),
-        m_local_edge_count(
-            graph1.size() * graph2.size() / ygm::comm_world().size() +
-            (ygm::comm_world().rank() <
-             (graph1.size() % ygm::comm_world().size()) * graph2.size())),
+        m_local_edge_count(uint64_t(graph1.size()) * uint64_t(graph2.size()) /
+                               ygm::comm_world().size() +
+                           (ygm::comm_world().rank() <
+                            (graph1.size() % ygm::comm_world().size())) *
+                               graph2.size()),
         m_graph1_itr(m_graph1.begin()),
         m_graph2_itr(m_graph2.begin()),
         m_graph1_pos(ygm::comm_world().rank()),
@@ -220,6 +219,9 @@ class kronecker_edge_generator {
     m_vertex_scale =
         (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
     m_graph1_itr += ygm::comm_world().rank();
+    if (ygm::comm_world().rank() == 0) {
+      std::cout << "sizeof(size_t) = " << sizeof(size_t) << std::endl;
+    }
   }
 
   kronecker_edge_generator(std::string filename1, std::string filename2,
@@ -271,7 +273,7 @@ class kronecker_edge_generator {
  private:
   edge_type generate_edge() {
     uint64_t       row, col;
-    Small_Index    row1, col1, row2, col2;
+    uint64_t       row1, col1, row2, col2;
     edge_data_type val1, val2, val;
 
     row1 = std::get<0>(*m_graph1_itr);
@@ -289,7 +291,7 @@ class kronecker_edge_generator {
     if (m_graph2_itr == m_graph2.end()) {
       m_graph2_itr = m_graph2.begin();
 
-      int increments = std::min(Small_Index(ygm::comm_world().size()),
+      int increments = std::min(uint64_t(ygm::comm_world().size()),
                                 m_num_vertices_graph1 - m_graph1_pos);
       m_graph1_itr += increments;
     }
@@ -302,16 +304,16 @@ class kronecker_edge_generator {
     return std::make_tuple(row, col, val);
   }
 
-  C1          m_graph1;
-  C2          m_graph2;
-  uint64_t    m_local_edge_count;  /// Local edge count
-  bool        m_scramble;
-  bool        m_undirected;
-  bool        m_has_edge_data;
-  Small_Index m_num_vertices_graph1;
-  Small_Index m_num_vertices_graph2;
-  Small_Index m_graph1_pos;
-  uint64_t    m_vertex_scale;
+  C1       m_graph1;
+  C2       m_graph2;
+  uint64_t m_local_edge_count;  /// Local edge count
+  bool     m_scramble;
+  bool     m_undirected;
+  bool     m_has_edge_data;
+  uint64_t m_num_vertices_graph1;
+  uint64_t m_num_vertices_graph2;
+  uint64_t m_graph1_pos;
+  uint64_t m_vertex_scale;
 
   typename C1::iterator m_graph1_itr;
   typename C2::iterator m_graph2_itr;
