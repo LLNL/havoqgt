@@ -71,7 +71,7 @@
 namespace kronecker {
 
 template <typename T, typename W>
-T read_graph_file(std::string                       filename,
+T read_graph_file(std::string filename,
                   std::vector<std::tuple<T, T, W>>& edge_list) {
   std::ifstream filestream(filename);
   T             num_vertices;
@@ -91,13 +91,15 @@ T read_graph_file(std::string                       filename,
     }
     while (std::getline(filestream, line)) {
       std::istringstream iss2(line);
-      T src, dest;
-      W wgt;
+      T                  src, dest;
+      W                  wgt;
       if (!(iss2 >> src >> dest >> wgt)) {
         std::cerr << "Malformed line in input\n";
         exit(-1);
       } else {
         edge_list.push_back(std::make_tuple(src, dest, wgt));
+        // Forcing to be symmetric, at least for now...
+        edge_list.push_back(std::make_tuple(dest, src, wgt));
       }
     }
     filestream.close();
@@ -120,10 +122,10 @@ template <typename edge_data_type = uint8_t, typename Small_Index = uint32_t,
               std::vector<std::tuple<Small_Index, Small_Index, edge_data_type>>>
 class kronecker_edge_generator {
  public:
-  typedef uint64_t                                       vertex_descriptor;
+  typedef uint64_t vertex_descriptor;
   typedef std::tuple<uint64_t, uint64_t, edge_data_type> value_type;
-  typedef value_type                                     edge_type;
-  typedef edge_data_type                                 edge_data_value_type;
+  typedef value_type     edge_type;
+  typedef edge_data_type edge_data_value_type;
 
   class input_iterator_type
       : public std::iterator<std::input_iterator_tag, edge_type, ptrdiff_t,
@@ -137,7 +139,7 @@ class kronecker_edge_generator {
       }
     }
 
-    const edge_type&     operator*() const { return m_current; }
+    const edge_type& operator*() const { return m_current; }
     input_iterator_type& operator++() {
       get_next();
       return *this;
@@ -238,7 +240,9 @@ class kronecker_edge_generator {
 
     m_vertex_scale =
         (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
-    std::cout << "Vertex Scale: " << m_vertex_scale << std::endl;
+    if (ygm::comm_world().rank() == 0) {
+      std::cout << "Vertex Scale: " << m_vertex_scale << std::endl;
+    }
   }
 
   input_iterator_type begin() {
