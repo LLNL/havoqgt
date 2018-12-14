@@ -494,6 +494,14 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
         create_visitor_queue<core2_wedges<TGraph>, lifo_queue>(&g, alg_data);
     vq.init_visitor_traversal();
   }
+  uint64_t global_triangle_count =
+      comm_world().all_reduce(local_triangle_count, MPI_SUM);
+  uint64_t global_wedge_count =
+      comm_world().all_reduce(local_wedge_count, MPI_SUM);
+  if (comm_world().rank() == 0) {
+    std::cout << "TC = " << global_triangle_count
+              << ", WC = " << global_wedge_count << std::endl;
+  }
 }
 
 template <typename TGraph, typename DODgraph>
