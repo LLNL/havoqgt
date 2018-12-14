@@ -291,7 +291,7 @@ class kronecker_edge_generator {
       m_graph2_itr = m_graph2.begin();
 
       int increments = std::min(uint64_t(ygm::comm_world().size()),
-                                m_num_vertices_graph1 - m_graph1_pos);
+                                m_graph1.size() - m_graph1_pos);
       m_graph1_itr += increments;
     }
 
