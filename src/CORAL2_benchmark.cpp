@@ -91,7 +91,6 @@ void usage() {
            "1)\n"
         << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
         << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
-        << " -u <bool>     - Treat edgelist as undirected (Default is 0)\n"
         << "file1          - Edge list file for first graph\n"
         << "file2          - Edge list file for second graph\n\n";
   }
@@ -100,8 +99,7 @@ void usage() {
 void parse_cmd_line(int argc, char** argv, std::string& output_filename,
                     uint64_t& delegate_threshold, std::string& input_filename1,
                     std::string& input_filename2, double& gbyte_per_rank,
-                    uint64_t& partition_passes, uint64_t& chunk_size,
-                    bool& undirected) {
+                    uint64_t& partition_passes, uint64_t& chunk_size) {
   if (comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -115,11 +113,10 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
   gbyte_per_rank             = 0.25;
   partition_passes           = 1;
   chunk_size                 = 8 * 1024;
-  undirected                 = false;
 
-  int c;
+  int  c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:u:h ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:p:f:c:h ")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
@@ -139,9 +136,6 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
         break;
       case 'c':
         chunk_size = atoll(optarg);
-        break;
-      case 'u':
-        undirected = atoi(optarg);
         break;
       default:
         std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
@@ -185,12 +179,11 @@ int main(int argc, char** argv) {
       uint64_t    partition_passes;
       double      gbyte_per_rank;
       uint64_t    chunk_size;
-      bool        undirected;
       bool        scramble = true;
 
       parse_cmd_line(argc, argv, output_filename, delegate_threshold,
                      input_filename1, input_filename2, gbyte_per_rank,
-                     partition_passes, chunk_size, undirected);
+                     partition_passes, chunk_size);
 
       if (mpi_rank == 0) {
         std::cout << "Ingesting graphs" << std::endl;
@@ -206,7 +199,7 @@ int main(int argc, char** argv) {
 
       // Setup Kronecker generator
       kronecker_edge_generator<gt_tc_type> kron(
-          input_filename1, input_filename2, scramble, undirected);
+          input_filename1, input_filename2, scramble, false);
 
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
@@ -215,7 +208,23 @@ int main(int argc, char** argv) {
           alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
           delegate_threshold, partition_passes, chunk_size, gt_tc);
 
-      triangle_count_per_edge(*graph, "");
+      uint64_t global_tc = triangle_count_per_edge(*graph, "");
+      if (comm_world().rank() == 0) {
+        std::cout << "global_tc = " << global_tc << std::endl;
+      }
+      uint64_t global_gt_tc(0);
+      {
+        kronecker_edge_generator<gt_tc_type> kron(
+            input_filename1, input_filename2, scramble, false);
+        for (auto edgetuple : kron) {
+          global_gt_tc += std::get<2>(edgetuple);
+        }
+      }
+
+      global_gt_tc = comm_world().all_reduce(global_gt_tc, MPI_SUM);
+      if (comm_world().rank() == 0) {
+        std::cout << "global_gt_tc = " << global_gt_tc / 2 << std::endl;
+      }
       comm_world().barrier();
     }  // Complete build distributed_db
 
