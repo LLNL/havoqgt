@@ -207,11 +207,11 @@ class kronecker_edge_generator {
         m_num_vertices_graph2(num_vertices_graph2),
         m_scramble(scramble),
         m_undirected(undirected),
-        m_local_edge_count(uint64_t(graph1.size()) * uint64_t(graph2.size()) /
-                               ygm::comm_world().size() +
-                           (ygm::comm_world().rank() <
-                            (graph1.size() % ygm::comm_world().size())) *
-                               graph2.size()),
+        m_local_edge_count(
+            ((m_graph1.size() / ygm::comm_world().size()) * m_graph2.size()) +
+            (ygm::comm_world().rank() <
+             (m_graph1.size() % ygm::comm_world().size())) *
+                m_graph2.size()),
         m_graph1_itr(m_graph1.begin()),
         m_graph2_itr(m_graph2.begin()),
         m_graph1_pos(ygm::comm_world().rank()),
@@ -219,9 +219,6 @@ class kronecker_edge_generator {
     m_vertex_scale =
         (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
     m_graph1_itr += ygm::comm_world().rank();
-    if (ygm::comm_world().rank() == 0) {
-      std::cout << "sizeof(size_t) = " << sizeof(size_t) << std::endl;
-    }
   }
 
   kronecker_edge_generator(std::string filename1, std::string filename2,
@@ -233,9 +230,10 @@ class kronecker_edge_generator {
     m_num_vertices_graph1 = kronecker::read_graph_file(filename1, m_graph1);
     m_num_vertices_graph2 = kronecker::read_graph_file(filename2, m_graph2);
     m_local_edge_count =
-        m_graph1.size() * m_graph2.size() / ygm::comm_world().size() +
+        ((m_graph1.size() / ygm::comm_world().size()) * m_graph2.size()) +
         (ygm::comm_world().rank() <
-         (m_graph1.size() % ygm::comm_world().size()) * m_graph2.size());
+         (m_graph1.size() % ygm::comm_world().size())) *
+            m_graph2.size();
     m_graph1_itr = m_graph1.begin();
     m_graph2_itr = m_graph2.begin();
     m_graph1_itr += ygm::comm_world().rank();
@@ -244,6 +242,7 @@ class kronecker_edge_generator {
         (uint64_t)ceil(log2(m_num_vertices_graph1 * m_num_vertices_graph2));
     if (ygm::comm_world().rank() == 0) {
       std::cout << "Vertex Scale: " << m_vertex_scale << std::endl;
+      std::cout << "sizeof(size_t) = " << sizeof(size_t) << std::endl;
     }
   }
 
