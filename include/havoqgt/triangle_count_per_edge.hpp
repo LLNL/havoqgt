@@ -707,7 +707,19 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
     }
   }
 
-  return 0;
+  uint64_t count_to_return(0);
+  for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+    for (auto& kvp : dod_graph_truss[*vitr]) {
+      count_to_return += kvp.second.edge_triangle_count;
+    }
+  }
+  for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+    for (auto& kvp : dod_graph_truss[*vitr]) {
+      count_to_return += kvp.second.edge_triangle_count;
+    }
+  }
+
+  return comm_world().all_reduce(count_to_return, MPI_SUM);
 }
 
 }  // end namespace havoqgt
