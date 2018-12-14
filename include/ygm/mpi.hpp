@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <iostream>
+#include <vector>
 
 #define CHK_MPI(a)                                               \
   {                                                              \
@@ -79,6 +80,30 @@ class comm {
     chk_ret(
         MPI_Allreduce(&in_d, &to_return, 1, mpi_typeof(T()), in_op, m_comm));
     return to_return;
+  }
+
+  template <typename T>
+  void broadcast(T &data, int root) const {
+    chk_ret(MPI_Bcast(&data, sizeof(T), MPI_BYTE, root, m_comm));
+  }
+
+  template <typename T>
+  void broadcast(std::vector<T> &vec_data, int root) const {
+    size_t size(0), capacity(0);
+    if (rank() == root) {
+      size     = vec_data.size();
+      capacity = vec_data.capacity();
+    } else {
+      vec_data.clear();
+    }
+    broadcast(size, root);
+    broadcast(capacity, root);
+    if (rank() != root) {
+      vec_data.reserve(capacity);
+      vec_data.resize(size);
+    }
+    chk_ret(
+        MPI_Bcast(&(vec_data[0]), sizeof(T) * size, MPI_BYTE, root, m_comm));
   }
 
  private:
