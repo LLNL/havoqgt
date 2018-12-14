@@ -73,40 +73,50 @@ namespace kronecker {
 template <typename T, typename W>
 T read_graph_file(std::string filename,
                   std::vector<std::tuple<T, T, W>>& edge_list) {
-  std::ifstream filestream(filename);
-  T             num_vertices;
+  edge_list.clear();
+  T num_vertices(0);
+  if (ygm::comm_world().rank() == 0) {
+    std::ifstream filestream(filename);
 
-  if (filestream.is_open()) {
-    std::string line;
-    if (!std::getline(filestream, line)) {
-      std::cerr << "Empty file\n";
-      exit(-1);
-    }
-    std::istringstream iss(line);
-    iss >> num_vertices;
-    if (line.find(" ") != line.npos) {
-      std::cout << iss.str() << std::endl;
-      std::cerr << "First line of input has too many values\n";
-      exit(-1);
-    }
-    while (std::getline(filestream, line)) {
-      std::istringstream iss2(line);
-      T                  src, dest;
-      W                  wgt;
-      if (!(iss2 >> src >> dest >> wgt)) {
-        std::cerr << "Malformed line in input\n";
+    if (filestream.is_open()) {
+      std::string line;
+      if (!std::getline(filestream, line)) {
+        std::cerr << "Empty file\n";
         exit(-1);
-      } else {
-        edge_list.push_back(std::make_tuple(src, dest, wgt));
-        // Forcing to be symmetric, at least for now...
-        edge_list.push_back(std::make_tuple(dest, src, wgt));
       }
+      std::istringstream iss(line);
+      iss >> num_vertices;
+      if (line.find(" ") != line.npos) {
+        std::cout << iss.str() << std::endl;
+        std::cerr << "First line of input has too many values\n";
+        exit(-1);
+      }
+      while (std::getline(filestream, line)) {
+        std::istringstream iss2(line);
+        T                  src, dest;
+        W                  wgt;
+        if (!(iss2 >> src >> dest >> wgt)) {
+          std::cerr << "Malformed line in input\n";
+          exit(-1);
+        } else {
+          edge_list.push_back(std::make_tuple(src, dest, wgt));
+          // Forcing to be symmetric, at least for now...
+          edge_list.push_back(std::make_tuple(dest, src, wgt));
+        }
+      }
+      filestream.close();
+    } else {
+      std::cerr << "Unable to open file " << filename << std::endl;
+      exit(-1);
     }
-    filestream.close();
-  } else {
-    std::cerr << "Unable to open file " << filename << std::endl;
-    exit(-1);
   }
+
+  ygm::comm_world().broadcast(num_vertices, 0);
+  ygm::comm_world().broadcast(edge_list, 0);
+
+  // std::cout << "Rank = " << ygm::comm_world().rank()
+  //           << " num_vertices = " << num_vertices
+  //           << " edge_list.size() = " << edge_list.size() << std::endl;
 
   return num_vertices;
 }
