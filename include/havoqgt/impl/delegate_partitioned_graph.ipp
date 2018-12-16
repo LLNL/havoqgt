@@ -70,41 +70,41 @@ namespace havoqgt {
 /**
  * Builds a delegate_partitioned_graph with from and unsorted sequence of edges.
  *
- * @param sm       Pointer to segment manager
+ * @param allocator       Const reference to allocator
  * @paramm_mpi_comm MPI communicator
  * @param Container input edges to partition
  * @param delegate_degree_threshold Threshold used to assign delegates
 */
 
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename Container>
-delegate_partitioned_graph<SegmentManager>::delegate_partitioned_graph(
-    const SegmentAllocator<void>& seg_allocator, MPI_Comm mpi_comm,
+delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
+    const Allocator& allocator, MPI_Comm mpi_comm,
     Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size,
     ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
-      m_local_outgoing_count(seg_allocator),
-      m_local_incoming_count(seg_allocator),
-      m_owned_info(seg_allocator),
-      m_owned_info_tracker(seg_allocator),
-      // m_owned_targets(seg_allocator),
+      m_local_outgoing_count(allocator),
+      m_local_incoming_count(allocator),
+      m_owned_info(allocator),
+      m_owned_info_tracker(allocator),
+      // m_owned_targets(allocator),
       m_delegate_degree_threshold(delegate_degree_threshold),
-      m_delegate_info(seg_allocator),
-      m_delegate_degree(seg_allocator),
-      m_delegate_label(seg_allocator),
-      // m_delegate_targets(seg_allocator),
+      m_delegate_info(allocator),
+      m_delegate_degree(allocator),
+      m_delegate_label(allocator),
+      // m_delegate_targets(allocator),
       // m_map_delegate_locator(100, boost::hash<uint64_t>(),
-      //    std::equal_to<uint64_t>(), seg_allocator),
-      m_map_delegate_locator(seg_allocator),
-      m_controller_locators(seg_allocator),
+      //    std::equal_to<uint64_t>(), allocator),
+      m_map_delegate_locator(allocator),
+      m_controller_locators(allocator),
       m_has_edge_data(false) {
   // this is just a dummy edge_data object
-  delegate_partitioned_graph<SegmentManager>::edge_data<
-      uint8_t, SegmentAllocator<uint8_t>>
-      _edge_data = delegate_partitioned_graph<SegmentManager>::edge_data<
-          uint8_t, SegmentAllocator<uint8_t>>(seg_allocator);
+  delegate_partitioned_graph<Allocator>::edge_data<
+      uint8_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint8_t>>
+      _edge_data = delegate_partitioned_graph<Allocator>::edge_data<
+          uint8_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint8_t>>(allocator);
 
   CHK_MPI(MPI_Comm_size(m_mpi_comm, &m_mpi_size));
   CHK_MPI(MPI_Comm_rank(m_mpi_comm, &m_mpi_rank));
@@ -163,33 +163,33 @@ delegate_partitioned_graph<SegmentManager>::delegate_partitioned_graph(
 
   m_graph_state = MetaDataGenerated;
   if (m_graph_state != stop_after) {
-    complete_construction(seg_allocator, mpi_comm, edges, _edge_data);
+    complete_construction(allocator, mpi_comm, edges, _edge_data);
   }
 }
 
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename Container, typename edge_data_type>
-delegate_partitioned_graph<SegmentManager>::delegate_partitioned_graph(
-    const SegmentAllocator<void>& seg_allocator, MPI_Comm mpi_comm,
+delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
+    const Allocator& allocator, MPI_Comm mpi_comm,
     Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size, edge_data_type& _edge_data,
     bool _has_edge_data, ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
       m_global_edge_count(edges.size()),
-      m_local_outgoing_count(seg_allocator),
-      m_local_incoming_count(seg_allocator),
-      m_owned_info(seg_allocator),
-      m_owned_info_tracker(seg_allocator),
-      // m_owned_targets(seg_allocator),
+      m_local_outgoing_count(allocator),
+      m_local_incoming_count(allocator),
+      m_owned_info(allocator),
+      m_owned_info_tracker(allocator),
+      // m_owned_targets(allocator),
       m_delegate_degree_threshold(delegate_degree_threshold),
-      m_delegate_info(seg_allocator),
-      m_delegate_degree(seg_allocator),
-      m_delegate_label(seg_allocator),
-      // m_delegate_targets(seg_allocator),
+      m_delegate_info(allocator),
+      m_delegate_degree(allocator),
+      m_delegate_label(allocator),
+      // m_delegate_targets(allocator),
       // m_map_delegate_locator(100, boost::hash<uint64_t>(),
-      //    std::equal_to<uint64_t>(), seg_allocator),
-      m_map_delegate_locator(seg_allocator),
-      m_controller_locators(seg_allocator),
+      //    std::equal_to<uint64_t>(), allocator),
+      m_map_delegate_locator(allocator),
+      m_controller_locators(allocator),
       m_has_edge_data(_has_edge_data) {
   typedef typename Container::value_type      edge_type;
   typedef typename edge_data_type::value_type edge_data_value_type;
@@ -256,17 +256,17 @@ delegate_partitioned_graph<SegmentManager>::delegate_partitioned_graph(
 
   m_graph_state = MetaDataGenerated;
   if (m_graph_state != stop_after) {
-    complete_construction(seg_allocator, mpi_comm, edges, _edge_data);
+    complete_construction(allocator, mpi_comm, edges, _edge_data);
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Edge storage allocation  phase of graph construction
 ////////////////////////////////////////////////////////////////////////////////
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename Container, typename edge_data_type>
-void delegate_partitioned_graph<SegmentManager>::complete_construction(
-    const SegmentAllocator<void>& seg_allocator, MPI_Comm mpi_comm,
+void delegate_partitioned_graph<Allocator>::complete_construction(
+    const Allocator& allocator, MPI_Comm mpi_comm,
     Container& edges, edge_data_type& _edge_data) {
   m_mpi_comm = mpi_comm;
   int temp_mpi_rank, temp_mpi_size;
@@ -285,7 +285,7 @@ void delegate_partitioned_graph<SegmentManager>::complete_construction(
 
       {
         LogStep logstep("initialize_edge_storage", m_mpi_comm, m_mpi_rank);
-        initialize_edge_storage(seg_allocator);
+        initialize_edge_storage(allocator);
 
         if (m_has_edge_data) {
           // Comment out here due to compile error 2018/02/14
@@ -385,9 +385,9 @@ void delegate_partitioned_graph<SegmentManager>::complete_construction(
  *  vertex has incomming.
  *  @return n/a
  */
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename InputIterator>
-void delegate_partitioned_graph<SegmentManager>::count_edge_degrees(
+void delegate_partitioned_graph<Allocator>::count_edge_degrees(
     InputIterator unsorted_itr, InputIterator unsorted_itr_end,
     boost::unordered_set<uint64_t>& global_hubs,
     uint64_t                        delegate_degree_threshold) {
@@ -531,8 +531,8 @@ void delegate_partitioned_graph<SegmentManager>::count_edge_degrees(
  * @param maps_to_send: a vector of maps of vertex ids to pairs of incoming and
  *  outgoing edge counts.
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::send_vertex_info(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::send_vertex_info(
     uint64_t& high_vertex_count, uint64_t delegate_degree_threshold,
     std::vector<boost::container::map<int, std::pair<uint64_t, uint64_t>>>&
         maps_to_send,
@@ -599,8 +599,8 @@ void delegate_partitioned_graph<SegmentManager>::send_vertex_info(
  * @param global_hubs: the set of hub vertices
  * @param delegate_degree_threshold: The edge limit when a vertex becomes a hub.
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::initialize_low_meta_data(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::initialize_low_meta_data(
     boost::unordered_set<uint64_t>& global_hubs) {
   // Allocate the index into the low edge csr.
   // +2: because the m_max_vertex is indexible and the last position must hold
@@ -643,8 +643,8 @@ void delegate_partitioned_graph<SegmentManager>::initialize_low_meta_data(
  * @param global_hubs: the set of hub vertices
  * @param delegate_degree_threshold: The edge limit when a vertex becomes a hub.
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::initialize_high_meta_data(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::initialize_high_meta_data(
     boost::unordered_set<uint64_t>& global_hubs) {
   //
   // Setup and Compute Hub information
@@ -724,9 +724,9 @@ void delegate_partitioned_graph<SegmentManager>::initialize_high_meta_data(
   }
 }
 
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::initialize_edge_storage(
-    const SegmentAllocator<void>& seg_allocator) {
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::initialize_edge_storage(
+    const Allocator& allocator) {
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
   for (int i = 0; i < processes_per_node; i++) {
@@ -742,22 +742,14 @@ void delegate_partitioned_graph<SegmentManager>::initialize_edge_storage(
       m_delegate_targets_size = m_edges_high_count;
       m_owned_targets_size    = m_edges_low_count;
 
-      SegmentManager* segment_manager = seg_allocator.get_segment_manager();
-
+      using vertex_locator_allocator = typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator>;
+      vertex_locator_allocator vl_allocator(allocator);
       {
-        // void * temp = segment_manager->allocate(
-        //   m_delegate_targets_size * sizeof(vertex_locator));
-        // m_delegate_targets = reinterpret_cast<vertex_locator *>(temp);
-        m_delegate_targets = (vertex_locator*)segment_manager->allocate(
-            m_delegate_targets_size * sizeof(vertex_locator));
+        m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size);
       }
 
       {
-        // void * temp = segment_manager->allocate(
-        //  m_owned_targets_size * sizeof(vertex_locator));
-        // m_owned_targets = reinterpret_cast<vertex_locator *>(temp);
-        m_owned_targets = (vertex_locator*)segment_manager->allocate(
-            m_owned_targets_size * sizeof(vertex_locator));
+        m_owned_targets = vl_allocator.allocate(m_owned_targets_size);
       }
 
       // Currently, m_delegate_info holds the count of high degree edges
@@ -797,9 +789,9 @@ constexpr std::size_t get_edge_data_tuple_index(
  * vertex and exchanges that information with the other nodes.
  *
  */
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename Container, typename edge_data_type>
-void delegate_partitioned_graph<SegmentManager>::partition_low_degree(
+void delegate_partitioned_graph<Allocator>::partition_low_degree(
     Container& unsorted_edges, edge_data_type& _edge_data) {
   typedef typename Container::value_type edge_type;
   typedef std::pair<uint64_t, uint64_t> edge_pair_type;
@@ -959,9 +951,9 @@ void delegate_partitioned_graph<SegmentManager>::partition_low_degree(
  * the other nodes.
  *
  */
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename InputIterator>
-void delegate_partitioned_graph<SegmentManager>::count_high_degree_edges(
+void delegate_partitioned_graph<Allocator>::count_high_degree_edges(
     InputIterator unsorted_itr, InputIterator unsorted_itr_end,
     boost::unordered_set<uint64_t>& global_hub_set) {
 // Temp Vector for storing offsets
@@ -1081,8 +1073,8 @@ void delegate_partitioned_graph<SegmentManager>::count_high_degree_edges(
  * @paramm_mpi_comm: the mpi communication group
  * @param maps_to_send: a vector of maps that map delegate_id to edge count.
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::send_high_info(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::send_high_info(
     std::vector<boost::container::map<uint64_t, uint64_t>>& maps_to_send,
     int maps_to_send_element_count) {
   int                   to_send_pos = 0;
@@ -1132,8 +1124,8 @@ void delegate_partitioned_graph<SegmentManager>::send_high_info(
  * @param transfer_info: used to track to whome and how many edges are given
  * to another node
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::calculate_overflow(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::calculate_overflow(
     std::map<uint64_t, std::deque<OverflowSendInfo>>& transfer_info) {
   //
   // Get the number of high and low edges for each node.
@@ -1309,8 +1301,8 @@ void delegate_partitioned_graph<SegmentManager>::calculate_overflow(
  * used to track which nodes will be recieving extra high edges.
  *
  */
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::generate_send_list(
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::generate_send_list(
     std::vector<uint64_t>& send_list, uint64_t num_send, int send_id,
     std::map<uint64_t, std::deque<OverflowSendInfo>>& transfer_info) {
   // Tracking variables used to determine how much space to allocate.
@@ -1369,9 +1361,9 @@ void delegate_partitioned_graph<SegmentManager>::generate_send_list(
  * @param transfer_info: A map of delegate_id to a deque of OverflowSendInfo
  * used to determine where overflowed edges go.
  */
-template <typename SegmentManager>
+template <typename Allocator>
 template <typename Container, typename edge_data_type>
-void delegate_partitioned_graph<SegmentManager>::partition_high_degree(
+void delegate_partitioned_graph<Allocator>::partition_high_degree(
     Container& unsorted_edges,
     std::map<uint64_t, std::deque<OverflowSendInfo>>& transfer_info,
     edge_data_type& _edge_data) {
@@ -1643,9 +1635,9 @@ void delegate_partitioned_graph<SegmentManager>::partition_high_degree(
  * @param  locator vertex_locator to convert
  * @return vertex label
  */
-template <typename SegmentManager>
-inline uint64_t delegate_partitioned_graph<SegmentManager>::locator_to_label(
-    delegate_partitioned_graph<SegmentManager>::vertex_locator locator) const {
+template <typename Allocator>
+inline uint64_t delegate_partitioned_graph<Allocator>::locator_to_label(
+    delegate_partitioned_graph<Allocator>::vertex_locator locator) const {
   uint64_t res;
   if (locator.is_delegate()) {
     res = m_delegate_label[locator.local_id()];
@@ -1660,13 +1652,13 @@ inline uint64_t delegate_partitioned_graph<SegmentManager>::locator_to_label(
  * @param  label vertex label to convert
  * @return locator for the label
  */
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::vertex_locator
-delegate_partitioned_graph<SegmentManager>::label_to_locator(
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::vertex_locator
+delegate_partitioned_graph<Allocator>::label_to_locator(
     uint64_t label) const {
   /*typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
-              SegmentAllocator< std::pair<uint64_t,vertex_locator> >
+              typename std::allocator_traits<Allocator>::template rebind_alloc< std::pair<uint64_t,vertex_locator> >
              >::const_iterator*/
   auto itr = m_map_delegate_locator.find(label);
 
@@ -1685,8 +1677,8 @@ delegate_partitioned_graph<SegmentManager>::label_to_locator(
  * @param  global_hubs           set of global hubs to be updated
  * @param  found_new_hub_locally true, if new local hub has been found
  */
-template <typename SegmentManager>
-inline void delegate_partitioned_graph<SegmentManager>::sync_global_hub_set(
+template <typename Allocator>
+inline void delegate_partitioned_graph<Allocator>::sync_global_hub_set(
     const boost::unordered_set<uint64_t>& local_hubs,
     boost::unordered_set<uint64_t>& global_hubs, bool local_change) {
   uint32_t new_hubs =
@@ -1706,10 +1698,10 @@ inline void delegate_partitioned_graph<SegmentManager>::sync_global_hub_set(
  * @param  locator Vertex locator
  * @return Begin Edge Iterator
  */
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::edge_iterator
-delegate_partitioned_graph<SegmentManager>::edges_begin(
-    delegate_partitioned_graph<SegmentManager>::vertex_locator locator) const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::edge_iterator
+delegate_partitioned_graph<Allocator>::edges_begin(
+    delegate_partitioned_graph<Allocator>::vertex_locator locator) const {
   if (locator.is_delegate()) {
     assert(locator.local_id() < m_delegate_info.size() - 1);
     return edge_iterator(locator, m_delegate_info[locator.local_id()], this);
@@ -1724,10 +1716,10 @@ delegate_partitioned_graph<SegmentManager>::edges_begin(
  * @param  locator Vertex locator
  * @return End Edge Iterator
  */
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::edge_iterator
-delegate_partitioned_graph<SegmentManager>::edges_end(
-    delegate_partitioned_graph<SegmentManager>::vertex_locator locator) const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::edge_iterator
+delegate_partitioned_graph<Allocator>::edges_end(
+    delegate_partitioned_graph<Allocator>::vertex_locator locator) const {
   if (locator.is_delegate()) {
     assert(locator.local_id() + 1 < m_delegate_info.size());
     return edge_iterator(locator, m_delegate_info[locator.local_id() + 1],
@@ -1743,9 +1735,9 @@ delegate_partitioned_graph<SegmentManager>::edges_end(
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename SegmentManager>
-inline uint64_t delegate_partitioned_graph<SegmentManager>::degree(
-    delegate_partitioned_graph<SegmentManager>::vertex_locator locator) const {
+template <typename Allocator>
+inline uint64_t delegate_partitioned_graph<Allocator>::degree(
+    delegate_partitioned_graph<Allocator>::vertex_locator locator) const {
   uint64_t local_id = locator.local_id();
   if (locator.is_delegate()) {
     assert(local_id < m_delegate_degree.size());
@@ -1760,9 +1752,9 @@ inline uint64_t delegate_partitioned_graph<SegmentManager>::degree(
  * @param  locator Vertex locator
  * @return Vertex degree
  */
-template <typename SegmentManager>
-inline uint64_t delegate_partitioned_graph<SegmentManager>::local_degree(
-    delegate_partitioned_graph<SegmentManager>::vertex_locator locator) const {
+template <typename Allocator>
+inline uint64_t delegate_partitioned_graph<Allocator>::local_degree(
+    delegate_partitioned_graph<Allocator>::vertex_locator locator) const {
   uint64_t local_id = locator.local_id();
   if (locator.is_delegate()) {
     assert(local_id + 1 < m_delegate_info.size());
@@ -1773,15 +1765,15 @@ inline uint64_t delegate_partitioned_graph<SegmentManager>::local_degree(
          m_owned_info[local_id].low_csr_idx;
 }
 
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
-delegate_partitioned_graph<SegmentManager>::vertices_begin() const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::vertex_iterator
+delegate_partitioned_graph<Allocator>::vertices_begin() const {
   return vertex_iterator(0, this);
 }
 
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
-delegate_partitioned_graph<SegmentManager>::vertices_end() const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::vertex_iterator
+delegate_partitioned_graph<Allocator>::vertices_end() const {
   // TODO:  Would better to stor the end, instead of recomputing each time...
   size_t last_index    = m_owned_info.empty() ? 0 : m_owned_info.size() - 1;
   auto   itr_to_return = vertex_iterator(last_index, this);
@@ -1796,44 +1788,45 @@ delegate_partitioned_graph<SegmentManager>::vertices_end() const {
   return ++itr_to_return;
 }
 
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
-delegate_partitioned_graph<SegmentManager>::delegate_vertices_begin() const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::vertex_iterator
+delegate_partitioned_graph<Allocator>::delegate_vertices_begin() const {
   return vertex_iterator(0, this, true);
 }
 
-template <typename SegmentManager>
-inline typename delegate_partitioned_graph<SegmentManager>::vertex_iterator
-delegate_partitioned_graph<SegmentManager>::delegate_vertices_end() const {
+template <typename Allocator>
+inline typename delegate_partitioned_graph<Allocator>::vertex_iterator
+delegate_partitioned_graph<Allocator>::delegate_vertices_end() const {
   return vertex_iterator(m_delegate_info.size() - 1, this, true);
 }
 
-template <typename SegmentManager>
-inline bool delegate_partitioned_graph<SegmentManager>::is_label_delegate(
+template <typename Allocator>
+inline bool delegate_partitioned_graph<Allocator>::is_label_delegate(
     uint64_t label) const {
   return m_map_delegate_locator.count(label) > 0;
 }
 
+#if 0 // Ignore these methods for now
 /**
  * @todo remove; make like vertex_data
  */
-template <typename SegmentManager>
-template <typename T, typename SegManagerOther>
-typename delegate_partitioned_graph<SegmentManager>::template edge_data<
-    T, SegManagerOther>*
-delegate_partitioned_graph<SegmentManager>::create_edge_data(
-    SegManagerOther* segment_manager_o, const char* obj_name) const {
+template <typename Allocator>
+template <typename T, typename AllocatorOther>
+typename delegate_partitioned_graph<Allocator>::template edge_data<
+    T, AllocatorOther>*
+delegate_partitioned_graph<Allocator>::create_edge_data(
+    const AllocatorOther& allocator_o, const char* obj_name) const {
   typedef typename delegate_partitioned_graph<
-      SegmentManager>::template edge_data<T, SegManagerOther>
+      Allocator>::template edge_data<T, AllocatorOther>
       mytype;
 
   if (obj_name == nullptr) {
-    return segment_manager_o->template construct<mytype>(
+    return allocator_o->template construct<mytype>(
         bip::anonymous_instance)(m_owned_targets_size, m_delegate_targets_size,
-                                 segment_manager_o);
+                                 allocator_o);
   } else {
-    return segment_manager_o->template construct<mytype>(obj_name)(
-        m_owned_targets_size, m_delegate_targets_size, segment_manager_o);
+    return allocator_o->template construct<mytype>(obj_name)(
+        m_owned_targets_size, m_delegate_targets_size, allocator_o);
   }
 }
 
@@ -1841,14 +1834,14 @@ delegate_partitioned_graph<SegmentManager>::create_edge_data(
  * @param   init initial value for each vertex
  * @todo remove; make like vertex_data
  */
-template <typename SegmentManager>
-template <typename T, typename SegManagerOther>
-delegate_partitioned_graph<SegmentManager>::edge_data<T, SegManagerOther>*
-delegate_partitioned_graph<SegmentManager>::create_edge_data(
-    const T& init, SegManagerOther* segment_manager_o,
+template <typename Allocator>
+template <typename T, typename AllocatorOther>
+delegate_partitioned_graph<Allocator>::edge_data<T, AllocatorOther>*
+delegate_partitioned_graph<Allocator>::create_edge_data(
+    const T& init, const AllocatorOther& segment_manager_o,
     const char* obj_name) const {
-  typedef delegate_partitioned_graph<SegmentManager>::edge_data<T,
-                                                                SegManagerOther>
+  typedef delegate_partitioned_graph<Allocator>::edge_data<T,
+                                                                AllocatorOther>
       mytype;
 
   if (obj_name == nullptr) {
@@ -1860,9 +1853,10 @@ delegate_partitioned_graph<SegmentManager>::create_edge_data(
         m_owned_targets_size, m_delegate_targets_size, init, segment_manager_o);
   }
 }
+#endif
 
-template <typename SegmentManager>
-void delegate_partitioned_graph<SegmentManager>::print_graph_statistics() {
+template <typename Allocator>
+void delegate_partitioned_graph<Allocator>::print_graph_statistics() {
   /*if(m_mpi_rank == 0) {
     for(size_t i=0; i<m_delegate_degree.size(); ++i) {
       std::cout << "Hub label = " << m_delegate_label[i] << ", degree = " <<

@@ -57,9 +57,9 @@
 
 namespace havoqgt {
 
-template <typename SegementManager>
-template <typename T, typename Allocator >
-class delegate_partitioned_graph<SegementManager>::vertex_data {
+template <typename Allocator>
+template <typename T, typename AllocatorOther >
+class delegate_partitioned_graph<Allocator>::vertex_data {
  public:
   typedef T value_type;
   vertex_data() {}
@@ -124,7 +124,7 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
   }
     
-  vertex_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+  vertex_data(const delegate_partitioned_graph& dpg, AllocatorOther allocate = AllocatorOther() )
     : m_owned_vert_data(allocate)
     , m_delegate_data(allocate) {
     m_owned_vert_data.resize(dpg.m_owned_info.size());
@@ -144,8 +144,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
   }
 
  private:
-  bip::vector<T, Allocator > m_owned_vert_data;
-  bip::vector<T, Allocator > m_delegate_data;
+  bip::vector<T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>> m_owned_vert_data;
+  bip::vector<T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>> m_delegate_data;
 };
 
 }  // namespace havoqgt

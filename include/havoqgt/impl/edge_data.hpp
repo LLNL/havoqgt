@@ -56,11 +56,11 @@
 
 namespace havoqgt {
 
-template <typename SegementManager>
-template <typename T, typename Allocator>
-class delegate_partitioned_graph<SegementManager>::edge_data {
+template <typename Allocator>
+template <typename T, typename AllocatorOther>
+class delegate_partitioned_graph<Allocator>::edge_data {
  public:
-   typedef typename bip::vector< T, Allocator >::iterator iterator;
+   typedef typename bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>::iterator iterator;
   typedef T value_type;
 
   edge_data() {}
@@ -98,7 +98,7 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
 
 //private:
   friend class delegate_partitioned_graph;
-  edge_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+  edge_data(const delegate_partitioned_graph& dpg, AllocatorOther allocate = AllocatorOther() )
     : m_owned_edge_data(allocate)
     , m_delegate_edge_data(allocate) {
     //m_owned_edge_data.resize(dpg.m_owned_targets_size);
@@ -106,7 +106,7 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
     resize(dpg);
   }
 
-  edge_data(Allocator allocate = Allocator() )
+  edge_data(AllocatorOther allocate = AllocatorOther() )
     : m_owned_edge_data(allocate)
     , m_delegate_edge_data(allocate) {}
 
@@ -122,8 +122,8 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
 
 // private:
  protected: 
-  bip::vector< T, Allocator >      m_owned_edge_data;
-  bip::vector< T, Allocator >      m_delegate_edge_data;
+  bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>      m_owned_edge_data;
+  bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>      m_delegate_edge_data;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

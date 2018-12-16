@@ -119,7 +119,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
