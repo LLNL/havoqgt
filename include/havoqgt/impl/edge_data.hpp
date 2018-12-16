@@ -60,7 +60,7 @@ template <typename Allocator>
 template <typename T, typename AllocatorOther>
 class delegate_partitioned_graph<Allocator>::edge_data {
  public:
-   typedef typename bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>::iterator iterator;
+   typedef typename bip::vector< T, other_allocator<AllocatorOther, T>>::iterator iterator;
   typedef T value_type;
 
   edge_data() {}
@@ -122,8 +122,8 @@ class delegate_partitioned_graph<Allocator>::edge_data {
 
 // private:
  protected: 
-  bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>      m_owned_edge_data;
-  bip::vector< T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>>      m_delegate_edge_data;
+  bip::vector< T, other_allocator<AllocatorOther, T>>      m_owned_edge_data;
+  bip::vector< T, other_allocator<AllocatorOther, T>>      m_delegate_edge_data;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

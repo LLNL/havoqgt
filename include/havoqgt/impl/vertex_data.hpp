@@ -144,8 +144,8 @@ class delegate_partitioned_graph<Allocator>::vertex_data {
   }
 
  private:
-  bip::vector<T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>> m_owned_vert_data;
-  bip::vector<T, typename std::allocator_traits<AllocatorOther>::template rebind_alloc<T>> m_delegate_data;
+  bip::vector<T, other_allocator<AllocatorOther, T>> m_owned_vert_data;
+  bip::vector<T, other_allocator<AllocatorOther, T>> m_delegate_data;
 };
 
 }  // namespace havoqgt

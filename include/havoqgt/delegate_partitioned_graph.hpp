@@ -229,7 +229,7 @@ class delegate_partitioned_graph {
     return locator.m_local_id % m_mpi_size;
   }
 
-  typedef typename bip::vector<vertex_locator, typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator> >
+  typedef typename bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator> >
       ::const_iterator controller_iterator;
 
   controller_iterator controller_begin() const {
@@ -356,22 +356,22 @@ class delegate_partitioned_graph {
   uint64_t m_edges_high_count {0};
   uint64_t m_edges_low_count {0};
 
-  bip::vector<uint32_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint32_t> > m_local_outgoing_count;
-  bip::vector<uint32_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint32_t> > m_local_incoming_count;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t> > m_local_outgoing_count;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t> > m_local_incoming_count;
 
-  bip::vector<vert_info, typename std::allocator_traits<Allocator>::template rebind_alloc<vert_info>> m_owned_info;
-  bip::vector<uint32_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint32_t>> m_owned_info_tracker;
-  //bip::vector<vertex_locator, typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator>> m_owned_targets;
+  bip::vector<vert_info, other_allocator<Allocator, vert_info>> m_owned_info;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t>> m_owned_info_tracker;
+  //bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator>> m_owned_targets;
   bip::offset_ptr<vertex_locator> m_owned_targets;
   size_t m_owned_targets_size;
 
   // Delegate Storage
   uint64_t m_delegate_degree_threshold;
 
-  bip::vector< uint64_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint64_t> > m_delegate_info;
-  bip::vector< uint64_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint64_t> > m_delegate_degree;
-  bip::vector< uint64_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint64_t> > m_delegate_label;
-  // bip::vector< vertex_locator, typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator> >
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_info;
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_degree;
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_label;
+  // bip::vector< vertex_locator, other_allocator<Allocator, vertex_locator> >
   //     m_delegate_targets;
   bip::offset_ptr<vertex_locator> m_delegate_targets;
   size_t m_delegate_targets_size;
@@ -379,13 +379,13 @@ class delegate_partitioned_graph {
   //Note: BIP only contains a map, not an unordered_map object.
   /*boost::interprocess::unordered_map<
       uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
-      typename std::allocator_traits<Allocator>::template rebind_alloc< std::pair<uint64_t,vertex_locator> >
+      other_allocator<Allocator, std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
   */
 
-  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, typename std::allocator_traits<Allocator>::template rebind_alloc< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
+  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, other_allocator<Allocator, std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
 
-  bip::vector<vertex_locator, typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator> >
+  bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator> >
     m_controller_locators;
 
   bool m_has_edge_data;

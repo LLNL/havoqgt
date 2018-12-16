@@ -102,9 +102,9 @@ delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
       m_has_edge_data(false) {
   // this is just a dummy edge_data object
   delegate_partitioned_graph<Allocator>::edge_data<
-      uint8_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint8_t>>
+      uint8_t, other_allocator<Allocator, uint8_t>>
       _edge_data = delegate_partitioned_graph<Allocator>::edge_data<
-          uint8_t, typename std::allocator_traits<Allocator>::template rebind_alloc<uint8_t>>(allocator);
+          uint8_t, other_allocator<Allocator, uint8_t>>(allocator);
 
   CHK_MPI(MPI_Comm_size(m_mpi_comm, &m_mpi_size));
   CHK_MPI(MPI_Comm_rank(m_mpi_comm, &m_mpi_rank));
@@ -742,7 +742,7 @@ void delegate_partitioned_graph<Allocator>::initialize_edge_storage(
       m_delegate_targets_size = m_edges_high_count;
       m_owned_targets_size    = m_edges_low_count;
 
-      using vertex_locator_allocator = typename std::allocator_traits<Allocator>::template rebind_alloc<vertex_locator>;
+      using vertex_locator_allocator = other_allocator<Allocator, vertex_locator>;
       vertex_locator_allocator vl_allocator(allocator);
       {
         m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size);
@@ -1658,7 +1658,7 @@ delegate_partitioned_graph<Allocator>::label_to_locator(
     uint64_t label) const {
   /*typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
-              typename std::allocator_traits<Allocator>::template rebind_alloc< std::pair<uint64_t,vertex_locator> >
+              other_allocator<Allocator,  std::pair<uint64_t,vertex_locator> >
              >::const_iterator*/
   auto itr = m_map_delegate_locator.find(label);
 
