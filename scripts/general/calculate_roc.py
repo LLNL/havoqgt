@@ -33,7 +33,7 @@ def calculate_roc(result_file, vertices_in_community):
             count_tp = count_tp + 1
         else:
             count_fp = count_fp + 1
-        print(count_fp, " ", count_tp)
+        print(float(count_fp) / i, " ", float(count_tp) / i)
 
 
 def main(argv):
