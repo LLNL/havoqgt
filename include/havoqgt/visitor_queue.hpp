@@ -258,6 +258,75 @@ class visitor_queue {
              !m_p_mailbox->global_empty());
   }
 
+  // Used by the dynamic graph construction
+  template <typename edge_list_iterator>
+  void dynamic_graph_construction(edge_list_iterator edge_begin, edge_list_iterator edge_end) {
+    do {
+      if (edge_begin != edge_end) {
+        vertex_locator vl_src(std::get<0>(*edge_begin));
+        vertex_locator vl_dst(std::get<1>(*edge_begin));
+        const bool delete_request = std::get<2>(*edge_begin);
+        const typename visitor_type::visit_type v_type = (delete_request) ? visitor_type::visit_type::DEL : visitor_type::visit_type::ADD;
+        visitor_type visitor(vl_src, vl_dst, v_type);
+        queue_visitor(visitor);
+        ++edge_begin;
+      }
+      process_pending_controllers();
+      while (!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+      }
+    } while (edge_begin != edge_end || !empty() ||
+        !m_p_mailbox->global_empty());
+  }
+
+  // Used by the dynamic graph colouring algorithm
+  template <typename edge_list_iterator>
+  void init_dynamic_traversal(edge_list_iterator edge_begin, edge_list_iterator edge_end) {
+    do {
+      if (edge_begin != edge_end) {
+        vertex_locator vl_src(std::get<0>(*edge_begin));
+        vertex_locator vl_dst(std::get<1>(*edge_begin));
+        const bool delete_request = std::get<2>(*edge_begin);
+        if (true) {  // TODO(Whomever): This should catch the "add" event.
+          visitor_type visitor(visitor_type::create_visitor_add_type(vl_src, vl_dst));
+          queue_visitor(visitor);
+        } else if (false) {  // TODO(Whomever): This should catch the "delete" event.
+          visitor_type visitor(visitor_type::create_visitor_del_type(vl_src, vl_dst));
+          queue_visitor(visitor);
+        }
+        ++edge_begin;
+      }
+      process_pending_controllers();
+      while (!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+      }
+    } while (edge_begin != edge_end || !empty() ||
+        !m_p_mailbox->global_empty());
+  }
+
+  // Note: similar to below, but uses graphstore iterator and no delegates.
+  void init_dynamic_test_traversal() {
+    for(auto vitr = m_ptr_graph->vertices_begin(), end = m_ptr_graph->vertices_end(); vitr != end; vitr++) {
+      vertex_locator vl = vitr.source_vertex();
+      visitor_type v(vl);
+      if(v.pre_visit(m_alg_data)) {
+        do_visit( v );
+      }
+    }
+    do {
+      process_pending_controllers();
+      while (!empty()) {
+        process_pending_controllers();
+        visitor_type this_visitor = pop_top();
+        do_visit(this_visitor);
+      }
+    } while (!empty() || !m_p_mailbox->global_empty());
+  }
+
   void queue_visitor(const visitor_type& v) {
     // std::cout << "queue_visitor()" << std::endl;
     if (v.vertex.is_delegate()) {
