@@ -127,8 +127,11 @@ int main(int argc, char **argv) {
       std::shuffle(seed_vertex_id_list.begin(), seed_vertex_id_list.end(), g);
     }
 
-    std::ofstream ofs("evaluation_result.log");
-    ofs << "seed\tcs\tct\twk\tdr\trv\trd" << std::endl;
+    std::ofstream ofs;
+    if (havoqgt::mpi_comm_rank() == 0) {
+      ofs.open("evaluation_result.log");
+      ofs << "seed\tcs\tct\twk\tdr\trv\trd" << std::endl;
+    }
 
     for (auto seed_vertex_id : seed_vertex_id_list) {
       vertex_locator seed_vertex = graph->label_to_locator(seed_vertex_id);
@@ -159,9 +162,17 @@ int main(int argc, char **argv) {
           assert(top_dead_score_vertices.size() == community_size);
           const auto recall_dead = ho_rw::compute_recall(top_dead_score_vertices, community_id, true_community_table);
 
-          ofs << seed_vertex_id << "\t" << closing_rates[0] << "\t" << closing_rates[1] << "\t" << num_walkers << "\t" << die_rate
-              << "\t" << recall_visit << "\t" << recall_dead << std::endl;
-          ofs.flush();
+          if (havoqgt::mpi_comm_rank() == 0) {
+            std::stringstream ss;
+            ss << seed_vertex_id << "\t" << closing_rates[0] << "\t" << closing_rates[1] << "\t" << num_walkers << "\t"
+                << die_rate
+                << "\t" << recall_visit << "\t" << recall_dead;
+
+            std::cout << ss.str() << "\n" << std::endl;
+
+            ofs << ss.str() << std::endl;
+            ofs.flush();
+          }
         }
       }
     }
