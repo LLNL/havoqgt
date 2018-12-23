@@ -17,7 +17,7 @@
 #include <havoqgt/distributed_db.hpp>
 ///#include <havoqgt/environment.hpp>
 
-//#include <metadata/vertex_data_db.hpp>
+#include <metadata/vertex_data_db.hpp>
 #include <metadata/vertex_data_db_degree.hpp>
 
 #include <prunejuice/template.hpp>
@@ -387,9 +387,9 @@ int main(int argc, char** argv) {
 
   //if (use_degree_as_vertex_data) {
   if (vertex_metadata_input.size() > 0) {
-///    vertex_data_db<graph_type, VertexMetaData, Vertex, VertexData>
+    vertex_data_db<graph_type, VertexMetadata, Vertex, VertexData>
       //(graph, vertex_metadata, vertex_data_input_filename, 10000);      
-///      (graph, vertex_metadata, vertex_metadata_input, 10000);
+      (graph, vertex_metadata, vertex_metadata_input, 10000);
       // TODO: each rank reads 10K lines from file at a time
   } else {
     vertex_data_db_degree<graph_type, VertexMetadata, Vertex, VertexData>
@@ -813,8 +813,8 @@ int main(int argc, char** argv) {
   //if (pl >= 6) {
   //if (pl >= 0) {
   // RMAT_tree
-///  if (pl >= 4) {
-  if (pl >= 4) { // Test
+  if (pl >= 4) {
+  //if (pl >= 99) { // Test
     do_tds_tp = true;
     //if(mpi_rank == 0) {
     //  std::cout << "Token Passing [" << pl << "] | Template Driven Search " << std::endl;

@@ -43,6 +43,13 @@ macro(include_link_boost target)
 endmacro() 
 
 #
+#  stdc++fs is required
+#
+macro(include_link_stdcppfs target)
+  target_link_libraries(${target} stdc++fs)
+endmacro()
+
+#
 #  Posix_fallocate
 #
 check_symbol_exists(posix_fallocate "fcntl.h" HAVE_POSIX_FALLOCATE)
