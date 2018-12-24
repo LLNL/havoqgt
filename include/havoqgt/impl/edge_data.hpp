@@ -66,11 +66,11 @@
 
 namespace havoqgt {
 
-template <typename SegementManager>
-template <typename T, typename Allocator>
-class delegate_partitioned_graph<SegementManager>::edge_data {
+template <typename Allocator>
+template <typename T, typename AllocatorOther>
+class delegate_partitioned_graph<Allocator>::edge_data {
  public:
-  typedef typename bip::vector<T, Allocator>::iterator iterator;
+   typedef typename bip::vector< T, other_allocator<AllocatorOther, T>>::iterator iterator;
   typedef T value_type;
 
   T& operator[](const edge_iterator& itr) {
@@ -106,19 +106,17 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
 
   // private:
   friend class delegate_partitioned_graph;
-  edge_data(const delegate_partitioned_graph& dpg,
-            Allocator                         allocate = Allocator())
-      : m_owned_edge_data(allocate), m_delegate_edge_data(allocate) {
-    // m_owned_edge_data.resize(dpg.m_owned_targets_size);
-    // m_delegate_edge_data.resize(dpg.m_delegate_targets_size);
+  edge_data(const delegate_partitioned_graph& dpg, AllocatorOther allocate = AllocatorOther() )
+    : m_owned_edge_data(allocate)
+    , m_delegate_edge_data(allocate) {
+    //m_owned_edge_data.resize(dpg.m_owned_targets_size);
+    //m_delegate_edge_data.resize(dpg.m_delegate_targets_size);
     resize(dpg);
   }
 
-  edge_data(Allocator allocate)
-      : m_owned_edge_data(allocate), m_delegate_edge_data(allocate) {}
-
-  edge_data()
-      : m_owned_edge_data(Allocator()), m_delegate_edge_data(Allocator()) {}
+  edge_data(AllocatorOther allocate = AllocatorOther() )
+    : m_owned_edge_data(allocate)
+    , m_delegate_edge_data(allocate) {}
 
   void resize(const delegate_partitioned_graph& dpg) {
     m_owned_edge_data.resize(dpg.m_owned_targets_size);
@@ -130,10 +128,10 @@ class delegate_partitioned_graph<SegementManager>::edge_data {
   // edge_data(uint64_t owned_size, uint64_t delegate_size, const T& init,
   //     SegManagerOther* sm);
 
-  // private:
+// private:
  protected:
-  bip::vector<T, Allocator> m_owned_edge_data;
-  bip::vector<T, Allocator> m_delegate_edge_data;
+  bip::vector< T, other_allocator<AllocatorOther, T>>      m_owned_edge_data;
+  bip::vector< T, other_allocator<AllocatorOther, T>>      m_delegate_edge_data;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

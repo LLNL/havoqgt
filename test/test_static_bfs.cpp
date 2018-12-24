@@ -19,7 +19,7 @@ namespace havoqgt { namespace test {
   using namespace havoqgt;
 
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
 TEST(test_static_bfs, test_static_bfs) {
   MPI_Barrier(MPI_COMM_WORLD);  
