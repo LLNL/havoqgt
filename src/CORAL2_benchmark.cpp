@@ -75,9 +75,6 @@
 
 using namespace havoqgt;
 
-typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
-
 typedef uint64_t gt_tc_type;
 
 void usage() {
@@ -158,6 +155,9 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
 }
 
 int main(int argc, char** argv) {
+  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::allocator<void>::type> graph_type;
+
   int mpi_rank(0), mpi_size(0);
 
   init(&argc, &argv);
