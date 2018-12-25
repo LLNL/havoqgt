@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    std::string graph_input;
+    std::string graph_input("/dev/shm/graph");
     uint64_t die_rate{15};
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
     std::unordered_map<uint64_t, std::size_t> community_size_table;
     std::vector<uint64_t> seed_vertex_id_list;
     {
-      std::ifstream ifs("true");
+      std::ifstream ifs("/dev/shm/true");
       if (!ifs.is_open()) {
         std::abort();
       }
@@ -154,18 +154,16 @@ int main(int argc, char **argv) {
 
           std::vector<uint64_t> top_visit_score_vertices;
           for (auto elem : top_scores.first) top_visit_score_vertices.emplace_back(elem.second);
-          assert(top_visit_score_vertices.size() == community_size);
           const auto recall_visit = ho_rw::compute_recall(top_visit_score_vertices,
                                                           community_id,
-                                                          community_size_table[community_id],
+                                                          community_size,
                                                           true_community_table);
 
           std::vector<uint64_t> top_dead_score_vertices;
           for (auto elem : top_scores.second) top_dead_score_vertices.emplace_back(elem.second);
-          assert(top_dead_score_vertices.size() == community_size);
           const auto recall_dead = ho_rw::compute_recall(top_dead_score_vertices,
                                                          community_id,
-                                                         community_size_table[community_id],
+                                                         community_size,
                                                          true_community_table);
 
           if (havoqgt::mpi_comm_rank() == 0) {
