@@ -82,7 +82,7 @@ template <typename graph_type, int k_num_histories>
 class algo_data_type {
  private:
   using vertex_locator = typename graph_type::vertex_locator;
-  using count_table_type = typename graph_type::template vertex_data<uint64_t, std::allocator<uint64_t>>;
+  using count_table_type = typename graph_type::template vertex_data<uint64_t, std::allocator < uint64_t>>;
   using history_select_prob_table_type = std::array<int, k_num_histories>;
 
  public:
@@ -377,6 +377,7 @@ compute_global_top_scores(const graph_type *const graph,
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
 
+  // Find the top vertices
   std::map<double, uint64_t> top_vertices;
   for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
     const auto score = score_function(*vitr);
@@ -389,6 +390,7 @@ compute_global_top_scores(const graph_type *const graph,
     }
   }
 
+  // Separate the array to use MPI
   std::vector<double> local_top_score;
   std::vector<uint64_t> local_top_id;
   for (const auto elem : top_vertices) {
@@ -402,35 +404,30 @@ compute_global_top_scores(const graph_type *const graph,
   havoqgt::mpi_all_gather(local_top_id, global_top_id, MPI_COMM_WORLD);
 
   std::vector<std::pair<double, uint64_t>> global_top;
-  for (uint64_t i = 0; i < global_top_score.size(); ++i) {
+  for (uint64_t i = 0; i < std::min((std::size_t)num_top, (std::size_t)global_top_score.size()); ++i) {
     global_top.emplace_back(std::make_pair(global_top_score.at(i), global_top_id.at(i)));
   }
-  std::partial_sort(global_top.begin(),
-                    global_top.begin() + std::min((uint64_t)num_top, (uint64_t)global_top.size()),
-                    global_top.end(),
-                    [](const std::pair<double, uint64_t> &lh, std::pair<double, uint64_t> &rh) -> bool {
-                      return (lh.first > rh.first);
-                    });
+  std::sort(global_top.begin(), global_top.end(),
+            [](const std::pair<double, uint64_t> &lh, std::pair<double, uint64_t> &rh) -> bool {
+              return (lh.first > rh.first);
+            });
   return global_top;
 }
 
 template <typename graph_type, typename algo_data_type>
-std::pair<std::vector<std::pair<double, uint64_t>>,
-          std::vector<std::pair<double, uint64_t>>>
+std::pair<std::vector<std::pair < double, uint64_t>>,
+std::vector<std::pair<double, uint64_t>>>
 compute_top_scores(const graph_type *const graph,
                    const algo_data_type &algo_data,
                    const std::size_t num_top) {
   using vertex_locator = typename graph_type::vertex_locator;
 
-  const uint64_t global_num_walkers = havoqgt::mpi_all_reduce(algo_data.num_launched_walkers(),
-                                                              std::plus<uint64_t>(),
-                                                              MPI_COMM_WORLD);
-
   uint64_t local_total_visits = 0;
   for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
     local_total_visits += algo_data.num_visits(*vitr);
   }
-  const uint64_t global_total_visits = havoqgt::mpi_all_reduce(local_total_visits, std::plus<uint64_t>(), MPI_COMM_WORLD);
+  const uint64_t
+      global_total_visits = havoqgt::mpi_all_reduce(local_total_visits, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
   uint64_t local_total_dead = 0;
   for (auto vitr = graph->vertices_begin(), end = graph->vertices_end(); vitr != end; ++vitr) {
@@ -438,22 +435,24 @@ compute_top_scores(const graph_type *const graph,
   }
   const uint64_t global_total_dead = havoqgt::mpi_all_reduce(local_total_dead, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
+  const uint64_t global_num_walkers = havoqgt::mpi_all_reduce(algo_data.num_launched_walkers(),
+                                                              std::plus<uint64_t>(),
+                                                              MPI_COMM_WORLD);
+
   if (havoqgt::mpi_comm_rank() == 0) {
     std::cout << "#launched wk: " << global_num_walkers << std::endl;
     std::cout << "sum of visits: " << global_total_visits << std::endl;
     std::cout << "sum of dead: " << global_total_dead << std::endl;
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 
   const auto visit_score_func = [&algo_data, &global_total_visits](vertex_locator vertex) -> double {
     return static_cast<double>(algo_data.num_visits(vertex)) / global_total_visits;
   };
+  const auto top_visit_scores = compute_global_top_scores(graph, num_top, visit_score_func);
 
   const auto dead_score_func = [&algo_data, &global_total_dead](vertex_locator vertex) -> double {
     return static_cast<double>(algo_data.num_dead(vertex)) / global_total_dead;
   };
-
-  const auto top_visit_scores = compute_global_top_scores(graph, num_top, visit_score_func);
   const auto top_dead_scores = compute_global_top_scores(graph, num_top, dead_score_func);
 
   return std::make_pair(top_visit_scores, top_dead_scores);
@@ -461,9 +460,13 @@ compute_top_scores(const graph_type *const graph,
 
 double compute_recall(const std::vector<uint64_t> &top_vertices,
                       const uint64_t target_community_id,
+                      const std::size_t community_size,
                       const std::unordered_map<uint64_t, uint64_t> &true_community_table) {
-  std::size_t count_true_positives = 0;
+  assert(top_vertices.size() <= community_size);
 
+  if (community_size == 0) return 0;
+
+  std::size_t count_true_positives = 0;
   for (const auto vid : top_vertices) {
     if (true_community_table.at(vid) == target_community_id) {
       ++count_true_positives;

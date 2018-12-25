@@ -155,18 +155,24 @@ int main(int argc, char **argv) {
           std::vector<uint64_t> top_visit_score_vertices;
           for (auto elem : top_scores.first) top_visit_score_vertices.emplace_back(elem.second);
           assert(top_visit_score_vertices.size() == community_size);
-          const auto recall_visit = ho_rw::compute_recall(top_visit_score_vertices, community_id, true_community_table);
+          const auto recall_visit = ho_rw::compute_recall(top_visit_score_vertices,
+                                                          community_id,
+                                                          community_size_table[community_id],
+                                                          true_community_table);
 
           std::vector<uint64_t> top_dead_score_vertices;
           for (auto elem : top_scores.second) top_dead_score_vertices.emplace_back(elem.second);
           assert(top_dead_score_vertices.size() == community_size);
-          const auto recall_dead = ho_rw::compute_recall(top_dead_score_vertices, community_id, true_community_table);
+          const auto recall_dead = ho_rw::compute_recall(top_dead_score_vertices,
+                                                         community_id,
+                                                         community_size_table[community_id],
+                                                         true_community_table);
 
           if (havoqgt::mpi_comm_rank() == 0) {
             std::stringstream ss;
             ss << seed_vertex_id << "\t" << closing_rates[0] << "\t" << closing_rates[1] << "\t" << num_walkers << "\t"
-                << die_rate
-                << "\t" << recall_visit << "\t" << recall_dead;
+               << die_rate
+               << "\t" << recall_visit << "\t" << recall_dead;
 
             std::cout << ss.str() << "\n" << std::endl;
 
