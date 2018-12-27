@@ -197,7 +197,7 @@ class visitor_queue {
   void do_visit(visitor_type& this_visitor) {
     vertex_locator v   = this_visitor.vertex;
     bool           ret = this_visitor.visit(*m_ptr_graph, this, m_alg_data);
-    if (ret && v.is_delegate() && m_ptr_graph->master(v) == m_world_rank) {
+    if (ret && v.is_delegate_master()) {
       visitor_type v = this_visitor;
       v.vertex.set_bcast(true);  // FIXME:  remove bcast bit from vertex_locator
       m_p_mailbox->send_bcast(v);
@@ -207,7 +207,7 @@ class visitor_queue {
   void do_init_visit(visitor_type& this_visitor) {
     vertex_locator v = this_visitor.vertex;
     bool ret         = this_visitor.init_visit(*m_ptr_graph, this, m_alg_data);
-    if (ret && v.is_delegate() && m_ptr_graph->master(v) == m_world_rank) {
+    if (ret && v.is_delegate_master()) {
       visitor_type v = this_visitor;
       v.vertex.set_bcast(true);  // FIXME:  remove bcast bit from vertex_locator
       m_p_mailbox->send_bcast(v);
