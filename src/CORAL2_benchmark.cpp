@@ -93,10 +93,10 @@ void usage() {
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& output_filename,
-                    uint64_t& delegate_threshold, std::string& input_filename1,
-                    std::string& input_filename2, double& gbyte_per_rank,
-                    uint64_t& partition_passes, uint64_t& chunk_size) {
+void parse_cmd_line(int argc, char** argv, uint64_t& delegate_threshold,
+                    std::string& input_filename1, std::string& input_filename2,
+                    double& gbyte_per_rank, uint64_t& partition_passes,
+                    uint64_t& chunk_size) {
   if (comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
@@ -105,11 +105,10 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
     std::cout << std::endl;
   }
 
-  bool found_output_filename = false;
-  delegate_threshold         = 1048576;
-  gbyte_per_rank             = 0.25;
-  partition_passes           = 1;
-  chunk_size                 = 8 * 1024;
+  delegate_threshold = 1048576;
+  gbyte_per_rank     = 0.25;
+  partition_passes   = 1;
+  chunk_size         = 8 * 1024;
 
   int  c;
   bool prn_help = false;
@@ -120,10 +119,6 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
         break;
       case 'd':
         delegate_threshold = atoll(optarg);
-        break;
-      case 'o':
-        found_output_filename = true;
-        output_filename       = optarg;
         break;
       case 'p':
         partition_passes = atoll(optarg);
@@ -140,7 +135,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
         break;
     }
   }
-  if (prn_help || !found_output_filename) {
+  if (prn_help) {
     usage();
     exit(-1);
   }
@@ -155,15 +150,11 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename,
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::allocator<void>::type> graph_type;
-
-  int mpi_rank(0), mpi_size(0);
+  using allocator_type = std::allocator<void>;
+  using graph_type     = havoqgt::delegate_partitioned_graph<allocator_type>;
 
   init(&argc, &argv);
   {
-    std::string output_filename;
-
     {  // Build Distributed_DB
       int mpi_rank = comm_world().rank();
       int mpi_size = comm_world().size();
@@ -181,21 +172,13 @@ int main(int argc, char** argv) {
       uint64_t    chunk_size;
       bool        scramble = true;
 
-      parse_cmd_line(argc, argv, output_filename, delegate_threshold,
-                     input_filename1, input_filename2, gbyte_per_rank,
-                     partition_passes, chunk_size);
+      parse_cmd_line(argc, argv, delegate_threshold, input_filename1,
+                     input_filename2, gbyte_per_rank, partition_passes,
+                     chunk_size);
 
       if (mpi_rank == 0) {
         std::cout << "Ingesting graphs" << std::endl;
       }
-
-      havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(),
-                                  gbyte_per_rank);
-
-      segment_manager_t* segment_manager = ddb.get_segment_manager();
-      bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
-
-      /*graph_type::edge_data<gt_tc_type, std::allocator<gt_tc_type>> gt_tc;*/
 
       // Setup Kronecker generator
       kronecker_edge_generator<gt_tc_type> kron(
@@ -204,13 +187,13 @@ int main(int argc, char** argv) {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
       }
-      graph_type* graph = segment_manager->construct<graph_type>("graph_obj")(
-          alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
-          delegate_threshold, partition_passes, chunk_size /*, gt_tc*/);
+      graph_type graph(allocator_type(), MPI_COMM_WORLD, kron,
+                       kron.max_vertex_id(), delegate_threshold,
+                       partition_passes, chunk_size);
 
-      graph->print_graph_statistics();
+      graph.print_graph_statistics();
 
-      uint64_t global_tc = triangle_count_per_edge(*graph, "");
+      uint64_t global_tc = triangle_count_per_edge(graph, "");
       uint64_t global_gt_tc(0);
       for (auto edgetuple : kron) {
         global_gt_tc += std::get<2>(edgetuple);

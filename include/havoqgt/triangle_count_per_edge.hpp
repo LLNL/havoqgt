@@ -141,8 +141,7 @@ inline bool edge_order_gt(uint32_t deg_a, uint32_t deg_b, VLOC v_a, VLOC v_b) {
   // }
   if (deg_a > deg_b) {
     return true;
-  }
-  if (deg_a < deg_b) {
+  } else if (deg_a < deg_b) {
     return false;
   } else {
     return v_b < v_a;
@@ -154,116 +153,6 @@ inline bool edge_order_gt(uint32_t deg_a, uint32_t deg_b, VLOC v_a, VLOC v_b) {
   //                 vertex)*/ std::get<0>(alg_data)[vertex] &&
   //      vertex.hash() < from_vertex.hash())) {
 }
-
-template <typename Graph>
-class core2_visitor {
- public:
-  typedef core2_visitor<Graph>           my_type;
-  typedef typename Graph::vertex_locator vertex_locator;
-
-  core2_visitor() : vertex(), init(true) {}
-
-  core2_visitor(vertex_locator v) : vertex(v), init(true) {}
-
-  core2_visitor(vertex_locator v, bool _init) : vertex(v), init(_init) {}
-
-  template <typename AlgData>
-  bool pre_visit(AlgData& alg_data) const {
-    if (vertex.is_delegate()) {
-      if (!vertex.is_delegate_master()) {
-        return true;
-      }
-    }
-    if (std::get<1>(alg_data)[vertex]) {
-      --(std::get<0>(alg_data)[vertex]);
-
-      if (std::get<0>(alg_data)[vertex] < 2) {
-        // remove from 2 core
-        std::get<1>(alg_data)[vertex] = false;
-        std::get<0>(alg_data)[vertex] = 0;
-        return true;
-      }
-    }
-
-    // Retrun true if alive
-    // return std::get<1>(alg_data)[vertex];
-    return false;
-  }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
-                  AlgData& alg_data) const {
-    if (std::get<1>(alg_data)[vertex]) {
-      //   --(std::get<0>(alg_data)[vertex]);
-      if (std::get<0>(alg_data)[vertex] < 2) {
-        // remove from 2 core
-        std::get<1>(alg_data)[vertex] = false;
-        std::get<0>(alg_data)[vertex] = 0;
-        for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
-             ++eitr) {
-          vertex_locator neighbor = eitr.target();
-          my_type        new_visitor(neighbor, false);
-          vis_queue->queue_visitor(new_visitor);
-        }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  template <typename VisitorQueueHandle, typename AlgData>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    if (init) {
-      if (std::get<0>(alg_data)[vertex] < 2) {
-        // remove from 2 core
-        std::get<1>(alg_data)[vertex] = false;
-        std::get<0>(alg_data)[vertex] = 0;
-        for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
-             ++eitr) {
-          vertex_locator neighbor = eitr.target();
-          my_type        new_visitor(neighbor, false);
-          vis_queue->queue_visitor(new_visitor);
-        }
-      }
-      return true;
-    }
-
-    if (std::get<1>(alg_data)[vertex]) {
-      std::cerr << "LOGIC ERROR" << std::endl;
-      exit(-1);
-    }
-    // if(std::get<1>(alg_data)[vertex]) {
-    //  --(std::get<0>(alg_data)[vertex]);
-    //  if(std::get<0>(alg_data)[vertex] < 2) {
-    //    //remove from 2 core
-    //    std::get<1>(alg_data)[vertex] = false;
-    //    std::get<0>(alg_data)[vertex] = 0;
-    for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
-         ++eitr) {
-      vertex_locator neighbor = eitr.target();
-      my_type        new_visitor(neighbor, false);
-      vis_queue->queue_visitor(new_visitor);
-    }
-    //  }
-    //  return true;
-    //}
-    // return false;
-    return true;
-  }
-
-  friend inline bool operator>(const core2_visitor& v1,
-                               const core2_visitor& v2) {
-    return false;
-  }
-
-  friend inline bool operator<(const core2_visitor& v1,
-                               const core2_visitor& v2) {
-    return false;
-  }
-
-  vertex_locator vertex;
-  bool           init;
-};
 
 template <typename Graph>
 class directed_core2 {
@@ -288,7 +177,7 @@ class directed_core2 {
         return true;
       }
     }
-    if (std::get<0>(alg_data)[vertex] < 2) return false;
+    // if (std::get<0>(alg_data)[vertex] < 2) return false;
     // only here should be low-degree & masters
     if (edge_order_gt(from_degree, std::get<2>(alg_data).degree(vertex),
                       from_vertex, vertex)) {
@@ -316,7 +205,7 @@ class directed_core2 {
   template <typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
-    if (std::get<0>(alg_data)[vertex] >= 2) {
+    if (/*std::get<0>(alg_data)[vertex]*/ g.degree(vertex) >= 2) {
       // if in 2core, send degree to neighbors
       uint32_t my_degree = g.degree(vertex);
       for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
@@ -333,8 +222,9 @@ class directed_core2 {
 
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    //    std::cout << "I'm in visit" << std::endl;
     if (init) {
-      if (std::get<0>(alg_data)[vertex] >= 2) {
+      if (/*std::get<0>(alg_data)[vertex]*/ g.degree(vertex) >= 2) {
         // if in 2core, send degree to neighbors
         uint32_t my_degree = g.degree(vertex);
         for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
@@ -345,6 +235,8 @@ class directed_core2 {
           vis_queue->queue_visitor(new_visitor);
         }
         return true;
+      } else {
+        std::cout << "My degreess < 2??" << std::endl;
       }
     }
     return false;
