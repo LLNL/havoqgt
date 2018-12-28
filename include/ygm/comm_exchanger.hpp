@@ -143,13 +143,13 @@ class comm_exchanger {
       m_vec_send[i].clear();
     }
     m_local_count = 0;
-    // if (m_comm_rank == 0) {
-    //  if (to_return > 0) {
-    //    std::cout << "." << std::flush;
-    //  } else {
-    //    std::cout << "!" << std::flush;
-    //  }
-    //}
+    if (m_comm_rank == 0) {
+      if (to_return > 0) {
+        std::cout << "." << std::flush;
+      } else {
+        std::cout << "!" << std::flush;
+      }
+    }
 
     return to_return;
   }
