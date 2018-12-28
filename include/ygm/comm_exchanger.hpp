@@ -49,21 +49,24 @@ class comm_exchanger {
     uint64_t to_return = 0;
     // Send counts
     for (int i = 0; i < m_comm_size; ++i) {
+      int        send_to = (i + m_comm_rank) % m_comm_size;
       count_pair to_send;
-      to_send.first = m_vec_send[i].size();
+      to_send.first = m_vec_send[send_to].size();
       to_send.second =
           m_local_count + extracount;  // FIXME, should count this better
-      CHK_MPI(
-          MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, i, m_tag, m_comm));
+      CHK_MPI(MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, send_to, m_tag,
+                       m_comm));
     }
 
     // Start all my sends
     for (int i = 0; i < m_comm_size; ++i) {
-      size_t count = m_vec_send[i].size();
+      int    send_to = (i + m_comm_rank) % m_comm_size;
+      size_t count   = m_vec_send[send_to].size();
       if (count > 0) {
         MPI_Request req;
-        CHK_MPI(MPI_Isend((void *)&(m_vec_send[i][0]), count * sizeof(MSG),
-                          MPI_BYTE, i, m_tag, m_comm, &req));
+        CHK_MPI(MPI_Isend((void *)&(m_vec_send[send_to][0]),
+                          count * sizeof(MSG), MPI_BYTE, send_to, m_tag, m_comm,
+                          &req));
         vec_req_isend_data.push_back(req);
       }
     }
@@ -127,13 +130,13 @@ class comm_exchanger {
       m_vec_send[i].clear();
     }
     m_local_count = 0;
-    if (m_comm_rank == 0) {
-      if (to_return > 0) {
-        std::cout << "." << std::flush;
-      } else {
-        std::cout << "!" << std::flush;
-      }
-    }
+    // if (m_comm_rank == 0) {
+    //  if (to_return > 0) {
+    //    std::cout << "." << std::flush;
+    //  } else {
+    //    std::cout << "!" << std::flush;
+    //  }
+    //}
 
     return to_return;
   }
