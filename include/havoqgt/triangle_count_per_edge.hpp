@@ -169,17 +169,16 @@ class directed_core2 {
 
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
-    // if(std::get<0>(alg_data)[vertex] >= 2) {
-    if (from_degree < std::get<2>(alg_data).degree(vertex)) return false;
-    // previously returned true, but changing here --- return true;
+    if (from_degree < std::get<1>(alg_data).degree(vertex)) return false;
+
     if (vertex.is_delegate()) {
       if (!vertex.is_delegate_master()) {
         return true;
       }
     }
-    // if (std::get<0>(alg_data)[vertex] < 2) return false;
+
     // only here should be low-degree & masters
-    if (edge_order_gt(from_degree, std::get<2>(alg_data).degree(vertex),
+    if (edge_order_gt(from_degree, std::get<1>(alg_data).degree(vertex),
                       from_vertex, vertex)) {
       // if (from_degree > /*std::get<2>(alg_data).degree(
       //                       vertex)*/ std::get<0>(alg_data)[vertex] ||
@@ -194,8 +193,7 @@ class directed_core2 {
       fl.set_bcast(0);
       fl.set_intercept(0);
 
-      std::get<1>(alg_data)[vv][fl].target_degree = from_degree;
-      // std::get<1>(alg_data)[vv].add(fl, from_degree);
+      std::get<0>(alg_data)[vv][fl].target_degree = from_degree;
     }
     //}
     //}
@@ -205,7 +203,7 @@ class directed_core2 {
   template <typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
-    if (/*std::get<0>(alg_data)[vertex]*/ g.degree(vertex) >= 2) {
+    if (g.degree(vertex) >= 2) {
       // if in 2core, send degree to neighbors
       uint32_t my_degree = g.degree(vertex);
       for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
@@ -222,9 +220,8 @@ class directed_core2 {
 
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    //    std::cout << "I'm in visit" << std::endl;
     if (init) {
-      if (/*std::get<0>(alg_data)[vertex]*/ g.degree(vertex) >= 2) {
+      if (g.degree(vertex) >= 2) {
         // if in 2core, send degree to neighbors
         uint32_t my_degree = g.degree(vertex);
         for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
@@ -409,41 +406,11 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
       std::allocator<std::map<vertex_locator, dod_graph_edge>>>
       core2_directed(g);
   {
-    typename graph_type::template vertex_data<uint32_t,
-                                              std::allocator<uint32_t>>
-        core2_degree(g);
-    {
-      typename graph_type::template vertex_data<bool, std::allocator<bool>>
-          core2_alive(g);
-      core2_alive.reset(true);
-      for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-        core2_degree[*vitr] = g.degree(*vitr);
-      }
-      for (auto ditr = g.delegate_vertices_begin();
-           ditr != g.delegate_vertices_end(); ++ditr) {
-        core2_degree[*ditr] = g.degree(*ditr);
-      }
-
-      // // /// This computes the 2core
-      // double start_time = MPI_Wtime();
-      // {
-      //   auto alg_data = std::forward_as_tuple(core2_degree, core2_alive);
-      //   auto vq = create_visitor_queue<core2_visitor<graph_type>,
-      //   lifo_queue>(
-      //       &g, alg_data);
-      //   vq.init_visitor_traversal();
-      // }
-      // double end_time = MPI_Wtime();
-      // if (mpi_rank == 0) {
-      //   std::cout << "2Core time = " << end_time - start_time << std::endl;
-      // }
-    }
-
     //
     // 2)  Calculate directed 2core edges
     double start_time = MPI_Wtime();
     {
-      auto alg_data = std::forward_as_tuple(core2_degree, core2_directed, g);
+      auto alg_data = std::forward_as_tuple(core2_directed, g);
       auto vq = create_visitor_queue<directed_core2<graph_type>, lifo_queue>(
           &g, alg_data);
       vq.init_visitor_traversal();
@@ -511,43 +478,26 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
     {  // 4)  Compute distributions
       //
 
-      uint64_t local_edge_count(0), local_dod_edge_count(0),
-          local_in_zero_count(0), local_in_zero_edges_count(0);
+      uint64_t local_edge_count(0), local_dod_edge_count(0);
 
       for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
         local_edge_count += g.degree(*vitr);
         local_dod_edge_count += core2_directed[*vitr].size();
-        if (core2_degree[*vitr] == core2_directed[*vitr].size()) {
-          ++local_in_zero_count;
-          local_in_zero_edges_count += core2_directed[*vitr].size();
-        }
       }
       for (auto citr = g.controller_begin(); citr != g.controller_end();
            ++citr) {
         local_edge_count += g.degree(*citr);
         local_dod_edge_count += core2_directed[*citr].size();
-        if (core2_degree[*citr] == core2_directed[*citr].size()) {
-          ++local_in_zero_count;
-          local_in_zero_edges_count += core2_directed[*citr].size();
-        }
       }
 
       uint64_t global_edge_count = mpi_all_reduce(
           local_edge_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
       uint64_t global_dod_edge_count = mpi_all_reduce(
           local_dod_edge_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
-      uint64_t global_in_zero_count = mpi_all_reduce(
-          local_in_zero_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
-      uint64_t global_in_zero_edge_count = mpi_all_reduce(
-          local_in_zero_edges_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
       if (mpi_rank == 0) {
         std::cout << "global_edge_count = " << global_edge_count << std::endl;
         std::cout << "global_dod_edge_count = " << global_dod_edge_count
-                  << std::endl;
-        std::cout << "global_in_zero_count = " << global_in_zero_count
-                  << std::endl;
-        std::cout << "global_in_zero_edge_count = " << global_in_zero_edge_count
                   << std::endl;
       }
     }
@@ -557,8 +507,12 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     dod_graph_truss[*vitr].insert(core2_directed[*vitr].begin(),
                                   core2_directed[*vitr].end());
+    core2_directed[*vitr].clear();
   }
   for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+    dod_graph_truss[*vitr].insert(core2_directed[*vitr].begin(),
+                                  core2_directed[*vitr].end());
+    core2_directed[*vitr].clear();
   }
 }
 
