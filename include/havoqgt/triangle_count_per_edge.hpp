@@ -389,8 +389,8 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
   uint64_t global_wedge_count =
       comm_world().all_reduce(local_wedge_count, MPI_SUM);
   if (comm_world().rank() == 0) {
-    std::cout << "TC = " << global_triangle_count
-              << ", WC = " << global_wedge_count << std::endl;
+    std::cout << "Triangle Count = " << global_triangle_count << std::endl
+              << "Number of Wedge Checks = " << global_wedge_count << std::endl;
   }
 }
 
@@ -429,22 +429,13 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
 
     uint64_t global_core2_directed_edge_count =
         comm_world().all_reduce(local_core2_directed_edge_count, MPI_SUM);
-    if (comm_world().rank() == 0) {
-      std::cout << "global_core2_directed_edge_count = "
-                << global_core2_directed_edge_count << std::endl;
-    }
 
     // (was) Sort Directed 2 core
     MPI_Barrier(MPI_COMM_WORLD);
     uint64_t local_max_dod(0), local_max_deg(0), local_max_dod_orig_deg(0);
     start_time = MPI_Wtime();
     {
-      std::stringstream ss;
-      // ss << "degrees_" << comm_world().rank();
-      // std::ofstream ofs_degrees(ss.str().c_str());
       for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-        // ofs_degrees << core2_directed[*vitr].size() << " " << g.degree(*vitr)
-        //            << std::endl;
         if (core2_directed[*vitr].size() > local_max_dod) {
           local_max_dod_orig_deg = uint64_t(g.degree(*vitr));
         }
@@ -454,8 +445,6 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
       }
       for (auto citr = g.controller_begin(); citr != g.controller_end();
            ++citr) {
-        // ofs_degrees << core2_directed[*citr].size() << " " << g.degree(*citr)
-        //            << std::endl;
         if (core2_directed[*citr].size() > local_max_dod) {
           local_max_dod_orig_deg = uint64_t(g.degree(*citr));
         }
@@ -471,14 +460,13 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
     uint64_t global_max_deg =
         mpi_all_reduce(local_max_deg, std::greater<uint64_t>(), MPI_COMM_WORLD);
     if (mpi_rank == 0) {
-      std::cout << "Largest DOD out degree = " << global_max_dod << std::endl;
-      std::cout << "Largest orig degree = " << global_max_deg << std::endl;
+      std::cout << "Largest original degree = " << global_max_deg << std::endl;
+      std::cout << "Largest DODGraph out degree = " << global_max_dod
+                << std::endl;
     }
-    // std::cout << whoami() << " max_local_dod_deg = " << local_max_dod
-    //           << ", orig deg was " << local_max_dod_orig_deg << std::endl;
+
     {  // 4)  Compute distributions
       //
-
       uint64_t local_edge_count(0), local_dod_edge_count(0);
 
       for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
@@ -497,9 +485,10 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
           local_dod_edge_count, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
       if (mpi_rank == 0) {
-        std::cout << "global_edge_count = " << global_edge_count << std::endl;
-        std::cout << "global_dod_edge_count = " << global_dod_edge_count
-                  << std::endl;
+        std::cout << "Count of nonzeros in original graph = "
+                  << global_edge_count << std::endl;
+        std::cout << "Count of directed edges in DODGraph = "
+                  << global_dod_edge_count << std::endl;
       }
     }
   }
@@ -541,7 +530,8 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
-    std::cout << "TC Time = " << end_time - start_time << std::endl;
+    std::cout << "Total Triangle Count Time (seconds) = "
+              << end_time - start_time << std::endl;
   }
 
   //

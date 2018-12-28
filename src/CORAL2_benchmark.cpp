@@ -196,7 +196,8 @@ int main(int argc, char** argv) {
   if (comm_world().rank() == 0) {
     if (global_tc == global_gt_tc) {
       std::cout << "!!PASSED!!" << std::endl;
-      std::cout << "Global Triangle Count = " << global_gt_tc / 3 << std::endl;
+      // std::cout << "Global Triangle Count = " << global_gt_tc / 3 <<
+      // std::endl;
     } else {
       std::cout << "?? FAILED ??" << std::endl;
       std::cout << global_gt_tc << " != " << global_tc << std::endl;
