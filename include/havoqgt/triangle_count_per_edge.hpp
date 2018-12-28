@@ -352,13 +352,6 @@ class core2_wedges {
 
 template <typename TGraph, typename DOGR>
 void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
-  // typedef TGraph                          graph_type;
-  // typedef typename TGraph::vertex_locator vertex_locator;
-  // typename graph_type::template vertex_data<
-  //     std::set<vertex_locator>, std::allocator<std::set<vertex_locator>>>
-  //     iedges_tmp(g);
-  //
-  // reset all edges
   for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
     for (auto& kvp : dogr[*vitr]) {
       kvp.second.edge_triangle_count = 0;
@@ -418,8 +411,8 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph_truss) {
     }
     double end_time = MPI_Wtime();
     if (mpi_rank == 0) {
-      std::cout << "Directed 2Core time = " << end_time - start_time
-                << std::endl;
+      std::cout << "Time to construct DODGraph (seconds) = "
+                << end_time - start_time << std::endl;
     }
 
     uint64_t local_core2_directed_edge_count(0);
