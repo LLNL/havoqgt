@@ -169,6 +169,7 @@ class comm_exchanger {
         m_req_irecv_counts.push_back(std::make_pair(req, recvr));
       }
     }
+    CHK_MPI(MPI_Barrier(m_comm));
   }
 
   // Basic Comm Data
