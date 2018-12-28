@@ -264,7 +264,7 @@ class visitor_queue {
       local_delegate_visit(v);
     } else {
       if (v.vertex.owner() == uint32_t(m_world_rank)) {
-        if (v.pre_visit(m_alg_data)) {
+        if (v.pre_visit(m_alg_data, this)) {
           push(v);
         }
       } else {
@@ -278,7 +278,7 @@ class visitor_queue {
  private:
   // This occurs when the local process first encounters a delegate
   void local_delegate_visit(const visitor_type& v) {
-    if (v.pre_visit(m_alg_data)) {
+    if (v.pre_visit(m_alg_data, this)) {
       if (m_ptr_graph->master(v.vertex) == uint32_t(m_world_rank)) {
         // delegate_bcast(v);
         push(v);
@@ -352,7 +352,7 @@ class visitor_queue {
         }
       } else {
         assert(m_ptr_graph->master(v.vertex) == uint32_t(m_world_rank));
-        if (v.pre_visit(m_alg_data)) {
+        if (v.pre_visit(m_alg_data, this)) {
           // if(m_ptr_graph->master(vw.m_visitor.vertex) == m_world_rank) {
           // delegate_bcast(vw.m_visitor);
           push(v);
@@ -371,7 +371,7 @@ class visitor_queue {
       assert(v.vertex.owner() == uint32_t(m_world_rank));
       //
       // Now handle owned vertices
-      if (v.pre_visit(m_alg_data)) {
+      if (v.pre_visit(m_alg_data, this)) {
         push(v);
       } else {
       }
