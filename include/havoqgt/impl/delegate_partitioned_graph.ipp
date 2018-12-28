@@ -278,9 +278,9 @@ void delegate_partitioned_graph<Allocator>::complete_construction(
   std::map<uint64_t, std::deque<OverflowSendInfo>> transfer_info;
   switch (m_graph_state) {
     case MetaDataGenerated: {
-      LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
-      calculate_overflow(transfer_info);
-      MPI_Barrier(m_mpi_comm);
+      // LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+      // calculate_overflow(transfer_info);
+      // MPI_Barrier(m_mpi_comm);
     }
 
       {
