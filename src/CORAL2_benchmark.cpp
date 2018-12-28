@@ -154,68 +154,55 @@ int main(int argc, char** argv) {
   using graph_type     = havoqgt::delegate_partitioned_graph<allocator_type>;
 
   init(&argc, &argv);
-  {
-    {  // Build Distributed_DB
-      int mpi_rank = comm_world().rank();
-      int mpi_size = comm_world().size();
 
-      if (mpi_rank == 0) {
-        std::cout << "MPI initialized with " << mpi_size << " ranks."
-                  << std::endl;
-      }
-      comm_world().barrier();
+  int mpi_rank = comm_world().rank();
+  int mpi_size = comm_world().size();
 
-      uint64_t    delegate_threshold;
-      std::string input_filename1, input_filename2;
-      uint64_t    partition_passes;
-      double      gbyte_per_rank;
-      uint64_t    chunk_size;
-      bool        scramble = true;
+  if (mpi_rank == 0) {
+    std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
+  }
+  comm_world().barrier();
 
-      parse_cmd_line(argc, argv, delegate_threshold, input_filename1,
-                     input_filename2, gbyte_per_rank, partition_passes,
-                     chunk_size);
+  uint64_t    delegate_threshold;
+  std::string input_filename1, input_filename2;
+  uint64_t    partition_passes;
+  double      gbyte_per_rank;
+  uint64_t    chunk_size;
+  bool        scramble = true;
 
-      if (mpi_rank == 0) {
-        std::cout << "Ingesting graphs" << std::endl;
-      }
+  parse_cmd_line(argc, argv, delegate_threshold, input_filename1,
+                 input_filename2, gbyte_per_rank, partition_passes, chunk_size);
 
-      // Setup Kronecker generator
-      kronecker_edge_generator<gt_tc_type> kron(
-          input_filename1, input_filename2, scramble, false);
+  // Setup Kronecker generator
+  kronecker_edge_generator<gt_tc_type> kron(input_filename1, input_filename2,
+                                            scramble, false);
 
-      if (mpi_rank == 0) {
-        std::cout << "Generating new graph." << std::endl;
-      }
-      graph_type graph(allocator_type(), MPI_COMM_WORLD, kron,
-                       kron.max_vertex_id(), delegate_threshold,
-                       partition_passes, chunk_size);
+  if (mpi_rank == 0) {
+    std::cout << "Generating  graph." << std::endl;
+  }
+  graph_type graph(allocator_type(), MPI_COMM_WORLD, kron, kron.max_vertex_id(),
+                   delegate_threshold, partition_passes, chunk_size);
 
-      graph.print_graph_statistics();
+  graph.print_graph_statistics();
 
-      uint64_t global_tc = triangle_count_per_edge(graph, "");
-      uint64_t global_gt_tc(0);
-      for (auto edgetuple : kron) {
-        global_gt_tc += std::get<2>(edgetuple);
-      }
-      global_gt_tc /= 2;  // Each edge is counted twice from kron stream
+  uint64_t global_tc = triangle_count_per_edge(graph, "");
+  uint64_t global_gt_tc(0);
+  for (auto edgetuple : kron) {
+    global_gt_tc += std::get<2>(edgetuple);
+  }
+  global_gt_tc /= 2;  // Each edge is counted twice from kron stream
 
-      global_gt_tc = comm_world().all_reduce(global_gt_tc, MPI_SUM);
-      if (comm_world().rank() == 0) {
-        if (global_tc == global_gt_tc) {
-          std::cout << "!!PASSED!!" << std::endl;
-          std::cout << "Global Triangle Count = " << global_gt_tc / 3
-                    << std::endl;
-        } else {
-          std::cout << "?? FAILED ??" << std::endl;
-          std::cout << global_gt_tc << " != " << global_tc << std::endl;
-        }
-      }
-      comm_world().barrier();
-    }  // Complete build distributed_db
+  global_gt_tc = comm_world().all_reduce(global_gt_tc, MPI_SUM);
+  if (comm_world().rank() == 0) {
+    if (global_tc == global_gt_tc) {
+      std::cout << "!!PASSED!!" << std::endl;
+      std::cout << "Global Triangle Count = " << global_gt_tc / 3 << std::endl;
+    } else {
+      std::cout << "?? FAILED ??" << std::endl;
+      std::cout << global_gt_tc << " != " << global_tc << std::endl;
+    }
+  }
 
-    comm_world().barrier();
-  }  // END Main MPI
-  ;
+  comm_world().barrier();
   return 0;
 }
