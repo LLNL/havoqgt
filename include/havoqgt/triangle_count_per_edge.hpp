@@ -168,8 +168,8 @@ class directed_core2 {
   directed_core2(vertex_locator v, vertex_locator _from, uint32_t _from_degree)
       : vertex(v), from_vertex(_from), from_degree(_from_degree), init(false) {}
 
-  template <typename AlgData, typename VisitorQueueHandle>
-  bool pre_visit(AlgData& alg_data, VisitorQueueHandle vis_queue) const {
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
     if (from_degree < std::get<1>(alg_data).degree(vertex)) return false;
 
     if (vertex.is_delegate()) {
@@ -273,8 +273,8 @@ class core2_wedges {
         from_vertex(_from_vertex),
         do_check_close(_do_check_close) {}
 
-  template <typename AlgData, typename VisitorQueueHandle>
-  bool pre_visit(AlgData& alg_data, VisitorQueueHandle vis_queue) const {
+  template <typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
     if (vertex.is_delegate()) {
       if (!vertex.is_delegate_master()) {
         return true;
@@ -290,10 +290,7 @@ class core2_wedges {
                                   // counts edge partipation in triangles
         std::get<0>(alg_data)[vertex][check_close].increment_edge();
         // std::get<5>(alg_data)[vertex].insert(from_vertex);  // i
-        // was return true;
-        my_type new_visitor(from_vertex, check_close, vertex, false);
-        vis_queue->queue_visitor(new_visitor);
-        return false;
+        return true;
       }
     } else {  // already found, not counting
       if (std::get<0>(alg_data)[vertex].count(check_close) == 0 ||
@@ -330,11 +327,11 @@ class core2_wedges {
 
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    // if (do_check_close) {
-    //  my_type new_visitor(from_vertex, check_close, vertex, false);
-    //  vis_queue->queue_visitor(new_visitor);
-    //  return false;
-    //}
+    if (do_check_close) {
+      my_type new_visitor(from_vertex, check_close, vertex, false);
+      vis_queue->queue_visitor(new_visitor);
+      return false;
+    }
     std::cout << "Shoudn't be here" << std::endl;
     exit(-1);
   }
@@ -376,6 +373,7 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
     int  cut_count = 0;   // dummy
     auto alg_data  = std::forward_as_tuple(dogr, local_triangle_count,
                                           local_wedge_count, k, cut_count);
+
     auto vq =
         create_visitor_queue<core2_wedges<TGraph>, lifo_queue>(&g, alg_data);
     vq.init_visitor_traversal();
