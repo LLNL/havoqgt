@@ -64,6 +64,7 @@
 #include <boost/container/deque.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
+#include <deque>
 #include <fstream>
 #include <havoqgt/visitor_queue.hpp>
 #include <map>
@@ -105,7 +106,7 @@ struct dod_graph_truss_edge {
 template <typename Visitor>
 class lifo_queue {
  protected:
-  std::vector<Visitor> m_data;
+  std::deque<Visitor> m_data;
 
  public:
   lifo_queue() {}
