@@ -23,30 +23,30 @@ class mailbox_p2p_nlnr {
     uint32_t local : 6;
     uint32_t node : 24;  // Supports addressing <= 16777216 nodes w/ <= 64 cores
     Data     data;
-    template <class Archive>
-    void save(Archive& ar) const {
-      uint32_t dummy;
-      encode(dummy);
-      ar(dummy, data);
-    }
+    /*     template <class Archive>
+        void save(Archive& ar) const {
+          uint32_t dummy;
+          encode(dummy);
+          ar(dummy, data);
+        }
 
-    template <class Archive>
-    void load(Archive& ar) {
-      uint32_t dummy;
-      ar(dummy, data);
-      decode(dummy);
-    }
+        template <class Archive>
+        void load(Archive& ar) {
+          uint32_t dummy;
+          ar(dummy, data);
+          decode(dummy);
+        }
 
-    void encode(uint32_t& dummy) const {
-      dummy = (node << 8) + (local << 2) + (interrupt << 1) + bcast;
-    }
+        void encode(uint32_t& dummy) const {
+          dummy = (node << 8) + (local << 2) + (interrupt << 1) + bcast;
+        }
 
-    void decode(uint32_t& input) {
-      bcast     = input & 1;
-      interrupt = (input >> 1) & 1;
-      local     = (input >> 2) & 63;
-      node      = (input >> 8);
-    }
+        void decode(uint32_t& input) {
+          bcast     = input & 1;
+          interrupt = (input >> 1) & 1;
+          local     = (input >> 2) & 63;
+          node      = (input >> 8);
+        } */
   };  //__attribute__((packed));
 
  public:
@@ -248,8 +248,8 @@ class mailbox_p2p_nlnr {
     total += m_second_local_exchanger.exchange(
         [&](const message& msg) { m_recv_func(this, msg.bcast, msg.data); },
         total);
-    uint64_t global_send_count =
-        comm_world().all_reduce(uint64_t(m_send_count), MPI_SUM);
+    // uint64_t global_send_count =
+    //    comm_world().all_reduce(uint64_t(m_send_count), MPI_SUM);
     m_send_count = 0;
 
     //
@@ -272,8 +272,8 @@ class mailbox_p2p_nlnr {
     in_exchange = false;
     // std::cout << whoami() << " - ending exchange, total = " << total
     //          << std::endl;
-    // return total;
-    return global_send_count;
+    return total;
+    // return global_send_count;
   }
 
  private:
