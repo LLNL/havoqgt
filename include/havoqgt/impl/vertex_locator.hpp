@@ -235,9 +235,10 @@ inline bool
 delegate_partitioned_graph<SegmentManager>::vertex_locator::is_equal(
     const typename delegate_partitioned_graph<SegmentManager>::vertex_locator x)
     const {
-  return m_is_delegate == x.m_is_delegate && m_is_bcast == x.m_is_bcast &&
-         m_is_intercept == x.m_is_intercept && m_owner_dest == x.m_owner_dest &&
-         m_local_id == x.m_local_id;
+  return m_is_delegate == x.m_is_delegate
+         //&& m_is_bcast == x.m_is_bcast &&
+         // m_is_intercept == x.m_is_intercept
+         && m_owner_dest == x.m_owner_dest && m_local_id == x.m_local_id;
 }
 
 }  // namespace havoqgt
