@@ -16,7 +16,7 @@ using namespace prunejuice::utilities;
 template <typename PatternType, typename Vertex = uint64_t, typename Edge = uint64_t> 
 class pattern_util {
   public:
-    //ypedef graph<Vertex, Edge, PatternType> pattern_graph;
+    //typedef graph<Vertex, Edge, PatternType> pattern_graph;
 
     pattern_util(std::string pattern_input_filename) : 
       input_pattern_path_length(0),
