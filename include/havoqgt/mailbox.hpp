@@ -53,7 +53,7 @@
 #define HAVOQGT_MPI_MAILBOX_ROUTED_HPP_INCLUDED
 
 #include <havoqgt/mpi.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <vector>
 #include <list>
 #include <limits>

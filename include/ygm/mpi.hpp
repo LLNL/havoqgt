@@ -5,153 +5,130 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <iostream>
+#include <vector>
 
-// #define CHK_MPI(a)                                               \
-//   {                                                              \
-//     if (a != MPI_SUCCESS) {                                      \
-//       char *error_string = NULL;                                 \
-//       int len = 0;                                               \
-//       MPI_Error_string(a, error_string, &len);                   \
-//       std::cerr << __FILE__ << ", line " << __LINE__             \
-//                 << " MPI ERROR = " << error_string << std::endl; \
-//       exit(-1);                                                  \
-//     }                                                            \
-//   }
-
-/// @warning  This algorithm is O(P) because its general purpose.   Could be
-///           Specialized to improve performance.
-///
-inline MPI_Comm build_node_local_comm() {
-  int mpi_rank(0), mpi_size(0);
-  CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-
-  MPI_Comm local_comm;
-
-  int min_shm_rank = -1;
-  int shm_com_size = 0;
-  const char *shm_name = "build_node_local_comm";
-  shm_unlink(shm_name);
-  CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-  //
-  // This executes rank-by-rank sequentially.
-  {
-    // Blocks except for rank 0
-    if (mpi_rank > 0) {
-      CHK_MPI(MPI_Recv(NULL, 0, MPI_BYTE, mpi_rank - 1, 1, MPI_COMM_WORLD,
-                       MPI_STATUS_IGNORE));
-      // std::cout << "Rank " << mpi_rank << " Ready" << std::endl;
-    }
-    int shm_fd = -1;
-    const int shm_size = 4096;
-    bool this_rank_created = false;
-
-    shm_fd = shm_open(shm_name, O_RDWR, 0666);
-    if (shm_fd == -1) {
-      // std::cout << "Rank " << mpi_rank << ": Failed to open;  attempting
-      // to create" << std::endl; Try to create
-      shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
-      if (shm_fd == -1) {
-        std::cerr << "Failed to open & create -- Total Failure" << std::endl;
-        exit(-1);
-      }
-      this_rank_created = true;
-      if (ftruncate(shm_fd, shm_size) == -1) {
-        std::cerr << "Created, but ftruncate failed" << std::endl;
-      }
-    }
-
-    // By now, should be ready & correct size
-    void *ptr =
-        mmap(0, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (ptr == MAP_FAILED) {
-      printf("Map failed\n");
-      exit(-1);
-    }
-
-    std::pair<int, int> *p_min_rank_size = (std::pair<int, int> *)ptr;
-    if (this_rank_created) {
-      p_min_rank_size->first = mpi_rank;
-      p_min_rank_size->second = 1;
-    } else {
-      p_min_rank_size->first = std::min(p_min_rank_size->first, mpi_rank);
-      p_min_rank_size->second++;
-    }
-
-    //
-    // Notifies rank+1 of completion
-    if (mpi_rank < mpi_size - 1) {
-      // std::cout << "Rank " << mpi_rank << " COMPLETE" << std::endl;
-      CHK_MPI(MPI_Send(NULL, 0, MPI_BYTE, mpi_rank + 1, 1, MPI_COMM_WORLD));
-    }
-
-    // All ranks have completed.  Each pulls their node loacal's data
-    CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-    min_shm_rank = p_min_rank_size->first;
-    shm_com_size = p_min_rank_size->second;
-
-    //
-    // Close shared segment
-    if (munmap(ptr, shm_size) != 0) {
-      std::cerr << "Rank " << mpi_rank << "munmap failed" << std::endl;
-    }
-    if (close(shm_fd) != 0) {
-      std::cerr << "Rank " << mpi_rank << "close failed" << std::endl;
-    }
-    CHK_MPI(MPI_Barrier(MPI_COMM_WORLD));
-    if (this_rank_created && shm_unlink(shm_name) != 0) {
-      std::cerr << "Rank " << mpi_rank << "shm_unlink failed" << std::endl;
-    }
-    // std::cout << "Rank " << mpi_rank << ", min_shm_rank = " << min_shm_rank
-    //           << ", shm_com_size = " << shm_com_size << std::endl;
+#define CHK_MPI(a)                                               \
+  {                                                              \
+    if (a != MPI_SUCCESS) {                                      \
+      char *error_string = NULL;                                 \
+      int   len          = 0;                                    \
+      MPI_Error_string(a, error_string, &len);                   \
+      std::cerr << __FILE__ << ", line " << __LINE__             \
+                << " MPI ERROR = " << error_string << std::endl; \
+      exit(-1);                                                  \
+    }                                                            \
   }
 
-  ///@todo
-  ///  Test if round robin or blocked
-  ///  test if equal number of ranks per node
+namespace ygm {
 
-  int local_color = min_shm_rank;
-  // std::cout << "Rank = " << mpi_rank << " local_color = " << local_color
-  //           << std::endl;
-  int key = mpi_rank;
-  CHK_MPI(MPI_Comm_split(MPI_COMM_WORLD, local_color, key, &local_comm));
-
-  return local_comm;
+inline MPI_Datatype mpi_typeof(char) { return MPI_CHAR; }
+inline MPI_Datatype mpi_typeof(signed short) { return MPI_SHORT; }
+inline MPI_Datatype mpi_typeof(signed int) { return MPI_INT; }
+inline MPI_Datatype mpi_typeof(signed long) { return MPI_LONG; }
+inline MPI_Datatype mpi_typeof(unsigned char) { return MPI_UNSIGNED_CHAR; }
+inline MPI_Datatype mpi_typeof(unsigned short) { return MPI_UNSIGNED_SHORT; }
+inline MPI_Datatype mpi_typeof(unsigned) { return MPI_UNSIGNED; }
+inline MPI_Datatype mpi_typeof(unsigned long) { return MPI_UNSIGNED_LONG; }
+inline MPI_Datatype mpi_typeof(unsigned long long) {
+  return MPI_UNSIGNED_LONG_LONG;
 }
-
-inline MPI_Comm build_node_remote_comm(MPI_Comm local_comm) {
-  int mpi_rank(0), remote_color(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_rank(local_comm, &remote_color));
-
-  MPI_Comm remote_comm;
-  int key = mpi_rank;
-  CHK_MPI(MPI_Comm_split(MPI_COMM_WORLD, remote_color, key, &remote_comm));
-
-  return remote_comm;
+inline MPI_Datatype mpi_typeof(signed long long) { return MPI_LONG_LONG_INT; }
+inline MPI_Datatype mpi_typeof(double) { return MPI_DOUBLE; }
+inline MPI_Datatype mpi_typeof(long double) { return MPI_LONG_DOUBLE; }
+inline MPI_Datatype mpi_typeof(std::pair<int, int>) { return MPI_2INT; }
+inline MPI_Datatype mpi_typeof(std::pair<float, int>) { return MPI_FLOAT_INT; }
+inline MPI_Datatype mpi_typeof(std::pair<double, int>) {
+  return MPI_DOUBLE_INT;
 }
-
-inline MPI_Comm build_node_bremote_comm(MPI_Comm local_comm) {
-  int mpi_rank(0), local_offset(0), local_size(0);
-  CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
-  CHK_MPI(MPI_Comm_rank(local_comm, &local_offset));
-  CHK_MPI(MPI_Comm_size(local_comm, &local_size));
-
-  int node_offset = (mpi_rank / local_size) % local_size;
-
-  int color = std::max(local_offset, node_offset) * local_size +
-              std::min(local_offset, node_offset);
-  int key = mpi_rank;
-  MPI_Comm bremote_comm;
-
-  // std::cout << "Rank = " << mpi_rank << " color = " << color
-  //           << std::endl
-  //           << "\t" << "node_offset = " << node_offset
-  //           << ", node_offset % local_size = " << node_offset % local_size
-  //           << ", local_offset = " << local_offset
-  //           << std::endl;
-
-  CHK_MPI(MPI_Comm_split(MPI_COMM_WORLD, color, key, &bremote_comm));
-
-  return bremote_comm;
+inline MPI_Datatype mpi_typeof(std::pair<long double, int>) {
+  return MPI_LONG_DOUBLE_INT;
 }
+inline MPI_Datatype mpi_typeof(std::pair<short, int>) { return MPI_SHORT_INT; }
+
+class comm;
+const comm &       comm_world();
+const comm &       comm_nl();
+const comm &       comm_nr();
+const comm &       comm_nlnr();
+inline std::string whoami();
+
+void init(int *argc, char ***argv);
+
+class comm {
+ public:
+  enum class split { nl, nr, nlnr };
+
+  comm(MPI_Comm comm = MPI_COMM_WORLD);
+
+  comm(split _split);
+
+  ~comm() {
+    if (free_comm_in_destructor) {
+      chk_ret(MPI_Comm_free(&m_comm));
+    }
+  }
+
+  int      size() const { return m_size; }
+  int      rank() const { return m_rank; }
+  MPI_Comm mpi_comm() const { return m_comm; }
+
+  void barrier() const { chk_ret(MPI_Barrier(m_comm)); }
+
+  template <typename T>
+  T all_reduce(T in_d, MPI_Op in_op) const {
+    T to_return;
+    chk_ret(
+        MPI_Allreduce(&in_d, &to_return, 1, mpi_typeof(T()), in_op, m_comm));
+    return to_return;
+  }
+
+  template <typename T>
+  void broadcast(T &data, int root) const {
+    chk_ret(MPI_Bcast(&data, sizeof(T), MPI_BYTE, root, m_comm));
+  }
+
+  template <typename T>
+  void broadcast(std::vector<T> &vec_data, int root) const {
+    size_t size(0), capacity(0);
+    if (rank() == root) {
+      size     = vec_data.size();
+      capacity = vec_data.capacity();
+    } else {
+      vec_data.clear();
+    }
+    broadcast(size, root);
+    broadcast(capacity, root);
+    if (rank() != root) {
+      vec_data.reserve(capacity);
+      vec_data.resize(size);
+    }
+    chk_ret(
+        MPI_Bcast(&(vec_data[0]), sizeof(T) * size, MPI_BYTE, root, m_comm));
+  }
+
+ private:
+  /// Not Copyable
+  comm();
+  comm(const comm &) = delete;             // non construction-copyable
+  comm &operator=(const comm &) = delete;  // non copyable
+
+  /// Checks MPI return codes
+
+  void chk_ret(int ret, const char *loc = NULL) const;
+
+  void init_nlnr_comm();
+  void init_nl_comm();
+  void init_nr_comm();
+  void init_rank_size();
+
+  MPI_Comm m_comm;
+  int      m_size;
+  int      m_rank;
+  bool     free_comm_in_destructor;
+};
+
+void abort(int errorcode = -1) { MPI_Abort(MPI_COMM_WORLD, errorcode); }
+
+}  // namespace ygm
+
+#include <ygm/impl/mpi.ipp>

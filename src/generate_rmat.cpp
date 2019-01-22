@@ -55,7 +55,7 @@
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <iostream>
@@ -74,7 +74,7 @@
 using namespace havoqgt;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
          << " -s <int>    - RMAT graph Scale (default 17)\n"
          << " -d <int>    - delegate threshold (Default is 1048576)\n"
@@ -91,7 +91,7 @@ void usage()  {
 void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, 
                     std::string& output_filename, std::string& backup_filename, double& gbyte_per_rank, 
                     uint64_t& partition_passes, uint64_t& chunk_size) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -151,25 +151,22 @@ int main(int argc, char** argv) {
 
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt_init(&argc, &argv);
+  init(&argc, &argv);
   {    
     std::string                output_filename;
     std::string                backup_filename;
     { // Build Distributed_DB
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
-    havoqgt::get_environment();
+    int mpi_rank = comm_world().rank();
+    int mpi_size = comm_world().size();
     
     if (mpi_rank == 0) {
-
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
     }
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
 
     uint64_t      num_vertices = 1;
     uint64_t      vert_scale;
@@ -211,7 +208,7 @@ int main(int argc, char** argv) {
         (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
 
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
     if (mpi_rank == 0) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
@@ -223,7 +220,7 @@ int main(int argc, char** argv) {
         std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
                   << "/" << segment_manager->get_size() << " = " << percent << std::endl;
       }
-      havoqgt_env()->world_comm().barrier();
+      comm_world().barrier();
     }
 
     graph->print_graph_statistics();
@@ -241,23 +238,23 @@ int main(int argc, char** argv) {
 
     uint64_t global_max_degree = mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
 
     if (mpi_rank == 0) {
       std::cout << "Max Degree = " << global_max_degree << std::endl;
     }
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
       distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
     }
-    havoqgt_env()->world_comm().barrier();
-    if(havoqgt_env()->node_local_comm().rank() == 0) {
+    comm_world().barrier();
+    if(comm_nl().rank() == 0) {
       sync();
     }
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
   } //END Main MPI
-  havoqgt_finalize();
+  ;
   return 0;
 }

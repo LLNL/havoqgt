@@ -57,9 +57,9 @@
 
 namespace havoqgt {
 
-template <typename SegementManager>
-template <typename T, typename Allocator >
-class delegate_partitioned_graph<SegementManager>::vertex_data {
+template <typename Allocator>
+template <typename T, typename AllocatorOther >
+class delegate_partitioned_graph<Allocator>::vertex_data {
  public:
   typedef T value_type;
   vertex_data() {}
@@ -94,14 +94,37 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
     }
   }
 
+  void clear() {
+    for(size_t i=0; i<m_owned_vert_data.size(); ++i) {
+      m_owned_vert_data[i].clear();
+    }
+    for(size_t i=0; i<m_delegate_data.size(); ++i) {
+      m_delegate_data[i].clear();
+    }
+  }
+
   void all_reduce() {
     std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
     std::vector<T> tmp_out(tmp_in.size(), 0);
     mpi_all_reduce(tmp_in, tmp_out, std::plus<T>(), MPI_COMM_WORLD);
     std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
   }
+
+  void all_max_reduce() {
+    std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
+    std::vector<T> tmp_out(tmp_in.size(), 0);
+    mpi_all_reduce(tmp_in, tmp_out, std::greater<T>(), MPI_COMM_WORLD);
+    std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
+  }
+
+  void all_min_reduce() {
+    std::vector<T> tmp_in(m_delegate_data.begin(), m_delegate_data.end());
+    std::vector<T> tmp_out(tmp_in.size(), 0);
+    mpi_all_reduce(tmp_in, tmp_out, std::less<T>(), MPI_COMM_WORLD);
+    std::copy(tmp_out.begin(), tmp_out.end(), m_delegate_data.begin());
+  }
     
-  vertex_data(const delegate_partitioned_graph& dpg, Allocator allocate = Allocator() )
+  vertex_data(const delegate_partitioned_graph& dpg, AllocatorOther allocate = AllocatorOther() )
     : m_owned_vert_data(allocate)
     , m_delegate_data(allocate) {
     m_owned_vert_data.resize(dpg.m_owned_info.size());
@@ -121,8 +144,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_data {
   }
 
  private:
-  bip::vector<T, Allocator > m_owned_vert_data;
-  bip::vector<T, Allocator > m_delegate_data;
+  bip::vector<T, other_allocator<AllocatorOther, T>> m_owned_vert_data;
+  bip::vector<T, other_allocator<AllocatorOther, T>> m_delegate_data;
 };
 
 }  // namespace havoqgt

@@ -92,12 +92,10 @@ namespace bip = boost::interprocess;
  * @todo Verify low-degree CSR creation:  ipp line 167
  * @todo Boostify controller locator
  */
-template <typename SegementManager>
+template <typename Allocator>
 class delegate_partitioned_graph {
  public:
 
-   template<typename T>
-   using SegmentAllocator = bip::allocator<T, SegementManager>;
 
   //////////////////////////////////////////////////////////////////////////////
   // Class Objects
@@ -109,10 +107,10 @@ class delegate_partitioned_graph {
   /// Vertex Iterator class for delegate partitioned graph
   class vertex_iterator;
   /// Vertex Data storage
-  template <typename T, typename Allocator>
+  template <typename T, typename AllocatorOther>
   class vertex_data;
   /// Edge Data storage
-  template <typename T, typename Allocator>
+  template <typename T, typename AllocatorOther>
   class edge_data;
   /// Stores information about owned vertices
   class vert_info;
@@ -126,7 +124,7 @@ class delegate_partitioned_graph {
   /// Constructor that initializes given and unsorted sequence of edges
 
   template <typename Container>
-  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+  delegate_partitioned_graph(const Allocator& allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, 
                              uint64_t max_vertex,
@@ -137,7 +135,7 @@ class delegate_partitioned_graph {
                              );
 
   template <typename Container, typename edge_data_type>  
-  delegate_partitioned_graph(const SegmentAllocator<void>& seg_allocator,
+  delegate_partitioned_graph(const Allocator& allocator,
                              MPI_Comm mpi_comm,
                              Container& edges, 
                              uint64_t max_vertex,
@@ -150,7 +148,7 @@ class delegate_partitioned_graph {
                              );
 
   template <typename Container, typename edge_data_type>
-  void complete_construction(const SegmentAllocator<void>& seg_allocator,
+  void complete_construction(const Allocator& allocator,
     MPI_Comm mpi_comm, Container& edges, edge_data_type& _edge_data);
   void print_graph_statistics();
 
@@ -188,27 +186,27 @@ class delegate_partitioned_graph {
   bool is_label_delegate(uint64_t label) const;
 
   /// Creates vertex_data of type T
-  template <typename T, typename SegManagerOther>
-  vertex_data<T, SegManagerOther>* create_vertex_data(
-      SegManagerOther*,
+  template <typename T, typename AllocatorOther>
+  vertex_data<T, AllocatorOther>* create_vertex_data(
+      const AllocatorOther&,
       const char *obj_name = nullptr) const;
 
   /// Creates vertex_data of type T, with initial value
-  template <typename T, typename SegManagerOther>
-  vertex_data<T, SegManagerOther>* create_vertex_data(
-      const T& init, SegManagerOther*,
+  template <typename T, typename AllocatorOther>
+  vertex_data<T, AllocatorOther>* create_vertex_data(
+      const T& init, const AllocatorOther&,
       const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T
-  template <typename T, typename SegManagerOther>
-  edge_data<T, SegManagerOther>* create_edge_data(
-      SegManagerOther*,
+  template <typename T, typename AllocatorOther>
+  edge_data<T, AllocatorOther>* create_edge_data(
+      const AllocatorOther&,
       const char *obj_name = nullptr) const;
 
   /// Creates edge_data of type T, with initial value
-  template <typename T, typename SegManagerOther>
-  edge_data<T, SegManagerOther>* create_edge_data(
-      const T& init, SegManagerOther*,
+  template <typename T, typename AllocatorOther>
+  edge_data<T, AllocatorOther>* create_edge_data(
+      const T& init, const AllocatorOther&,
       const char *obj_name = nullptr) const;
 
   size_t num_local_vertices() const {
@@ -231,7 +229,7 @@ class delegate_partitioned_graph {
     return locator.m_local_id % m_mpi_size;
   }
 
-  typedef typename bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
+  typedef typename bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator> >
       ::const_iterator controller_iterator;
 
   controller_iterator controller_begin() const {
@@ -242,11 +240,11 @@ class delegate_partitioned_graph {
     return m_controller_locators.end();
   }
 
-  bool compare(delegate_partitioned_graph<SegementManager>* b) {
+  bool compare(delegate_partitioned_graph<Allocator>* b) {
     return *this==*b;
   }
 
-  inline bool operator==(delegate_partitioned_graph<SegementManager>& other) {
+  inline bool operator==(delegate_partitioned_graph<Allocator>& other) {
     if (m_mpi_size != other.m_mpi_size)
       return false;
     if (m_mpi_rank != other.m_mpi_rank)
@@ -277,7 +275,7 @@ class delegate_partitioned_graph {
     return true;
   }
 
-  inline bool operator!=(delegate_partitioned_graph<SegementManager>&
+  inline bool operator!=(delegate_partitioned_graph<Allocator>&
       other) {
     return !(*this == other);
   }
@@ -295,7 +293,7 @@ class delegate_partitioned_graph {
   void initialize_low_meta_data(boost::unordered_set<uint64_t>& global_hub_set);
   void initialize_high_meta_data(boost::unordered_set<uint64_t>& global_hubs);
 
-  void initialize_edge_storage(const SegmentAllocator<void>& seg_allocator);
+  void initialize_edge_storage(const Allocator& allocator);
 
   template <typename Container, typename edge_data_type>
   void partition_low_degree(Container& unsorted_edges, edge_data_type& _edge_data);
@@ -358,22 +356,22 @@ class delegate_partitioned_graph {
   uint64_t m_edges_high_count {0};
   uint64_t m_edges_low_count {0};
 
-  bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_outgoing_count;
-  bip::vector<uint32_t, SegmentAllocator<uint32_t> > m_local_incoming_count;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t> > m_local_outgoing_count;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t> > m_local_incoming_count;
 
-  bip::vector<vert_info, SegmentAllocator<vert_info>> m_owned_info;
-  bip::vector<uint32_t, SegmentAllocator<uint32_t>> m_owned_info_tracker;
-  //bip::vector<vertex_locator, SegmentAllocator<vertex_locator>> m_owned_targets;
+  bip::vector<vert_info, other_allocator<Allocator, vert_info>> m_owned_info;
+  bip::vector<uint32_t, other_allocator<Allocator, uint32_t>> m_owned_info_tracker;
+  //bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator>> m_owned_targets;
   bip::offset_ptr<vertex_locator> m_owned_targets;
   size_t m_owned_targets_size;
 
   // Delegate Storage
   uint64_t m_delegate_degree_threshold;
 
-  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_info;
-  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_degree;
-  bip::vector< uint64_t, SegmentAllocator<uint64_t> > m_delegate_label;
-  // bip::vector< vertex_locator, SegmentAllocator<vertex_locator> >
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_info;
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_degree;
+  bip::vector< uint64_t, other_allocator<Allocator, uint64_t> > m_delegate_label;
+  // bip::vector< vertex_locator, other_allocator<Allocator, vertex_locator> >
   //     m_delegate_targets;
   bip::offset_ptr<vertex_locator> m_delegate_targets;
   size_t m_delegate_targets_size;
@@ -381,13 +379,13 @@ class delegate_partitioned_graph {
   //Note: BIP only contains a map, not an unordered_map object.
   /*boost::interprocess::unordered_map<
       uint64_t, vertex_locator, boost::hash<uint64_t>, std::equal_to<uint64_t>,
-      SegmentAllocator< std::pair<uint64_t,vertex_locator> >
+      other_allocator<Allocator, std::pair<uint64_t,vertex_locator> >
      > m_map_delegate_locator;
   */
 
-  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, SegmentAllocator< std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
+  bip::map<uint64_t, vertex_locator, std::less<uint64_t>, other_allocator<Allocator, std::pair<const uint64_t,vertex_locator> > > m_map_delegate_locator;
 
-  bip::vector<vertex_locator, SegmentAllocator<vertex_locator> >
+  bip::vector<vertex_locator, other_allocator<Allocator, vertex_locator> >
     m_controller_locators;
 
   bool m_has_edge_data;
