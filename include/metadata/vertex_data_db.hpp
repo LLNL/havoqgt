@@ -12,6 +12,7 @@
 
 //#include <boost/filesystem.hpp>
 //#include <boost/regex.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
@@ -145,7 +146,7 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
   
   // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit 
   // the ones already in the queue
-  //MPI_Barrier(MPI_COMM_WORLD); // TODO: deadlock
+  //MPI_Barrier(MPI_COMM_WORLD); // TODO: fix, it causes the system to freeze
   ///vq.init_visitor_traversal_new();
   vq.init_visitor_traversal();
   MPI_Barrier(MPI_COMM_WORLD);
@@ -246,7 +247,6 @@ void read_file_and_build_vertex_data_db(std::string vertex_data_input_filename,
     (g, vertex_metadata, vertex_entry);
 
   // TODO: process in chunks. 
-  // Important : same issue as number of files per rank.
   // For now, make sure a vertex data file is not too big.
   // It can handle arbitrary number of files, so reading a file in chunks is not
   // important. 
@@ -279,6 +279,78 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
     std::cerr << "Error: Failed to read input files." << std::endl;    
     return; 
   }
+
+  // Important : if not all the ranks have the same number of files to process 
+  size_t max_files_per_rank = 0;
+  if (file_paths.size() < mpi_size) {
+    max_files_per_rank = 1;  
+  } else {
+      if (file_paths.size() % mpi_size == 0) {
+      max_files_per_rank = file_paths.size() / mpi_size; 
+    } else {
+      double quotient = file_paths.size() / (double) mpi_size; 
+      max_files_per_rank = static_cast<size_t>(floor(quotient) + 1);
+    }
+  }
+  if (mpi_rank == 0) {
+    std::cout << "Total number of files : " << file_paths.size() << std::endl;
+    std::cout << "Maximum number of files per rank : " << 
+      max_files_per_rank << std::endl; 
+  }
+
+  for (size_t i = mpi_rank <= file_paths.size() - 1 ? mpi_rank : 
+    static_cast<size_t>(mpi_rank % file_paths.size()), j = 0; 
+    //i < file_paths.size(); i+=mpi_size) {
+    j < max_files_per_rank; j++) {
+
+    assert(i >= 0 && i < file_paths.size());    
+//    std::cout << "MPI Rank " << mpi_rank << " processing file [" << i << "] " 
+//      << file_paths[i] << " ... " << std::endl;
+
+    read_file_and_build_vertex_data_db
+      <TGraph, VertexMetadata, Vertex, VertexData>
+      (file_paths[i], chunk_size, g, vertex_metadata);
+
+    if (i + mpi_size < file_paths.size()) {
+      i+=mpi_size;  
+    }     
+  } 
+
+  if (mpi_rank == 0) {
+    std::cout << "Done Building Vertex Metadata Store." << std::endl;
+  }   
+    
+}
+
+template <typename TGraph, typename VertexMetadata, typename Vertex, 
+  typename VertexData>
+void vertex_data_db_nostdfs(TGraph* g, VertexMetadata& vertex_metadata, 
+  std::string base_filename, size_t chunk_size) {
+  ///int mpi_rank = havoqgt_env()->world_comm().rank();
+  ///int mpi_size = havoqgt_env()->world_comm().size();
+  int mpi_rank = comm_world().rank();
+  int mpi_size = comm_world().size(); 
+
+  if (mpi_rank == 0) {
+    std::cout << "Building Distributed Vertex Metadata Store ... " << std::endl;
+  }
+  
+  std::vector<std::string> file_paths;
+
+  std::string file_paths_filename = base_filename;    
+
+  std::ifstream file_paths_file(file_paths_filename, std::ifstream::in);
+  std::string line; 
+  while (std::getline(file_paths_file, line)) {
+    boost::trim(line);
+    line.erase(std::remove(line.begin(), line.end(), '\n'), line.end()); 
+    // TODO: move to string utility file
+    //if (mpi_rank == 0) {
+      //std::cout << line << std::endl; 
+    //}  
+    file_paths.push_back(line); 
+  }
+  file_paths_file.close();  
 
   // Important : if not all the ranks have the same number of files to process 
   size_t max_files_per_rank = 0;
