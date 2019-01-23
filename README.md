@@ -2,7 +2,8 @@
 <p>We present an example of searching a pattern in a R-MAT generated graph using our program. The code is developed on top of HavoqGT.</p>
 <p>Clone the code from https://github.com/LLNL/havoqgt/tree/develop_prunejuice</p>
 <p>git clone https://github.com/LLNL/havoqgt.git</p>
-<p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58; the code works fine with 1.57) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. Once you have checked out the code, make sure you are on the master branch.</p>
+<p>git checkout develop_prunejuice</p>
+<p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. Once you have checked out the code, make sure you are on the master branch.</p>
 <p>Go to the directory, havoqgt/build/catalyst.llnl.gov/:</p> 
 <p>cd  havoqgt/build/catalyst.llnl.gov/</p>
 <p>Setup the CMake environment by running the following script:</p> 
@@ -26,7 +27,7 @@
 <p>make run_pattern_matching_beta_x.x</p> 
 <p>Next, use the following command to search the pattern stored in havoqgt/examples/prunejuice/rmat_log2_tree_pattern/.</p> 
 <p>(Note that we do not need to provide vertex labels for the Tree pattern as we will use labels based on vertex degree and the program will generate degree-based labels when no input label is provided, i.e., the -v flag is not set. The program requires a specific directory structure to output results. An example is available here, havoqgt/examples/prunejuice/output/.)</p> 
-<p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching_beta_x.x -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/rmat_log2_tree_pattern/ -o ../../examples/prunejuice/output/</p>
+<p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching_beta_x.x -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/rmat_log2_tree_pattern/0/ -o ../../examples/prunejuice/output/0/</p>
 <p>The program logs status information to the standard output so you know the current state of the execution.</p>
 
 <h4>Results</h4>
