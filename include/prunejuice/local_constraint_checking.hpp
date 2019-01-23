@@ -9,7 +9,7 @@
 
 # define OUTPUT_RESULT
 
-using namespace havoqgt;
+//using namespace havoqgt;
 
 //static constexpr size_t max_bit_vector_size = 16;
 ///static uint64_t lp_visitor_count = 0;
@@ -186,7 +186,7 @@ public:
 //--    BitSet vertex_template_vertices; // initialized with zeros
 
       ///int mpi_rank = havoqgt_env()->world_comm().rank();    
-      int mpi_rank = comm_world().rank();
+      int mpi_rank = havoqgt::comm_world().rank();
  
       // delegate slave      
       if (vertex.is_delegate() && g->master(vertex) != mpi_rank && msg_type == 0) {
@@ -479,7 +479,7 @@ public:
     }
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank(); 
-    int mpi_rank = comm_world().rank(); 
+    int mpi_rank = havoqgt::comm_world().rank(); 
 
     // Important : skip this verification for the delegates as the 
     // vertex_state is only maintained on the contrller
@@ -847,7 +847,7 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
   typedef typename TGraph::vertex_locator vertex_locator;
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_rank = comm_world().rank(); 
+  int mpi_rank = havoqgt::comm_world().rank(); 
 
   // Important : invalidate vertices that have valid labels but were not added 
   // to the vertex_state_map (becuase they did not hear from a valid parent)
@@ -1125,7 +1125,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   std::ofstream& message_count_result_file) {
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_rank = comm_world().rank();
+  int mpi_rank = havoqgt::comm_world().rank();
   uint64_t superstep_var = 0; // TODO: change type to size_t
   uint64_t& superstep_ref = superstep_var;
   bool not_finished = false; // local not finished flag
@@ -1142,7 +1142,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   typedef lppm_visitor<TGraph, Vertex, VertexData, BitSet> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
     vertex_active, vertex_iteration, vertex_state_map_generic, pattern_graph, superstep_var, global_init_step, g, template_vertices, vertex_active_edges_map);
-  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  auto vq = havoqgt::create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   if (mpi_rank == 0) {
     std::cout << "Local Constraint Checking ... " << std::endl; 
