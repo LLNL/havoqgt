@@ -216,7 +216,7 @@ class distributed_db {
     m_pm = new mapped_type(boost::interprocess::create_only,
                            m_rank_filename.c_str(), file_size);
 
-#ifdef HAVE_POSIX_FALLOCATE
+/*#ifdef HAVE_POSIX_FALLOCATE
     {
       int fd = open(m_rank_filename.c_str(), O_RDWR);
       if (fd == -1) {
@@ -230,7 +230,7 @@ class distributed_db {
     }
 #else
 //#warning posix_fallocate not found;  OSX?
-#endif
+#endif*/
 
     //
     // Create header

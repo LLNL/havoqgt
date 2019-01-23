@@ -5,7 +5,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-using namespace havoqgt;
+//using namespace havoqgt;
 
 ///namespace havoqgt { ///namespace mpi {
 
@@ -122,7 +122,7 @@ public:
     // std::get<20>(alg_data); // pattern_join_vertex      
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_rank = comm_world().rank();
+    int mpi_rank = havoqgt::comm_world().rank();
 
     if (ack_success) {
       // TODO: if vertex == target_vertex
@@ -320,7 +320,7 @@ public:
     }
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_rank = comm_world().rank();
+    int mpi_rank = havoqgt::comm_world().rank();
 
     if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) { // Test ++
       std::cerr << "Error: controller forwarding visitor to delegates." << std::endl;
@@ -929,8 +929,8 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   
   tp_visitor_count = 0;
 
-  int mpi_rank = comm_world().rank();
-  int mpi_size = comm_world().size();
+  int mpi_rank = havoqgt::comm_world().rank();
+  int mpi_size = havoqgt::comm_world().size();
 
   if (mpi_rank == 0) {
     std::cout << "Token Passing ... " << std::endl;
@@ -943,7 +943,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
     edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
     pattern_selected_vertices, pattern_selected_edges, 
     pattern_mark_join_vertex, pattern_ignore_join_vertex, pattern_join_vertex);
-  auto vq = create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
+  auto vq = havoqgt::create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
   ///vq.init_visitor_traversal_new();
   //vq.init_visitor_traversal_new_alt();
   vq.init_visitor_traversal();

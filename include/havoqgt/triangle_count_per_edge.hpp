@@ -494,6 +494,14 @@ void count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
         create_visitor_queue<core2_wedges<TGraph>, lifo_queue>(&g, alg_data);
     vq.init_visitor_traversal();
   }
+  uint64_t global_triangle_count =
+      comm_world().all_reduce(local_triangle_count, MPI_SUM);
+  uint64_t global_wedge_count =
+      comm_world().all_reduce(local_wedge_count, MPI_SUM);
+  if (comm_world().rank() == 0) {
+    std::cout << "TC = " << global_triangle_count
+              << ", WC = " << global_wedge_count << std::endl;
+  }
 }
 
 template <typename TGraph, typename DODgraph>
@@ -689,6 +697,8 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
     std::cout << "TC Time = " << end_time - start_time << std::endl;
   }
 
+  //
+  // Print output if file path is provided
   if (output_tc.length() > 0) {
     std::stringstream ssoutfname;
     ssoutfname << output_tc << "_" << mpi_rank << "_of_" << mpi_size;
@@ -707,7 +717,21 @@ uint64_t triangle_count_per_edge(TGraph& g, const std::string& output_tc) {
     }
   }
 
-  return 0;
+  //
+  // Count total triangle edge count to return
+  uint64_t count_to_return(0);
+  for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+    for (auto& kvp : dod_graph_truss[*vitr]) {
+      count_to_return += kvp.second.edge_triangle_count;
+    }
+  }
+  for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+    for (auto& kvp : dod_graph_truss[*vitr]) {
+      count_to_return += kvp.second.edge_triangle_count;
+    }
+  }
+
+  return comm_world().all_reduce(count_to_return, MPI_SUM);
 }
 
 }  // end namespace havoqgt
