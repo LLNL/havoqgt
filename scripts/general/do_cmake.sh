@@ -10,4 +10,4 @@ cmake ../../ \
   -DMPI_CXX_COMPILER=mpicxx \
   -DBOOST_ROOT=$HOME/local/boost \
   -DMPIEXEC_NUMPROC_FLAG="-n" \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -lrt -lpthread -lm"
+  -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lpthread -lm"

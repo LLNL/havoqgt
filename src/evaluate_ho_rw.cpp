@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include <havoqgt/environment.hpp>
+#include <ygm/mpi.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -73,20 +73,19 @@
 static constexpr int k_num_histories = 3; // 0:square; 1:triangle; 2:previous vertex
 
 int main(int argc, char **argv) {
-  using graph_type = havoqgt::delegate_partitioned_graph<havoqgt::distributed_db::segment_manager_type>;
+  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+  using graph_type = havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type>;
   using vertex_locator = typename graph_type::vertex_locator;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
     CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-    havoqgt::get_environment();
 
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
     }
     MPI_Barrier(MPI_COMM_WORLD);
 

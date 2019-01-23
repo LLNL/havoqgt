@@ -58,13 +58,12 @@
 #include <chrono>
 #include <sstream>
 
-#include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/distributed_db.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/visitor_queue.hpp>
-#include <havoqgt/detail/visitor_priority_queue.hpp>
+#include <havoqgt/distributed_db.hpp>
 #include <havoqgt/higher_order_random_walk.hpp>
+
+using namespace havoqgt;
 
 static constexpr int k_num_histories = 3; // 0:square; 1:triangle; 2:previous vertex
 
@@ -79,7 +78,7 @@ void parse_cmd_line(int argc, char **argv,
                     std::array<int, k_num_histories> &closing_rates,
                     std::string &score_dump_file_prefix,
                     uint64_t &num_top) {
-  if (havoqgt::havoqgt_env()->world_comm().rank() == 0) {
+  if (comm_world().rank()  == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
       std::cout << " " << argv[i];
@@ -235,20 +234,20 @@ void dump_all_score(const graph_type *const graph, const std::string &file_name,
 }
 
 int main(int argc, char **argv) {
-  using graph_type = havoqgt::delegate_partitioned_graph<havoqgt::distributed_db::segment_manager_type>;
+  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
+  using graph_type = havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type>;
   using vertex_locator = typename graph_type::vertex_locator;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
     CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-    havoqgt::get_environment();
+
 
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
     }
     MPI_Barrier(MPI_COMM_WORLD);
 

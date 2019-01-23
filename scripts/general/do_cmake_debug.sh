@@ -9,5 +9,5 @@ cmake ../../ \
   -DMPI_C_COMPILER=mpicc \
   -DMPI_CXX_COMPILER=mpicxx \
   -DBOOST_ROOT=$HOME/local/boost \
-  -DCMAKE_CXX_FLAGS="-std=c++11 -Wredundant-decls -DDEBUG -DDEBUG_DPG -lrt -lpthread -lm"
+  -DCMAKE_CXX_FLAGS="-std=c++17 -Wredundant-decls -DDEBUG -DDEBUG_DPG -lrt -lpthread -lm"
 

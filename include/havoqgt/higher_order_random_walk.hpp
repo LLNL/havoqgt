@@ -69,7 +69,6 @@ std::ofstream *ofs_log;
 #include <sstream>
 #include <unordered_map>
 
-#include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
