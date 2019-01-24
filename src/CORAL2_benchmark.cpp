@@ -79,17 +79,10 @@ typedef uint64_t gt_tc_type;
 
 void usage() {
   if (comm_world().rank() == 0) {
-    std::cerr
-        << "Usage: -o <string> -d <int> file1 file2 \n"
-        << " -o <string>   - output graph base filename (required)\n"
-        << " -d <int>      - delegate threshold (Default is 1048576)\n"
-        << " -h            - print help and exit\n"
-        << " -p <int>      - number of Low & High partition passes (Default is "
-           "1)\n"
-        << " -f <float>    - Gigabytes reserved per rank (Default is 0.25)\n"
-        << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
-        << "file1          - Edge list file for first graph\n"
-        << "file2          - Edge list file for second graph\n\n";
+    std::cerr << "Usage: -o <string> -d <int> file1 file2 \n"
+              << " -h            - print help and exit\n"
+              << "file1          - Edge list file for first graph\n"
+              << "file2          - Edge list file for second graph\n\n";
   }
 }
 
@@ -105,7 +98,7 @@ void parse_cmd_line(int argc, char** argv, uint64_t& delegate_threshold,
     std::cout << std::endl;
   }
 
-  delegate_threshold = 1048576;
+  delegate_threshold = 1024 * 1024 * 1024;
   gbyte_per_rank     = 0.25;
   partition_passes   = 1;
   chunk_size         = 8 * 1024;
