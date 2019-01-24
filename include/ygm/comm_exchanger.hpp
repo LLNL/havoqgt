@@ -12,12 +12,15 @@ class comm_exchanger {
   using count_pair = std::pair<size_t, size_t>;
 
  public:
-  comm_exchanger(MPI_Comm comm, int tag)
-      : m_comm(comm), m_tag(tag), m_local_count(0) {
+  comm_exchanger(MPI_Comm comm, int tag) : m_tag(tag), m_local_count(0) {
+    CHK_MPI(MPI_Comm_dup(comm, &m_comm));
     CHK_MPI(MPI_Comm_size(m_comm, &m_comm_size));
     CHK_MPI(MPI_Comm_rank(m_comm, &m_comm_rank));
     m_vec_send.resize(m_comm_size);
+    init_recv_counts();
   }
+
+  ~comm_exchanger() { cancel_recv_counts(); }
 
   void queue(int rank, const MSG &msg) {
     // if (m_local_count == 0) { init_recv_counts(); }
@@ -40,8 +43,6 @@ class comm_exchanger {
   // this way....
   template <typename RecvHandlerFunc>
   uint64_t exchange(RecvHandlerFunc recv_func, uint64_t extracount = 0) {
-    init_recv_counts();
-
     std::deque<std::tuple<MPI_Request, MSG *, size_t>>
                              q_req_irecv_data;  // req, buff, recv_size
     std::vector<MPI_Request> vec_req_isend_data;
@@ -49,82 +50,53 @@ class comm_exchanger {
     uint64_t to_return = 0;
     // Send counts
     for (int i = 0; i < m_comm_size; ++i) {
-      int        send_to = (i + m_comm_rank) % m_comm_size;
       count_pair to_send;
-      to_send.first = m_vec_send[send_to].size();
+      to_send.first = m_vec_send[i].size();
       to_send.second =
           m_local_count + extracount;  // FIXME, should count this better
-      CHK_MPI(MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, send_to, m_tag,
+      CHK_MPI(MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, i, 2 * m_tag,
                        m_comm));
     }
 
-    /*// Start all my sends
-    for (int i = 0; i < m_comm_size; ++i) {
-      int    send_to = (i + m_comm_rank) % m_comm_size;
-      size_t count   = m_vec_send[send_to].size();
-      if (count > 0) {
-        MPI_Request req;
-        CHK_MPI(MPI_Isend((void *)&(m_vec_send[send_to][0]),
-                          count * sizeof(MSG), MPI_BYTE, send_to, m_tag, m_comm,
-                          &req));
-        vec_req_isend_data.push_back(req);
-      }
-    }*/
-
     // Big do/while loop adds a bit of async.  Recvs can start while sends are
     // still in progress.
-    // do {
-    // Wait for all counts to come in, post recvs & sends
-    while (!m_req_irecv_counts.empty()) {
-      auto req_pair = m_req_irecv_counts.front();
-      m_req_irecv_counts.pop_front();
-      int flag;
-      CHK_MPI(MPI_Test(&(req_pair.first), &flag, MPI_STATUS_IGNORE));
-      if (flag) {
-        int    recv_rank = req_pair.second;
-        size_t recv_size = m_vec_recv_counts[recv_rank].first * sizeof(MSG);
-        to_return +=
-            m_vec_recv_counts[recv_rank].second;  // add up global exc count
-        if (recv_size > 0) {
-          MSG *       buff = (MSG *)malloc(recv_size);
-          MPI_Request req;
-          CHK_MPI(MPI_Irecv((void *)buff, recv_size, MPI_BYTE, recv_rank, m_tag,
-                            m_comm, &req));
-          q_req_irecv_data.push_back(std::make_tuple(req, buff, recv_size));
-        }
-        /*
-                  // send my data to recv_rank
-                  {
-                    int    send_to = recv_rank;
-                    size_t count   = m_vec_send[send_to].size();
-                    if (count > 0) {
-                      MPI_Request req;
-                      CHK_MPI(MPI_Isend((void *)&(m_vec_send[send_to][0]),
-                                        count * sizeof(MSG), MPI_BYTE, send_to,
-           m_tag,
-                                        m_comm, &req));
-                      vec_req_isend_data.push_back(req);
-                    }
-                  } */
-      } else {
-        m_req_irecv_counts.push_back(req_pair);
-        // not breaking now break;
-      }
-    }
-    CHK_MPI(MPI_Barrier(m_comm));
-    // Start all my sends
-    for (int i = 0; i < m_comm_size; ++i) {
-      int    send_to = (i + m_comm_rank) % m_comm_size;
-      size_t count   = m_vec_send[send_to].size();
-      if (count > 0) {
-        MPI_Request req;
-        CHK_MPI(MPI_Isend((void *)&(m_vec_send[send_to][0]),
-                          count * sizeof(MSG), MPI_BYTE, send_to, m_tag, m_comm,
-                          &req));
-        vec_req_isend_data.push_back(req);
-      }
-    }
     do {
+      // Wait for all counts to come in, post recvs.
+      while (!m_req_irecv_counts.empty()) {
+        MPI_Status status;
+        auto       req_pair = m_req_irecv_counts.front();
+        int        flag;
+        CHK_MPI(MPI_Test(&(req_pair.first), &flag, &status));
+        if (flag) {
+          int    recv_counts_vec_pos = req_pair.second;
+          int    recv_rank           = status.MPI_SOURCE;
+          size_t recv_size =
+              m_vec_recv_counts[recv_counts_vec_pos].first * sizeof(MSG);
+          to_return += m_vec_recv_counts[recv_counts_vec_pos]
+                           .second;  // add up global exc count
+          if (recv_size > 0) {
+            MSG *       buff = (MSG *)malloc(recv_size);
+            MPI_Request req;
+            CHK_MPI(MPI_Irecv((void *)buff, recv_size, MPI_BYTE, recv_rank,
+                              2 * m_tag + 1, m_comm, &req));
+            q_req_irecv_data.push_back(std::make_tuple(req, buff, recv_size));
+          }
+          /// If I received a rank's count, they should be close to accepting my
+          /// messages
+          size_t send_size = m_vec_send[recv_rank].size() * sizeof(MSG);
+          if (send_size > 0) {
+            MPI_Request req;
+            CHK_MPI(MPI_Isend((void *)&(m_vec_send[recv_rank][0]), send_size,
+                              MPI_BYTE, recv_rank, 2 * m_tag + 1, m_comm,
+                              &req));
+            vec_req_isend_data.push_back(req);
+          }
+          m_req_irecv_counts.pop_front();
+        } else {
+          break;
+        }
+      }
+
       // Wait for all recvs to come in
       // WARNING:  this might be better as a if/then, posting the recvs is
       // actually higher priority...
@@ -157,13 +129,9 @@ class comm_exchanger {
       m_vec_send[i].clear();
     }
     m_local_count = 0;
-    // if (m_comm_rank == 0) {
-    //   if (to_return > 0) {
-    //     std::cout << "." << std::flush;
-    //   } else {
-    //     std::cout << "!" << std::flush;
-    //   }
-    // }
+
+    m_tag += 2;
+    init_recv_counts();
 
     return to_return;
   }
@@ -175,15 +143,18 @@ class comm_exchanger {
       m_vec_recv_counts.clear();
       m_vec_recv_counts.resize(m_comm_size, std::make_pair(0, 0));
       for (int i = 0; i < m_comm_size; ++i) {
-        int         recvr = (m_comm_rank + i) % m_comm_size;
         MPI_Request req;
-        CHK_MPI(MPI_Irecv((void *)&(m_vec_recv_counts[recvr]),
-                          sizeof(count_pair), MPI_BYTE, recvr, m_tag, m_comm,
-                          &req));
-        m_req_irecv_counts.push_back(std::make_pair(req, recvr));
+        CHK_MPI(MPI_Irecv((void *)&(m_vec_recv_counts[i]), sizeof(count_pair),
+                          MPI_BYTE, MPI_ANY_SOURCE, 2 * m_tag, m_comm, &req));
+        m_req_irecv_counts.push_back(std::make_pair(req, i));
       }
     }
-    CHK_MPI(MPI_Barrier(m_comm));
+  }
+
+  void cancel_recv_counts() {
+    for (int i = 0; i < m_req_irecv_counts.size(); ++i) {
+      CHK_MPI(MPI_Cancel(&(m_req_irecv_counts[i].first)));
+    }
   }
 
   // Basic Comm Data
@@ -199,5 +170,5 @@ class comm_exchanger {
   // exchange data
   std::vector<count_pair> m_vec_recv_counts;
   std::deque<std::pair<MPI_Request, int>> m_req_irecv_counts;  // req, rank
-};
+};                                                             // namespace ygm
 }  // namespace ygm

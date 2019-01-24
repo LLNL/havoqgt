@@ -3,6 +3,7 @@
 #include <ygm/comm_exchanger.hpp>
 #include <ygm/mpi.hpp>
 
+
 #include <assert.h>
 #include <stdint.h>
 #include <algorithm>
@@ -23,30 +24,30 @@ class mailbox_p2p_nlnr {
     uint32_t local : 6;
     uint32_t node : 24;  // Supports addressing <= 16777216 nodes w/ <= 64 cores
     Data     data;
-    /*     template <class Archive>
-        void save(Archive& ar) const {
-          uint32_t dummy;
-          encode(dummy);
-          ar(dummy, data);
-        }
+    template <class Archive>
+    void save(Archive& ar) const {
+      uint32_t dummy;
+      encode(dummy);
+      ar(dummy, data);
+    }
 
-        template <class Archive>
-        void load(Archive& ar) {
-          uint32_t dummy;
-          ar(dummy, data);
-          decode(dummy);
-        }
+    template <class Archive>
+    void load(Archive& ar) {
+      uint32_t dummy;
+      ar(dummy, data);
+      decode(dummy);
+    }
 
-        void encode(uint32_t& dummy) const {
-          dummy = (node << 8) + (local << 2) + (interrupt << 1) + bcast;
-        }
+    void encode(uint32_t& dummy) const {
+      dummy = (node << 8) + (local << 2) + (interrupt << 1) + bcast;
+    }
 
-        void decode(uint32_t& input) {
-          bcast     = input & 1;
-          interrupt = (input >> 1) & 1;
-          local     = (input >> 2) & 63;
-          node      = (input >> 8);
-        } */
+    void decode(uint32_t& input) {
+      bcast     = input & 1;
+      interrupt = (input >> 1) & 1;
+      local     = (input >> 2) & 63;
+      node      = (input >> 8);
+    }
   };  //__attribute__((packed));
 
  public:
@@ -58,9 +59,13 @@ class mailbox_p2p_nlnr {
         m_first_local_exchanger(comm_nl().mpi_comm(), tag),
         m_remote_exchanger(comm_nlnr().mpi_comm(), tag + 1),
         m_second_local_exchanger(comm_nl().mpi_comm(), tag + 2) {
-    m_node_rank  = comm_world().rank() / comm_nl().size();
-    m_layer_rank = m_node_rank % comm_nl().size();
-    m_parity     = comm_nlnr().rank() & 1;
+    m_node_rank           = comm_world().rank() / comm_nl().size();
+    m_layer_rank          = m_node_rank % comm_nl().size();
+    m_parity              = comm_nlnr().rank() & 1;
+    m_num_nodes           = comm_world().size() / comm_nl().size();
+    m_per_node_batch_size = 2 * m_batch_size / m_num_nodes;
+    m_per_node_send_count.resize(m_num_nodes);
+    m_last_dest_node = 0;
   }
 
   ~mailbox_p2p_nlnr() {
@@ -79,7 +84,12 @@ class mailbox_p2p_nlnr {
         m_send_queue.push_back(std::make_pair(dest, data));
       } else {
         do_send(dest, data);
-        if (m_send_count >= m_batch_size) do_exchange();
+        if (m_send_count >= m_batch_size ||
+            m_per_node_send_count[m_last_dest_node] >= m_per_node_batch_size) {
+          do_exchange();
+          std::fill(m_per_node_send_count.begin(), m_per_node_send_count.end(),
+                    0);
+        }
       }
       /*
       uint32_t local = dest % m_local_size;
@@ -164,13 +174,21 @@ class mailbox_p2p_nlnr {
     }
     if (comm_nl().rank() == layer) {
       // remote
-      m_send_count += m_remote_exchanger.queue_bytes(
+      size_t msg_size = m_remote_exchanger.queue_bytes(
           remote, message{0, 0, local, remote, data});
+      m_send_count += msg_size;
+      m_per_node_send_count[node] += msg_size;
+      m_last_dest_node = node;
+      assert(m_last_dest_node < m_num_nodes);
       // m_remote_exchanger.queue(remote, message{0, 0, local, remote, data});
     } else {
       // forwarding local
-      m_send_count += m_first_local_exchanger.queue_bytes(
+      size_t msg_size = m_first_local_exchanger.queue_bytes(
           layer, message{0, 0, local, remote, data});
+      m_send_count += msg_size;
+      m_per_node_send_count[node] += msg_size;
+      m_last_dest_node = node;
+      assert(m_last_dest_node < m_num_nodes);
       // m_first_local_exchanger.queue(layer, message{0, 0, local, remote,
       // data});
     }
@@ -248,8 +266,6 @@ class mailbox_p2p_nlnr {
     total += m_second_local_exchanger.exchange(
         [&](const message& msg) { m_recv_func(this, msg.bcast, msg.data); },
         total);
-    // uint64_t global_send_count =
-    //    comm_world().all_reduce(uint64_t(m_send_count), MPI_SUM);
     m_send_count = 0;
 
     //
@@ -273,7 +289,6 @@ class mailbox_p2p_nlnr {
     // std::cout << whoami() << " - ending exchange, total = " << total
     //          << std::endl;
     return total;
-    // return global_send_count;
   }
 
  private:
@@ -294,10 +309,14 @@ class mailbox_p2p_nlnr {
   int      m_node_rank;
   int      m_layer_rank;
   int      m_parity;
+  uint64_t m_num_nodes;
+  size_t   m_per_node_batch_size;
+  uint64_t m_last_dest_node;
 
   bool in_exchange = false;
   std::vector<std::pair<uint32_t, Data>> m_send_queue;
-  std::vector<Data> m_bcast_queue;
+  std::vector<Data>     m_bcast_queue;
+  std::vector<uint64_t> m_per_node_send_count;
   // uint32_t m_total_recv = 0;
 
   //  public:
