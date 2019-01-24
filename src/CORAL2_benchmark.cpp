@@ -56,7 +56,7 @@
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/kronecker_edge_generator.hpp>
-#include <havoqgt/triangle_count_per_edge.hpp>
+#include <havoqgt/triangle_count_global.hpp>
 
 #include <assert.h>
 #include <unistd.h>
@@ -185,12 +185,13 @@ int main(int argc, char** argv) {
 
   graph.print_graph_statistics();
 
-  uint64_t global_tc = triangle_count_per_edge(graph, "");
+  uint64_t global_tc = triangle_count_global(graph);
   uint64_t global_gt_tc(0);
   for (auto edgetuple : kron) {
     global_gt_tc += std::get<2>(edgetuple);
   }
   global_gt_tc /= 2;  // Each edge is counted twice from kron stream
+  global_gt_tc /= 3;  // Each triangle is counted 3 times, once per edge
 
   global_gt_tc = comm_world().all_reduce(global_gt_tc, MPI_SUM);
   if (comm_world().rank() == 0) {
