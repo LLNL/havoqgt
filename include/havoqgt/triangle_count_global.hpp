@@ -249,13 +249,20 @@ class core2_wedges {
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue,
                   AlgData& alg_data) const {
     if (std::get<0>(alg_data)[vertex].size() > 1) {
-      for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
-        for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
-          if (pair_a.first == pair_b.first) continue;
-          if (edge_order_gt(pair_b.second.target_degree,
-                            pair_a.second.target_degree, pair_b.first,
-                            pair_a.first)) {
-            my_type new_visitor(pair_a.first, pair_b.first);
+      // for (const auto& pair_a : std::get<0>(alg_data)[vertex]) {
+      for (auto pair_a = std::get<0>(alg_data)[vertex].begin();
+           pair_a != std::get<0>(alg_data)[vertex].end(); ++pair_a) {
+        // for (const auto& pair_b : std::get<0>(alg_data)[vertex]) {
+        for (auto pair_b = pair_a;
+             pair_b != std::get<0>(alg_data)[vertex].end(); ++pair_b) {
+          if (pair_a->first == pair_b->first) continue;
+          if (edge_order_gt(pair_b->second.target_degree,
+                            pair_a->second.target_degree, pair_b->first,
+                            pair_a->first)) {
+            my_type new_visitor(pair_a->first, pair_b->first);
+            vis_queue->queue_visitor(new_visitor);
+          } else {
+            my_type new_visitor(pair_b->first, pair_a->first);
             vis_queue->queue_visitor(new_visitor);
           }
         }
