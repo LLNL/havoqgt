@@ -226,9 +226,8 @@ class core2_wedges {
 
   core2_wedges(vertex_locator v) : vertex(v) {}
 
-  core2_wedges(vertex_locator v, vertex_locator _check_close,
-               vertex_locator _from_vertex)
-      : vertex(v), check_close(_check_close), from_vertex(_from_vertex) {}
+  core2_wedges(vertex_locator v, vertex_locator _check_close)
+      : vertex(v), check_close(_check_close) {}
 
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
@@ -239,7 +238,7 @@ class core2_wedges {
     }
 
     ++std::get<2>(alg_data);  // counts wedge checks
-    if (std::get<0>(alg_data)[vertex].count(check_close) > 0) {
+    if (std::get<3>(alg_data)[vertex].count(check_close) > 0) {
       ++std::get<1>(alg_data);  // counts total triangles
     }
 
@@ -256,7 +255,7 @@ class core2_wedges {
           if (edge_order_gt(pair_b.second.target_degree,
                             pair_a.second.target_degree, pair_b.first,
                             pair_a.first)) {
-            my_type new_visitor(pair_a.first, pair_b.first, vertex);
+            my_type new_visitor(pair_a.first, pair_b.first);
             vis_queue->queue_visitor(new_visitor);
           }
         }
@@ -281,17 +280,17 @@ class core2_wedges {
 
   vertex_locator vertex;
   vertex_locator check_close;
-  vertex_locator from_vertex;
 };
 
-template <typename TGraph, typename DOGR>
-uint64_t count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
+template <typename TGraph, typename DOGR, typename DODSet>
+uint64_t count_all_triangles_from_scratch(TGraph& g, DOGR& dogr,
+                                          DODSet& dod_set) {
   uint64_t local_triangle_count(0), local_wedge_count(0);
   // MPI_Barrier(MPI_COMM_WORLD);
   double start_time = MPI_Wtime();
   {
-    auto alg_data =
-        std::forward_as_tuple(dogr, local_triangle_count, local_wedge_count);
+    auto alg_data = std::forward_as_tuple(dogr, local_triangle_count,
+                                          local_wedge_count, dod_set);
 
     auto vq =
         create_visitor_queue<core2_wedges<TGraph>, lifo_queue>(&g, alg_data);
@@ -309,8 +308,8 @@ uint64_t count_all_triangles_from_scratch(TGraph& g, DOGR& dogr) {
   return global_triangle_count;
 }
 
-template <typename TGraph, typename DODgraph>
-void construct_dod_graph(TGraph& g, DODgraph& core2_directed) {
+template <typename TGraph, typename DODgraph, typename DODSet>
+void construct_dod_graph(TGraph& g, DODgraph& core2_directed, DODSet& dod_set) {
   typedef TGraph                          graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
 
@@ -403,6 +402,22 @@ void construct_dod_graph(TGraph& g, DODgraph& core2_directed) {
                   << global_dod_edge_count << std::endl;
       }
     }
+
+    // Copy edges into dod_set
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      std::vector<vertex_locator> tmp;
+      for (auto& vl : core2_directed[*vitr]) {
+        tmp.push_back(vl.first);
+      }
+      dod_set[*vitr].insert(tmp.begin(), tmp.end());
+    }
+    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+      std::vector<vertex_locator> tmp;
+      for (auto& vl : core2_directed[*vitr]) {
+        tmp.push_back(vl.first);
+      }
+      dod_set[*vitr].insert(tmp.begin(), tmp.end());
+    }
   }
 }
 
@@ -420,12 +435,18 @@ uint64_t triangle_count_global(TGraph& g) {
       std::allocator<std::map<vertex_locator, dod_graph_edge>>>
       dod_graph(g);
 
+  typename graph_type::template vertex_data<
+      boost::container::flat_set<vertex_locator>,
+      std::allocator<boost::container::flat_set<vertex_locator>>>
+      dod_graph_set(g);
+
   MPI_Barrier(MPI_COMM_WORLD);
   double start_time = MPI_Wtime();
-  construct_dod_graph(g, dod_graph);
+  construct_dod_graph(g, dod_graph, dod_graph_set);
 
-  uint64_t to_return = count_all_triangles_from_scratch(g, dod_graph);
-  double   end_time  = MPI_Wtime();
+  uint64_t to_return =
+      count_all_triangles_from_scratch(g, dod_graph, dod_graph_set);
+  double end_time = MPI_Wtime();
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
