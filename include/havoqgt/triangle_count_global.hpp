@@ -309,14 +309,17 @@ uint64_t count_all_triangles_from_scratch(TGraph& g, DOGR& dogr,
 }
 
 template <typename TGraph, typename DODgraph, typename DODSet>
-void construct_dod_graph(TGraph& g, DODgraph& core2_directed, DODSet& dod_set) {
+void construct_dod_graph(TGraph& g, DODgraph& dod_graph, DODSet& dod_set) {
   typedef TGraph                          graph_type;
   typedef typename TGraph::vertex_locator vertex_locator;
 
   int mpi_size(0), mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-
+  typename graph_type::template vertex_data<
+      std::map<vertex_locator, dod_graph_edge>,
+      std::allocator<std::map<vertex_locator, dod_graph_edge>>>
+      core2_directed(g);
   {
     //
     // 2)  Calculate directed 2core edges
@@ -410,6 +413,10 @@ void construct_dod_graph(TGraph& g, DODgraph& core2_directed, DODSet& dod_set) {
         tmp.push_back(vl.first);
       }
       dod_set[*vitr].insert(tmp.begin(), tmp.end());
+      dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
+                              core2_directed[*vitr].begin(),
+                              core2_directed[*vitr].end());
+      core2_directed[*vitr].clear();
     }
     for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
       std::vector<vertex_locator> tmp;
@@ -417,6 +424,10 @@ void construct_dod_graph(TGraph& g, DODgraph& core2_directed, DODSet& dod_set) {
         tmp.push_back(vl.first);
       }
       dod_set[*vitr].insert(tmp.begin(), tmp.end());
+      dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
+                              core2_directed[*vitr].begin(),
+                              core2_directed[*vitr].end());
+      core2_directed[*vitr].clear();
     }
   }
 }
@@ -431,8 +442,8 @@ uint64_t triangle_count_global(TGraph& g) {
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
 
   typename graph_type::template vertex_data<
-      std::map<vertex_locator, dod_graph_edge>,
-      std::allocator<std::map<vertex_locator, dod_graph_edge>>>
+      std::vector<std::pair<vertex_locator, dod_graph_edge>>,
+      std::allocator<std::vector<std::pair<vertex_locator, dod_graph_edge>>>>
       dod_graph(g);
 
   typename graph_type::template vertex_data<
