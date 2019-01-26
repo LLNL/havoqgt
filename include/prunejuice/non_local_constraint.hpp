@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 
 //#include <havoqgt/approximate_pattern_matching/util.hpp> 
+#include <prunejuice/file_utilities.hpp>
 #include <prunejuice/utilities.hpp>
 
 using namespace prunejuice::utilities;
@@ -194,7 +195,8 @@ class pattern_nonlocal_constraint {
     std::vector<std::vector<VertexData>> one_path_patterns;
     std::vector<std::vector<VertexData>> two_path_patterns; 
 
-    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns; 
+    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns;
+    // TODO: verify stoull, bool, uint8_t compatibility  
     std::vector<std::vector<Vertex>> enumeration_patterns;
     std::vector<std::vector<uint8_t>> aggregation_steps;
       
@@ -207,6 +209,11 @@ class pattern_nonlocal_constraint {
       bool is_integral_type = true) {
       std::ifstream pattern_non_local_constraint_file
         (pattern_non_local_constraint_filename, std::ifstream::in);
+      if (is_file_empty(pattern_non_local_constraint_file)) {
+        //std::cout << pattern_non_local_constraint_filename << " is empty." 
+        //  << std::endl;
+        return;
+      } 
       std::string line;  
       while (std::getline(pattern_non_local_constraint_file, line)) {
         //std::cout << line << std::endl; // Test  
