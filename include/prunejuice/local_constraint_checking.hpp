@@ -1111,17 +1111,19 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
   MPI_Barrier(MPI_COMM_WORLD);
 }   
 
-template <typename TGraph, typename VertexMetaData, typename VertexData, typename PatternData, 
-  typename PatternIndices, typename VertexRank, typename VertexActive, 
-  typename VertexIteration, typename VertexStateMapGeneric, typename PatternGraph, 
-  typename BitSet, typename TemplateVertex, typename VertexUint8MapCollection>
-void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_metadata, 
-  PatternData& pattern, PatternIndices& pattern_indices, VertexRank& vertex_rank,
-  VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMapGeneric& vertex_state_map_generic, 
-  PatternGraph& pattern_graph, bool global_init_step, bool& global_not_finished, size_t global_itr_count, 
-  std::ofstream& superstep_result_file, std::ofstream& active_vertices_count_result_file,
-  std::ofstream& active_edges_count_result_file,  
-  TemplateVertex& template_vertices, VertexUint8MapCollection& vertex_active_edges_map, 
+template <typename Vertex, typename VertexData, typename TGraph, 
+  typename VertexMetaData, typename VertexStateMapGeneric, typename VertexActive,
+  typename VertexUint8MapCollection, typename BitSet, typename TemplateVertex, 
+  typename PatternGraph>
+void label_propagation_pattern_matching_bsp(TGraph* g, 
+  VertexMetaData& vertex_metadata, VertexStateMapGeneric& vertex_state_map_generic,  
+  VertexActive& vertex_active, 
+  VertexUint8MapCollection& vertex_active_edges_map, 
+  TemplateVertex& template_vertices, PatternGraph& pattern_graph, 
+  bool global_init_step, bool& global_not_finished, size_t global_itr_count, 
+  std::ofstream& superstep_result_file, 
+  std::ofstream& active_vertices_count_result_file,
+  std::ofstream& active_edges_count_result_file, 
   std::ofstream& message_count_result_file) {
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
@@ -1130,7 +1132,6 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   uint64_t& superstep_ref = superstep_var;
   bool not_finished = false; // local not finished flag
 
-  typedef uint64_t Vertex; // TODO: pass from main 
   //typedef std::bitset<max_bit_vector_size> BitSet;
   //typedef boost::dynamic_bitset<> DynamicBitSet; 
 
@@ -1139,6 +1140,18 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 //  typedef std::unordered_map<Vertex, VertexStateGeneric> VertexStateMapGeneric;
 //  VertexStateMapGeneric vertex_state_map_generic;  
 
+  // dummy // TODO: remove
+  typedef uint8_t PatternData;
+  typedef uint8_t PatternIndices; 
+  typedef uint8_t  VertexRank;
+  typedef uint8_t VertexIteration;
+
+  PatternData pattern = 0; 
+  PatternIndices pattern_indices = 0; 
+  VertexRank vertex_rank = 0; 
+  VertexIteration vertex_iteration = 0;  
+  // dummy // 
+   
   typedef lppm_visitor<TGraph, Vertex, VertexData, BitSet> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
     vertex_active, vertex_iteration, vertex_state_map_generic, pattern_graph, superstep_var, global_init_step, g, template_vertices, vertex_active_edges_map);

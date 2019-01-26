@@ -301,7 +301,8 @@ int main(int argc, char** argv) {
   static constexpr size_t max_bit_vector_size = 16; // TODO:
   static constexpr size_t max_template_vertex_count = 16;  
   typedef std::bitset<max_bit_vector_size> BitSet; // TODO: rename to TemplateVertexSet
-  typedef uint16_t TemplateVertexType; 
+  typedef BitSet TemplateVertexBitSet; 
+  typedef uint16_t TemplateVertexType; // TODO: rename to TemplateVertexBitSetToUint
   
   typedef uint8_t Boolean; // TODO: replace all bool with Boolean?
 
@@ -313,7 +314,7 @@ int main(int argc, char** argv) {
 
   typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetadata;
   typedef graph_type::vertex_data<Boolean, std::allocator<Boolean> > VertexActive; // TODO: solution_graph // TODO: you are mixing bool and uint!
-  typedef graph_type::vertex_data<TemplateVertexType, std::allocator<TemplateVertexType> > TemplateVertex; // TODO: solution_graph
+  typedef graph_type::vertex_data<TemplateVertexType, std::allocator<TemplateVertexType> > TemplateVertex; // TODO: solution_graph, rename to VertexTemplateVertexBitSetToUint
 
   typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration; // TODO: delete
   typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank; // TODO: delete
@@ -536,8 +537,8 @@ int main(int argc, char** argv) {
     //pattern_input_filename + "_nonlocal_constraint");
     pattern_dir + "/pattern_nonlocal_constraint"); 
 
-  auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]);
-  auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]);
+  //auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]); // TODO: remove
+  //auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]); // TODO: remove
 
   // Test
   //if(mpi_rank == 0) {
@@ -566,6 +567,8 @@ int main(int argc, char** argv) {
   // initialize application parameters  
   bool global_init_step = true; // TODO: Boolean 
   bool global_not_finished = false; // TODO: Boolean
+
+  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
 
   uint64_t global_itr_count = 0;
   uint64_t active_vertices_count = 0;
@@ -653,13 +656,14 @@ int main(int argc, char** argv) {
 //    vertex_iteration, vertex_state_map, pattern_graph, global_init_step, global_not_finished, 
 //    global_itr_count, superstep_result_file, active_vertices_count_result_file, edge_active/**edge_data_ptr*/, edge_metadata);
 
- prunejuice::label_propagation_pattern_matching_bsp<graph_type, VertexMetadata, VertexData, decltype(pattern), decltype(pattern_indices),
-   /*VertexRank*/uint8_t, VertexActive, /*VertexIteration*/uint8_t, VertexStateMap, PatternGraph, BitSet, TemplateVertex, 
-   VertexUint8MapCollection>
-   (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active,
-   vertex_iteration, vertex_state_map, pattern_graph, global_init_step, global_not_finished,
-   global_itr_count, superstep_result_file, active_vertices_count_result_file, active_edges_count_result_file,
-   template_vertices, vertex_active_edges_map, message_count_result_file);
+ prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
+   graph_type, VertexMetadata, VertexStateMap, VertexActive, 
+   VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
+   (graph, vertex_metadata, vertex_state_map, vertex_active, 
+   vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
+   global_not_finished, global_itr_count, superstep_result_file, 
+   active_vertices_count_result_file, active_edges_count_result_file,
+   message_count_result_file);
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
   double label_propagation_time_end = MPI_Wtime();
@@ -770,10 +774,14 @@ int main(int argc, char** argv) {
 
 //#ifdef ENABLE_BLOCK 
   // toekn passing
-  double token_passing_time_start = MPI_Wtime();   
+  double token_passing_time_start = MPI_Wtime(); 
+
+  if (ptrn_util_two.input_patterns.size() < 1) {
+    do_nonlocal_constraint_checking = false; 
+  }   
 
   //if ((token_passing_algo == 0) && global_not_finished) { // do token passing ?
-  if (global_not_finished) { // TODO: do we need this? 
+  if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
 
   global_not_finished = false;  
 
@@ -998,7 +1006,7 @@ int main(int argc, char** argv) {
       template_vertices, vertex_active_edges_map, pattern_selected_vertices_tp, 
       paths_result_file, message_count); // pass a boolean flag to indicate to use batching*/ 
   } else {     
-    prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, decltype(pattern), decltype(pattern_indices), uint8_t, PatternGraph,
+    prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, decltype(pattern_tp), decltype(pattern_indices_tp), uint8_t, PatternGraph,
     VertexStateMap, VertexUint8Map, edge_data_t,
     VertexSetCollection, VertexActive, TemplateVertex, VertexUint8MapCollection, BitSet>(graph, vertex_metadata, pattern_tp,
     pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
@@ -1279,10 +1287,10 @@ int main(int argc, char** argv) {
   // interleave token passing with label propagation  
   if (token_source_deleted && pattern_interleave_label_propagation_tp) {
 
-   bool global_not_finished_dummy = true; // TODO: do we need this?
+  bool global_not_finished_dummy = true; // TODO: do we need this?
 
-    // lable propagation   
-   label_propagation_time_start = MPI_Wtime();
+  // lable propagation   
+  label_propagation_time_start = MPI_Wtime();
 
   // label propagation pattern matching bsp, iterative 
 //  label_propagation_pattern_matching_bsp<graph_type, VertexMetaData, VertexData, decltype(pattern), decltype(pattern_indices), 
@@ -1291,7 +1299,7 @@ int main(int argc, char** argv) {
 //    (graph, vertex_metadata, pattern, pattern_indices, vertex_rank, vertex_active, 
 //    vertex_iteration, vertex_state_map, pattern_graph, global_initstep, global_not_finished_dummy, 
 //    global_itr_count, superstep_result_file, active_vertices_count_result_file, edge_active/**edge_data_ptr*/, edge_metadata);
-
+#ifdef LCC_OLD 
   prunejuice::label_propagation_pattern_matching_bsp<graph_type, VertexMetadata, VertexData, decltype(pattern), decltype(pattern_indices),
     /*VertexRank*/uint8_t, VertexActive, /*VertexIteration*/uint8_t, VertexStateMap, PatternGraph, BitSet, TemplateVertex, 
     VertexUint8MapCollection>
@@ -1299,6 +1307,16 @@ int main(int argc, char** argv) {
     vertex_iteration, vertex_state_map, pattern_graph, global_init_step, global_not_finished,
     global_itr_count, superstep_result_file, active_vertices_count_result_file, active_edges_count_result_file,
     template_vertices, vertex_active_edges_map, message_count_result_file);
+#endif
+
+  prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
+    graph_type, VertexMetadata, VertexStateMap, VertexActive, 
+    VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
+    (graph, vertex_metadata, vertex_state_map, vertex_active, 
+    vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
+    global_not_finished, global_itr_count, superstep_result_file, 
+    active_vertices_count_result_file, active_edges_count_result_file,
+    message_count_result_file);  
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
   label_propagation_time_end = MPI_Wtime();
@@ -1361,7 +1379,7 @@ int main(int argc, char** argv) {
     if(mpi_rank == 0) {
       std::cout << "Pattern Matching | Skipping Local Constraint Checking (Interleaved)." << std::endl;
     }        
-  }
+  } // interleave token passing with label propagation
 
   // result
   paths_result_file.close();
