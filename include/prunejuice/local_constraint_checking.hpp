@@ -1074,14 +1074,16 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
     }
     if (!vertex_active[vertex]) {
       vertex_active_edges_map[vertex].clear();
-
-      if (!global_not_finished) {
+      
+      // Important : must not do this here   
+      // termination detection
+      /*if (!global_not_finished) {
         global_not_finished = true;
       }
 
       if (!not_finished) {
         not_finished = true;
-      }
+      }*/
 
     } else {  
       for (auto itr = vertex_active_edges_map[vertex].begin(); 
@@ -1091,14 +1093,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         if (!itr->second) {
           itr = vertex_active_edges_map[vertex].erase(itr); // C++11  
  
+          // Important : must not do this here  
           // termination detection  
-          if (!global_not_finished) {
+          /*if (!global_not_finished) {
             global_not_finished = true;
           }
 
           if (!not_finished) {
             not_finished = true;
-          } 
+          }*/ 
 
         } else {
           itr->second = 0; 
@@ -1166,7 +1169,9 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
   //bool not_finished = false;
  
   //for (uint64_t superstep = 0; superstep < 1; superstep++) {
-  for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  //for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  uint64_t superstep = 0;
+  do {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       //std::cout << "Superstep #" << superstep << std::endl;
@@ -1266,11 +1271,13 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     lp_visitor_count = 0; // reset for next iteration 
 
     // TODO: global reduction on global_not_finished before next iteration
-    if (!not_finished) { // Important : this must come after output/file write  
-      break;
-    } 
-    
-  } // for 
+    //if (!not_finished) { // Important : this must come after output/file write  
+    //  break;
+    //} 
+  
+    superstep++;
+  } while (not_finished);  
+  //} // for 
   // end of BSP execution  
 }  
 
