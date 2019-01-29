@@ -64,7 +64,7 @@ class mailbox_p2p_nlnr {
     m_parity              = comm_nlnr().rank() & 1;
     m_num_nodes           = comm_world().size() / comm_nl().size();
     m_per_node_batch_size = 2 * m_batch_size / m_num_nodes;
-    m_per_node_send_count.resize(m_num_nodes);
+    //m_per_node_send_count.resize(m_num_nodes);
     m_last_dest_node = 0;
   }
 
@@ -84,11 +84,11 @@ class mailbox_p2p_nlnr {
         m_send_queue.push_back(std::make_pair(dest, data));
       } else {
         do_send(dest, data);
-        if (m_send_count >= m_batch_size ||
-            m_per_node_send_count[m_last_dest_node] >= m_per_node_batch_size) {
+        if (m_send_count >= m_batch_size //||
+            /*m_per_node_send_count[m_last_dest_node] >= m_per_node_batch_size*/) {
           do_exchange();
-          std::fill(m_per_node_send_count.begin(), m_per_node_send_count.end(),
-                    0);
+          //std::fill(m_per_node_send_count.begin(), m_per_node_send_count.end(),
+         //           0);
         }
       }
       /*
@@ -177,7 +177,7 @@ class mailbox_p2p_nlnr {
       size_t msg_size = m_remote_exchanger.queue_bytes(
           remote, message{0, 0, local, remote, data});
       m_send_count += msg_size;
-      m_per_node_send_count[node] += msg_size;
+      //m_per_node_send_count[node] += msg_size;
       m_last_dest_node = node;
       assert(m_last_dest_node < m_num_nodes);
       // m_remote_exchanger.queue(remote, message{0, 0, local, remote, data});
@@ -186,7 +186,7 @@ class mailbox_p2p_nlnr {
       size_t msg_size = m_first_local_exchanger.queue_bytes(
           layer, message{0, 0, local, remote, data});
       m_send_count += msg_size;
-      m_per_node_send_count[node] += msg_size;
+      //m_per_node_send_count[node] += msg_size;
       m_last_dest_node = node;
       assert(m_last_dest_node < m_num_nodes);
       // m_first_local_exchanger.queue(layer, message{0, 0, local, remote,
@@ -316,7 +316,7 @@ class mailbox_p2p_nlnr {
   bool in_exchange = false;
   std::vector<std::pair<uint32_t, Data>> m_send_queue;
   std::vector<Data>     m_bcast_queue;
-  std::vector<uint64_t> m_per_node_send_count;
+  //std::vector<uint64_t> m_per_node_send_count;
   // uint32_t m_total_recv = 0;
 
   //  public:

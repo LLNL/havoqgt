@@ -50,11 +50,12 @@ class comm_exchanger {
     uint64_t to_return = 0;
     // Send counts
     for (int i = 0; i < m_comm_size; ++i) {
+        int rank = (i + m_comm_rank)%m_comm_size;
       count_pair to_send;
-      to_send.first = m_vec_send[i].size();
+      to_send.first = m_vec_send[rank].size();
       to_send.second =
           m_local_count + extracount;  // FIXME, should count this better
-      CHK_MPI(MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, i, 2 * m_tag,
+      CHK_MPI(MPI_Send(&to_send, sizeof(count_pair), MPI_BYTE, rank, 2 * m_tag,
                        m_comm));
     }
 
@@ -62,7 +63,7 @@ class comm_exchanger {
     // still in progress.
     do {
       // Wait for all counts to come in, post recvs.
-      while (!m_req_irecv_counts.empty()) {
+      /*while*/if(!m_req_irecv_counts.empty()) {
         MPI_Status status;
         auto       req_pair = m_req_irecv_counts.front();
         int        flag;
@@ -76,6 +77,9 @@ class comm_exchanger {
                            .second;  // add up global exc count
           if (recv_size > 0) {
             MSG *       buff = (MSG *)malloc(recv_size);
+            if(buff == NULL) {
+              std::cerr << "comm_exchanger:: unable to malloc" << std::endl << std::flush;  exit(-1);
+            }
             MPI_Request req;
             CHK_MPI(MPI_Irecv((void *)buff, recv_size, MPI_BYTE, recv_rank,
                               2 * m_tag + 1, m_comm, &req));
@@ -93,14 +97,14 @@ class comm_exchanger {
           }
           m_req_irecv_counts.pop_front();
         } else {
-          break;
+          //break;
         }
       }
 
       // Wait for all recvs to come in
       // WARNING:  this might be better as a if/then, posting the recvs is
       // actually higher priority...
-      if (!q_req_irecv_data.empty()) {
+      while (!q_req_irecv_data.empty()) {
         auto req_tuple = q_req_irecv_data.front();
         q_req_irecv_data.pop_front();
         int flag;
@@ -114,6 +118,7 @@ class comm_exchanger {
           free(recvbuff);
         } else {
           q_req_irecv_data.push_back(req_tuple);
+          break;
         }
       }
     } while (!m_req_irecv_counts.empty() || !q_req_irecv_data.empty());
