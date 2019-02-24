@@ -36,7 +36,7 @@ def thread_function(in_filename) :
 """
 
 def active_vertices_count(dir_file_list, out_filename) :
-	print ("Total active vertices count")
+	print ("Total active vertices/edges count")
 
 	# read one file and count number of iterations
 	print ("Counting total number of iterations ... ")
