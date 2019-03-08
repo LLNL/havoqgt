@@ -9,16 +9,17 @@
 
 #include <boost/algorithm/string.hpp>
 
+//#include <havoqgt/approximate_pattern_matching/util.hpp> 
+#include <prunejuice/file_utilities.hpp>
 #include <prunejuice/utilities.hpp>
 
-using namespace prunejuice::utilities; 
+using namespace prunejuice::utilities;
 
-template <typename PatternType, typename Vertex = uint64_t, typename Edge = uint64_t> 
-class pattern_util {
+template <typename Vertex, typename Edge, typename VertexData, typename PatternGraph> 
+class pattern_nonlocal_constraint {
   public:
-    //ypedef graph<Vertex, Edge, PatternType> pattern_graph;
 
-    pattern_util(std::string pattern_input_filename) : 
+    /*pattern_util(std::string pattern_input_filename) : 
       input_pattern_path_length(0),
       input_pattern(0),
       all_patterns(0),
@@ -33,9 +34,9 @@ class pattern_util {
       std::cout << "Generating pattrens to search ..." << std::endl;
       generate_pattern_combinations(); 
       output_pattern_combinations(); 
-    }
+    }*/
 
-    pattern_util(std::string pattern_input_filename, bool is_integral_type) :
+    /*pattern_util(std::string pattern_input_filename, bool is_integral_type) :
       input_pattern_path_length(0),
       input_pattern(0),
       all_patterns(0),
@@ -53,7 +54,7 @@ class pattern_util {
         //output_pattern(std::get<1>(ip));               
         //std::cout << std::endl; 
       //}
-    }
+    }*/
 
     /*pattern_util(std::string pattern_edge_filename, std::string pattern_vertex_filename, std::string pattern_vertex_data_filename, bool is_integral_type)
     {
@@ -67,7 +68,7 @@ class pattern_util {
       } 
     }*/ 
 
-    pattern_util(std::string pattern_input_filename, 
+    /*pattern_util(std::string pattern_input_filename, 
       std::string join_vertex_input_filename, bool is_integral_type) :
       input_pattern_path_length(0),
       input_pattern(0),
@@ -88,9 +89,37 @@ class pattern_util {
         //output_pattern(std::get<1>(ip));               
         //std::cout << std::endl; 
       //}
-    }   
+    }*/   
 
-    pattern_util(std::string pattern_input_filename, 
+    pattern_nonlocal_constraint(PatternGraph& pattern_graph, 
+      std::string pattern_non_local_constraint_filename) :
+      input_pattern_path_length(0),
+      input_pattern(0),
+      all_patterns(0),
+      one_path_patterns(0),
+      two_path_patterns(0),
+      enumeration_patterns(0),
+      aggregation_steps(0) {
+
+      read_non_local_constraint(pattern_graph, pattern_non_local_constraint_filename);
+    } 
+
+    pattern_nonlocal_constraint(PatternGraph& pattern_graph, 
+      std::string pattern_non_local_constraint_filename,
+      std::string pattern_vertex_non_local_constraint_filename) :
+      input_pattern_path_length(0),
+      input_pattern(0),
+      all_patterns(0),
+      one_path_patterns(0),
+      two_path_patterns(0),
+      enumeration_patterns(0),
+      aggregation_steps(0) {
+
+      read_non_local_constraint(pattern_graph, pattern_non_local_constraint_filename);
+      read_vertex_non_local_constraint(pattern_vertex_non_local_constraint_filename);
+    } 
+
+    pattern_nonlocal_constraint(std::string pattern_input_filename, 
       std::string pattern_enumeration_input_filename, bool is_integral_type, bool is_enumeration) :
       input_pattern_path_length(0),
       input_pattern(0),
@@ -118,7 +147,7 @@ class pattern_util {
       //}
     } 
 
-    pattern_util(std::string pattern_input_filename, 
+    /*pattern_util(std::string pattern_input_filename, 
       std::string pattern_enumeration_input_filename, 
       std::string pattern_aggregation_input_filename,
       bool is_integral_type, bool is_enumeration) :
@@ -148,12 +177,12 @@ class pattern_util {
         //output_pattern(std::get<1>(ip));               
         //std::cout << std::endl; 
       //}
-    } 
+    }*/ 
 
-    ~pattern_util() {
-    }
+    //~pattern_util() {}
+    ~pattern_nonlocal_constraint() {}
   
-    static void output_pattern(std::vector<PatternType> pattern) {
+    static void output_pattern(std::vector<VertexData> pattern) {
       for (auto p : pattern) {
         std::cout << std::to_string(p) << ", ";
       }
@@ -161,19 +190,127 @@ class pattern_util {
     }
 
     size_t input_pattern_path_length;
-    std::vector<PatternType> input_pattern; 
-    std::vector<std::vector<PatternType>> all_patterns;
-    std::vector<std::vector<PatternType>> one_path_patterns;
-    std::vector<std::vector<PatternType>> two_path_patterns; 
+    std::vector<VertexData> input_pattern; 
+    std::vector<std::vector<VertexData>> all_patterns;
+    std::vector<std::vector<VertexData>> one_path_patterns;
+    std::vector<std::vector<VertexData>> two_path_patterns; 
 
-    std::vector< std::tuple< std::vector<PatternType>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns;     std::vector<std::vector<Vertex>> enumeration_patterns;
+    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns;
+    // TODO: verify stoull, bool, uint8_t compatibility  
+    std::vector<std::vector<Vertex>> enumeration_patterns;
     std::vector<std::vector<uint8_t>> aggregation_steps;
       
     std::vector<Vertex> join_vertices;
  
   private:
 
-    void read_pattern_list(std::string pattern_input_filename, bool is_integral_type) {
+    void read_non_local_constraint(PatternGraph& pattern_graph, 
+      std::string pattern_non_local_constraint_filename, 
+      bool is_integral_type = true) {
+      std::ifstream pattern_non_local_constraint_file
+        (pattern_non_local_constraint_filename, std::ifstream::in);
+      if (is_file_empty(pattern_non_local_constraint_file)) {
+        //std::cout << pattern_non_local_constraint_filename << " is empty." 
+        //  << std::endl;
+        return;
+      } 
+      std::string line;  
+      while (std::getline(pattern_non_local_constraint_file, line)) {
+        //std::cout << line << std::endl; // Test  
+        boost::trim(line); // important 
+
+	std::istringstream iss(line);
+
+        auto tokens = split(line, ':');
+        assert(tokens.size() > 5); // TODO: improve 	   
+
+        boost::trim(tokens[0]); // important  
+        boost::trim(tokens[1]); // important
+        boost::trim(tokens[2]); // important
+        boost::trim(tokens[3]); // important
+        boost::trim(tokens[4]); // important
+        boost::trim(tokens[5]); // important
+
+        auto vertices = split<Vertex>(tokens[0], ' ');
+        assert(vertices.size()> 2);
+
+        std::vector<VertexData> vertex_data(0);        
+
+        for (auto v = 0; v < vertices.size(); v++) {           
+          vertex_data.push_back(pattern_graph.vertex_data[vertices[v]]);
+        }
+  
+        assert(vertices.size() == vertex_data.size());  
+
+        if (is_integral_type) {
+          input_patterns.push_back(
+            std::forward_as_tuple(
+              vertex_data, 
+              vertices,
+              (vertices.size() - 2), // path length
+              std::stoull(tokens[3]), // 0 - acyclic, 1 - cyclic 
+              std::stoull(tokens[4]), // 0 - regular, 1 - TDS
+              std::stoull(tokens[5]) // 0 - skip LCC, 1 - invoke LCC   
+            )
+          );
+     
+          enumeration_patterns.push_back(split<Vertex>(tokens[1], ' ')); 
+          aggregation_steps.push_back(split<uint8_t>(tokens[2], ' ')); // TODO: verify type compatibility 
+        }    
+      }
+      pattern_non_local_constraint_file.close();
+    }
+
+    void read_vertex_non_local_constraint
+      (std::string pattern_vertex_non_local_constraint_filename) {
+      std::ifstream pattern_vertex_non_local_constraint_file
+        (pattern_vertex_non_local_constraint_filename, std::ifstream::in);
+      std::string line;
+      while (std::getline(pattern_vertex_non_local_constraint_file, line)) {
+        std::istringstream iss(line);
+
+        auto tokens_a = split(line, ':');         
+        if (tokens_a.size() < 2) {
+          // vertex does not have a non-local constraint
+          // TODO: ?  
+          continue;                    
+        }        
+
+        for (size_t i = 0; i < tokens_a.size(); i++) {
+          boost::trim(tokens_a[i]);  
+
+          if (i == 0) {
+            // the vertex  
+          } 
+          
+          if (i == 1) {
+             
+            auto tokens_b = split(tokens_a[i], ',');
+            if (tokens_b.size() < 1) {
+              // TODO: error?
+              continue; 
+            }          
+            
+            for (size_t j = 0; j < tokens_b.size(); j++) {
+              // a key, value pair, key - non-local constraint ID, 
+              // value - is the non-local constraint mandatory for 
+              // the vertex type
+              boost::trim(tokens_b[j]); 
+              auto tokens_c = split(tokens_b[j], ' ');
+              assert(tokens_c.size() == 2);
+
+              boost::trim(tokens_c[0]); 
+              boost::trim(tokens_c[1]);
+            } // for    
+          } // if
+        } // for
+
+           
+      }
+      pattern_vertex_non_local_constraint_file.close();      
+    }  
+
+    void read_pattern_list(std::string pattern_input_filename, bool is_integral_type) { 
       std::ifstream pattern_input_file(pattern_input_filename,
         std::ifstream::in);
       std::string line;
@@ -194,7 +331,7 @@ class pattern_util {
         if (is_integral_type) {
           input_patterns.push_back(
             std::forward_as_tuple(
-              split<PatternType>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), 
+              split<VertexData>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), 
               std::stoull(tokens[2]), std::stoull(tokens[3]), 
               std::stoull(tokens[4]), std::stoull(tokens[5])
             )
@@ -202,7 +339,7 @@ class pattern_util {
         } else { 
           input_patterns.push_back( 
             std::forward_as_tuple( 
-              split_char<PatternType>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), 
+              split_char<VertexData>(tokens[0], ' '), split<Vertex>(tokens[1], ' '), 
               std::stoull(tokens[2]), std::stoull(tokens[3]),
               std::stoull(tokens[4]), std::stoull(tokens[5]) 
             ) 
@@ -332,7 +469,7 @@ class pattern_util {
       while (std::getline(pattern_input_file, line)) {
         std::istringstream iss(line);
         std::cout << line << std::endl;
-        PatternType p(0);    
+        VertexData p(0);    
         iss >> p;
         input_pattern.push_back(p); 
       }
@@ -344,7 +481,7 @@ class pattern_util {
       size_t path_length = 1;
       while (path_length <= max_path_length) {
         for (size_t i = 0, j = i + path_length; j < input_pattern.size(); i++, j++) {
-          std::vector<PatternType> pattern(input_pattern.begin() + i, input_pattern.begin() + j + 1);
+          std::vector<VertexData> pattern(input_pattern.begin() + i, input_pattern.begin() + j + 1);
           all_patterns.push_back(pattern);
           if (path_length == 1) {
             one_path_patterns.push_back(pattern);

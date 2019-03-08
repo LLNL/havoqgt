@@ -9,7 +9,7 @@
 
 # define OUTPUT_RESULT
 
-using namespace havoqgt;
+//using namespace havoqgt;
 
 //static constexpr size_t max_bit_vector_size = 16;
 ///static uint64_t lp_visitor_count = 0;
@@ -186,7 +186,7 @@ public:
 //--    BitSet vertex_template_vertices; // initialized with zeros
 
       ///int mpi_rank = havoqgt_env()->world_comm().rank();    
-      int mpi_rank = comm_world().rank();
+      int mpi_rank = havoqgt::comm_world().rank();
  
       // delegate slave      
       if (vertex.is_delegate() && g->master(vertex) != mpi_rank && msg_type == 0) {
@@ -479,7 +479,7 @@ public:
     }
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank(); 
-    int mpi_rank = comm_world().rank(); 
+    int mpi_rank = havoqgt::comm_world().rank(); 
 
     // Important : skip this verification for the delegates as the 
     // vertex_state is only maintained on the contrller
@@ -847,7 +847,7 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
   typedef typename TGraph::vertex_locator vertex_locator;
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_rank = comm_world().rank(); 
+  int mpi_rank = havoqgt::comm_world().rank(); 
 
   // Important : invalidate vertices that have valid labels but were not added 
   // to the vertex_state_map (becuase they did not hear from a valid parent)
@@ -1074,14 +1074,16 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
     }
     if (!vertex_active[vertex]) {
       vertex_active_edges_map[vertex].clear();
-
-      if (!global_not_finished) {
+      
+      // Important : must not do this here   
+      // termination detection
+      /*if (!global_not_finished) {
         global_not_finished = true;
       }
 
       if (!not_finished) {
         not_finished = true;
-      }
+      }*/
 
     } else {  
       for (auto itr = vertex_active_edges_map[vertex].begin(); 
@@ -1091,14 +1093,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         if (!itr->second) {
           itr = vertex_active_edges_map[vertex].erase(itr); // C++11  
  
+          // Important : must not do this here  
           // termination detection  
-          if (!global_not_finished) {
+          /*if (!global_not_finished) {
             global_not_finished = true;
           }
 
           if (!not_finished) {
             not_finished = true;
-          } 
+          }*/ 
 
         } else {
           itr->second = 0; 
@@ -1111,26 +1114,27 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
   MPI_Barrier(MPI_COMM_WORLD);
 }   
 
-template <typename TGraph, typename VertexMetaData, typename VertexData, typename PatternData, 
-  typename PatternIndices, typename VertexRank, typename VertexActive, 
-  typename VertexIteration, typename VertexStateMapGeneric, typename PatternGraph, 
-  typename BitSet, typename TemplateVertex, typename VertexUint8MapCollection>
-void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_metadata, 
-  PatternData& pattern, PatternIndices& pattern_indices, VertexRank& vertex_rank,
-  VertexActive& vertex_active, VertexIteration& vertex_iteration, VertexStateMapGeneric& vertex_state_map_generic, 
-  PatternGraph& pattern_graph, bool global_init_step, bool& global_not_finished, size_t global_itr_count, 
-  std::ofstream& superstep_result_file, std::ofstream& active_vertices_count_result_file,
-  std::ofstream& active_edges_count_result_file,  
-  TemplateVertex& template_vertices, VertexUint8MapCollection& vertex_active_edges_map, 
+template <typename Vertex, typename VertexData, typename TGraph, 
+  typename VertexMetaData, typename VertexStateMapGeneric, typename VertexActive,
+  typename VertexUint8MapCollection, typename BitSet, typename TemplateVertex, 
+  typename PatternGraph>
+void label_propagation_pattern_matching_bsp(TGraph* g, 
+  VertexMetaData& vertex_metadata, VertexStateMapGeneric& vertex_state_map_generic,  
+  VertexActive& vertex_active, 
+  VertexUint8MapCollection& vertex_active_edges_map, 
+  TemplateVertex& template_vertices, PatternGraph& pattern_graph, 
+  bool global_init_step, bool& global_not_finished, size_t global_itr_count, 
+  std::ofstream& superstep_result_file, 
+  std::ofstream& active_vertices_count_result_file,
+  std::ofstream& active_edges_count_result_file, 
   std::ofstream& message_count_result_file) {
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  int mpi_rank = comm_world().rank();
+  int mpi_rank = havoqgt::comm_world().rank();
   uint64_t superstep_var = 0; // TODO: change type to size_t
   uint64_t& superstep_ref = superstep_var;
   bool not_finished = false; // local not finished flag
 
-  typedef uint64_t Vertex; // TODO: pass from main 
   //typedef std::bitset<max_bit_vector_size> BitSet;
   //typedef boost::dynamic_bitset<> DynamicBitSet; 
 
@@ -1139,10 +1143,22 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
 //  typedef std::unordered_map<Vertex, VertexStateGeneric> VertexStateMapGeneric;
 //  VertexStateMapGeneric vertex_state_map_generic;  
 
+  // dummy // TODO: remove
+  typedef uint8_t PatternData;
+  typedef uint8_t PatternIndices; 
+  typedef uint8_t  VertexRank;
+  typedef uint8_t VertexIteration;
+
+  PatternData pattern = 0; 
+  PatternIndices pattern_indices = 0; 
+  VertexRank vertex_rank = 0; 
+  VertexIteration vertex_iteration = 0;  
+  // dummy // 
+   
   typedef lppm_visitor<TGraph, Vertex, VertexData, BitSet> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
     vertex_active, vertex_iteration, vertex_state_map_generic, pattern_graph, superstep_var, global_init_step, g, template_vertices, vertex_active_edges_map);
-  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
+  auto vq = havoqgt::create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
 
   if (mpi_rank == 0) {
     std::cout << "Local Constraint Checking ... " << std::endl; 
@@ -1153,7 +1169,9 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
   //bool not_finished = false;
  
   //for (uint64_t superstep = 0; superstep < 1; superstep++) {
-  for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  //for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  uint64_t superstep = 0;
+  do {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       //std::cout << "Superstep #" << superstep << std::endl;
@@ -1253,11 +1271,13 @@ void label_propagation_pattern_matching_bsp(TGraph* g, VertexMetaData& vertex_me
     lp_visitor_count = 0; // reset for next iteration 
 
     // TODO: global reduction on global_not_finished before next iteration
-    if (!not_finished) { // Important : this must come after output/file write  
-      break;
-    } 
-    
-  } // for 
+    //if (!not_finished) { // Important : this must come after output/file write  
+    //  break;
+    //} 
+  
+    superstep++;
+  } while (not_finished);  
+  //} // for 
   // end of BSP execution  
 }  
 

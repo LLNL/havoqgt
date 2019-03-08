@@ -144,7 +144,7 @@ public:
     }
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_rank = comm_world().rank();
+    int mpi_rank = havoqgt::comm_world().rank();
  
     auto vertex_data = std::get<0>(alg_data)[vertex];
     auto& pattern = std::get<1>(alg_data);
@@ -399,7 +399,7 @@ public:
     }
 
     ///int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_rank = comm_world().rank();
+    int mpi_rank = havoqgt::comm_world().rank();
 
     if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {  
       // Important : it should never get here  
@@ -1026,8 +1026,8 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
 
   ///int mpi_rank = havoqgt_env()->world_comm().rank();
   ///int mpi_size = havoqgt_env()->world_comm().size();
-  int mpi_rank = comm_world().rank();
-  int mpi_size = comm_world().size();
+  int mpi_rank = havoqgt::comm_world().rank();
+  int mpi_size = havoqgt::comm_world().size();
   //size_t superstep_var = 0;
   //size_t& superstep_ref = superstep_var;  
 
@@ -1040,9 +1040,15 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   auto pattern_indices = std::get<1>(pattern_utilities.input_patterns[pl]);
   auto pattern_cycle_length = std::get<2>(pattern_utilities.input_patterns[pl]); // uint
   auto pattern_valid_cycle = std::get<3>(pattern_utilities.input_patterns[pl]); // boolean
-  auto pattern_interleave_label_propagation = std::get<4>(pattern_utilities.input_patterns[pl]); // boolean
-//--  auto pattern_seleted_edges_tp = std::get<5>(ptrn_util_two.input_patterns[pl]); // boolean 
-  auto pattern_selected_vertices = std::get<5>(pattern_utilities.input_patterns[pl]); // boolean
+  //auto pattern_interleave_label_propagation = std::get<4>(pattern_utilities.input_patterns[pl]); // boolean
+//--  auto pattern_seleted_edges_tp = std::get<5>(pattern_utilities.input_patterns[pl]); // boolean 
+  //auto pattern_selected_vertices = std::get<5>(pattern_utilities.input_patterns[pl]); // boolean
+ 
+  auto pattern_selected_vertices  = 0; // TODO: remove
+
+  auto pattern_is_tds = std::get<4>(pattern_utilities.input_patterns[pl]); // boolean
+  auto pattern_interleave_label_propagation = std::get<5>(pattern_utilities.input_patterns[pl]); // boolean 
+  
   auto pattern_enumeration_indices = pattern_utilities.enumeration_patterns[pl];
   auto pattern_aggregation_steps = pattern_utilities.aggregation_steps[pl];
   // TODO: temporary patch
@@ -1174,7 +1180,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
       }			
   }; 
 
-  struct VisitorCompare_1 {
+  /*struct VisitorCompare_1 {
     public:
       bool operator()(const visitor_type& v1, const visitor_type& v2) const {
         //auto return_value = (v1.vertex_label == v2.vertex_label) && 
@@ -1224,7 +1230,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
         //return false;
         return true;
       }			
-  }; 
+  };*/ 
 
   struct VisitorCompare {
     public:
@@ -1472,7 +1478,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
       pattern_selected_vertices, paths_result_file, pattern_enumeration_indices, visitor_set_receive,
       superstep_var, vertex_sequence_number, pattern_aggregation_steps);
 
-    auto vq = create_visitor_queue<visitor_type, 
+    auto vq = havoqgt::create_visitor_queue<visitor_type, 
       /*havoqgt::detail::visitor_priority_queue*/tppm_queue_tds>(g, alg_data);
 
     ///vq.init_visitor_traversal_new();
@@ -1587,7 +1593,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
     edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
     pattern_selected_vertices, paths_result_file, pattern_enumeration_indices);
-  auto vq = create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
+  auto vq = havoqgt::create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
   ///vq.init_visitor_traversal_new();
   //vq.init_visitor_traversal_new_batch();
   //vq.init_visitor_traversal_new_alt();
