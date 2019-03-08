@@ -9,7 +9,7 @@ The input is designed to be similar to the Graph500, but is constructed by the k
 of two previously generated graphs whose triangles have been previously counted.  After kroneckering
 the two inputs, the triangle count of the input graph can be validated easily.
 
-Inputs for the benchmark are in the /data/kron_inputs folder and are labeled as 'A' or 'B'.
+Inputs for the benchmark are in the /data/kron_inputs folder and are labeled as 'A' or 'B'.  Kroneckering two Scale 10 (i.e., A_G500_S10_tc.edges  B_G500_S10_tc.edges) will yield a Graph500-like Scale 20 graph.  Scales 20-36 can be created using the included data.  
 
 ## Example
 
