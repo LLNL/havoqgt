@@ -79,67 +79,10 @@ typedef uint64_t gt_tc_type;
 
 void usage() {
   if (comm_world().rank() == 0) {
-    std::cerr << "Usage: -o <string> -d <int> file1 file2 \n"
-              << " -h            - print help and exit\n"
+    std::cerr << "Usage: file1 file2 \n"
               << "file1          - Edge list file for first graph\n"
               << "file2          - Edge list file for second graph\n\n";
   }
-}
-
-void parse_cmd_line(int argc, char** argv, uint64_t& delegate_threshold,
-                    std::string& input_filename1, std::string& input_filename2,
-                    double& gbyte_per_rank, uint64_t& partition_passes,
-                    uint64_t& chunk_size) {
-  if (comm_world().rank() == 0) {
-    std::cout << "CMD line:";
-    for (int i = 0; i < argc; ++i) {
-      std::cout << " " << argv[i];
-    }
-    std::cout << std::endl;
-  }
-
-  delegate_threshold = 1024 * 1024 * 1024;
-  gbyte_per_rank     = 0.25;
-  partition_passes   = 1;
-  chunk_size         = 8 * 1024;
-
-  int  c;
-  bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:h ")) != -1) {
-    switch (c) {
-      case 'h':
-        prn_help = true;
-        break;
-      case 'd':
-        delegate_threshold = atoll(optarg);
-        break;
-      case 'p':
-        partition_passes = atoll(optarg);
-        break;
-      case 'f':
-        gbyte_per_rank = atof(optarg);
-        break;
-      case 'c':
-        chunk_size = atoll(optarg);
-        break;
-      default:
-        std::cerr << "Unrecognized option: " << c << ", ignore." << std::endl;
-        prn_help = true;
-        break;
-    }
-  }
-  if (prn_help) {
-    usage();
-    exit(-1);
-  }
-
-  if (argc - optind != 2) {
-    usage();
-    exit(-1);
-  }
-
-  input_filename1 = argv[optind++];
-  input_filename2 = argv[optind];
 }
 
 int main(int argc, char** argv) {
@@ -151,20 +94,23 @@ int main(int argc, char** argv) {
   int mpi_rank = comm_world().rank();
   int mpi_size = comm_world().size();
 
+  if (argc != 3) {
+    usage();
+    exit(-1);
+  }
+
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
   }
   comm_world().barrier();
 
-  uint64_t    delegate_threshold;
-  std::string input_filename1, input_filename2;
-  uint64_t    partition_passes;
-  double      gbyte_per_rank;
-  uint64_t    chunk_size;
-  bool        scramble = true;
+  uint64_t    delegate_threshold = 1024 * 1024 * 1024;
+  std::string input_filename1    = argv[1];
+  std::string input_filename2    = argv[2];
+  uint64_t    partition_passes   = 1;
 
-  parse_cmd_line(argc, argv, delegate_threshold, input_filename1,
-                 input_filename2, gbyte_per_rank, partition_passes, chunk_size);
+  uint64_t chunk_size = 8 * 1024;
+  bool     scramble   = true;
 
   // Setup Kronecker generator
   kronecker_edge_generator<gt_tc_type> kron(input_filename1, input_filename2,
@@ -177,6 +123,14 @@ int main(int argc, char** argv) {
                    delegate_threshold, partition_passes, chunk_size);
 
   graph.print_graph_statistics();
+
+  if (comm_world().rank() == 0) {
+    std::cout << "\n\n\n";
+    std::cout << "Benchmark results for:" << std::endl
+              << "A = " << input_filename1 << std::endl
+              << "B = " << input_filename2 << std::endl;
+  }
+  comm_world().barrier();
 
   uint64_t global_tc = triangle_count_global(graph);
   uint64_t global_gt_tc(0);
