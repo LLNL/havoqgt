@@ -79,8 +79,8 @@ namespace havoqgt {
 template <typename Allocator>
 template <typename Container>
 delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size,
     ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
@@ -170,8 +170,8 @@ delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
 template <typename Allocator>
 template <typename Container, typename edge_data_type>
 delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size, edge_data_type& _edge_data,
     bool _has_edge_data, ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
@@ -266,8 +266,8 @@ delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
 template <typename Allocator>
 template <typename Container, typename edge_data_type>
 void delegate_partitioned_graph<Allocator>::complete_construction(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, edge_data_type& _edge_data) {
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    edge_data_type& _edge_data) {
   m_mpi_comm = mpi_comm;
   int temp_mpi_rank, temp_mpi_size;
   CHK_MPI(MPI_Comm_size(m_mpi_comm, &temp_mpi_size));
@@ -278,9 +278,9 @@ void delegate_partitioned_graph<Allocator>::complete_construction(
   std::map<uint64_t, std::deque<OverflowSendInfo>> transfer_info;
   switch (m_graph_state) {
     case MetaDataGenerated: {
-      LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
-      calculate_overflow(transfer_info);
-      MPI_Barrier(m_mpi_comm);
+      // LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+      // calculate_overflow(transfer_info);
+      // MPI_Barrier(m_mpi_comm);
     }
 
       {
@@ -650,11 +650,6 @@ void delegate_partitioned_graph<Allocator>::initialize_high_meta_data(
   // Setup and Compute Hub information
   //
   for (int i = 0; i < processes_per_node; i++) {
-    if (m_mpi_rank == 0) {
-      std::cout << "\t Setup and Compute Hub information: " << i << "/"
-                << processes_per_node << "." << std::endl
-                << std::flush;
-    }
     if (i == m_mpi_rank % processes_per_node) {
       std::vector<uint64_t> vec_sorted_hubs(global_hubs.begin(),
                                             global_hubs.end());
@@ -730,27 +725,18 @@ void delegate_partitioned_graph<Allocator>::initialize_edge_storage(
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
   for (int i = 0; i < processes_per_node; i++) {
-    if (m_mpi_rank == 0) {
-      std::cout << "\tResizing m_owned_targets and m_delegate_targets: " << i
-                << "/" << processes_per_node << "." << std::endl
-                << std::flush;
-    }
-
     if (i == m_mpi_rank % processes_per_node) {
       // m_owned_targets.resize(m_edges_low_count);
       // m_delegate_targets.resize(m_edges_high_count);
       m_delegate_targets_size = m_edges_high_count;
       m_owned_targets_size    = m_edges_low_count;
 
-      using vertex_locator_allocator = other_allocator<Allocator, vertex_locator>;
+      using vertex_locator_allocator =
+          other_allocator<Allocator, vertex_locator>;
       vertex_locator_allocator vl_allocator(allocator);
-      {
-        m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size);
-      }
+      { m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size); }
 
-      {
-        m_owned_targets = vl_allocator.allocate(m_owned_targets_size);
-      }
+      { m_owned_targets = vl_allocator.allocate(m_owned_targets_size); }
 
       // Currently, m_delegate_info holds the count of high degree edges
       // assigned to this node for each vertex.
@@ -1654,8 +1640,7 @@ inline uint64_t delegate_partitioned_graph<Allocator>::locator_to_label(
  */
 template <typename Allocator>
 inline typename delegate_partitioned_graph<Allocator>::vertex_locator
-delegate_partitioned_graph<Allocator>::label_to_locator(
-    uint64_t label) const {
+delegate_partitioned_graph<Allocator>::label_to_locator(uint64_t label) const {
   /*typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
               other_allocator<Allocator,  std::pair<uint64_t,vertex_locator> >
@@ -1806,7 +1791,7 @@ inline bool delegate_partitioned_graph<Allocator>::is_label_delegate(
   return m_map_delegate_locator.count(label) > 0;
 }
 
-#if 0 // Ignore these methods for now
+#if 0  // Ignore these methods for now
 /**
  * @todo remove; make like vertex_data
  */

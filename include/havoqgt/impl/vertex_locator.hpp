@@ -114,9 +114,9 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
     //        (uint64_t(m_is_delegate) << 60);
     uint64_t key;
     if (m_is_delegate) {
-      key = (uint64_t(1) << 60) | uint64_t(m_local_id);
+      key = (uint64_t(1) << 62) | uint64_t(m_local_id);
     } else {
-      key = (uint64_t(m_owner_dest) << 39) | uint64_t(m_local_id);
+      key = (uint64_t(m_owner_dest) << 40) | uint64_t(m_local_id);
     }
     return hash64shift(key);
   }
@@ -185,8 +185,8 @@ class delegate_partitioned_graph<SegementManager>::vertex_locator {
 
   unsigned int m_is_bcast : 1;
   unsigned int m_is_intercept : 1;
-  unsigned int m_owner_dest : 20;
-  uint64_t     m_local_id : 39;
+  unsigned int m_owner_dest : 21;
+  uint64_t     m_local_id : 40;
 
   vertex_locator(bool is_delegate, uint64_t local_id, uint32_t owner_dest);
 } __attribute__((packed));
@@ -235,9 +235,10 @@ inline bool
 delegate_partitioned_graph<SegmentManager>::vertex_locator::is_equal(
     const typename delegate_partitioned_graph<SegmentManager>::vertex_locator x)
     const {
-  return m_is_delegate == x.m_is_delegate && m_is_bcast == x.m_is_bcast &&
-         m_is_intercept == x.m_is_intercept && m_owner_dest == x.m_owner_dest &&
-         m_local_id == x.m_local_id;
+  return m_is_delegate == x.m_is_delegate
+         //&& m_is_bcast == x.m_is_bcast &&
+         // m_is_intercept == x.m_is_intercept
+         && m_owner_dest == x.m_owner_dest && m_local_id == x.m_local_id;
 }
 
 }  // namespace havoqgt
