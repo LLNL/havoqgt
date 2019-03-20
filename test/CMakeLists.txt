@@ -43,6 +43,8 @@ endfunction()
 # Sequential Tests
 #
 add_nonmpi_ctest( sequential )
+add_nonmpi_ctest( rhh )
+add_nonmpi_ctest( rhh_unordered_set )
 
 #
 # Parallel Tests
