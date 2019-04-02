@@ -1,6 +1,6 @@
 # CORAL2 Triangle Counting Benchmark
 
-A triangle counting benchmark has been built using HavoqGT for CORAL2 evaluation.  
+A triangle counting benchmark has been built using HavoqGT for CORAL2 evaluation.
 This benchmark evaluates the performance of computing triangles on large scale-free graphs
 using the algorithm presented [here](https://doi.org/10.1109/HPEC.2017.8091051).
 
@@ -9,7 +9,7 @@ The input is designed to be similar to the Graph500, but is constructed by the k
 of two previously generated graphs whose triangles have been previously counted.  After kroneckering
 the two inputs, the triangle count of the input graph can be validated easily.
 
-Inputs for the benchmark are in the /data/kron_inputs folder and are labeled as 'A' or 'B'.  Kroneckering two Scale 10 (i.e., A_G500_S10_tc.edges  B_G500_S10_tc.edges) will yield a Graph500-like Scale 20 graph.  Scales 20-36 can be created using the included data.  
+Inputs for the benchmark are in the /data/kron_inputs folder and are labeled as 'A' or 'B'.  Kroneckering two Scale 10 (i.e., A_G500_S10_tc.edges  B_G500_S10_tc.edges) will yield a Graph500-like Scale 20 graph.  Scales 20-36 can be created using the included data.
 
 ## Example
 
@@ -33,4 +33,16 @@ Triangle Count = 139903248
 Number of Wedge Checks = 1115054571
 Total Triangle Count Time (seconds) = 18.4261
 !!PASSED!!
+```
+
+## Results from Sequoia, March 2019
+```console
+96K Nodes, 1.5M Cores, Scale 36
+Benchmark results for:
+A = ../../data/kron_inputs/A_G500_S18_tc.edges
+B = ../../data/kron_inputs/B_G500_S18_tc.edges
+Triangle Count = 2.7e+13
+Number of Wedge Checks = 1.05e+15
+Total Triangle Count Time (seconds) = 3960.17
+FOM = 2.65e+11 Checks / second
 ```

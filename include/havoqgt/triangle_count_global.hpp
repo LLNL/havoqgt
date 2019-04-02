@@ -64,10 +64,11 @@
 #include <boost/container/deque.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
+#include <boost/functional/hash.hpp>
 #include <deque>
 #include <fstream>
 #include <havoqgt/visitor_queue.hpp>
-#include <map>
+#include <unordered_set>
 
 namespace havoqgt {
 
@@ -413,28 +414,57 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph, DODSet& dod_set) {
       }
     }
 
-    // Copy edges into dod_set
-    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
-      std::vector<vertex_locator> tmp;
-      for (auto& vl : core2_directed[*vitr]) {
-        tmp.push_back(vl.first);
+    {
+      auto mailbox_recv_func = [&](void* mailbox, bool bcast,
+                                   const std::pair<uint64_t, uint64_t>& data) {
+        dod_set.insert(data);
+      };
+      char* env_batch = getenv("YGM_BATCH_SIZE");
+      int   ygm_batch = 1024 * 1024;
+      if (env_batch != NULL) {
+        ygm_batch = atoi(env_batch);
       }
-      dod_set[*vitr].insert(tmp.begin(), tmp.end());
-      dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
-                              core2_directed[*vitr].begin(),
-                              core2_directed[*vitr].end());
-      core2_directed[*vitr].clear();
-    }
-    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
-      std::vector<vertex_locator> tmp;
-      for (auto& vl : core2_directed[*vitr]) {
-        tmp.push_back(vl.first);
+      ygm::mailbox_p2p_nrroute<std::pair<uint64_t, uint64_t>,
+                            decltype(mailbox_recv_func), ygm::atav_comm_exchanger>
+          mailbox(mailbox_recv_func, ygm_batch);
+
+      // Copy edges into dod_set
+      for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+        for (auto& vl : core2_directed[*vitr]) {
+          std::pair<uint64_t, uint64_t> edge(g.locator_to_label(*vitr),
+                                             g.locator_to_label(vl.first));
+          uint64_t                      hash = (*vitr).hash() + vl.first.hash();
+          mailbox.send(hash % comm_world().size(), edge);
+        }
+
+        // std::vector<vertex_locator> tmp;
+        // for (auto& vl : core2_directed[*vitr]) {
+        //   tmp.push_back(vl.first);
+        // }
+        // dod_set[*vitr].insert(tmp.begin(), tmp.end());
+        dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
+                                core2_directed[*vitr].begin(),
+                                core2_directed[*vitr].end());
+        core2_directed[*vitr].clear();
       }
-      dod_set[*vitr].insert(tmp.begin(), tmp.end());
-      dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
-                              core2_directed[*vitr].begin(),
-                              core2_directed[*vitr].end());
-      core2_directed[*vitr].clear();
+      for (auto vitr = g.controller_begin(); vitr != g.controller_end();
+           ++vitr) {
+        // std::vector<vertex_locator> tmp;
+        // for (auto& vl : core2_directed[*vitr]) {
+        //   tmp.push_back(vl.first);
+        // }
+        // dod_set[*vitr].insert(tmp.begin(), tmp.end());
+        dod_graph[*vitr].insert(dod_graph[*vitr].begin(),
+                                core2_directed[*vitr].begin(),
+                                core2_directed[*vitr].end());
+        for (auto& vl : core2_directed[*vitr]) {
+          std::pair<uint64_t, uint64_t> edge(g.locator_to_label(*vitr),
+                                             g.locator_to_label(vl.first));
+          uint64_t                      hash = (*vitr).hash() + vl.first.hash();
+          mailbox.send(hash % comm_world().size(), edge);
+        }
+        core2_directed[*vitr].clear();
+      }
     }
   }
 }
@@ -448,28 +478,151 @@ uint64_t triangle_count_global(TGraph& g) {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
 
+   uint64_t local_wedge_creation_count(0);
+
   typename graph_type::template vertex_data<
       std::vector<std::pair<vertex_locator, dod_graph_edge>>,
       std::allocator<std::vector<std::pair<vertex_locator, dod_graph_edge>>>>
       dod_graph(g);
 
-  typename graph_type::template vertex_data<
-      boost::container::flat_set<vertex_locator>,
-      std::allocator<boost::container::flat_set<vertex_locator>>>
-      dod_graph_set(g);
+  // typename graph_type::template vertex_data<
+  //     boost::container::flat_set<vertex_locator>,
+  //     std::allocator<boost::container::flat_set<vertex_locator>>>
+  //     dod_graph_set(g);
+
+  // boost::container::flat_set<std::pair<vertex_locator, vertex_locator>>
+  //     dod_edge_set;
+  std::unordered_set<std::pair<uint64_t, uint64_t>,
+                     boost::hash<std::pair<uint64_t, uint64_t>>>
+      dod_edge_set;
 
   MPI_Barrier(MPI_COMM_WORLD);
   double start_time = MPI_Wtime();
-  construct_dod_graph(g, dod_graph, dod_graph_set);
+  construct_dod_graph(g, dod_graph, dod_edge_set);
+  uint64_t local_triangle_count(0), local_wedge_count(0);
 
-  uint64_t to_return =
-      count_all_triangles_from_scratch(g, dod_graph, dod_graph_set);
+  char* env_comm_profile = getenv("CORAL2_TC_PROFILE");
+  std::vector<uint64_t> per_rank_send_bytes;
+  if(env_comm_profile) {
+    if(mpi_rank == 0) {
+      std::cout << "WARNING:  Communication profiling is enabled.  Output prefix: " << env_comm_profile << std::endl;
+    }
+    per_rank_send_bytes.resize(comm_world().size(),0);
+  }
+
+  {
+    auto mailbox_recv_func = [&](void* mailbox, bool bcast,
+                                 const std::pair<uint64_t, uint64_t>& data) {
+      ++local_wedge_count;
+      if (dod_edge_set.count(data) > 0) {
+        ++local_triangle_count;
+      }
+    };
+    char* env_batch = getenv("YGM_BATCH_SIZE");
+    int   ygm_batch = 1024 * 1024;
+    if (env_batch != NULL) {
+      ygm_batch = atoi(env_batch);
+    }
+    ygm::mailbox_p2p_nrroute<std::pair<uint64_t, uint64_t>,
+                          decltype(mailbox_recv_func), ygm::atav_comm_exchanger>
+        mailbox(mailbox_recv_func, ygm_batch);
+    if(mpi_rank == 0) {
+      std::cout << "Using nrroute batch = " << ygm_batch << std::endl;
+    }
+    for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
+      for (auto pair_a = dod_graph[*vitr].begin();
+           pair_a != dod_graph[*vitr].end(); ++pair_a) {
+        for (auto pair_b = pair_a; pair_b != dod_graph[*vitr].end(); ++pair_b) {
+          if (pair_a->first == pair_b->first) continue;
+          if (edge_order_gt(pair_b->second.target_degree,
+                            pair_a->second.target_degree, pair_b->first,
+                            pair_a->first)) {
+            std::pair<uint64_t, uint64_t> edge(
+                g.locator_to_label(pair_a->first),
+                g.locator_to_label(pair_b->first));
+            uint64_t hash = pair_a->first.hash() + pair_b->first.hash();
+            size_t dest = hash % comm_world().size();
+            mailbox.send(dest, edge);
+            ++local_wedge_creation_count;
+            if(env_comm_profile) {per_rank_send_bytes[dest]+=sizeof(edge);}
+          } else {
+            std::pair<uint64_t, uint64_t> edge(
+                g.locator_to_label(pair_b->first),
+                g.locator_to_label(pair_a->first));
+            uint64_t hash = pair_b->first.hash() + pair_a->first.hash();
+            size_t dest = hash % comm_world().size();
+            mailbox.send(dest, edge);
+            local_wedge_creation_count++;
+            if(env_comm_profile) {per_rank_send_bytes[dest]+=sizeof(edge);}
+          }
+        }
+      }
+    }
+
+    for (auto vitr = g.controller_begin(); vitr != g.controller_end(); ++vitr) {
+      for (auto pair_a = dod_graph[*vitr].begin();
+           pair_a != dod_graph[*vitr].end(); ++pair_a) {
+        for (auto pair_b = pair_a; pair_b != dod_graph[*vitr].end(); ++pair_b) {
+          if (pair_a->first == pair_b->first) continue;
+          if (edge_order_gt(pair_b->second.target_degree,
+                            pair_a->second.target_degree, pair_b->first,
+                            pair_a->first)) {
+            std::pair<uint64_t, uint64_t> edge(
+                g.locator_to_label(pair_a->first),
+                g.locator_to_label(pair_b->first));
+            uint64_t hash = pair_a->first.hash() + pair_b->first.hash();
+            size_t dest = hash % comm_world().size();
+            mailbox.send(dest, edge);
+            local_wedge_creation_count++;
+            if(env_comm_profile) {per_rank_send_bytes[dest]+=sizeof(edge);}
+          } else {
+            std::pair<uint64_t, uint64_t> edge(
+                g.locator_to_label(pair_b->first),
+                g.locator_to_label(pair_a->first));
+            uint64_t hash = pair_b->first.hash() + pair_a->first.hash();
+            size_t dest = hash % comm_world().size();
+            mailbox.send(dest, edge);
+            ++local_wedge_creation_count;
+            if(env_comm_profile) {per_rank_send_bytes[dest]+=sizeof(edge);}
+          }
+        }
+      }
+    }
+  }
+
+  uint64_t global_wedge_creation_count = comm_world().all_reduce(local_wedge_creation_count, MPI_SUM);
+
+  uint64_t global_triangle_count =
+      comm_world().all_reduce(local_triangle_count, MPI_SUM);
+  uint64_t global_wedge_count =
+      comm_world().all_reduce(local_wedge_count, MPI_SUM);
+  if (comm_world().rank() == 0) {
+    std::cout << "Triangle Count = " << global_triangle_count << std::endl
+              << "Number of Wedge Checks = " << global_wedge_count << std::endl
+              << "Number of wedges created = " << global_wedge_creation_count << std::endl;
+  }
+
+  uint64_t to_return = global_triangle_count;
+  //     count_all_triangles_from_scratch(g, dod_graph, dod_graph_set);
   double end_time = MPI_Wtime();
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
     std::cout << "Total Triangle Count Time (seconds) = "
               << end_time - start_time << std::endl;
+    std::cout << "FOM = " << double(global_wedge_count) / double(end_time - start_time) << " Checks / second" << std::endl;
+  }
+
+  if(env_comm_profile) {
+    if(mpi_rank ==0) {
+      std::cout << "== Writing comm profile per rank ==" << std::endl;
+    }
+    std::stringstream fname;
+    fname << env_comm_profile << "_" << comm_world().rank();
+    std::ofstream outfile(fname.str().c_str());
+    for(size_t i=0; i<per_rank_send_bytes.size(); ++i) {
+      outfile << per_rank_send_bytes[i] << "\n";
+    }
   }
 
   return to_return;

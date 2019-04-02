@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
   std::string input_filename2    = argv[2];
   uint64_t    partition_passes   = 1;
 
-  uint64_t chunk_size = 8 * 1024;
+  uint64_t chunk_size = 64 * 1024;
   bool     scramble   = true;
 
   // Setup Kronecker generator

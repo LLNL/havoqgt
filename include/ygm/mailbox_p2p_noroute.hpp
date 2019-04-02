@@ -14,14 +14,14 @@
 using std::vector;
 
 namespace ygm {
-template < typename Data, typename RecvHandlerFunc,
-         template <typename> class EXCHANGER = comm_exchanger >
+template <typename Data, typename RecvHandlerFunc,
+          template <typename> class EXCHANGER = comm_exchanger>
 class mailbox_p2p_noroute {
   struct message {
     uint32_t bcast : 1;
     uint32_t interrupt : 1;
     uint32_t dest : 30;
-    Data     data;
+    Data data;
     template <class Archive>
     void save(Archive& ar) const {
       uint32_t dummy;
@@ -49,15 +49,16 @@ class mailbox_p2p_noroute {
 
  public:
   mailbox_p2p_noroute(RecvHandlerFunc recv_func, const size_t batch_size,
-		      const int tag = 1)
+                      const int tag = 1)
       : m_recv_func(recv_func),
         m_batch_size(batch_size),
         m_max_alloc(0),
-        m_exchanger(comm_world().mpi_comm(), tag) {}
+        m_exchanger(comm_world().mpi_comm(),
+                    (batch_size * 2) / comm_world().size()) {}
 
   ~mailbox_p2p_noroute() {
     wait_empty();
-    //if (comm_world().rank() == 0) {
+    // if (comm_world().rank() == 0) {
     //  std::cout << "m_count_exchanges = " << m_count_exchanges << std::endl;
     //}
   }
@@ -102,27 +103,23 @@ class mailbox_p2p_noroute {
   bool global_empty() { return do_exchange() == 0; }
 
   void wait_empty() {
-    do {
-    } while (!global_empty());
-  }
+    do { } while (!global_empty()); }
 
  private:
   void do_send(uint32_t dest, const Data& data) {
-    //m_exchanger.queue(dest, message{0, 0, dest, data});
+    // m_exchanger.queue(dest, message{0, 0, dest, data});
     //++m_send_count;
-    m_send_count += m_exchanger.queue_bytes(
-        dest, message{0, 0, dest, data});
+    m_send_count += m_exchanger.queue_bytes(dest, message{0, 0, dest, data});
   }
 
   void do_send_bcast(const Data& data) {
     for (uint32_t i = 0; i < comm_world().size(); i++) {
       if (i == comm_world().rank()) continue;
-      m_send_count +=
-          m_exchanger.queue_bytes(i, message{1, 0, i, data});
-      //m_exchanger.queue(i, message{1, 0, i, data});
+      m_send_count += m_exchanger.queue_bytes(i, message{1, 0, i, data});
+      // m_exchanger.queue(i, message{1, 0, i, data});
       //++m_send_count;
     }
-    //if (m_send_count >= m_batch_size) { do_exchange(); }
+    // if (m_send_count >= m_batch_size) { do_exchange(); }
   }
 
   uint64_t do_exchange() {
@@ -130,24 +127,21 @@ class mailbox_p2p_noroute {
     m_count_exchanges++;
     m_total_sent += m_send_count;
     uint64_t total(0);
-    total =  m_exchanger.exchange(
-        [&](const message &msg) { m_recv_func(this, msg.bcast, msg.data); });
+    total = m_exchanger.exchange(
+        [&](const message& msg) { m_recv_func(this, msg.bcast, msg.data); },
+        m_send_count);
     m_send_count = 0;
     //
     // push out recursive queued
     auto queue_size = m_send_queue.size() + m_bcast_queue.size();
-    //if (queue_size > 0) {
+    // if (queue_size > 0) {
     //  std::cout << whoami()
     //            << " recursive m_send_queue.size() = " << m_send_queue.size()
     //            << " m_bcast_queue.size() = " << m_bcast_queue.size()
     //            << " exchange total = " << total << std::endl;
     //}
-    for (const auto& p : m_send_queue) {
-      do_send(p.first, p.second);
-    }
-    for (const auto& d : m_bcast_queue) {
-      do_send_bcast(d);
-    }
+    for (const auto& p : m_send_queue) { do_send(p.first, p.second); }
+    for (const auto& d : m_bcast_queue) { do_send_bcast(d); }
     m_send_queue.clear();
     m_bcast_queue.clear();
     in_exchange = false;
@@ -157,21 +151,21 @@ class mailbox_p2p_noroute {
   }
 
  private:
-  //comm_exchanger<message> m_exchanger;
-  EXCHANGER<message>      m_exchanger;
-  RecvHandlerFunc         m_recv_func;
-  size_t                  m_send_count = 0;
-  size_t                  m_batch_size;
-  uint64_t                m_max_alloc;
-  uint64_t                m_count_exchanges = 0;
-  uint32_t                m_total_sent = 0;
+  // comm_exchanger<message> m_exchanger;
+  EXCHANGER<message> m_exchanger;
+  RecvHandlerFunc m_recv_func;
+  size_t m_send_count = 0;
+  size_t m_batch_size;
+  uint64_t m_max_alloc;
+  uint64_t m_count_exchanges = 0;
+  uint32_t m_total_sent = 0;
 
-  uint64_t m_local_send  = 0;
+  uint64_t m_local_send = 0;
   uint64_t m_local_bcast = 0;
 
-  bool                                   in_exchange = false;
+  bool in_exchange = false;
   std::vector<std::pair<uint32_t, Data>> m_send_queue;
-  std::vector<Data>                      m_bcast_queue;
+  std::vector<Data> m_bcast_queue;
 
   // uint32_t m_total_recv = 0;
 
