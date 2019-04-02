@@ -5,7 +5,7 @@ This benchmark evaluates the performance of computing triangles on large scale-f
 using the algorithm presented [here](https://doi.org/10.1109/HPEC.2017.8091051).
 
 ## Inputs
-The input is designed to be similar to the Graph500, but is constructed by the kronecker product
+The input is designed to be similar to the Graph500, but is constructed by the Kronecker product
 of two previously generated graphs whose triangles have been previously counted.  After kroneckering
 the two inputs, the triangle count of the input graph can be validated easily.
 
@@ -45,4 +45,12 @@ Triangle Count = 2.7e+13
 Number of Wedge Checks = 1.05e+15
 Total Triangle Count Time (seconds) = 3960.17
 FOM = 2.65e+11 Checks / second
+```
+
+## Profiling Communication
+To profile the communication requirements of the triangle counting algorithm, use the CORAL2_TC_PROFILE
+environment variable.  This captures the communication from the algorithm's perspective,
+not the MPI communication performed by YGM's routing.   Provide an output file prefix:
+```console
+CORAL2_TC_PROFILE="S20_profile"
 ```
