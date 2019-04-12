@@ -69,6 +69,7 @@
 #include <fstream>
 #include <havoqgt/visitor_queue.hpp>
 #include <unordered_set>
+#include <ygm/mailbox_p2p_nlnr.hpp>
 
 namespace havoqgt {
 
@@ -424,8 +425,8 @@ void construct_dod_graph(TGraph& g, DODgraph& dod_graph, DODSet& dod_set) {
       if (env_batch != NULL) {
         ygm_batch = atoi(env_batch);
       }
-      ygm::mailbox_p2p_nrroute<std::pair<uint64_t, uint64_t>,
-                            decltype(mailbox_recv_func), ygm::atav_comm_exchanger>
+      ygm::mailbox_p2p_nlnr<std::pair<uint64_t, uint64_t>,
+                            decltype(mailbox_recv_func), ygm::comm_exchanger>
           mailbox(mailbox_recv_func, ygm_batch);
 
       // Copy edges into dod_set
@@ -523,11 +524,11 @@ uint64_t triangle_count_global(TGraph& g) {
     if (env_batch != NULL) {
       ygm_batch = atoi(env_batch);
     }
-    ygm::mailbox_p2p_nrroute<std::pair<uint64_t, uint64_t>,
-                          decltype(mailbox_recv_func), ygm::atav_comm_exchanger>
+    ygm::mailbox_p2p_nlnr<std::pair<uint64_t, uint64_t>,
+                          decltype(mailbox_recv_func), ygm::comm_exchanger>
         mailbox(mailbox_recv_func, ygm_batch);
     if(mpi_rank == 0) {
-      std::cout << "Using nrroute batch = " << ygm_batch << std::endl;
+      std::cout << "Using nlnr batch = " << ygm_batch << std::endl;
     }
     for (auto vitr = g.vertices_begin(); vitr != g.vertices_end(); ++vitr) {
       for (auto pair_a = dod_graph[*vitr].begin();

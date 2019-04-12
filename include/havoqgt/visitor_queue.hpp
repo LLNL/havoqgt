@@ -71,7 +71,7 @@
 #include <havoqgt/mpi.hpp>
 #include <iterator>
 #include <vector>
-#include <ygm/mailbox_p2p_nrroute.hpp>
+#include <ygm/mailbox_p2p_nlnr.hpp>
 
 namespace havoqgt {
 
@@ -103,7 +103,7 @@ class visitor_queue {
     visitor_queue* m_vq;
   };
 
-  typedef ygm::mailbox_p2p_nrroute<visitor_type, mailbox_recv, ygm::atav_comm_exchanger> mailbox_type;
+  typedef ygm::mailbox_p2p_nlnr<visitor_type, mailbox_recv, ygm::comm_exchanger> mailbox_type;
 
  public:
   visitor_queue(TGraph* _graph, AlgData& _alg_data)
