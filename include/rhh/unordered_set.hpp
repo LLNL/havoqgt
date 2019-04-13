@@ -56,7 +56,7 @@
 #include <memory>
 #include <algorithm>
 #include <iterator>
-#include <rhh/dynamic_robin_hood_hashing.hpp>
+#include <rhh/basic_robin_hood_hashing.hpp>
 
 namespace rhh {
 
@@ -74,11 +74,10 @@ class unordered_set {
  private:
   using self_type = unordered_set<_key_type, _hash, _key_equal, _allocator>;
 
-  using rhh_table_type = detail::dynamic_robin_hood_hashing<_key_type,
-                                                            detail::utility::void_mapped_value_tag,
-                                                            _hash,
-                                                            _key_equal,
-                                                            _allocator>;
+  using rhh_table_type = detail::robin_hood_hashing_set<_key_type,
+                                                        _hash,
+                                                        _key_equal,
+                                                        _allocator>;
 
   template <bool is_const>
   class iterator_impl;
@@ -106,8 +105,7 @@ class unordered_set {
   // ---------------------------------------------------------------------------------------------------- //
 
   // -------------------- Constructors -------------------- //
-  unordered_set() = default;
-  explicit unordered_set(const allocator_type &allocator) :
+  explicit unordered_set(const allocator_type &allocator = allocator_type()) :
       m_table(allocator) {}
   ~unordered_set() = default;
 
@@ -249,7 +247,7 @@ class unordered_set<_key_type, _hash, _key_equal, _allocator>::iterator_impl {
   iterator_impl(rhh_table_type *const table, const size_type position) :
       m_table(table),
       m_current_position(position) {
-    m_current_position = m_table->find_any(m_current_position);
+    m_current_position = m_table->find_next(m_current_position);
   }
 
   iterator_impl operator++() {
@@ -294,7 +292,7 @@ class unordered_set<_key_type, _hash, _key_equal, _allocator>::iterator_impl {
   }
 
   void next_valid_value() {
-    m_current_position = m_table->find_any(m_current_position + 1);
+    m_current_position = m_table->find_next(m_current_position + 1);
   }
 
   rhh_table_type *m_table;

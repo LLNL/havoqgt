@@ -50,9 +50,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <rhh/dynamic_robin_hood_hashing.hpp>
+#include <rhh/basic_robin_hood_hashing.hpp>
 
-using map_type = rhh::detail::dynamic_robin_hood_hashing<uint32_t, uint32_t>;
+using map_type = rhh::detail::robin_hood_hashing_map<uint32_t, uint32_t>;
 
 namespace {
 TEST(dynamic_robin_hood_hashing_test, init) {

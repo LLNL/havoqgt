@@ -130,30 +130,71 @@ class value_accessor<key_type, void_mapped_value_tag> {
 
 } // namespace utility
 
+template <typename value_type,
+          typename hash,
+          typename key_equal,
+          typename allocator>
+class basic_robin_hood_hashing;
+
+/// \brief Robin Hood Hashing class
+/// \tparam key_type Type of the key values
+/// \tparam hash Hash function
+/// \tparam EqualTo Equal to function
+/// \tparam AllocatorType Type of the allocator
+template <typename key_type,
+          typename hash = std::hash<key_type>,
+          typename key_equal = std::equal_to<key_type>,
+          typename allocator = std::allocator<char>>
+using robin_hood_hashing_set = basic_robin_hood_hashing<utility::key_only_value_type<key_type>,
+                                                        hash,
+                                                        key_equal,
+                                                        allocator>;
+
 /// \brief Robin Hood Hashing class
 /// \tparam key_type Type of the key values
 /// \tparam mapped_value_type Type of the mapped values
 /// \tparam hash Hash function
 /// \tparam EqualTo Equal to function
 /// \tparam AllocatorType Type of the allocator
-template <typename _key_type,
-          typename _mapped_value_type = utility::void_mapped_value_tag,
-          typename _hash = std::hash<_key_type>,
-          typename _key_equal = std::equal_to<_key_type>,
-          typename _allocator = std::allocator<char>>
-class dynamic_robin_hood_hashing {
+template <typename key_type,
+          typename mapped_value_type,
+          typename hash = std::hash<key_type>,
+          typename key_equal = std::equal_to<key_type>,
+          typename allocator = std::allocator<char>>
+using robin_hood_hashing_map = basic_robin_hood_hashing<utility::pair_value_type<key_type, mapped_value_type>,
+                                                        hash,
+                                                        key_equal,
+                                                        allocator>;
+
+/// \brief Robin Hood Hashing class
+/// \tparam key_type Type of the key values
+/// \tparam mapped_value_type Type of the mapped values
+/// \tparam hash Hash function
+/// \tparam EqualTo Equal to function
+/// \tparam AllocatorType Type of the allocator
+template <typename _value_wrapper_type,
+          typename _hash,
+          typename _key_equal,
+          typename _allocator>
+class basic_robin_hood_hashing {
+ public:
+  // ---------------------------------------------------------------------------------------------------- //
+  //                               Public type
+  // ---------------------------------------------------------------------------------------------------- //
+  using key_type = typename _value_wrapper_type::key_type;
+  using value_type = typename _value_wrapper_type::value_type;
+  using hash = _hash;
+  using key_equal = _key_equal;
+  using allocator_type = _allocator;
+  using size_type = typename std::allocator_traits<allocator_type>::size_type;
+
  private:
-  using self_type = dynamic_robin_hood_hashing<_key_type, _mapped_value_type, _hash, _key_equal, _allocator>;
-  using value_accessor = utility::value_accessor<_key_type, _mapped_value_type>;
+  using self_type = basic_robin_hood_hashing<_value_wrapper_type, _hash, _key_equal, _allocator>;
 
   struct element_type {
     class header_type;
-    using value_type = typename value_accessor::value_type;
 
     element_type() = default;
-    explicit element_type(value_type &&value) :
-        value(std::forward<value_type>(value)) {};
-
     ~element_type() = default;
     element_type(const element_type &) = default;
     element_type(element_type &&) noexcept = default;
@@ -161,7 +202,7 @@ class dynamic_robin_hood_hashing {
     element_type &operator=(element_type &&) noexcept = default;
 
     header_type header;
-    value_type value;
+    _value_wrapper_type value_wrapper;
   };
 
   using internal_table_allocator_type = typename std::allocator_traits<_allocator>::template rebind_alloc<element_type>;
@@ -180,46 +221,35 @@ class dynamic_robin_hood_hashing {
   //  };
 
  public:
-  // ---------------------------------------------------------------------------------------------------- //
-  //                               Public type
-  // ---------------------------------------------------------------------------------------------------- //
-  using key_type = _key_type;
-  using mapped_value_type = _mapped_value_type;
-  using value_type = typename value_accessor::value_type;
-  using hash = _hash;
-  using key_equal = _key_equal;
-  using allocator_type = _allocator;
-  using size_type = typename std::allocator_traits<allocator_type>::size_type;
-
   // -------------------------------------------------------------------------------- //
   // Constructor & assign operator
   // -------------------------------------------------------------------------------- //
-  explicit dynamic_robin_hood_hashing(const _allocator &allocator = _allocator()) :
+  explicit basic_robin_hood_hashing(const _allocator &allocator = _allocator()) :
       m_num_elements(0),
       m_table(1, element_type(), allocator) {
   }
 
-  dynamic_robin_hood_hashing(const size_type initial_capacity, const _allocator &allocator) :
+  basic_robin_hood_hashing(const size_type initial_capacity, const _allocator &allocator) :
       m_num_elements(0),
       m_table(initial_capacity, element_type(), allocator) {}
 
-  ~dynamic_robin_hood_hashing() = default;
+  ~basic_robin_hood_hashing() = default;
 
   // Copy constructor
-  dynamic_robin_hood_hashing(const dynamic_robin_hood_hashing &) = default;
+  basic_robin_hood_hashing(const basic_robin_hood_hashing &) = default;
 
   // Move constructor
-  dynamic_robin_hood_hashing(dynamic_robin_hood_hashing &&other) noexcept :
+  basic_robin_hood_hashing(basic_robin_hood_hashing &&other) noexcept :
       m_num_elements(other.m_num_elements),
       m_table(std::move(other.m_table)) {
     other.m_num_elements = 0;
   }
 
   // Copy assignments
-  dynamic_robin_hood_hashing &operator=(const dynamic_robin_hood_hashing &) = default;
+  basic_robin_hood_hashing &operator=(const basic_robin_hood_hashing &) = default;
 
   // Move assignments
-  dynamic_robin_hood_hashing &operator=(dynamic_robin_hood_hashing &&other) noexcept {
+  basic_robin_hood_hashing &operator=(basic_robin_hood_hashing &&other) noexcept {
     m_num_elements = other.m_num_elements;
     other.m_num_elements = 0;
     m_table = std::move(other.m_table);
@@ -243,12 +273,12 @@ class dynamic_robin_hood_hashing {
   //  when mapped_value is not utility::void_mapped_value_tag
   value_type &at(const size_type position) {
     assert (position < capacity());
-    return m_table[position].value;
+    return m_table[position].value_wrapper.value();
   }
 
   const value_type &at(const size_type position) const {
     assert (position < capacity());
-    return m_table[position].value;
+    return m_table[position].value_wrapper;
   }
 
   // -------------------- Element lookup -------------------- //
@@ -256,9 +286,8 @@ class dynamic_robin_hood_hashing {
     const auto ret = priv_locate_key(key);
     if (ret.second) {
       return ret.first; // Found the key
-    } else {
-      return capacity(); // Didn't find the key
     }
+    return capacity(); // Didn't find the key
   }
 
   size_type find(const key_type &key, const size_type hint_position) const {
@@ -270,16 +299,20 @@ class dynamic_robin_hood_hashing {
     }
   }
 
-  size_type find_any() const {
-    return find_any(0);
+  size_type find_next() const {
+    return find_next(0);
   }
 
-  size_type find_any(const size_type start_position) const {
+  size_type find_next(const size_type start_position) const {
     return priv_find_valid_element(start_position);
   }
 
   // -------------------- Modifiers -------------------- //
-  size_type insert(value_type value) {
+  size_type insert(const value_type& value) {
+    return priv_check_capacity_and_insert(value);
+  }
+
+  size_type insert(value_type&& value) {
     return priv_check_capacity_and_insert(std::move(value));
   }
 
@@ -289,7 +322,7 @@ class dynamic_robin_hood_hashing {
     return old_num_elements - size();
   }
 
-  void erase_at(const ssize_t position) {
+  void erase_at(const size_type position) {
     return priv_erase_at(position);
   }
 
@@ -301,7 +334,7 @@ class dynamic_robin_hood_hashing {
     }
   }
 
-  void swap(dynamic_robin_hood_hashing &other) noexcept {
+  void swap(basic_robin_hood_hashing &other) noexcept {
     using std::swap;
     swap(m_num_elements, other.m_num_elements);
     swap(m_table, other.m_table);
@@ -353,7 +386,7 @@ class dynamic_robin_hood_hashing {
 
   // -------------------- Probe distance -------------------- //
   size_type priv_probe_distance(const size_type current_position) const {
-    const key_type &key = value_accessor::get_key(m_table[current_position].value);
+    const key_type &key = m_table[current_position].value_wrapper.key();
     return priv_probe_distance(key, current_position);
   }
 
@@ -372,7 +405,7 @@ class dynamic_robin_hood_hashing {
 
     for (size_type i = 0; i < capacity(); ++i) {
       if (!m_table[i].header.empty() && !m_table[i].header.get_tomb_stone()) {
-        new_table.priv_insert(std::move(m_table[i].value));
+        new_table.priv_insert(std::move(m_table[i].value_wrapper.value()));
       }
     }
 
@@ -395,7 +428,7 @@ class dynamic_robin_hood_hashing {
         break;
       } else if (current_probe_distance > priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(value_accessor::get_key(m_table[current_position].value), key)
+      } else if (key_equal()(m_table[current_position].value_wrapper.key(), key)
           && !m_table[current_position].header.get_tomb_stone()) {
         is_found_key = true;
         break;
@@ -426,47 +459,51 @@ class dynamic_robin_hood_hashing {
   }
 
   // -------------------- Insert -------------------- //
-  size_type priv_check_capacity_and_insert(value_type &&value) {
+  template <typename T>
+  size_type priv_check_capacity_and_insert(T &&value) {
     if (!priv_enough_capacity()) {
       priv_grow_table();
     }
 
-    return priv_insert(std::forward<value_type>(value));;
+    return priv_insert(std::forward<T>(value));;
   }
 
-  size_type priv_insert(value_type &&value) {
+  template <typename T>
+  size_type priv_insert(T &&value) {
 
     // Find the position to insert the value
-    auto insert_position = priv_locate_key(value_accessor::get_key(value));
+    auto insert_position = priv_locate_key(_value_wrapper_type::key(value));
     while (insert_position.second) { // skip elements with the same key
-      insert_position = priv_locate_key(value_accessor::get_key(value), insert_position.first + 1);
+      insert_position = priv_locate_key(_value_wrapper_type::key(value), insert_position.first + 1);
     }
 
-    priv_insert_core(std::forward<value_type>(value), insert_position.first);
+    priv_insert_core(std::forward<T>(value), insert_position.first);
 
     return insert_position.first;
   }
 
-  void priv_insert_core(value_type &&value, const size_type first_insert_position) {
+  template <typename T>
+  void priv_insert_core(T &&value, const size_type first_insert_position) {
     size_type current_position = first_insert_position;
-    size_type current_probe_distance = priv_probe_distance(value_accessor::get_key(value), current_position);
+    size_type current_probe_distance = priv_probe_distance(_value_wrapper_type::key(value), current_position);
 
+    _value_wrapper_type wk_value(std::forward<T>(value));
     ++m_num_elements;
 
     while (true) {
       if (m_table[current_position].header.empty()) {
-        priv_emplace_at(current_position, std::forward<value_type>(value));
+        priv_emplace_at(current_position, std::move(wk_value));
         return;
       }
 
       if (current_probe_distance > priv_probe_distance(current_position)) {
         if (m_table[current_position].header.get_tomb_stone()) {
-          priv_emplace_at(current_position, std::forward<value_type>(value));
+          priv_emplace_at(current_position, std::move(wk_value));
           return;
         }
 
         using std::swap;
-        swap(m_table[current_position].value, value);
+        swap(m_table[current_position].value_wrapper, wk_value);
       }
 
       current_position = (current_position + 1) & (capacity() - 1);
@@ -474,14 +511,9 @@ class dynamic_robin_hood_hashing {
     }
   }
 
-  void priv_emplace_at(const size_type position, value_type &&value) {
-    m_table[position].value.~value_type();
-    auto allocator = m_table.get_allocator();
-
-    // Construct an element at position
-    std::allocator_traits<typename internal_table_type::allocator_type>::construct(allocator,
-                                                                                   &m_table[position],
-                                                                                   std::forward<value_type>(value));
+  void priv_emplace_at(const size_type position, _value_wrapper_type &&value_wrapper) {
+    m_table[position].value_wrapper = std::move(value_wrapper);
+    m_table[position].header.reset();
     m_table[position].header.set();
   }
 
@@ -504,7 +536,7 @@ class dynamic_robin_hood_hashing {
         break;
       } else if (current_probe_distance > priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(value_accessor::get_key(m_table[current_position].value), key)
+      } else if (key_equal()(m_table[current_position].value_wrapper.key(), key)
           && !m_table[current_position].header.get_tomb_stone()) {
         priv_erase_at(current_position);
       }
@@ -517,7 +549,7 @@ class dynamic_robin_hood_hashing {
   void priv_erase_at(const size_type position) {
     assert(!m_table[position].header.get_tomb_stone());
     m_table[position].header.set_tomb_stone();
-    value_accessor::destroy_mapped_value(&(m_table[position].value));
+    m_table[position].value_wrapper.~_value_wrapper_type();
 
     assert(m_num_elements > 0);
     --m_num_elements;
@@ -527,16 +559,14 @@ class dynamic_robin_hood_hashing {
   internal_table_type m_table;
 };
 
-template <typename _key_type,
-          typename _mapped_value_type,
+template <typename _value_type,
           typename _hash,
           typename _key_equal,
           typename _allocator>
-class dynamic_robin_hood_hashing<_key_type,
-                                 _mapped_value_type,
-                                 _hash,
-                                 _key_equal,
-                                 _allocator>::element_type::header_type {
+class basic_robin_hood_hashing<_value_type,
+                               _hash,
+                               _key_equal,
+                               _allocator>::element_type::header_type {
  public:
   using underlying_type = uint8_t;
 

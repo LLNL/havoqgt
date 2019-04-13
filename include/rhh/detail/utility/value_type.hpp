@@ -64,32 +64,47 @@ namespace utility {
 /// value_type is std::pair<key_type, mapped_value_type>
 /// \tparam key_type Type of the key
 /// \tparam mapped_value_type Type of the value
-template <typename key_type, typename mapped_value_type>
+template <typename _key_type, typename _mapped_value_type>
 class pair_value_type {
  public:
-  using value_type = std::pair<const key_type, mapped_value_type>;
+  using key_type = _key_type;
+  using value_type = std::pair<key_type, _mapped_value_type>;
+  using const_key_value_type = std::pair<const key_type, _mapped_value_type>;
 
-  pair_value_type(key_type key, mapped_value_type mapped_value) :
-      m_value(key, mapped_value) {}
+  pair_value_type() = default;
 
-  pair_value_type(key_type &&key, mapped_value_type &&mapped_value) :
-      m_value(std::move(key), std::move(mapped_value)) {}
+  explicit pair_value_type(const value_type &value) :
+      m_value(std::make_pair(value.first, value.second)) {}
+
+  explicit pair_value_type(value_type &&value) :
+      m_value(std::make_pair(std::move(value.first), std::move(value.second))) {}
+
+  pair_value_type(const key_type &key, const _mapped_value_type &mapped_value) :
+      m_value(std::make_pair(key, mapped_value)) {}
+
+  pair_value_type(key_type &&key, _mapped_value_type &&mapped_value) :
+      m_value(std::make_pair(std::move(key), std::move(mapped_value))) {}
 
   ~pair_value_type() = default;
 
   pair_value_type(const pair_value_type &) = default;
+  pair_value_type(pair_value_type &&other) noexcept = default;
+  pair_value_type &operator=(const pair_value_type &) = default;
+  pair_value_type &operator=(pair_value_type &&other) noexcept = default;
 
-  pair_value_type(pair_value_type &&other) noexcept
-      : m_value(std::move(const_cast<key_type>(other.m_value.first)), std::move(other.m_value.second)) {}
-
-  pair_value_type &operator=(const pair_value_type &) = delete;
-  pair_value_type &operator=(pair_value_type &&other) = delete;
+  static const key_type &key(const value_type &value) {
+    return value.first;
+  }
 
   const key_type &key() const {
     return m_value.first;
   }
 
   value_type &value() {
+    return m_value;
+  }
+
+  _mapped_value_type &mapped_value() {
     return m_value.second;
   }
 
@@ -100,12 +115,16 @@ class pair_value_type {
 /// \brief Specialized class whose second template type is void_mapped_value_tag
 /// therefore, value_type is same to key_type
 /// \tparam key_type Type of the key
-template <typename key_type>
+template <typename _key_type>
 class key_only_value_type {
  public:
-  using value_type = const key_type;
+  using key_type = _key_type;
+  using value_type = key_type;
+  using const_key_value_type = const key_type;
 
-  explicit key_only_value_type(key_type key) :
+  key_only_value_type() = default;
+
+  explicit key_only_value_type(const key_type &key) :
       m_value(key) {}
 
   explicit key_only_value_type(key_type &&key) :
@@ -114,12 +133,13 @@ class key_only_value_type {
   ~key_only_value_type() = default;
 
   key_only_value_type(const key_only_value_type &) = default;
+  key_only_value_type(key_only_value_type &&other) noexcept = default;
+  key_only_value_type &operator=(const key_only_value_type &) = default;
+  key_only_value_type &operator=(key_only_value_type &&other) noexcept = default;
 
-  key_only_value_type(key_only_value_type &&other) noexcept
-  : m_value(std::move(const_cast<key_type>(other.m_value))) {}
-
-  key_only_value_type &operator=(const key_only_value_type &) = delete;
-  key_only_value_type &operator=(key_only_value_type &&other) = delete;
+  static const key_type &key(const value_type &value) {
+    return value;
+  }
 
   const key_type &key() const {
     return m_value;
