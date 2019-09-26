@@ -26,7 +26,8 @@
 #include <prunejuice/local_constraint_checking.hpp>
 #include <prunejuice/local_constraint_checking_any_neighbor.hpp>
 #include <prunejuice/non_local_constraint_checking_unique.hpp>
-#include <prunejuice/non_local_constraint_checking_tds_batch.hpp> // TODO: optimize for batch_size = mpi_size
+//#include <prunejuice/non_local_constraint_checking_tds_batch.hpp> // TODO: optimize for batch_size = mpi_size
+#include <prunejuice/non_local_constraint_checking_tds_jump_batch.hpp> // TODO: optimize for batch_size = mpi_size
 
 /*
 //#include <havoqgt/graph.hpp>
@@ -208,6 +209,7 @@ int main(int argc, char** argv) {
     ///havoqgt::get_environment().print();
     //print_system_info(false);
   }
+
   MPI_Barrier(MPI_COMM_WORLD);  
 
   /////////////////////////////////////////////////////////////////////////////
@@ -517,14 +519,29 @@ int main(int argc, char** argv) {
       std::ofstream::out);
   }
 
-  /////////////////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
+
+  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+  bool do_generate_max_candidate_set = false; // TODO: Boolean
+
+  //////////////////////////////////////////////////////////////////////////////
 
   // loop over up to k-edit distance prototypes
 
   double application_time_start = MPI_Wtime();
   double application_time_end = MPI_Wtime();  
 
-  for (size_t pk = 0; pk < edit_distance_prototype_vector.size(); pk++) {
+  for (size_t pk_tmp = 0; pk_tmp <= edit_distance_prototype_vector.size(); 
+    pk_tmp++) {
+
+    size_t pk = 0;
+
+    if (pk_tmp > 0) {
+      pk = pk_tmp - 1; 
+      do_generate_max_candidate_set = false;          
+    } else { 
+      do_generate_max_candidate_set = true;
+    }  
 
     double edit_distance_time_start = MPI_Wtime();
     double edit_distance_time_end = MPI_Wtime();
@@ -532,8 +549,13 @@ int main(int argc, char** argv) {
     size_t current_edit_distance = 
       std::get<0>(edit_distance_prototype_vector[pk]);
     if (mpi_rank == 0) {
-      std::cout << "Pattern Matching | Searching Edit Distance " 
-        << current_edit_distance << " Prototypes ... " << std::endl;  
+      if (do_generate_max_candidate_set) {
+        std::cout << "Pattern Matching | Generating Max Candidate Set ... " 
+          << std::endl; 
+      } else {  
+        std::cout << "Pattern Matching | Searching Edit Distance " 
+          << current_edit_distance << " Prototypes ... " << std::endl;  
+      }
     }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -579,7 +601,7 @@ int main(int argc, char** argv) {
   // setup pattern to search
   if(mpi_rank == 0) { 
     //std::cout << "Setting up Pattern [" << ps << "] ... " << std::endl;
-    std::cout << "Setting up Prototype [" << current_edit_distance << "] ["
+    std::cout << "Pattern Matching | Setting up Prototype [" << current_edit_distance << "] ["
       << ps << "] ... " << std::endl; 
   }
    
@@ -759,13 +781,12 @@ int main(int argc, char** argv) {
   //pattern_dir = "/p/lscratchh/reza2/tmp_1/RDT_25_4/tmp_1/1_" + std::to_string(ps) + "/pattern";
 
 
-  // prototype directory 
-
+  // prototype input directory
   std::string pattern_dir_t = pattern_dir + "/" + 
-    std::to_string(current_edit_distance) + "_" + std::to_string(ps) + "/pattern";  
+    std::to_string(current_edit_distance) + "_" + std::to_string(ps) + "/pattern"; 
 
   if(mpi_rank == 0) {
-    std::cout << "Pattern Matching | Reading Pattern From " << pattern_dir_t << std::endl;  
+    std::cout << "Pattern Matching | Reading Pattern From " << pattern_dir_t << std::endl; 
   }
 
   //continue; // Test
@@ -857,6 +878,8 @@ int main(int argc, char** argv) {
   //MPI_Barrier(MPI_COMM_WORLD); // Test
   //return 0; // Test  
 
+  //////////////////////////////////////////////////////////////////////////////
+
   // initialization - per-pattern
 
   // initialize containers
@@ -872,10 +895,10 @@ int main(int argc, char** argv) {
   //edge_active.reset(0); //  initially all edges are active / inactive
 
   // initialize application parameters  
-  bool global_init_step = true; // TODO: Boolean 
+  bool global_init_step = true; // TODO: Boolean // TODO: only once, when generating the maximum candidate graph? 
   bool global_not_finished = false; // TODO: Boolean
 
-  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+  //bool do_nonlocal_constraint_checking = true; // TODO: Boolean
 
   uint64_t global_itr_count = 0;
   uint64_t active_vertices_count = 0;
@@ -929,7 +952,7 @@ int main(int argc, char** argv) {
 ///  do {
   
   if (mpi_rank == 0) {
-    std::cout << "Running Constraint Checking ..." << std::endl;
+    std::cout << "Pattern Matching | Running Constraint Checking ... " << std::endl;
   }
 
   global_not_finished = false;
@@ -967,8 +990,11 @@ int main(int argc, char** argv) {
   // 28MAR2019 
   // temporary hack 
     
-  /*label_propagation_time_start = MPI_Wtime(); 
+  label_propagation_time_start = MPI_Wtime(); 
 
+  if (do_generate_max_candidate_set) {
+
+  // generate max-candidate set
   prunejuice::approximate::local_constraint_checking_any_neighbor<Vertex,
     VertexData, graph_type, VertexMetadata, VertexStateMap, VertexActive,
     VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
@@ -981,15 +1007,23 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
   label_propagation_time_end = MPI_Wtime();
   if(mpi_rank == 0) {
-    std::cout << "Pattern Matching Time | Connected Component Subgraph : "
+    std::cout << "Pattern Matching Time | Max Candidate Set Generation : "
       << label_propagation_time_end - label_propagation_time_start << std::endl;
-  }*/
+  } 
+
+  // result
+  if(mpi_rank == 0) {
+    step_result_file << global_itr_count << ", MC, " << "0"  << ", "
+      << (label_propagation_time_end - label_propagation_time_start) << "\n";
+  }
 
   do_nonlocal_constraint_checking = false; // Test
-
-  // 28MAR2019
  
-  label_propagation_time_start = MPI_Wtime(); 
+  // 28MAR2019
+
+  } else {
+
+  //label_propagation_time_start = MPI_Wtime(); 
 
   prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
     graph_type, VertexMetadata, VertexStateMap, VertexActive, 
@@ -1005,12 +1039,14 @@ int main(int argc, char** argv) {
   if(mpi_rank == 0) {
     std::cout << "Pattern Matching Time | Local Constraint Checking : " 
       << label_propagation_time_end - label_propagation_time_start << std::endl;
-  }
+  }  
 
   // result
   if(mpi_rank == 0) {
     step_result_file << global_itr_count << ", LP, " << "0"  << ", "
       << (label_propagation_time_end - label_propagation_time_start) << "\n";
+  }
+
   }
 
 //#endif
@@ -1100,13 +1136,6 @@ int main(int argc, char** argv) {
   // Test
 
   /////////////////////////////////////////////////////////////////////////////
-  
-  // Test
-  // forced token passing
-  if (global_itr_count == 0) {
-    global_not_finished = true; // TODO: for load balancing experiments, ?  
-  }
-  // Test  
 
 //#ifdef ENABLE_BLOCK 
   // toekn passing
@@ -1115,6 +1144,13 @@ int main(int argc, char** argv) {
   if (ptrn_util_two.input_patterns.size() < 1) {
     do_nonlocal_constraint_checking = false; 
   }   
+
+  // Test
+  // forced token passing
+  if (global_itr_count == 0) {
+    global_not_finished = true; // TODO: for load balancing experiments, ?  
+  }
+  // Test  
 
   //if ((token_passing_algo == 0) && global_not_finished) { // do token passing ?
   if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
