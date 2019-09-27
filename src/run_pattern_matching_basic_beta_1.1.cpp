@@ -120,6 +120,7 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_input,
   bool print_help = false;
   std::bitset<3> required_input;
   required_input.reset();
+  required_input.set(2); // TODO: improve
 
   char c;
   while ((c = getopt(argc, argv, "i:b:v:e:p:o:x:h ")) != -1) {
@@ -169,6 +170,21 @@ void parse_cmd_line(int argc, char** argv, std::string& graph_input,
     usage();
     exit(-1);
   }
+}
+
+template <typename EditDistancePrototypeVector, typename Uint>
+void read_edit_distance_prototype_manifest_file(std::string manifest_filename, 
+  EditDistancePrototypeVector& edit_distance_prototype_vector) {
+  std::ifstream manifest_file(manifest_filename, std::ifstream::in);
+  std::string line;
+  while (std::getline(manifest_file, line)) {
+    std::istringstream iss(line);
+    Uint edit_distance(0), prototype_count(0); 
+    iss >> edit_distance >> prototype_count;
+    edit_distance_prototype_vector.push_back
+      (std::forward_as_tuple(edit_distance, prototype_count));
+  } 
+  manifest_file.close();
 }
 
 int main(int argc, char** argv) {
@@ -225,7 +241,7 @@ int main(int argc, char** argv) {
     tp_vertex_batch_size); 
 
   std::string pattern_dir = pattern_input; 
-  std::string result_dir = result_output;
+  std::string result_dir = "/todo/"; //result_output; // TODO 
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -350,6 +366,8 @@ int main(int argc, char** argv) {
     std::cout << "Pattern Matching ... " << std::endl;
   }
 
+  //////////////////////////////////////////////////////////////////////////////
+
   double time_start = MPI_Wtime();
   double time_end = MPI_Wtime();
 
@@ -388,7 +406,7 @@ int main(int argc, char** argv) {
   VertexSet k_edit_distance_vertex_set(0); // Test 
   // TODO: Important : on each vertex a vector of bitsets, one for each k edit 
   // distance. k + 1 prototypes use the result from k. 
-  // Above is a hack temporary hack.  
+  // Above is a temporary hack.  
 
   if(mpi_rank == 0) {
     std::cout << "Pattern Matching | Allocated Vertex and Edge Containers" 
@@ -463,15 +481,82 @@ int main(int argc, char** argv) {
   //MPI_Barrier(MPI_COMM_WORLD); // Test  
   //return 0; // Test
 
+  /////////////////////////////////////////////////////////////////////////////
+
+  // read the manifest file for the edit distance based approximate matching
+
+  std::string manifest_filename = pattern_dir + "/manifest";
+    //"/p/lustre3/havoqgtu/reza2_tmp/apm_5/4_clique_unique_labels_apm/tmp_1/manifest"; // TODO: CLI 
+  typedef std::vector<std::tuple<size_t, size_t>> EditDistancePrototypeVector;
+  EditDistancePrototypeVector edit_distance_prototype_vector;
+
+  read_edit_distance_prototype_manifest_file
+    <EditDistancePrototypeVector, size_t>
+    (manifest_filename, edit_distance_prototype_vector);  
+  
+  // Test
+  if (mpi_rank == 0) {
+    std::cout << "Edit Distance, Prototype Count" << std::endl; 
+    for (size_t i = 0; i < edit_distance_prototype_vector.size(); i++) {
+      std::cout << std::get<0>(edit_distance_prototype_vector[i]) << " "
+        << std::get<1>(edit_distance_prototype_vector[i]) << std::endl;  
+    }
+  } 
+  // Test
+  
+  MPI_Barrier(MPI_COMM_WORLD);  
+
+  //return 0; // Test
+
   ///////////////////////////////////////////////////////////////////////////// 
  
   // result
   std::string pattern_set_result_filename = result_dir + "/result_pattern_set";
   std::ofstream pattern_set_result_file;  
   if (mpi_rank == 0) {
-    pattern_set_result_file = std::ofstream(pattern_set_result_filename, std::ofstream::out);
+    pattern_set_result_file = std::ofstream(pattern_set_result_filename, 
+      std::ofstream::out);
   }
 
+  /////////////////////////////////////////////////////////////////////////////
+
+  double application_time_start = MPI_Wtime();
+  double application_time_end = MPI_Wtime();
+ 
+  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+  //bool do_generate_max_candidate_set = false; // TODO: Boolean
+
+  size_t all_edit_distance_vertex_set_size_global = 0;
+ 
+  // loop over up to k-edit distance prototypes
+  
+  for (size_t pk_tmp = 0; pk_tmp <= edit_distance_prototype_vector.size(); 
+    pk_tmp++) {
+
+    size_t pk = 0;
+
+    if (pk_tmp > 0) {
+      pk = pk_tmp - 1; 
+      //do_generate_max_candidate_set = false;          
+    } else { 
+      //do_generate_max_candidate_set = true;
+    }  
+
+    double edit_distance_time_start = MPI_Wtime();
+    double edit_distance_time_end = MPI_Wtime();
+
+    size_t current_edit_distance = 
+      std::get<0>(edit_distance_prototype_vector[pk]);
+    if (mpi_rank == 0) { // TODO: 
+      //if (do_generate_max_candidate_set) {
+      //  std::cout << "Pattern Matching | Generating Max Candidate Set ... " 
+      //    << std::endl; 
+      //} else {  
+        std::cout << "Pattern Matching | Searching Edit Distance " 
+          << current_edit_distance << " Prototypes ... " << std::endl;  
+      //}
+    }
+ 
   /////////////////////////////////////////////////////////////////////////////
 
   // TODO: setup pattern set 
@@ -479,11 +564,11 @@ int main(int argc, char** argv) {
   
   // TODO: code indentation
 
-  double application_time_start = MPI_Wtime();
-  double application_time_end = MPI_Wtime();
-   
   // loop over pattern set
   
+  //size_t max_ps = 1; // Test
+  size_t max_ps = std::get<1>(edit_distance_prototype_vector[pk]); // Test // prototype_count 
+
   //size_t max_ps = 7 + 2; // RMAT // Test
   //size_t max_ps = 15 + 2; // RMAT //11 + 1; // Test
   //size_t max_ps = 5 + 2; // RDT_25_4 // Test
@@ -501,19 +586,28 @@ int main(int argc, char** argv) {
   //size_t max_ps = 1 + 9 + 33 + 61 + 48; // wdc_patterns_31_c/
  
   //size_t max_ps = 1 + 6 + 15 + 16; // ER, ML, 4U
-  size_t max_ps = 1 + 2 + 4 + 4; // ER, ML, 1U
-  //size_t max_ps = 1 + 4 + 9 + 9; // ER, ML, 1U
+  //size_t max_ps = 1 + 2 + 4 + 4; // ER, ML, 1U
+  //size_t max_ps = 1 + 4 + 9 + 9; // ER, ML, 2U
 
-  std::string pattern_root_dir = pattern_dir;
-  std::string pattern_output_dir = ""; 
+  //std::string pattern_root_dir = pattern_dir;
+  //std::string pattern_output_dir = ""; 
+
+  // loop over k-edit distance prototypes 
    
   for (size_t ps = 0; ps < max_ps; ps++) { // TODO: for now, only reading from pattern_dir/0 
   //for (size_t ps = 0; ps < 1; ps++) {
+
+  double prototype_time_start = MPI_Wtime();
+  double prototype_time_end = MPI_Wtime();
+
   // beginning of the pattern set
    
   // setup pattern to search
   if(mpi_rank == 0) { 
-    std::cout << "Setting up Pattern [" << ps << "] ... " << std::endl;
+    //std::cout << "Setting up Pattern [" << ps << "] ... " << std::endl;
+    std::cout << "Pattern Matching | Setting up Prototype [" 
+      << current_edit_distance << "] ["
+      << ps << "] ... " << std::endl;   
   }
    
   // setup pattern - for local constraint checking 
@@ -544,7 +638,7 @@ int main(int argc, char** argv) {
   }*/  
 
   // 1U
-  if (ps == 0) { 
+  /*if (ps == 0) { 
     pattern_dir = pattern_root_dir + "/0_" + std::to_string(ps) + "/pattern";
     pattern_output_dir = pattern_root_dir + "/0_" + std::to_string(ps) + "/output/";
   } else if (ps >= 1 && ps <= 2) {
@@ -562,7 +656,7 @@ int main(int argc, char** argv) {
   } else {
     std::cerr << "Error: wrong value." << std::endl;
     continue;
-  }
+  }*/
 
   // 2U
   /*if (ps == 0) { 
@@ -734,9 +828,18 @@ int main(int argc, char** argv) {
    
   //pattern_dir = "/p/lscratchh/reza2/tmp_1/RDT_25_4/tmp_1/1_" + std::to_string(ps) + "/pattern";
 
+  // prototype input directory
+  std::string pattern_input_dir = pattern_dir + "/" + 
+    std::to_string(current_edit_distance) + "_" + std::to_string(ps) + "/pattern";
+  std::string pattern_output_dir = pattern_dir + "/" +
+    std::to_string(current_edit_distance) + "_" + std::to_string(ps) + "/output"; 
+
   if(mpi_rank == 0) {
-    std::cout << "Pattern Matching | Reading Pattern From " << pattern_dir << std::endl; 
-    std::cout << "Pattern Matching | Output Directory " << pattern_output_dir << std::endl; 
+    //std::cout << "Pattern Matching | Reading Pattern From " << pattern_dir << std::endl; 
+    //std::cout << "Pattern Matching | Output Directory " << pattern_output_dir << std::endl; 
+    std::cout << "Pattern Matching | Reading Input From : " << pattern_input_dir << std::endl; 
+    std::cout << "Pattern Matching | Output Directory : " << pattern_output_dir << std::endl; 
+
   }
 
   //continue;
@@ -744,7 +847,7 @@ int main(int argc, char** argv) {
   // Test
  
   //std::string pattern_input_filename = pattern_dir + "/" + std::to_string(ps) + "/pattern";
-  std::string pattern_input_filename = pattern_dir + "/pattern";
+  std::string pattern_input_filename = pattern_input_dir + "/pattern";
   
   typedef prunejuice::pattern_graph_csr<Vertex, Edge, VertexData,
     EdgeData, TemplateVertexBitSet, Boolean, ApproximateQuery> PatternGraph;
@@ -778,7 +881,7 @@ int main(int argc, char** argv) {
     }*/
     std::cout << std::endl; 
   }
-  std::cout << "diameter : " << pattern_graph.diameter << std::endl; 
+  std::cout << "diameter : TODO" << std::endl; //<< pattern_graph.diameter << std::endl; // TODO:
   }
   // test print
 
@@ -811,7 +914,8 @@ int main(int argc, char** argv) {
 
   PatternNonlocalConstraint ptrn_util_two(pattern_graph,
     //pattern_input_filename + "_nonlocal_constraint");
-    pattern_dir + "/pattern_nonlocal_constraint"); 
+    //pattern_dir + "/pattern_nonlocal_constraint"); 
+    pattern_input_dir + "/pattern_nonlocal_constraint");
 
   //auto pattern = std::get<0>(ptrn_util_two.input_patterns[0]); // TODO: remove
   //auto pattern_indices = std::get<1>(ptrn_util_two.input_patterns[0]); // TODO: remove
@@ -826,7 +930,10 @@ int main(int argc, char** argv) {
   // Test
 
   //MPI_Barrier(MPI_COMM_WORLD); // Test
-  //return 0; // Test  
+  //return 0; // Test
+  //continue; // Test  
+
+  //////////////////////////////////////////////////////////////////////////////
 
   // initialization - per-pattern
 
@@ -846,7 +953,8 @@ int main(int argc, char** argv) {
   bool global_init_step = true; // TODO: Boolean 
   bool global_not_finished = false; // TODO: Boolean
 
-  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+  //bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+  do_nonlocal_constraint_checking = true; // TODO: Boolean
 
   uint64_t global_itr_count = 0;
   uint64_t active_vertices_count = 0;
@@ -980,6 +1088,7 @@ int main(int argc, char** argv) {
       std::cout << "Continue" << std::endl;
     } else {
       std::cout << "Stop" << std::endl;
+      do_nonlocal_constraint_checking = false; 
     } 
   }
 
@@ -1046,13 +1155,6 @@ int main(int argc, char** argv) {
 
   /////////////////////////////////////////////////////////////////////////////
   
-  // Test
-  // forced token passing
-  if (global_itr_count == 0) {
-    global_not_finished = true; // TODO: for load balancing experiments, ?  
-  }
-  // Test  
-
 //#ifdef ENABLE_BLOCK 
   // toekn passing
   double token_passing_time_start = MPI_Wtime(); 
@@ -1061,6 +1163,15 @@ int main(int argc, char** argv) {
     do_nonlocal_constraint_checking = false; 
   }   
 
+  // Test
+  // forced token passing
+  // Important : freezes in edit distance mode, do not enable 
+  //if (global_itr_count == 0) {
+    //global_not_finished = true; // TODO: for load balancing experiments, ?  
+  //}
+  // Test  
+
+  // TODO: code indentation
   //if ((token_passing_algo == 0) && global_not_finished) { // do token passing ?
   if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
 
@@ -1679,6 +1790,23 @@ int main(int argc, char** argv) {
 //--      std::cout << "No active vertex left." << std::endl;
 //--    }
 //--  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  // global termination detection
+
+  // Test
+  // global active vertices count
+  size_t global_active_vertices_count =  
+    havoqgt::mpi_all_reduce(vertex_state_map.size(),
+    std::greater<size_t>(), MPI_COMM_WORLD);   
+  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+  if (global_active_vertices_count < 1) {
+    break;
+  }
+  // Test
+
+  //////////////////////////////////////////////////////////////////////////////
    	  
   } else { // if (token_source_deleted) // if (global_not_finished) - old code
     if(mpi_rank == 0) {
@@ -1920,8 +2048,50 @@ int main(int argc, char** argv) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   // end of an elemnet in the pattern set
-  } // for - loop over pattern set
+  } // for - loop over pattern set // loop over k-edit distance prototypes
 
+  //application_time_end = MPI_Wtime();
+  edit_distance_time_end = MPI_Wtime();
+  if (mpi_rank == 0) {    
+    std::cout << "Pattern Matching Time | Edit Distance [" << pk << "] : "
+      << edit_distance_time_end - edit_distance_time_start << std::endl;
+  }
+
+  // Test
+  // k-edit distance output 
+  MPI_Barrier(MPI_COMM_WORLD); 
+  size_t k_edit_distance_vertex_set_size_global = 
+    havoqgt::mpi_all_reduce(k_edit_distance_vertex_set.size(), 
+    std::plus<size_t>(), MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  if (mpi_rank == 0) {
+    //std::cout << "Pattern Matching | Global Vertex Match Count : " << k_edit_distance_vertex_set_size_global << std::endl;
+    std::cout << "Pattern Matching | Edit Distance Vertex Match Count | Edit Distance [" << pk
+      << "] : " << k_edit_distance_vertex_set_size_global << std::endl;
+  }
+
+  k_edit_distance_vertex_set.clear(); // Test
+
+  all_edit_distance_vertex_set_size_global+=k_edit_distance_vertex_set_size_global;
+
+  // vertex_nlc_matches
+  /*for (auto& v : vertex_state_map) {
+    auto v_locator = graph->label_to_locator(v.first);
+    if (!vertex_nlc_matches[v_locator].none()) {
+      std::cout << vertex_nlc_matches[v_locator] << std::endl;     
+    }
+  }*/
+  // Test
+
+
+  ////////////////////////////////////////////////////////////////////////////// 
+
+  } // for - loop over up to k-edit distance prototypes
+
+  //////////////////////////////////////////////////////////////////////////////
+ 
+  MPI_Barrier(MPI_COMM_WORLD); 
   application_time_end = MPI_Wtime();
   if (mpi_rank == 0) {    
     std::cout << "Pattern Matching Time | Application : "
@@ -1929,27 +2099,33 @@ int main(int argc, char** argv) {
   }
 
   // Test
-  MPI_Barrier(MPI_COMM_WORLD); 
+  /*MPI_Barrier(MPI_COMM_WORLD); 
   size_t k_edit_distance_vertex_set_size_global = 
     havoqgt::mpi_all_reduce(k_edit_distance_vertex_set.size(), std::plus<size_t>(), MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD);
   
   if (mpi_rank == 0) {
     std::cout << "Pattern Matching | Global Vertex Match Count : " << k_edit_distance_vertex_set_size_global << std::endl;
+  }*/
+
+  if (mpi_rank == 0) {
+    std::cout << "Pattern Matching | Global Vertex Match Count : " << all_edit_distance_vertex_set_size_global << std::endl;
   }
 
-  for (auto& v : vertex_state_map) {
+  /*for (auto& v : vertex_state_map) {
     auto v_locator = graph->label_to_locator(v.first);
     if (!vertex_nlc_matches[v_locator].none()) {
       std::cout << vertex_nlc_matches[v_locator] << std::endl;     
     }
-  }
+  }*/
   // Test
 
   if (mpi_rank == 0) {
     pattern_set_result_file.close(); // close file
     std::cout << "Pattern Matching | Done." << std::endl;
   }
+
+  ////////////////////////////////////////////////////////////////////////////////
 
   } // pattern matching  
 
