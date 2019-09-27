@@ -540,6 +540,7 @@ int main(int argc, char** argv) {
       //do_generate_max_candidate_set = false;          
     } else { 
       //do_generate_max_candidate_set = true;
+      continue; // TODO:	
     }  
 
     double edit_distance_time_start = MPI_Wtime();

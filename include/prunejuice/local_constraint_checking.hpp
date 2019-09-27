@@ -1,25 +1,25 @@
 #pragma once
 
-#include <bitset>
+//#include <bitset>
 
 #include <boost/dynamic_bitset.hpp>
 
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-# define OUTPUT_RESULT
+#define OUTPUT_RESULT
 
 //using namespace havoqgt;
 
 //static constexpr size_t max_bit_vector_size = 16;
-///static uint64_t lp_visitor_count = 0;
+///static uint64_t lcc_visitor_count = 0;
 
 ///namespace havoqgt { ///namespace mpi {
 namespace prunejuice {
 
-static uint64_t lp_visitor_count = 0;
+static uint64_t lcc_visitor_count = 0;
 
-#ifdef BLOCK
+#ifdef ENABLE_BLOCK
 template<typename IntegralType>
 class vertex_state {
 public:
@@ -153,7 +153,7 @@ public:
 
   template<typename AlgData> 
   bool pre_visit(AlgData& alg_data) const {
-    lp_visitor_count++; 
+    lcc_visitor_count++; 
     if (!std::get<4>(alg_data)[vertex]) {
       return false;
     }
@@ -473,7 +473,7 @@ public:
 
   template<typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {   
-    //lp_visitor_count++; 
+    //lcc_visitor_count++; 
     if (!std::get<4>(alg_data)[vertex]) {
       return false;
     }
@@ -807,7 +807,7 @@ public:
 	  return 0;		
         }    
       } else {
-        std::cerr << "Error: did not find the expected item in the map." << std::endl;
+//16MARCH2019        std::cerr << "Error: did not find the expected item in the map." << std::endl;
         return 0;
       }        
     } else {
@@ -941,11 +941,35 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         // and in addition to vertex_active.all_min_reduce(), we need to sync all the set bits on the delegates.
         // to_ullong(), all_max_reduce, vertex_data<bitset> but when you do reduction pass to_ullong()? or 
         BitSet tmp_pattern_vertex_edges;  // TODO: this should be done once per MPI rank  
-        for (auto e = pattern_graph.vertices[vertex_pattern_index];
+        /*for (auto e = pattern_graph.vertices[vertex_pattern_index];
           e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
           assert(pattern_graph.edges[e] < 16); // Test
-          tmp_pattern_vertex_edges.set(pattern_graph.edges[e]);  
+          tmp_pattern_vertex_edges.set(pattern_graph.edges[e]);  //16MAR2019
+        }*/
+
+        //16MAR2019 // TODO: debug and fix the bitset index issue 
+
+        //assert(vertex_pattern_index <= 7);  
+        for (size_t e = pattern_graph.vertices[vertex_pattern_index];
+          e < pattern_graph.vertices[vertex_pattern_index + 1]; e++) {
+
+          //assert(e <= 7);             
+
+          assert(pattern_graph.edges[e] < 16); // Test
+          size_t vertex_pattern_index_nbr = pattern_graph.edges[e];
+          assert(vertex_pattern_index_nbr < 16);
+
+          try {
+            tmp_pattern_vertex_edges.set(vertex_pattern_index_nbr);
+          } catch (const std::exception& e) {
+            //16MAR2019 std::cerr << "Exception: " << " " << e.what() << std::endl;
+          }
+
+          //tmp_pattern_vertex_edges.set(pattern_graph.edges[e]);  //16MAR2019
+          //tmp_pattern_vertex_edges.set();
         }
+
+        //16MAR2019 
 
         assert(!tmp_pattern_vertex_edges.none()); // Important 
 
@@ -973,13 +997,13 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
             not_finished = true;
           }
 
-        } 
+        } // if 
 
       } // if
     } // for
 
     if (v.second.template_vertices.none()) {
-      vertex_remove_from_map_list.push_back(v.first);
+      vertex_remove_from_map_list.push_back(v.first); // TODO: remove vertex_remove_from_map_list and use C++11 erase
       vertex_active[v_locator] = false;
       vertex_active_edges_map[v_locator].clear(); // edge elimination 
       //template_vertices[v_locator] = 0;  
@@ -1060,7 +1084,7 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
 
   vertex_active.all_min_reduce();
   //template_vertices.all_bor_reduce();  
-  template_vertices.all_max_reduce(); // ensure all the delegates have the value as the controller 
+  template_vertices.all_max_reduce(); // ensure all the delegates have the same value as the controller 
   MPI_Barrier(MPI_COMM_WORLD);
 
   // edge elimination
@@ -1075,13 +1099,15 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
     if (!vertex_active[vertex]) {
       vertex_active_edges_map[vertex].clear();
 
-      if (!global_not_finished) {
+      // Important : must not do this here
+      // termination detection
+      /*if (!global_not_finished) {
         global_not_finished = true;
       }
 
       if (!not_finished) {
         not_finished = true;
-      }
+      }*/
 
     } else {  
       for (auto itr = vertex_active_edges_map[vertex].begin(); 
@@ -1090,15 +1116,16 @@ void verify_and_update_vertex_state(TGraph* g, AlgData& alg_data,
         << std::endl; // Test
         if (!itr->second) {
           itr = vertex_active_edges_map[vertex].erase(itr); // C++11  
- 
+
+          // Important : must not do this here  
           // termination detection  
-          if (!global_not_finished) {
+          /*if (!global_not_finished) {
             global_not_finished = true;
           }
 
           if (!not_finished) {
             not_finished = true;
-          } 
+          }*/ 
 
         } else {
           itr->second = 0; 
@@ -1152,7 +1179,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
   VertexIteration vertex_iteration = 0;  
   // dummy // 
    
-  typedef lppm_visitor<TGraph, Vertex, VertexData, BitSet> visitor_type;
+  typedef prunejuice::lppm_visitor<TGraph, Vertex, VertexData, BitSet> visitor_type;
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank,
     vertex_active, vertex_iteration, vertex_state_map_generic, pattern_graph, superstep_var, global_init_step, g, template_vertices, vertex_active_edges_map);
   auto vq = havoqgt::create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(g, alg_data);
@@ -1161,12 +1188,14 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     std::cout << "Local Constraint Checking ... " << std::endl; 
   } 
 
-  // beiginning of BSP execution
+  // beginning of BSP execution
   // TODO: change for loop to use a local termination detection at the end of a seperstep
   //bool not_finished = false;
  
   //for (uint64_t superstep = 0; superstep < 1; superstep++) {
-  for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  //for (uint64_t superstep = 0; superstep < pattern_graph.diameter; superstep++) {
+  uint64_t superstep = 0;
+  do {
     superstep_ref = superstep;
     if (mpi_rank == 0) { 
       //std::cout << "Superstep #" << superstep << std::endl;
@@ -1193,12 +1222,25 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
 
     // TODO: TBA new verify_and_update_vertex_state_generic( ... )
  
-    verify_and_update_vertex_state<TGraph, decltype(alg_data), VertexStateMapGeneric,
+    prunejuice::verify_and_update_vertex_state<TGraph, decltype(alg_data), VertexStateMapGeneric,
       PatternGraph, VertexActive, VertexIteration, BitSet, TemplateVertex>(g, alg_data, vertex_state_map_generic, pattern_graph, 
       vertex_active, vertex_iteration, superstep, global_init_step, global_not_finished, not_finished, template_vertices, vertex_active_edges_map);
     //MPI_Barrier(MPI_COMM_WORLD);
     //std::cout << "MPI Rank : " << mpi_rank <<  " - vertex_state_map_generic.size() : " << vertex_state_map_generic.size() << std::endl; // Test
   
+    // global active vertices count
+    size_t global_active_vertices_count =  havoqgt::mpi_all_reduce(vertex_state_map_generic.size(),
+      std::greater<size_t>(), MPI_COMM_WORLD);
+
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+
+    if (global_active_vertices_count < 1) {
+      not_finished = false;   
+      global_not_finished = false;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+
     // local terminatiion detection
     not_finished = havoqgt::mpi_all_reduce(not_finished, std::greater<uint8_t>(), MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
@@ -1208,6 +1250,11 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     if (mpi_rank == 0) {
       //std::cout << "Superstep #" << superstep <<  " Time " << time_end - time_start << std::endl;
       std::cout << " | Time : " << time_end - time_start << std::endl;
+    }
+
+    if(mpi_rank == 0) {
+       std::cout << "Local Constraint Checking | Global Active Vertex Count : "
+         << global_active_vertices_count << std::endl;
     }
 
     if (mpi_rank == 0) {
@@ -1243,6 +1290,10 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
  
         // edges
         active_edges_count+=vertex_active_edges_map[v_locator].size();   
+      } else {
+        std::cerr << "Error: Delegate slave in the map of active vertices."
+          << std::endl;
+        //return -1;
       }
     }
  
@@ -1259,18 +1310,20 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     // messages
     message_count_result_file << global_itr_count << ", LP, "
       << superstep << ", "
-      << lp_visitor_count << "\n";   
+      << lcc_visitor_count << "\n";   
  
 #endif
 
-    lp_visitor_count = 0; // reset for next iteration 
+    lcc_visitor_count = 0; // reset for next iteration 
 
     // TODO: global reduction on global_not_finished before next iteration
-    if (!not_finished) { // Important : this must come after output/file write  
-      break;
-    } 
-    
-  } // for 
+    //if (!not_finished) { // Important : this must come after output/file write  
+    //  break;
+    //}
+     
+    superstep++;  
+  } while (not_finished);
+  //} // for 
   // end of BSP execution  
 }  
 

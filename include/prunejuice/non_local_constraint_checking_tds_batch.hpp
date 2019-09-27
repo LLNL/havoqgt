@@ -14,7 +14,7 @@
 namespace prunejuice {
 
 // TODO: improve
-static bool enable_token_aggregation = true;
+static bool enable_token_aggregation = false; //true;
 static bool enable_vertex_token_source_cache = false; // TODO: delete
 static bool path_checking_filter = false; //true;
 static uint64_t visitor_count;
@@ -460,7 +460,10 @@ public:
     // std::get<20>(alg_data); // available
     // std::get<21>(alg_data); // vertex_sequence_number
     // std::get<22>(alg_data); // pattern_aggregation_steps
-    
+
+    // std::get<23>(alg_data); // pattern_constraint
+    // std::get<24>(alg_data); // vertex_nlc_matches   
+
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // init tokens from the source vertex    
           
@@ -707,11 +710,11 @@ public:
             vis_queue->queue_visitor(new_visitor); 
 
             // write to the paths_result_file  
-            std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
+            /*std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
             for (size_t i = 0; i <= new_itr_count ; i++) { 
               std::get<17>(alg_data) << g.locator_to_label(visited_vertices[i]) << ", ";  
             }
-            std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";
+            std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";*/
 
             path_count++; // Test 
  
@@ -744,11 +747,11 @@ public:
           std::get<9>(alg_data) = 1; // true; // pattern_found
    
           // write to the paths_result_file  
-          std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
+          /*std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
           for (size_t i = 0; i <= new_itr_count ; i++) { 
             std::get<17>(alg_data) << g.locator_to_label(visited_vertices[i]) << ", ";  
           }
-          std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";
+          std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";*/
 
           path_count++; // Test  
   
@@ -826,7 +829,7 @@ public:
                 }
               }  
             } else if (std::get<18>(alg_data)[new_itr_count + 1] < new_itr_count + 1) {
-              // neighbour is expected in visited_vertices
+              // neighbour is expected in visited_vertices // TODO: jump, optimize, need input to indicate a jump
               if (g.locator_to_label(visited_vertices[std::get<18>(alg_data)[new_itr_count + 1]]) 
                 != g.locator_to_label(neighbour)) {
                 match_found = true;              
@@ -868,7 +871,7 @@ public:
               }
             }  
           } else if (std::get<18>(alg_data)[new_itr_count + 1] < new_itr_count + 1) {
-            // neighbour is expected in visited_vertices
+            // neighbour is expected in visited_vertices // TODO: jump, optimize, need input to indicate a jump
             if (g.locator_to_label(visited_vertices[std::get<18>(alg_data)[new_itr_count + 1]]) 
               != g.locator_to_label(neighbour)) {
               match_found = true;              
@@ -1009,7 +1012,7 @@ template <typename TGraph, typename Vertex, typename Edge, typename VertexData,
   typename PatternUtilities, typename VertexUint8Map, 
   typename VertexSetCollection, 
   template<typename> class DelegateGraphVertexDataSTDAllocator,
-  typename Boolean, typename BitSet>
+  typename Boolean, typename BitSet, typename VertexNonlocalConstraintMatches>
 
 void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   VertexActive& vertex_active, 
@@ -1020,7 +1023,9 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
   VertexSetCollection& vertex_token_source_set,
   std::vector<uint8_t>::reference pattern_found,
   std::uint64_t batch_size, 
-  std::ofstream& paths_result_file, uint64_t& message_count) {
+  std::ofstream& paths_result_file, uint64_t& message_count, 
+  uint64_t pattern_constraint, 
+  VertexNonlocalConstraintMatches& vertex_nlc_matches) {
 
   visitor_count = 0;
 
@@ -1415,10 +1420,21 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
       for (auto vitr = token_source_set.begin(); vitr != token_source_set.end();) {
         auto find_token_source = batch_token_source_map.find(*vitr);
         if (find_token_source == batch_token_source_map.end()) {
-          auto insert_status = batch_token_source_map.insert({*vitr, false});
-          if (!insert_status.second) {
-            std::cerr << "Error: failed to add an element to the map." << std::endl; 
-          } 
+
+          // approximate matching
+          // skip the vertices that met this constraint          
+          vertex_locator vertex = g->label_to_locator(*vitr);
+          assert(pattern_constraint <= 16); // Test 
+          if(!vertex_nlc_matches[vertex].test(static_cast<size_t>(pattern_constraint))) {  
+            //std::cout << pattern_constraint << " Already Set. "; // Test       
+       
+            auto insert_status = batch_token_source_map.insert({*vitr, false});
+            if (!insert_status.second) {
+              std::cerr << "Error: failed to add an element to the map." << std::endl; 
+            } 
+
+          }
+
           vitr = token_source_set.erase(vitr); // C++11 
         } else {
           std::cerr << "Error: unexpected item in the map." << std::endl;
@@ -1476,7 +1492,9 @@ void token_passing_pattern_matching(TGraph* g, VertexMetadata& vertex_metadata,
       pattern_found, 
       edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
       pattern_selected_vertices, paths_result_file, pattern_enumeration_indices, visitor_set_receive,
-      superstep_var, vertex_sequence_number, pattern_aggregation_steps);
+      superstep_var, vertex_sequence_number, pattern_aggregation_steps, pattern_constraint, vertex_nlc_matches);
+
+      // TODO: remove, pattern_constraint, vertex_nlc_matches and others that are not used
 
     auto vq = havoqgt::create_visitor_queue<visitor_type, 
       /*havoqgt::detail::visitor_priority_queue*/tppm_queue_tds>(g, alg_data);

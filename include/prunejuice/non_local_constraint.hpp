@@ -15,7 +15,8 @@
 
 using namespace prunejuice::utilities;
 
-template <typename Vertex, typename Edge, typename VertexData, typename PatternGraph> 
+template <typename Vertex, typename Edge, typename VertexData, 
+  typename PatternGraph, typename Uint = uint64_t> 
 class pattern_nonlocal_constraint {
   public:
 
@@ -195,7 +196,8 @@ class pattern_nonlocal_constraint {
     std::vector<std::vector<VertexData>> one_path_patterns;
     std::vector<std::vector<VertexData>> two_path_patterns; 
 
-    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns;
+    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, 
+      Edge, bool, bool, bool, Uint> > input_patterns;
     // TODO: verify stoull, bool, uint8_t compatibility  
     std::vector<std::vector<Vertex>> enumeration_patterns;
     std::vector<std::vector<uint8_t>> aggregation_steps;
@@ -222,7 +224,7 @@ class pattern_nonlocal_constraint {
 	std::istringstream iss(line);
 
         auto tokens = split(line, ':');
-        assert(tokens.size() > 5); // TODO: improve 	   
+        assert(tokens.size() > 6); // TODO: improve 	   
 
         boost::trim(tokens[0]); // important  
         boost::trim(tokens[1]); // important
@@ -230,6 +232,7 @@ class pattern_nonlocal_constraint {
         boost::trim(tokens[3]); // important
         boost::trim(tokens[4]); // important
         boost::trim(tokens[5]); // important
+        boost::trim(tokens[6]); // important 
 
         auto vertices = split<Vertex>(tokens[0], ' ');
         assert(vertices.size()> 2);
@@ -250,7 +253,8 @@ class pattern_nonlocal_constraint {
               (vertices.size() - 2), // path length
               std::stoull(tokens[3]), // 0 - acyclic, 1 - cyclic 
               std::stoull(tokens[4]), // 0 - regular, 1 - TDS
-              std::stoull(tokens[5]) // 0 - skip LCC, 1 - invoke LCC   
+              std::stoull(tokens[5]), // 0 - skip LCC, 1 - invoke LCC  
+              std::stoull(tokens[6]) // constraint ID 
             )
           );
      

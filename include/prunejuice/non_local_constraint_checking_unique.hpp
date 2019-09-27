@@ -13,6 +13,8 @@ namespace prunejuice {
 
 static bool enable_vertex_token_source = true;
 static uint64_t tp_visitor_count = 0;
+static uint64_t tp_token_source_count = 0;
+static uint64_t tp_path_count = 0;
 
 template<typename Visitor>
 class tppm_queue {
@@ -387,11 +389,21 @@ public:
     
     // std::get<18>(alg_data); // pattern_mark_join_vertex
     // std::get<19>(alg_data); // pattern_ignore_join_vertex
-    // std::get<20>(alg_data); // pattern_join_vertex 
+    // std::get<20>(alg_data); // pattern_join_vertex
+    
+    // std::get<21>(alg_data); // pattern_constraint
+    // std::get<22>(alg_data); // vertex_nlc_matches  
 
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // create visitors only for the source vertices
        
+      // approximate matching
+      // skip the vertices that met this constraint 
+      if (std::get<22>(alg_data)[vertex].test(static_cast<size_t>(std::get<21>(alg_data)))) {
+        //std::cout << std::get<21>(alg_data) << " Already Set. "; // Test
+        return false;
+      }
+
       // Test 
 //      for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
 //        vertex_locator neighbor = eitr.target();
@@ -487,6 +499,8 @@ public:
       // initiate token passing from the source vertex
 //--      for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
 //--        vertex_locator neighbour = eitr.target();
+
+      tp_token_source_count++;
 
       for (auto& item : std::get<15>(alg_data)[vertex]) { // vertex_active_edges_map
         vertex_locator neighbour = g.label_to_locator(item.first);
@@ -718,7 +732,7 @@ public:
 
                 find_token_source->second = 1; //true;   
                 std::get<9>(alg_data) = 1; // true; // pattern_found
-	
+		tp_path_count++;	
               }
 
               return false;  
@@ -761,7 +775,7 @@ public:
 //          }
  
           std::get<9>(alg_data) = 1; // true; // pattern_found	
-
+          tp_path_count++;
 //++          return true; // Important : must return true to handle delegates
           
           // mark the edge received the successful token on     	  
@@ -914,7 +928,7 @@ template <typename TGraph, typename VertexMetaData, typename PatternData,
   typename PatternIndices, typename VertexRank, typename PatternGraph, 
   typename VertexStateMap, typename TokenSourceMap, typename EdgeMetaData, 
   typename VertexSetCollection, typename VertexActive, typename TemplateVertex, 
-  typename VertexUint8MapCollection, typename BitSet>
+  typename VertexUint8MapCollection, typename BitSet, typename VertexNonlocalConstraintMatches>
 void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata, 
   PatternData& pattern, PatternIndices& pattern_indices, 
   VertexRank& vertex_rank, PatternGraph& pattern_graph, VertexStateMap& vertex_state_map,
@@ -924,7 +938,8 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   TemplateVertex& template_vertices, VertexUint8MapCollection& vertex_active_edges_map, 
   bool pattern_selected_vertices, bool pattern_selected_edges,
   bool pattern_mark_join_vertex, bool pattern_ignore_join_vertex, size_t pattern_join_vertex, 
-  uint64_t& message_count) { // TODO: bool& pattern_found does not work, why?
+  uint64_t& message_count, uint64_t pattern_constraint, 
+  VertexNonlocalConstraintMatches& vertex_nlc_matches) { // TODO: bool& pattern_found does not work, why?
   //std::cout << "token_passing_pattern_matching_new.hpp" << std::endl;
   
   tp_visitor_count = 0;
@@ -942,12 +957,34 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
     edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
     pattern_selected_vertices, pattern_selected_edges, 
-    pattern_mark_join_vertex, pattern_ignore_join_vertex, pattern_join_vertex);
+    pattern_mark_join_vertex, pattern_ignore_join_vertex, pattern_join_vertex, 
+    pattern_constraint, vertex_nlc_matches);
   auto vq = havoqgt::create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
   ///vq.init_visitor_traversal_new();
   //vq.init_visitor_traversal_new_alt();
   vq.init_visitor_traversal();
   MPI_Barrier(MPI_COMM_WORLD);
+
+
+  uint64_t global_tp_token_source_count =
+    havoqgt::mpi_all_reduce(tp_token_source_count,
+    std::plus<uint64_t>(), MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (mpi_rank == 0) {
+    std::cout << "Token Passing [-1] | Global Token Source Count : "
+      << global_tp_token_source_count << std::endl;
+  }
+
+  uint64_t global_tp_path_count =
+    havoqgt::mpi_all_reduce(tp_path_count,
+    std::plus<uint64_t>(), MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (mpi_rank == 0) {
+    std::cout << "Token Passing [-1] | Global Subpattern Count : "
+      << global_tp_path_count << std::endl;
+  }  
 
   message_count = tp_visitor_count;
 }
