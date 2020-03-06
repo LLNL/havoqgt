@@ -71,7 +71,6 @@ add_custom_target(doc
     )
 endif(DOXYGEN_FOUND)
 
-
 add_subdirectory (include)
 add_subdirectory (src)
 enable_testing()

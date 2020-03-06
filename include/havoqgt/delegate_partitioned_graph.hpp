@@ -213,11 +213,11 @@ class delegate_partitioned_graph {
     return m_owned_info.size();
   }
 
-  uint64_t max_global_vertex_id() {
+  uint64_t max_global_vertex_id() const {
     return m_global_max_vertex;
   }
 
-  uint64_t max_local_vertex_id() {
+  uint64_t max_local_vertex_id() const {
     return m_max_vertex;
   }
 
