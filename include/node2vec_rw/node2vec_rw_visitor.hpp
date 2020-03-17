@@ -132,7 +132,7 @@ class rw_visitor_data {
   void clear() {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(m_mpi_comm, &mpi_rank));
-    m_walker_id = (mpi_rank << 40ULL);
+    m_walker_id = ((uint64_t)mpi_rank << 40ULL);
     m_walk_log_store.clear();
   }
 
