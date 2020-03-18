@@ -140,15 +140,17 @@ void parse_cmd_line(int argc, char **argv,
 
 void dump_walk_history(const graph_type &graph,
                        const std::vector<std::vector<vertex_type>> &walk_history,
-                       const std::string &walk_history_out_file_name) {
+                       const std::string &walk_history_out_file_name,
+                       const bool truncate_file) {
   int mpi_rank = -1;
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
   std::string fout_name(walk_history_out_file_name + "-" + std::to_string(mpi_rank));
-  std::ofstream ofs(fout_name, std::ofstream::app);
+  std::ofstream ofs(fout_name,
+                    (truncate_file) ? std::ofstream::trunc : std::ofstream::app);
   for (auto &per_wk_history : walk_history) {
-    for (auto &w : per_wk_history) {
-      ofs << graph.locator_to_label(w) << " ";
+    for (auto &v : per_wk_history) {
+      ofs << graph.locator_to_label(v) << " ";
     }
     ofs << "\n";
   }
@@ -192,6 +194,7 @@ int main(int argc, char **argv) {
 
     // Start mini-batched random walk
     int mini_batch_size = 1024; // Run 1024 walkers from each process
+    bool first_walk_history_dump = true;
     for (int n = 0; n < option.num_walkers_per_vertex; ++n) {
       auto itr = graph->vertices_begin();
       while (true) {
@@ -201,7 +204,10 @@ int main(int argc, char **argv) {
         }
 
         std::vector<std::vector<vertex_type>> walk_history = n2v_rw.run_walker(start_vertices);
-        if (!walk_history_out_file_name.empty()) dump_walk_history(*graph, walk_history, walk_history_out_file_name);
+        if (!walk_history_out_file_name.empty()) {
+          dump_walk_history(*graph, walk_history, walk_history_out_file_name, first_walk_history_dump);
+          first_walk_history_dump = false;
+        }
 
         // Global termination check
         const char local_finished = (itr == graph->vertices_end());

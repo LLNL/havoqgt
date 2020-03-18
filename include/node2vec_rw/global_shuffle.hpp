@@ -114,8 +114,10 @@ void mpi_large_all_to_all(input_iterator_type input_begin, input_iterator_type i
 
     havoqgt::mpi_all_to_all(send_buf, recv_buf, mpi_comm);
     for (const auto &single_buf : recv_buf) {
-      std::transform(single_buf.begin(), single_buf.end(), output_begin,
-                     [](value_type value) -> value_type { return value; });
+      for (const auto& value : single_buf) {
+        *output_begin = value;
+        ++output_begin;
+      }
     }
     send_buf.clear();
     recv_buf.clear();

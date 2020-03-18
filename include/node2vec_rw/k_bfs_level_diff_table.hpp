@@ -111,6 +111,7 @@ class k_bfs_level_diff_table {
   internal_table_type m_table;
 };
 
+/// \NOTE this algorithm assumes an undirected graph
 template <typename graph_allocator_type, typename level_type>
 class level_diff_compute_visitor {
  private:
@@ -147,9 +148,6 @@ class level_diff_compute_visitor {
     const auto &level_table = std::get<algo_data::level_table>(algorithm_data);
     const int8_t diff = level - level_table.get_level(vertex, k);
     auto &level_diff_table = std::get<algo_data::level_diff_table>(algorithm_data);
-    // DB
-//    std::cout << vertex.local_id() << " " << source_vertex.local_id()
-//              << ", lv=" << level_table.get_level(vertex, k) << ", k=" << k << std::endl;
     level_diff_table.set(vertex, source_vertex, k, diff);
 
     return false;
@@ -165,15 +163,11 @@ class level_diff_compute_visitor {
       for (uint16_t k = 0; k < level_table.k_size(); ++k) {
         assert(level_table.visited(vertex, k));
         auto neighbor = eitr.target();
-        // DB
-//        std::cout << g.locator_to_label(vertex) << " (" << vertex.local_id()
-//                  << ") -> " << g.locator_to_label(neighbor)
-//                  << ", lv=" << level_table.get_level(vertex, k) << ", k=" << k << std::endl;
         level_diff_compute_visitor new_visitor(neighbor, vertex, level_table.get_level(vertex, k), k);
         vis_queue->queue_visitor(new_visitor);
       }
     }
-
+    
     return true;
   }
 
