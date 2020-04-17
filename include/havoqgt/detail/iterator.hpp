@@ -54,7 +54,7 @@
 
 #include <havoqgt/mpi.hpp>
 
-namespace havoqgt { namespace mpi { namespace detail {
+namespace havoqgt { namespace detail {
 
 /**
  * Tests if all processes' iterator range is empty
@@ -72,6 +72,6 @@ bool global_iterator_range_empty(Iterator itr, Iterator itr_end, MPI_Comm comm) 
   return ranks_unfinished == 0;
 }
 
-}}}
+}}
 
 #endif //HAVOQGT_MPI_DETAIL_ITERATOR_HPP_INCLUDED

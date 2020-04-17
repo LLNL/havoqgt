@@ -58,7 +58,7 @@
 #include <boost/random.hpp>
 #include <algorithm>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 template <typename EdgeType>
@@ -153,7 +153,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
     // Exchange vectors
     std::vector<uint64_t> to_recv; // not sized
     std::vector<int>      recvcnts; // not sized
-    havoqgt::mpi::mpi_all_to_all(to_send, sendcnts, to_recv, recvcnts, MPI_COMM_WORLD);
+    mpi_all_to_all(to_send, sendcnts, to_recv, recvcnts, MPI_COMM_WORLD);
     //
     // Look up pointers, pointer jump!
     for(size_t i=0; i<to_recv.size(); ++i) {
@@ -162,7 +162,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
     }
     //
     // Return exchange vectors
-    havoqgt::mpi::mpi_all_to_all(to_recv, recvcnts, to_send, sendcnts, MPI_COMM_WORLD);
+    mpi_all_to_all(to_recv, recvcnts, to_send, sendcnts, MPI_COMM_WORLD);
     //
     // Return new pointers to marked location
     for(size_t i=0; i<to_send.size(); ++i) {
@@ -175,7 +175,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
         ++count_missing;
       }
     }
-    count_missing = havoqgt::mpi::mpi_all_reduce(count_missing, std::plus<uint64_t>(), MPI_COMM_WORLD);
+    count_missing = mpi_all_reduce(count_missing, std::plus<uint64_t>(), MPI_COMM_WORLD);
 
     //
     // Iteration ouput
@@ -189,7 +189,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
   } while(count_missing > 0);
   //
   // Output total nuumber of global exchanges
-  count_total_mising = havoqgt::mpi::mpi_all_reduce(count_total_mising, std::plus<uint64_t>(), MPI_COMM_WORLD);
+  count_total_mising = mpi_all_reduce(count_total_mising, std::plus<uint64_t>(), MPI_COMM_WORLD);
   if(mpi_rank == 0) {
     std::cout << "Total missing (how much data globally exchanged) = " << count_total_mising << std::endl;
   }
@@ -236,7 +236,7 @@ void gen_preferential_attachment_edge_list(std::vector<EdgeType>& local_edges,
   // std::random_shuffle(local_edges.begin(), local_edges.end());
 }
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 #endif //end HAVOQGT_MPI_GEN_PREFERENTIAL_ATTACHMENT_EDGE_LIST_HPP_INCLUDED

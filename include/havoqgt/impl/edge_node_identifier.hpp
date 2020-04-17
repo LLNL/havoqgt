@@ -54,7 +54,6 @@
 #define __HAVOQGT_IMP_EDGE_NODE_IDENTIFIER_HPP__
 
 namespace havoqgt {
-namespace mpi {
 
 class local_source_id {
  public:
@@ -110,7 +109,6 @@ class get_owner_id {
   uint64_t m_mpi_size;
 };
 
-}  // namespace mpi
 }  // namespace havoqgt
 
 #endif  // __HAVOQGT_IMP_EDGE_NODE_IDENTIFIER_HPP__

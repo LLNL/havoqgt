@@ -49,14 +49,10 @@
  *
  */
 
-#include <havoqgt/page_rank.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/breadth_first_search.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
-#include <havoqgt/upper_triangle_edge_generator.hpp>
-#include <havoqgt/single_source_shortest_path.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
 
 #include <boost/bind.hpp>
@@ -73,21 +69,20 @@
 
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
 using namespace havoqgt;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
+         << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
          << " -s <int>      - Source vertex of BFS (Default is 0)\n"
          << " -h            - print help and exit\n\n";
   }
 }
 
-void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t& source_vertex) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, uint64_t& source_vertex) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -100,7 +95,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t
   
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:h ")) != -1) {
+  while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -111,6 +106,9 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t
       case 'i':
          found_input_filename = true;
          input_filename = optarg;
+         break;
+      case 'b':
+         backup_filename = optarg;
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -126,30 +124,32 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, uint64_t
 
 int main(int argc, char** argv) {
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    havoqgt::get_environment().print();
-    //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
 
   std::string graph_input;
+  std::string backup_filename;
   uint64_t source_vertex = 0;
   
-  parse_cmd_line(argc, argv, graph_input, source_vertex);
+  parse_cmd_line(argc, argv, graph_input, backup_filename, source_vertex);
+
 
   MPI_Barrier(MPI_COMM_WORLD);
+  if(backup_filename.size() > 0) {
+    distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
+  }
 
   havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
 
@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
   // BFS Experiments
   {
     
-    graph_type::vertex_data<uint8_t, std::allocator<uint8_t> >                      bfs_level_data(*graph);
+    graph_type::vertex_data<uint16_t, std::allocator<uint16_t> >                      bfs_level_data(*graph);
     graph_type::vertex_data<graph_type::vertex_locator, std::allocator<graph_type::vertex_locator> >  bfs_parent_data(*graph);
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {
@@ -205,17 +205,17 @@ int main(int argc, char** argv) {
         std::cout << "degree = " << graph->degree(source) << std::endl;
       }
 
-      bfs_level_data.reset(128);
+      bfs_level_data.reset(std::numeric_limits<uint16_t>::max());
 
       MPI_Barrier(MPI_COMM_WORLD);
       double time_start = MPI_Wtime();
-      hmpi::breadth_first_search(graph, bfs_level_data, bfs_parent_data,
+      havoqgt::breadth_first_search(graph, bfs_level_data, bfs_parent_data,
           source);
       MPI_Barrier(MPI_COMM_WORLD);
       double time_end = MPI_Wtime();
 
       uint64_t visited_total(0);
-      for (uint64_t level = 0; level < 15; ++level) {
+      for (uint64_t level = 0; level < std::numeric_limits<uint16_t>::max(); ++level) {
         uint64_t local_count(0);
         graph_type::vertex_iterator vitr;
         for (vitr = graph->vertices_begin();
@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
     }
   }  // End BFS Test
   }  // END Main MPI
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }

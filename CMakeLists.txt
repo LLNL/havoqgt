@@ -25,6 +25,15 @@ macro(include_link_mpi target)
 endmacro()
 
 #
+# PThreads is required
+#
+find_package (Threads)
+macro(include_link_threads target)
+  target_link_libraries(${target} ${CMAKE_THREAD_LIBS_INIT})
+endmacro()
+
+
+#
 # BOOST is required
 #
 find_package( Boost )
@@ -32,6 +41,13 @@ macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
 endmacro() 
+
+#
+#  stdc++fs is required
+#
+macro(include_link_stdcppfs target)
+  target_link_libraries(${target} stdc++fs)
+endmacro()
 
 #
 #  Posix_fallocate

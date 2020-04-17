@@ -3,6 +3,8 @@
 #
 add_subdirectory (gtest)
 include_directories(gtest/include)
+add_subdirectory (include)
+include_directories(include)
 
 #
 # This function adds a sequential (nompi) test.
@@ -28,7 +30,7 @@ function ( add_mpi_ctest test_name )
   include_link_boost(${test_exe})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(${test_exe} gtest)
-  SET( num_procs 1)
+  SET( num_procs 2)
   WHILE( 8 GREATER ${num_procs} )
     add_test( "${test_name}_${num_procs}" ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
       ${num_procs} ${MPIEXEC_PREFLAGS} "${CMAKE_CURRENT_BINARY_DIR}/${test_exe}")
@@ -46,3 +48,5 @@ add_nonmpi_ctest( sequential )
 # Parallel Tests
 #
 add_mpi_ctest( mpi_communicator )
+add_mpi_ctest( delegate_graph_static )
+add_mpi_ctest( static_bfs )

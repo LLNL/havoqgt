@@ -56,7 +56,7 @@
 #include <utility>
 #include <limits>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 /*
 Info about the states of termination detection -- this
@@ -338,6 +338,6 @@ class termination_detection {
 
 };
 
-}} //namespace havoqgt { namespace mpi {
+} //namespace havoqgt {
 
 #endif //HAVOQGT_MPI_TERMINATION_DETECTION_HPP_INCLUDED

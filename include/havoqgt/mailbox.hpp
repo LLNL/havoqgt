@@ -53,7 +53,7 @@
 #define HAVOQGT_MPI_MAILBOX_ROUTED_HPP_INCLUDED
 
 #include <havoqgt/mpi.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <vector>
 #include <list>
 #include <limits>
@@ -65,7 +65,7 @@
 #include <stdint.h>
 #include <boost/tuple/tuple.hpp>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 
@@ -85,7 +85,12 @@ class mailbox_routed {
   //                                        msg.vertex.is_parent_op(); }
   // };
 
-  typedef TMsg routed_msg_type;
+  struct routed_msg_type {
+    uint64_t dest      : 30;
+    uint64_t bcast     : 1;
+    uint64_t intercept : 1;
+    TMsg        msg;
+  };
 
   class twod_router{
   public:
@@ -157,9 +162,8 @@ class mailbox_routed {
 public:
   typedef TMsg message_type;
 
-  mailbox_routed( MPI_Comm _mpi_comm,
-                  int _mpi_tag):
-              m_mpi_comm(_mpi_comm),
+  mailbox_routed(int _mpi_tag):
+              m_mpi_comm(MPI_COMM_WORLD),
               m_mpi_tag(_mpi_tag) {
     m_pending_partial_buffers = 0;
     m_num_pending_isend = 0;
@@ -200,6 +204,11 @@ public:
     m_tree_parent = m_mpi_rank / 2;
     m_tree_child1 = (m_mpi_rank * 2) + 1;
     m_tree_child2 = (m_mpi_rank * 2) + 2;
+
+    if(m_mpi_rank ==0) {
+      std::cout << "sizeof(message_type) = " << sizeof(message_type) << std::endl;
+    }
+
   }
 
   ~mailbox_routed() {
@@ -238,7 +247,7 @@ public:
     CHK_MPI( MPI_Barrier( m_mpi_comm ) );
   }
 
-  void send_tree_fast(int raw_dest, const TMsg& _raw_msg) {
+  /*void send_tree_fast(int raw_dest, const TMsg& _raw_msg) {
     ++m_tree_send_counter;
     routed_msg_type msg(raw_dest, _raw_msg);
     if(!m_buffer_per_rank[raw_dest].is_init()) {
@@ -267,6 +276,7 @@ public:
       }
     }
   }
+  */
 
   void route_fast_path(uint32_t dest, const routed_msg_type& _msg) {
     ++m_route_counter;
@@ -286,14 +296,17 @@ public:
 
   template <typename OutputIterator>
   void bcast(TMsg _raw_msg, OutputIterator _oitr) {
-    assert(_raw_msg.get_bcast());
-    _raw_msg.set_dest(m_mpi_size+1);
+    _raw_msg.vertex.set_bcast(true);
+    routed_msg_type msg;
+    msg.bcast = true;
+    msg.msg = _raw_msg;
+    msg.dest = m_mpi_size+1;
     for(uint32_t i=0; i<m_2d_comm.bcast_proxies().size(); ++i) {
       uint32_t proxy_rank = m_2d_comm.bcast_proxies()[i];
       if(proxy_rank == uint32_t(m_mpi_rank)) {
-        bcast_to_targets(_raw_msg);
+        bcast_to_targets(msg);
       } else {
-        route_fast_path(proxy_rank, _raw_msg);
+        route_fast_path(proxy_rank, msg);
       }
     }
     if(m_receiving) return;   //prevent receive recursion @todo, make this a function called wait
@@ -303,12 +316,12 @@ public:
     } while(m_num_pending_isend > get_environment().mailbox_num_isend());
   }
 
-  void bcast_to_targets(TMsg _msg) {
-    assert(_msg.get_bcast());
+  void bcast_to_targets(routed_msg_type msg) {
+    assert(msg.bcast);
     for(uint32_t i=0; i<m_2d_comm.bcast_targets().size(); ++i) {
       uint32_t target = m_2d_comm.bcast_targets()[i];
-      _msg.set_dest(target);
-      route_fast_path(target, _msg);
+      msg.dest= target;
+      route_fast_path(target, msg);
     }
   }
 
@@ -327,13 +340,17 @@ public:
   }
 
   template <typename OutputIterator>
-  void send(int raw_dest, const TMsg& _raw_msg, OutputIterator _oitr, bool fast=true) {
+  void send(int raw_dest, const TMsg& _raw_msg, OutputIterator _oitr, bool _intercept) {
     ++m_send_counter;
     assert(raw_dest >= 0 && raw_dest < m_mpi_size);
     //++m_last_recv_count;
     assert(raw_dest != m_mpi_rank); // just dont send to self!
     //routed_msg_type msg(raw_dest, _raw_msg);
-    routed_msg_type msg = _raw_msg; //@todo fixme
+    routed_msg_type msg; //@todo fixme
+    msg.msg  = _raw_msg;
+    msg.dest = raw_dest;
+    msg.intercept = _intercept;
+    msg.bcast = false;
     int dest = m_2d_comm.proxy_rank(raw_dest);
     if(dest == m_mpi_rank) dest = raw_dest;
     if(!m_buffer_per_rank[dest].is_init()) {
@@ -378,18 +395,18 @@ public:
           int count(0);
           CHK_MPI( MPI_Get_count(&status, MPI_BYTE, &count) );
           for(size_t i=0; i<count/sizeof(routed_msg_type); ++i) {
-            if(recv_ptr[i].dest() == uint32_t(m_mpi_rank) /*|| recv_ptr[i].is_tree_op()*/) {
-              *_oitr = recv_ptr[i];//.msg;
+            if(recv_ptr[i].dest == uint32_t(m_mpi_rank) /*|| recv_ptr[i].is_tree_op()*/) {
+              *_oitr = recv_ptr[i].msg;//.msg;
               ++_oitr;
               ++m_recv_counter;
-            } else if(recv_ptr[i].get_bcast()) {
+            } else if(recv_ptr[i].bcast) {
               bcast_to_targets(recv_ptr[i]);
-            } else if(recv_ptr[i].is_intercept()) {
-              if( _oitr.intercept(recv_ptr[i]) ) {
-                route_fast_path(recv_ptr[i].dest(), recv_ptr[i]);
+            } else if(recv_ptr[i].intercept) {
+              if( _oitr.intercept(recv_ptr[i].msg) ) {
+                route_fast_path(recv_ptr[i].dest, recv_ptr[i]);
               }
             } else {
-              route_fast_path(recv_ptr[i].dest(), recv_ptr[i]);
+              route_fast_path(recv_ptr[i].dest, recv_ptr[i]);
             }
           }
           post_new_irecv(recv_ptr);
@@ -461,7 +478,7 @@ private:
     void* buffer_ptr = m_buffer_per_rank[index].get_ptr();
     int size_in_bytes = m_buffer_per_rank[index].size_in_bytes();
 
-    CHK_MPI( MPI_Isend( buffer_ptr, size_in_bytes, MPI_BYTE, dest,
+    CHK_MPI( MPI_Issend( buffer_ptr, size_in_bytes, MPI_BYTE, dest,
                         m_mpi_tag, m_mpi_comm, request_ptr) );
 
     --m_pending_partial_buffers;
@@ -560,7 +577,7 @@ private:
 };
 
 
-}} //namespace havoqgt { namespace mpi {
+} //namespace havoqgt { 
 
 
 

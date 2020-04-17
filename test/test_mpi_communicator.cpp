@@ -7,7 +7,7 @@ TEST(my_test, test_b) {
   EXPECT_EQ(5, 5);
 }
 
-}} //end namespace apgaf::test
+}} //end namespace havoqgt::test
 
 //mpi main for gteset
 GTEST_API_ int main(int argc, char **argv) {

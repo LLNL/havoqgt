@@ -49,11 +49,12 @@
  *
  */
 
-#ifndef HAVOQGT_MPI_UTILIES_HPP_
-#define HAVOQGT_MPI_UTILIES_HPP_
+#ifndef HAVOQGT_UTILIES_HPP
+#define HAVOQGT_UTILIES_HPP
+
+#include <memory>
 
 namespace havoqgt {
-namespace mpi {
 
 /// Frees the container of edges
 template <typename Container>
@@ -65,7 +66,9 @@ void free_edge_container<std::vector<std::pair<uint64_t, uint64_t> > >(std::vect
   edges.swap(empty);
 };
 
-#endif // HAVOQGT_MPI_UTILIES_HPP_
+template <typename Allocator, typename T2>
+using other_allocator = typename std::allocator_traits<Allocator>::template rebind_alloc<T2>;
 
-} // namespace mpi
+#endif // HAVOQGT_UTILIES_HPP
+
 } // namespace havoqgt

@@ -57,7 +57,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <queue>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 
 template <typename Visitor>
@@ -115,27 +115,30 @@ public:
   sssp_visitor(vertex_locator _vertex) :
               vertex(_vertex), m_path(0) { }            
 
-  
-  bool pre_visit() const {
-    bool do_visit  = (*path_data())[vertex] > m_path;
+  template<typename AlgData>
+  bool pre_visit(AlgData& alg_data) const {
+    bool do_visit = std::get<0>(alg_data)[vertex] > m_path;
     if(do_visit) {
-      (*path_data())[vertex] = m_path;
+      std::get<0>(alg_data)[vertex] = m_path; 
     }
     return do_visit;
   }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    if(m_path == (*path_data())[vertex]) 
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {  
+    if(m_path <= std::get<0>(alg_data)[vertex]) 
     {
+      std::stringstream line;
+      //line << "Visiting vertex: " << g.locator_to_label(vertex);
       typedef typename Graph::edge_iterator eitr_type;
       for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         vertex_locator neighbor = eitr.target();
-        path_type weight = (*edge_data())[eitr];
-        //std::cout << "Visiting neighbor: " << g.locator_to_label(neighbor) << std::endl;
+        path_type weight = std::get<1>(alg_data)[eitr];
+        //line << ", Sending to neighbor: " << g.locator_to_label(neighbor) << " dist = " << weight+m_path;
         sssp_visitor new_visitor( neighbor, weight + m_path);
         vis_queue->queue_visitor(new_visitor);
       }
+      //std::cout << line.str() << std::endl;
       return true;
     }
     return false;
@@ -147,20 +150,6 @@ public:
 
   friend inline bool operator<(const sssp_visitor& v1, const sssp_visitor& v2) {
     return v1.m_path < v2.m_path;
-  }
-
-  static void set_path_data(PathData* _data) { path_data() = _data; }
-
-  static PathData*& path_data() {
-    static PathData* data;
-    return data;
-  }
-
-  static void set_edge_weight(EdgeWeight* _data) { edge_data() = _data; }
-
-  static EdgeWeight*& edge_data() {
-    static EdgeWeight* data;
-    return data;
   }
 
   vertex_locator   vertex;
@@ -175,17 +164,14 @@ void single_source_shortest_path(TGraph& g,
                                  typename TGraph::vertex_locator s) {
   
   typedef  sssp_visitor<TGraph, PathData, EdgeWeight>    visitor_type;
-  visitor_type::set_path_data(&path_data);
-  visitor_type::set_edge_weight(&edge_data);
-  typedef visitor_queue< visitor_type, sssp_queue, TGraph >    visitor_queue_type;
-   
-  visitor_queue_type vq(&g);
+  auto alg_data = std::forward_as_tuple(path_data, edge_data);
+  auto vq = create_visitor_queue<visitor_type, havoqgt::detail::visitor_priority_queue>(&g, alg_data);
   vq.init_visitor_traversal(s);
 }
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 

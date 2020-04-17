@@ -55,7 +55,7 @@
 #include <havoqgt/rmat_edge_generator.hpp>
 #include <havoqgt/upper_triangle_edge_generator.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <iostream>
@@ -72,22 +72,26 @@
 // Make one vert per rank a hub.
 
 using namespace havoqgt;
-namespace hmpi = havoqgt::mpi;
-using namespace havoqgt::mpi;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -s <int> -d <int> -o <string>\n"
          << " -s <int>    - RMAT graph Scale (default 17)\n"
          << " -d <int>    - delegate threshold (Default is 1048576)\n"
          << " -o <string> - output graph base filename\n"
+         << " -b <string>   - backup graph base filename \n"
+         << " -p <int>    - number of Low & High partition passes (Default is 1)\n"
+         << " -f <float>  - Gigabytes reserved per rank (Default is 0.25)\n"
+         << " -c <int>      - Edge partitioning chunk size (Defulat is 8192)\n"
          << " -h          - print help and exit\n\n";
          
   }
 }
 
-void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, std::string& output_filename) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_threshold, 
+                    std::string& output_filename, std::string& backup_filename, double& gbyte_per_rank, 
+                    uint64_t& partition_passes, uint64_t& chunk_size) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -98,10 +102,13 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
   bool found_output_filename = false;
   scale = 17;
   delegate_threshold = 1048576;
-  
+  gbyte_per_rank = 0.25;
+  partition_passes = 1;
+  chunk_size = 8*1024;
+
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "s:d:o:h ")) != -1) {
+  while ((c = getopt(argc, argv, "s:d:o:b:p:f:c:h ")) != -1) {
      switch (c) {
        case 'h':  
          prn_help = true;
@@ -115,6 +122,18 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
       case 'o':
          found_output_filename = true;
          output_filename = optarg;
+         break;
+      case 'b':
+         backup_filename = optarg;
+         break;
+      case 'p':
+         partition_passes = atoll(optarg);
+         break;
+      case 'f':
+         gbyte_per_rank = atof(optarg);
+         break;
+      case 'c':
+         chunk_size = atoll(optarg);
          break;
       default:
          std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
@@ -132,39 +151,44 @@ int main(int argc, char** argv) {
 
   typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 
-  typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt_init(&argc, &argv);
-  {
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
-    havoqgt::get_environment();
+  init(&argc, &argv);
+  {    
+    std::string                output_filename;
+    std::string                backup_filename;
+    { // Build Distributed_DB
+    int mpi_rank = comm_world().rank();
+    int mpi_size = comm_world().size();
     
     if (mpi_rank == 0) {
-
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
     }
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
 
-    uint64_t num_vertices = 1;
-    uint64_t vert_scale;
-    uint64_t hub_threshold;
-    std::string fname_output;
+    uint64_t      num_vertices = 1;
+    uint64_t      vert_scale;
+    uint64_t      hub_threshold;
+    uint64_t      partition_passes;
+    double        gbyte_per_rank;
+    uint64_t      chunk_size;
         
-    parse_cmd_line(argc, argv, vert_scale, hub_threshold, fname_output);
+    parse_cmd_line(argc, argv, vert_scale, hub_threshold, output_filename, backup_filename, 
+                   gbyte_per_rank, partition_passes, chunk_size);
 
     num_vertices <<= vert_scale;
     if (mpi_rank == 0) {
       std::cout << "Building Graph500"<< std::endl
         << "Building graph Scale: " << vert_scale << std::endl
         << "Hub threshold = " << hub_threshold << std::endl
-        << "File name = " << fname_output << std::endl;
+        << "File name = " << output_filename << std::endl
+        << "Reserved Gigabytes per Rank = " << gbyte_per_rank << std::endl
+        << "High/Low partition passes = " << partition_passes << std::endl; 
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), fname_output.c_str());
+    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
 
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -181,15 +205,13 @@ int main(int argc, char** argv) {
     }
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold);
+        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
 
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
     if (mpi_rank == 0) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
-
-
 
     for (int i = 0; i < mpi_size; i++) {
       if (i == mpi_rank) {
@@ -198,7 +220,7 @@ int main(int argc, char** argv) {
         std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
                   << "/" << segment_manager->get_size() << " = " << percent << std::endl;
       }
-      havoqgt_env()->world_comm().barrier();
+      comm_world().barrier();
     }
 
     graph->print_graph_statistics();
@@ -211,17 +233,25 @@ int main(int argc, char** argv) {
       max_degree = std::max(max_degree, graph->degree(*citr));
     }
 
-    uint64_t global_max_degree = havoqgt::mpi::mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
+    uint64_t global_max_degree = mpi_all_reduce(max_degree, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
 
     if (mpi_rank == 0) {
       std::cout << "Max Degree = " << global_max_degree << std::endl;
     }
 
-    havoqgt_env()->world_comm().barrier();
-
+    comm_world().barrier();
+    } // Complete build distributed_db
+    if(backup_filename.size() > 0) {
+      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
+    }
+    comm_world().barrier();
+    if(comm_nl().rank() == 0) {
+      sync();
+    }
+    comm_world().barrier();
   } //END Main MPI
-  havoqgt_finalize();
+  ;
   return 0;
 }

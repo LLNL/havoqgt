@@ -56,7 +56,6 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 
 namespace havoqgt {
-namespace mpi {
 
 template <typename SegementManager>
 class delegate_partitioned_graph<SegementManager>::edge_iterator {
@@ -77,6 +76,7 @@ class delegate_partitioned_graph<SegementManager>::edge_iterator {
 
   vertex_locator source() const { return m_source; }
   vertex_locator target() const;
+  //edge_data_type edge_data() const;  
 
  protected:
   friend class delegate_partitioned_graph;
@@ -167,8 +167,21 @@ delegate_partitioned_graph<SegmentManager>::edge_iterator::target() const {
   return m_ptr_graph->m_owned_targets[m_edge_offset];
 }
 
+//template <typename SegmentManager>
+//inline
+//typename delegate_partitioned_graph<SegmentManager>::edge_data_type
+//delegate_partitioned_graph<SegmentManager>::edge_iterator::edge_data() const {
+//  if(m_source.is_delegate()) {
+//    assert(m_edge_offset < m_ptr_graph->m_delegate_targets_size);
+//    assert(m_ptr_graph->m_delegate_targets[m_edge_offset].m_owner_dest <
+//          m_ptr_graph->m_mpi_size);
+//    return m_ptr_graph->m_edge_data.m_delegate_edge_data[m_edge_offset]; 
+//  }
+//  assert(m_edge_offset < m_ptr_graph->m_owned_targets_size);
+//  assert(m_ptr_graph->m_owned_targets[m_edge_offset].m_owner_dest <
+//          m_ptr_graph->m_mpi_size);
+//  return m_ptr_graph->m_edge_data.m_owned_edge_data[m_edge_offset];
+//`}
 
-
-}  // mpi
 }  // namespace havoqgt
 #endif  // HAVOQGT_MPI_IMPL_EDGE_ITERATOR_HPP_

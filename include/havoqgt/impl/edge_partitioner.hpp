@@ -56,7 +56,6 @@
 #include <deque>
 
 namespace havoqgt {
-namespace mpi {
 
 /**
  * @class delegate_partitioned_graph
@@ -72,11 +71,13 @@ class source_partitioner {
   int m_mpi_size;
 };
 
+template <typename edge_type>
 class edge_source_partitioner {
  public:
   explicit edge_source_partitioner(int p):m_mpi_size(p) { }
-  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting) const {
-    return i.first % m_mpi_size;
+
+  int operator()(edge_type i, bool is_counting) const {
+    return std::get<0>(i) % m_mpi_size;
   }
 
  private:
@@ -116,6 +117,7 @@ class edge_target_partitioner {
   int32_t temp_to_send_count;
 }OverflowSendInfo;
 
+template <typename edge_type>
 class high_edge_partitioner {
  public:
   explicit high_edge_partitioner(int s, int r,
@@ -133,14 +135,13 @@ class high_edge_partitioner {
    * @param  is_counting determines how to adjust the send_count variavles
    * @return the node to send the passed edge to.
    */
-  int operator()(std::pair<uint64_t, uint64_t> i, bool is_counting = true) {
+  int operator()(edge_type i, bool is_counting = true) {
 
-
-    int dest = int(i.second % m_mpi_size);
+    int dest = int(std::get<1>(i) % m_mpi_size);
     if (dest == m_mpi_rank) {
       // If the current node is the destination, then determine the destination
       // by examing the transfer_info object
-      const uint64_t delegate_id = i.first;
+      const uint64_t delegate_id = std::get<0>(i);
       if (m_transfer_info->count(delegate_id) == 0) {
         return m_mpi_rank;
       }
@@ -207,7 +208,6 @@ class dest_pair_partitioner {
 
 
 
-}  // namespace mpi
 }  // namespace havoqgt
    //
 #endif  // __HAVOQGT_IMP_EDGE_PARTITIONER_HPP__

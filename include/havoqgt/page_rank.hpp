@@ -59,7 +59,7 @@
 #include <boost/container/deque.hpp>
 #include <vector>
 
-namespace havoqgt { namespace mpi {
+namespace havoqgt {
 
 template <typename Visitor>
 class pr_queue
@@ -104,11 +104,11 @@ public:
 
 
 
-template<typename Graph, typename PRData>
+template<typename Graph>
 class pr_visitor {
 public:
   typedef typename Graph::vertex_locator                 vertex_locator;
-  pr_visitor(): rank(0)  { }
+  pr_visitor(): rank(std::numeric_limits<double>::min())  { }
 
   pr_visitor(vertex_locator _vertex, double _rank)
     : vertex(_vertex)
@@ -116,19 +116,29 @@ public:
 
   pr_visitor(vertex_locator _vertex)
     : vertex(_vertex)
-    , rank(0) { }      
+    , rank(std::numeric_limits<double>::min()) { }      
 
-  
-  bool pre_visit() const {
-    rank_data()[vertex] += rank;
+  template<typename AlgData> 
+  bool pre_visit(AlgData& alg_data) const {
+    if(rank == std::numeric_limits<double>::min()) {
+      HAVOQGT_ERROR_MSG("This is a damn logic error!");
+      return true;
+    }
+    std::get<1>(alg_data)[vertex] += rank; //change to next_rank 
     return false;
   }
+  
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    return visit(g, vis_queue, alg_data);
+  }
 
-  template<typename VisitorQueueHandle>
-  bool visit(Graph& g, VisitorQueueHandle vis_queue) const {
-    double old_rank = 1;
+  template<typename VisitorQueueHandle, typename AlgData>
+  bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
+    //change to cur_rank
+    double old_rank = std::get<0>(alg_data)[vertex];    
     uint64_t degree = g.degree(vertex);
-    double send_rank = 1;//old_rank / double(degree);
+    double send_rank = old_rank / double(degree);
 
 
     typedef typename Graph::edge_iterator eitr_type;
@@ -138,7 +148,6 @@ public:
       vis_queue->queue_visitor(new_visitor);
     }
     return true;
-
   }
 
 
@@ -150,32 +159,27 @@ public:
     return false;
   }
 
-  static PRData& rank_data(PRData* _data = NULL) {
-    static PRData* data;
-    if(_data) data = _data;
-    return *data;
-  }
-
-
   vertex_locator   vertex;
   double           rank;
 };
 
- 
 template <typename TGraph, typename PRData>
-void page_rank(TGraph& g, PRData& pr_data) {
-  typedef  pr_visitor<TGraph, PRData>    visitor_type;
-  visitor_type::rank_data(&pr_data);
-  typedef visitor_queue< visitor_type, pr_queue, TGraph >    visitor_queue_type;
+void page_rank(TGraph& g, PRData& cur_rank, PRData& next_rank, bool initial) {
+  typedef  pr_visitor<TGraph>    visitor_type;
+  auto alg_data = std::forward_as_tuple(cur_rank, next_rank);
    
-  visitor_queue_type vq(&g);
+  if(initial) {
+    cur_rank.reset(double(1)/double(g.max_global_vertex_id()));
+  }
+   
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(&g, alg_data);
   vq.init_visitor_traversal();
-  pr_data.all_reduce();
+  next_rank.all_reduce();
 }
 
 
 
-}} //end namespace havoqgt::mpi
+} //end namespace havoqgt
 
 
 
