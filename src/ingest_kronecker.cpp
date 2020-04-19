@@ -74,8 +74,7 @@
 
 using namespace havoqgt;
 
-typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
 typedef uint64_t edge_data_type;
 
@@ -200,15 +199,10 @@ int main(int argc, char** argv) {
         std::cout << "Ingesting graphs" << std::endl;
       }
 
-      havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(),
-                                  gbyte_per_rank);
+      distributed_db ddb(db_create(), output_filename.c_str());
 
-      segment_manager_t* segment_manager = ddb.get_segment_manager();
-      bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
-
-      graph_type::edge_data<edge_data_type,
-                            bip::allocator<edge_data_type, segment_manager_t>>
-          edge_data(alloc_inst);
+      typedef distributed_db::allocator<edge_data_type> edge_data_allocator;
+      graph_type::edge_data<edge_data_type, edge_data_allocator> edge_data(ddb.get_allocator());
 
       // Setup Kronecker generator
       kronecker_edge_generator<edge_data_type> kron(
@@ -218,17 +212,13 @@ int main(int argc, char** argv) {
       if (mpi_rank == 0) {
         std::cout << "Generating new graph." << std::endl;
       }
-      graph_type* graph = segment_manager->construct<graph_type>("graph_obj")(
-          alloc_inst, MPI_COMM_WORLD, kron, kron.max_vertex_id(),
+      graph_type* graph = ddb.get_manager()->construct<graph_type>("graph_obj")(
+          ddb.get_allocator(), MPI_COMM_WORLD, kron, kron.max_vertex_id(),
           delegate_threshold, partition_passes, chunk_size, edge_data);
 
       if (has_edge_data) {
-        graph_type::edge_data<
-            edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>*
-            edge_data_ptr = segment_manager->construct<graph_type::edge_data<
-                edge_data_type,
-                bip::allocator<edge_data_type, segment_manager_t>>>(
-                "graph_edge_data_obj")(edge_data);
+        auto edge_data_ptr = ddb.get_manager()->
+            construct<graph_type::edge_data<edge_data_type, edge_data_allocator>>("graph_edge_data_obj")(edge_data);
       }
 
       comm_world().barrier();
@@ -236,17 +226,18 @@ int main(int argc, char** argv) {
         std::cout << "Graph Ready, Calculating Stats. " << std::endl;
       }
 
-      for (int i = 0; i < mpi_size; i++) {
-        if (i == mpi_rank) {
-          double percent = double(segment_manager->get_free_memory()) /
-                           double(segment_manager->get_size());
-          std::cout << "[" << mpi_rank << "] "
-                    << segment_manager->get_free_memory() << "/"
-                    << segment_manager->get_size() << " = " << percent
-                    << std::endl;
-        }
-        comm_world().barrier();
-      }
+      // TODO: implement get_size() and get_free_memory() in Metall
+      // for (int i = 0; i < mpi_size; i++) {
+      //   if (i == mpi_rank) {
+      //     double percent = double(segment_manager->get_free_memory()) /
+      //                      double(segment_manager->get_size());
+      //     std::cout << "[" << mpi_rank << "] "
+      //               << segment_manager->get_free_memory() << "/"
+      //               << segment_manager->get_size() << " = " << percent
+      //               << std::endl;
+      //   }
+      //   comm_world().barrier();
+      // }
 
       //    graph->print_graph_statistics();
 
