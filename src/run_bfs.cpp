@@ -58,8 +58,9 @@
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 
-#include <havoqgt/distributed_db.hpp>
 #include <assert.h>
+
+#include <metall_utility/metall_mpi_adaptor.hpp>
 
 #include <deque>
 #include <string>
@@ -89,15 +90,15 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
     }
     std::cout << std::endl;
   }
-  
+
   bool found_input_filename = false;
   source_vertex = 0;
-  
+
   char c;
   bool prn_help = false;
   while ((c = getopt(argc, argv, "i:s:b:h ")) != -1) {
      switch (c) {
-       case 'h':  
+       case 'h':
          prn_help = true;
          break;
        case 's':
@@ -115,7 +116,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
          prn_help = true;
          break;
      }
-   } 
+   }
    if (prn_help || !found_input_filename) {
      usage();
      exit(-1);
@@ -123,8 +124,9 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef metall::utility::metall_mpi_adaptor dist_db;
+  typedef dist_db::manager_type::allocator_type<std::byte> allocator_type;
+  typedef havoqgt::delegate_partitioned_graph<allocator_type> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -132,7 +134,7 @@ int main(int argc, char** argv) {
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  
+
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
   }
@@ -142,19 +144,18 @@ int main(int argc, char** argv) {
   std::string graph_input;
   std::string backup_filename;
   uint64_t source_vertex = 0;
-  
+
   parse_cmd_line(argc, argv, graph_input, backup_filename, source_vertex);
 
 
   MPI_Barrier(MPI_COMM_WORLD);
   if(backup_filename.size() > 0) {
-    distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
+    dist_db::copy(backup_filename.c_str(), graph_input.c_str());
   }
 
-  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+  dist_db ddb(metall::open_read_only, graph_input);
 
-  graph_type *graph = ddb.get_segment_manager()->
-    find<graph_type>("graph_obj").first;
+  graph_type *graph = ddb.get_local_manager().find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -163,11 +164,11 @@ int main(int argc, char** argv) {
   }
   //graph->print_graph_statistics();
   MPI_Barrier(MPI_COMM_WORLD);
- 
+
 
   // BFS Experiments
   {
-    
+
     graph_type::vertex_data<uint16_t, std::allocator<uint16_t> >                      bfs_level_data(*graph);
     graph_type::vertex_data<graph_type::vertex_locator, std::allocator<graph_type::vertex_locator> >  bfs_parent_data(*graph);
     MPI_Barrier(MPI_COMM_WORLD);

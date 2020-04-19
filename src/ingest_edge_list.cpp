@@ -55,7 +55,9 @@
 #include <havoqgt/parallel_edge_list_reader.hpp>
 
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/distributed_db.hpp>
+
+#include <metall_utility/metall_mpi_adaptor.hpp>
+
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -72,11 +74,13 @@
 
 using namespace havoqgt;
 
-typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+typedef metall::utility::metall_mpi_adaptor dist_db;
+typedef dist_db::manager_type::allocator_type<std::byte> graph_allocator_type;
+typedef havoqgt::delegate_partitioned_graph<graph_allocator_type> graph_type;
 
 typedef double edge_data_type;
-  
+typedef dist_db::manager_type::allocator_type<edge_data_type> edge_data_allocator_type;
+
 void usage()  {
   if(comm_world().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
@@ -93,7 +97,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
-                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
+                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames,
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
                     bool& undirected) {
   if(comm_world().rank() == 0) {
@@ -103,7 +107,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
     }
     std::cout << std::endl;
   }
-  
+
   bool found_output_filename = false;
   delegate_threshold = 1048576;
   input_filenames.clear();
@@ -111,12 +115,12 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-  
+
   char c;
   bool prn_help = false;
   while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
      switch (c) {
-       case 'h':  
+       case 'h':
          prn_help = true;
          break;
        case 'd':
@@ -146,7 +150,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          prn_help = true;
          break;
      }
-   } 
+   }
    if (prn_help || !found_output_filename) {
      usage();
      exit(-1);
@@ -167,11 +171,11 @@ int main(int argc, char** argv) {
   {
     std::string                output_filename;
     std::string                backup_filename;
- 
+
     { // Build Distributed_DB
     int mpi_rank = comm_world().rank();
     int mpi_size = comm_world().size();
-        
+
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     }
@@ -183,35 +187,31 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-   
+
     parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
-
-    segment_manager_t* segment_manager = ddb.get_segment_manager();
-    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
-
-    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
+    dist_db ddb(metall::create_only, output_filename.c_str());
+    auto& allocator_manager = ddb.get_local_manager();
+    graph_type::edge_data<edge_data_type, edge_data_allocator_type> edge_data(allocator_manager.get_allocator());
 
     //Setup edge list reader
     havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
-    bool has_edge_data = pelr.has_edge_data(); 
+    bool has_edge_data = pelr.has_edge_data();
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
-    graph_type *graph = segment_manager->construct<graph_type>
+    graph_type *graph = allocator_manager.construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
-         edge_data); 
-    
+        (allocator_manager.get_allocator(), MPI_COMM_WORLD,pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size, edge_data);
+
     if (has_edge_data) {
-      graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
-      = segment_manager->construct<graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>>
+      graph_type::edge_data<edge_data_type, edge_data_allocator_type>* edge_data_ptr
+      = allocator_manager.construct<graph_type::edge_data<edge_data_type, edge_data_allocator_type>>
           ("graph_edge_data_obj")
           (edge_data);
     }
@@ -221,15 +221,15 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-    for (int i = 0; i < mpi_size; i++) {
-      if (i == mpi_rank) {
-        double percent = double(segment_manager->get_free_memory()) /
-        double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
-                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
-      }
-      comm_world().barrier();
-    }
+//    for (int i = 0; i < mpi_size; i++) {
+//      if (i == mpi_rank) {
+//        double percent = double(segment_manager->get_free_memory()) /
+//        double(segment_manager->get_size());
+//        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
+//                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
+//      }
+//      comm_world().barrier();
+//    }
 
 //    graph->print_graph_statistics();
 
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
     comm_world().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
-      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
+      dist_db::copy(output_filename.c_str(), backup_filename.c_str());
     }
     comm_world().barrier();
     if(comm_nl().rank() == 0) {
