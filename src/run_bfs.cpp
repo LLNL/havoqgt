@@ -54,7 +54,7 @@
 #include <havoqgt/breadth_first_search.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
-#include <havoqgt/metall_distributed_db.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -121,7 +121,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::delegate_partitioned_graph<metall_distributed_db::allocator<>> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -145,12 +145,12 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   if(backup_filename.size() > 0) {
-    metall_distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
+    distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
 
-  metall_distributed_db ddb(db_open(), graph_input);
+  distributed_db ddb(db_open_read_only(), graph_input);
 
-  graph_type *graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
+  auto graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);

@@ -61,11 +61,12 @@
 #ifndef HAVOQGT_METALL_DISTRIBUTED_DB_HPP_INCLUDED
 #define HAVOQGT_METALL_DISTRIBUTED_DB_HPP_INCLUDED
 
-#include <havoqgt/distributed_db.hpp>
 #include <metall_utility/metall_mpi_adaptor.hpp>
 
 namespace havoqgt {
 
+class db_create {};
+class db_open {};
 class db_open_read_only {};
 
 class metall_distributed_db {
@@ -94,9 +95,9 @@ class metall_distributed_db {
 
   metall_distributed_db(db_create,
                         const std::string &data_store_dir,
-                        const std::size_t capacity,
+                        const double gbyte_per_rank,
                         const MPI_Comm &comm = MPI_COMM_WORLD)
-      : m_impl(metall::create_only, data_store_dir, capacity, comm) {}
+      : m_impl(metall::create_only, data_store_dir, uint64_t(gbyte_per_rank * 1024 * 1024) * 1024ULL, comm) {}
 
   static bool transfer(const char *const src_base_fname,
                        const char *const dest_base_fname,

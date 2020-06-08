@@ -76,8 +76,6 @@
 #include <string>
 #include <utility>
 
-#include <boost/interprocess/managed_heap_memory.hpp>
-
 using namespace havoqgt;
 
 typedef double edge_data_type;
@@ -136,8 +134,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -164,18 +161,13 @@ int main(int argc, char** argv) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+    distributed_db ddb(havoqgt::db_open_read_only(), graph_input.c_str());
 
-    graph_type* graph =
-        ddb.get_segment_manager()->find<graph_type>("graph_obj").first;
+    auto graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
     assert(graph != nullptr);
 
-    auto edge_data_qry =
-        ddb.get_segment_manager()
-            ->find<graph_type::edge_data<
-                edge_data_type,
-                bip::allocator<edge_data_type, segment_manager_t>>>(
-                "graph_edge_data_obj");
+    typedef distributed_db::allocator<edge_data_type> edge_data_allocator;
+    auto edge_data_qry = ddb.get_manager()->find<graph_type::edge_data<edge_data_type, edge_data_allocator>>("graph_edge_data_obj");
     if (edge_data_qry.second == false) {
       if (mpi_rank == 0) {
         std::cout << "ERROR, edge weights not found" << std::endl;

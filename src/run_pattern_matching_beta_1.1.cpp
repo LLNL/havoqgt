@@ -65,15 +65,10 @@
 using namespace havoqgt;
 //using namespace prunejuice;
 
-typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-
-template<typename T>
-  using SegmentAllocator = bip::allocator<T, segment_manager_t>;
 
 ///typedef hmpi::delegate_partitioned_graph<segment_manager_t> graph_type;
 //typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
-typedef havoqgt::delegate_partitioned_graph
-  <typename segment_manager_t::template allocator<void>::type> graph_type;
+typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
 template<typename T>
   using DelegateGraphVertexDataSTDAllocator = graph_type::vertex_data
@@ -243,7 +238,7 @@ int main(int argc, char** argv) {
     distributed_db::transfer(backup_graph_input.c_str(), graph_input.c_str());
   }
 
-  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+  distributed_db ddb(db_open_read_only(), graph_input.c_str());
 
   //segment_manager_t* segment_manager = ddb.get_segment_manager();
   //  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
@@ -251,8 +246,7 @@ int main(int argc, char** argv) {
   //graph_type *graph = segment_manager->
   //  find<graph_type>("graph_obj").first;
   //assert(graph != nullptr);  
-  graph_type *graph = ddb.get_segment_manager()->
-    find<graph_type>("graph_obj").first;
+  auto graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
   // edge data
@@ -264,11 +258,9 @@ int main(int argc, char** argv) {
   // TODO: figure out a way to get it from graph_type
   // see edge_data_value_type in parallel_edge_list_reader.hpp
 
-  typedef graph_type::edge_data<edge_data_type, 
-    bip::allocator<edge_data_type, segment_manager_t>> edge_data_t;
+  typedef graph_type::edge_data<edge_data_type, distributed_db::allocator<edge_data_type>> edge_data_t;
 
-  edge_data_t* edge_data_ptr = ddb.get_segment_manager()->
-    find<edge_data_t>("graph_edge_data_obj").first;
+  auto edge_data_ptr = ddb.get_manager()->find<edge_data_t>("graph_edge_data_obj").first;
 //  assert(edge_data_ptr != nullptr); 
 
   MPI_Barrier(MPI_COMM_WORLD);

@@ -53,7 +53,7 @@
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
-#include <havoqgt/metall_distributed_db.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include <havoqgt/cache_utilities.hpp>
 
@@ -73,10 +73,10 @@
 
 using namespace havoqgt;
 
-typedef havoqgt::delegate_partitioned_graph<metall_distributed_db::allocator<>> graph_type;
+typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
 typedef double edge_data_type;
-typedef metall_distributed_db::allocator<edge_data_type> edge_data_allocator_type;
+typedef distributed_db::allocator<edge_data_type> edge_data_allocator_type;
 
 void usage()  {
   if(comm_world().rank() == 0) {
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    metall_distributed_db ddb(db_create(), output_filename.c_str());
+    distributed_db ddb(db_create(), output_filename.c_str());
     graph_type::edge_data<edge_data_type, edge_data_allocator_type> edge_data(ddb.get_allocator());
 
     //Setup edge list reader
@@ -217,15 +217,16 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-//    for (int i = 0; i < mpi_size; i++) {
-//      if (i == mpi_rank) {
-//        double percent = double(segment_manager->get_free_memory()) /
-//        double(segment_manager->get_size());
-//        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
-//                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
-//      }
-//      comm_world().barrier();
-//    }
+  // TODO: implement get_size() and get_free_memory() in Metall
+  // for (int i = 0; i < mpi_size; i++) {
+  //  if (i == mpi_rank) {
+  //    double percent = double(ddb.get_manager()->get_free_memory()) /
+  //    double(ddb.get_manager()->get_size());
+  //    std::cout << "[" << mpi_rank << "] " << ddb.get_manager()->get_free_memory()
+  //              << "/" << ddb.get_manager()->get_size() << " = " << percent << std::endl;
+  //  }
+  //  comm_world().barrier();
+  // }
 
 //    graph->print_graph_statistics();
 
@@ -247,7 +248,7 @@ int main(int argc, char** argv) {
     comm_world().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
-      metall_distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
+      distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
     }
     comm_world().barrier();
     if(comm_nl().rank() == 0) {

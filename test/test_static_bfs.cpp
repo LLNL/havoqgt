@@ -18,8 +18,7 @@ namespace havoqgt { namespace test {
 
   using namespace havoqgt;
 
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
 TEST(test_static_bfs, test_static_bfs) {
   MPI_Barrier(MPI_COMM_WORLD);  
@@ -27,10 +26,7 @@ TEST(test_static_bfs, test_static_bfs) {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
     
-  havoqgt::distributed_db ddb(havoqgt::db_create(), "test_static_bfs", 0.01f);
-  
-  segment_manager_t* segment_manager = ddb.get_segment_manager();
-  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+  distributed_db ddb(db_create(), "test_static_bfs", 0.01f);
 
   std::vector< std::pair<uint64_t,uint64_t> > edges;
   size_t num_vertices = 10000;
@@ -41,9 +37,9 @@ TEST(test_static_bfs, test_static_bfs) {
     }
   }
 
-  graph_type *graph = segment_manager->construct<graph_type>
+  graph_type *graph = ddb.get_manager()->construct<graph_type>
       ("graph_obj")
-      (alloc_inst, MPI_COMM_WORLD, edges, num_vertices, 1024, 1, 1024); 
+      (ddb.get_allocator(), MPI_COMM_WORLD, edges, num_vertices, 1024, 1, 1024);
   
   graph_type::vertex_data<uint16_t, std::allocator<uint16_t> >                      bfs_level_data(*graph);
   bfs_level_data.reset(num_vertices+1);
