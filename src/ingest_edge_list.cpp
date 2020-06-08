@@ -53,10 +53,9 @@
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/metall_distributed_db.hpp>
 
 #include <havoqgt/cache_utilities.hpp>
-
-#include <metall_utility/metall_mpi_adaptor.hpp>
 
 #include <iostream>
 #include <assert.h>
@@ -74,12 +73,10 @@
 
 using namespace havoqgt;
 
-typedef metall::utility::metall_mpi_adaptor dist_db;
-typedef dist_db::manager_type::allocator_type<std::byte> graph_allocator_type;
-typedef havoqgt::delegate_partitioned_graph<graph_allocator_type> graph_type;
+typedef havoqgt::delegate_partitioned_graph<metall_distributed_db::allocator<>> graph_type;
 
 typedef double edge_data_type;
-typedef dist_db::manager_type::allocator_type<edge_data_type> edge_data_allocator_type;
+typedef metall_distributed_db::allocator<edge_data_type> edge_data_allocator_type;
 
 void usage()  {
   if(comm_world().rank() == 0) {
@@ -194,9 +191,8 @@ int main(int argc, char** argv) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    dist_db ddb(metall::create_only, output_filename.c_str());
-    auto& allocator_manager = ddb.get_local_manager();
-    graph_type::edge_data<edge_data_type, edge_data_allocator_type> edge_data(allocator_manager.get_allocator());
+    metall_distributed_db ddb(db_create(), output_filename.c_str());
+    graph_type::edge_data<edge_data_type, edge_data_allocator_type> edge_data(ddb.get_allocator());
 
     //Setup edge list reader
     havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
@@ -205,13 +201,13 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
-    graph_type *graph = allocator_manager.construct<graph_type>
+    graph_type *graph = ddb.get_manager()->construct<graph_type>
         ("graph_obj")
-        (allocator_manager.get_allocator(), MPI_COMM_WORLD,pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size, edge_data);
+        (ddb.get_allocator(), MPI_COMM_WORLD,pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size, edge_data);
 
     if (has_edge_data) {
       graph_type::edge_data<edge_data_type, edge_data_allocator_type>* edge_data_ptr
-      = allocator_manager.construct<graph_type::edge_data<edge_data_type, edge_data_allocator_type>>
+      = ddb.get_manager()->construct<graph_type::edge_data<edge_data_type, edge_data_allocator_type>>
           ("graph_edge_data_obj")
           (edge_data);
     }
@@ -251,7 +247,7 @@ int main(int argc, char** argv) {
     comm_world().barrier();
     } // Complete build distributed_db
     if(backup_filename.size() > 0) {
-      dist_db::copy(output_filename.c_str(), backup_filename.c_str());
+      metall_distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
     }
     comm_world().barrier();
     if(comm_nl().rank() == 0) {

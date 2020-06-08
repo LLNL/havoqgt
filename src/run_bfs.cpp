@@ -54,21 +54,18 @@
 #include <havoqgt/breadth_first_search.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
+#include <havoqgt/metall_distributed_db.hpp>
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 
 #include <assert.h>
 
-#include <metall_utility/metall_mpi_adaptor.hpp>
-
 #include <deque>
 #include <string>
 #include <utility>
 #include <algorithm>
 #include <functional>
-
-#include <boost/interprocess/managed_heap_memory.hpp>
 
 using namespace havoqgt;
 
@@ -124,9 +121,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 }
 
 int main(int argc, char** argv) {
-  typedef metall::utility::metall_mpi_adaptor dist_db;
-  typedef dist_db::manager_type::allocator_type<std::byte> allocator_type;
-  typedef havoqgt::delegate_partitioned_graph<allocator_type> graph_type;
+  typedef havoqgt::delegate_partitioned_graph<metall_distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -150,12 +145,12 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   if(backup_filename.size() > 0) {
-    dist_db::copy(backup_filename.c_str(), graph_input.c_str());
+    metall_distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
 
-  dist_db ddb(metall::open_read_only, graph_input);
+  metall_distributed_db ddb(db_open(), graph_input);
 
-  graph_type *graph = ddb.get_local_manager().find<graph_type>("graph_obj").first;
+  graph_type *graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
