@@ -7,6 +7,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules)
 #
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Use Rpath for dependencies." TRUE)
 option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
+set(METALL_ROOT "" CACHE PATH "Metall installed root directory")
 
 #
 # Main Inlucde directory

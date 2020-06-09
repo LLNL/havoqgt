@@ -1,0 +1,64 @@
+# GitLab CI YML file dedicated for LC environment (Quartz)
+#
+# Spack must be available
+# It would be better to install all Boost versions manually,
+# as it causes errors often and could exceed the timelimit of the system.
+#
+# One might want to change the location of builds directory on LC clusters to avoid consuming the home directory space.
+# Type the following command on a LC cluster:
+# $ ln -s /usr/workspace/lc-username ~/.gitlab-runner
+
+stages:
+  - install
+  - build
+
+
+variables:
+  GTEST_COLOR: "1"
+  GIT_DEPTH: 0
+  SPACK_ARCH_INFO: "arch=linux-rhel7-broadwell"
+  GCC_VERSION: "8.1.0"
+  BOOST_VERSION: "1.74.0"
+  METALL_VERSION: "0.3"
+
+
+install_boost:
+  stage: install
+  tags:
+    - quartz
+    - shell
+  script:
+    - hostname
+    - pwd
+    - spack install boost@${BOOST_VERSION}
+    - spack install metall@${METALL_VERSION}
+    - spack clean
+    - spack find
+
+
+.build:
+  stage: build
+  tags:
+    - quartz
+    - shell
+  script:
+    - module load gcc/${GCC_VERSION}
+    - spack load boost@${BOOST_VERSION} ${SPACK_ARCH_INFO}
+    - spack load metall@${METALL_VERSION} ${SPACK_ARCH_INFO}
+    - salloc -N1 -ppdebug
+    - cd build/gitlab_ci
+    - sh ./scripts/${BUILD_SCRIPT}
+    - make -j
+    - export HAVOQGT_TEST_DIR="/dev/shm/havoqgt_test-${CI_CONCURRENT_ID}-${CI_PIPELINE_IID}"
+    - make test
+
+
+build_with_release:
+  extends: .build
+  variables:
+    BUILD_SCRIPT: "do_cmake.sh"
+
+build_with_debug:
+  extends: .build
+  variables:
+    BUILD_SCRIPT: "do_cmake_debug.sh"
