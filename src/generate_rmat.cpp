@@ -148,10 +148,7 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
 }
 
 int main(int argc, char** argv) {
-
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -188,10 +185,7 @@ int main(int argc, char** argv) {
         << "High/Low partition passes = " << partition_passes << std::endl; 
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
-
-    segment_manager_t* segment_manager = ddb.get_segment_manager();
-    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+    distributed_db ddb(db_create(), output_filename.c_str(), gbyte_per_rank);
 
     //Generate RMAT graph
     uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
@@ -203,9 +197,9 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
-    graph_type *graph = segment_manager->construct<graph_type>
+    auto graph = ddb.get_manager()->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
+        (ddb.get_allocator(), MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
 
 
     comm_world().barrier();
@@ -213,15 +207,16 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-    for (int i = 0; i < mpi_size; i++) {
-      if (i == mpi_rank) {
-        double percent = double(segment_manager->get_free_memory()) /
-        double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
-                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
-      }
-      comm_world().barrier();
-    }
+    // TODO: implement get_size() and get_free_memory() in Metall
+    // for (int i = 0; i < mpi_size; i++) {
+    //  if (i == mpi_rank) {
+    //    double percent = double(ddb.get_manager()->get_free_memory()) /
+    //    double(ddb.get_manager()->get_size());
+    //    std::cout << "[" << mpi_rank << "] " << ddb.get_manager()->get_free_memory()
+    //              << "/" << ddb.get_manager()->get_size() << " = " << percent << std::endl;
+    //  }
+    //  comm_world().barrier();
+    // }
 
     graph->print_graph_statistics();
 

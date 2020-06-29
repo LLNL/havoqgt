@@ -53,15 +53,9 @@ void create_delegate_graph(
       << " files." << std::endl;
   }
 
-  havoqgt::distributed_db ddb(havoqgt::db_create(), 
-    output_filename.c_str(), gbyte_per_rank);  
+  distributed_db ddb(db_create(),output_filename.c_str(), gbyte_per_rank);
 
-  segment_manager_t* segment_manager = ddb.get_segment_manager();
-  
-  bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
-
-  graph_type::edge_data<edge_data_type, 
-    bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
+  graph_type::edge_data<edge_data_type, distributed_db::allocator<edge_data_type>> edge_data(ddb.get_allocator());
 
   //Setup edge list reader
   havoqgt::parallel_edge_list_reader<edge_data_type> 
@@ -72,18 +66,15 @@ void create_delegate_graph(
     std::cout << "Generating new graph." << std::endl;
   } 
 
-  graph_type *graph = segment_manager->construct<graph_type>
+  auto graph = ddb.get_manager()->construct<graph_type>
     (graph_unique_instance_name.c_str())
-    (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), 
+    (ddb.get_allocator(), MPI_COMM_WORLD, pelr, pelr.max_vertex_id(),
      delegate_threshold, partition_passes, chunk_size, edge_data);
 
   if (has_edge_data) {
-      graph_type::edge_data<edge_data_type, 
-      bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
-      = segment_manager->construct<graph_type::edge_data<edge_data_type, 
-      bip::allocator<edge_data_type, segment_manager_t>>>
-        (edge_data_unique_instance_name.c_str())
-        (edge_data);
+    auto edge_data_ptr = ddb.get_manager()->
+    construct<graph_type::edge_data<edge_data_type, distributed_db::allocator<edge_data_type>>>
+        (edge_data_unique_instance_name.c_str())(edge_data);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);

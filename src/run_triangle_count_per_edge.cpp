@@ -131,8 +131,7 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename,
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -159,10 +158,9 @@ int main(int argc, char** argv) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+    distributed_db ddb(db_open_read_only(), graph_input.c_str());
 
-    graph_type* graph =
-        ddb.get_segment_manager()->find<graph_type>("graph_obj").first;
+    auto graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
     assert(graph != nullptr);
 
     MPI_Barrier(MPI_COMM_WORLD);
