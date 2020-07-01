@@ -50,12 +50,13 @@
  */
 
 #include <gtest/gtest.h>
-#include <rhh/basic_robin_hood_hashing.hpp>
+#include <rhh/rhh_map.hpp>
 
-using map_type = rhh::detail::robin_hood_hashing_map<uint32_t, uint32_t>;
+using map_type = rhh::rhh_map<uint32_t, uint32_t>;
 
 namespace {
-TEST(dynamic_robin_hood_hashing_test, init) {
+
+TEST(rhhMapTest, init) {
   map_type map;
 
   ASSERT_EQ(map.capacity(), 1);
@@ -63,7 +64,7 @@ TEST(dynamic_robin_hood_hashing_test, init) {
 }
 
 
-TEST(dynamic_robin_hood_hashing_test, insert) {
+TEST(rhhMapTest, insert) {
   map_type map;
 
   typename map_type::value_type val1{1, 1};
@@ -79,7 +80,23 @@ TEST(dynamic_robin_hood_hashing_test, insert) {
   ASSERT_EQ(map.size(), 3);
 }
 
-TEST(dynamic_robin_hood_hashing_test, erase) {
+TEST(rhhSetTest, insertString) {
+  rhh::rhh_map<std::string, std::string> map;
+
+  const std::pair<std::string, std::string> val1("10", "100");
+  ASSERT_EQ(map.at(map.insert(val1)), val1);
+  ASSERT_EQ(map.size(), 1);
+
+  const std::pair<std::string, std::string> val2("20", "200");
+  ASSERT_EQ(map.at(map.insert(val2)), val2);
+  ASSERT_EQ(map.size(), 2);
+
+  const std::pair<std::string, std::string> val3("30", "300");
+  ASSERT_EQ(map.at(map.insert(val3)), val3);
+  ASSERT_EQ(map.size(), 3);
+}
+
+TEST(rhhMapTest, erase) {
   map_type map;
 
   ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0);
@@ -93,7 +110,7 @@ TEST(dynamic_robin_hood_hashing_test, erase) {
   ASSERT_EQ(map.size(), 0);
 }
 
-TEST(dynamic_robin_hood_hashing_test, find) {
+TEST(rhhMapTest, find) {
   map_type map;
 
   typename map_type::value_type val1{1, 1};
@@ -124,7 +141,7 @@ TEST(dynamic_robin_hood_hashing_test, find) {
   ASSERT_EQ(map.find(2), map.capacity());
 }
 
-TEST(dynamic_robin_hood_hashing_test, clear) {
+TEST(rhhMapTest, clear) {
   map_type map;
 
   ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0);
@@ -138,7 +155,7 @@ TEST(dynamic_robin_hood_hashing_test, clear) {
   ASSERT_EQ(map.find(2), map.capacity());
 }
 
-TEST(dynamic_robin_hood_hashing_test, swap) {
+TEST(rhhMapTest, swap) {
   map_type map1;
   map_type map2;
 

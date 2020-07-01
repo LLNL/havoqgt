@@ -52,6 +52,8 @@
 #ifndef HAVOQGT_RHH_DYNAMI_VALUE_TYPE_HPP
 #define HAVOQGT_RHH_DYNAMI_VALUE_TYPE_HPP
 
+#include <memory>
+
 namespace rhh {
 namespace detail {
 namespace utility {
@@ -64,12 +66,15 @@ namespace utility {
 /// value_type is std::pair<key_type, mapped_value_type>
 /// \tparam key_type Type of the key
 /// \tparam mapped_value_type Type of the value
-template <typename _key_type, typename _mapped_value_type>
+/// \tparam allocator_type Allocator type
+template <typename _key_type, typename _mapped_value_type,
+    typename _allocator_type = std::allocator<std::byte>>
 class pair_value_type {
  public:
   using key_type = _key_type;
   using value_type = std::pair<key_type, _mapped_value_type>;
   using const_key_value_type = std::pair<const key_type, _mapped_value_type>;
+  using allocator_type = _allocator_type;
 
   pair_value_type() = default;
 

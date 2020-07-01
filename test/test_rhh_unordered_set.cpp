@@ -67,25 +67,62 @@ TEST(rhh_unordered_set_test, insert) {
   ASSERT_FALSE(set.insert(3).second);
 }
 
-TEST(rhh_unordered_set_test, erase) {
+TEST(rhh_unordered_set_test, erase_with_key) {
   rhh::unordered_set<uint64_t> set;
 
   ASSERT_EQ(set.erase(1), 0);
   ASSERT_EQ(set.erase(2), 0);
-  ASSERT_EQ(set.erase(3), 0);
+
+  set.insert(1);
+  set.insert(2);
+
+  ASSERT_EQ(set.erase(1), 1);
+  ASSERT_EQ(set.erase(1), 0);
+  ASSERT_EQ(set.size(), 1);
+
+  ASSERT_EQ(set.erase(2), 1);
+  ASSERT_EQ(set.erase(2), 0);
+  ASSERT_EQ(set.size(), 0);
+
+}
+
+TEST(rhh_unordered_set_test, erase_with_iterator) {
+  rhh::unordered_set<uint64_t> set;
+
+  set.insert(1);
+  set.insert(2);
+
+  auto itr1_next = set.find(1);
+  ++itr1_next;
+  ASSERT_EQ(set.erase(set.find(1)), itr1_next);
+  ASSERT_EQ(set.size(), 1);
+
+  auto itr2_next = set.find(2);
+  ++itr2_next;
+  ASSERT_EQ(set.erase(set.find(2)), itr2_next);
+  ASSERT_EQ(set.size(), 0);
+
+}
+
+TEST(rhh_unordered_set_test, erase_with_range) {
+  rhh::unordered_set<uint64_t> set;
+
 
   set.insert(1);
   set.insert(2);
   set.insert(3);
+  set.insert(4);
+
+  auto itr1 = set.find(1);
+  auto itr1_next = itr1;
+  ++itr1_next;
+
+  // Erase a value
+  ASSERT_EQ(set.erase(itr1, itr1_next), itr1_next);
   ASSERT_EQ(set.size(), 3);
 
-  ASSERT_EQ(set.erase(1), 1);
-  ASSERT_EQ(set.size(), 2);
-
-  ASSERT_EQ(set.erase(2), 1);
-  ASSERT_EQ(set.size(), 1);
-
-  ASSERT_EQ(set.erase(3), 1);
+  // Erase all values
+  ASSERT_EQ(set.erase(set.begin(), set.end()), set.end());
   ASSERT_EQ(set.size(), 0);
 }
 
