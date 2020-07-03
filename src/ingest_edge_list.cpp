@@ -76,7 +76,7 @@ typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
 typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
 
 typedef double edge_data_type;
-  
+
 void usage()  {
   if(comm_world().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
@@ -93,7 +93,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
-                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
+                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames,
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
                     bool& undirected) {
   if(comm_world().rank() == 0) {
@@ -103,7 +103,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
     }
     std::cout << std::endl;
   }
-  
+
   bool found_output_filename = false;
   delegate_threshold = 1048576;
   input_filenames.clear();
@@ -111,12 +111,12 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-  
-  char c;
+
+  int c;
   bool prn_help = false;
   while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
      switch (c) {
-       case 'h':  
+       case 'h':
          prn_help = true;
          break;
        case 'd':
@@ -146,7 +146,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          prn_help = true;
          break;
      }
-   } 
+   }
    if (prn_help || !found_output_filename) {
      usage();
      exit(-1);
@@ -167,11 +167,11 @@ int main(int argc, char** argv) {
   {
     std::string                output_filename;
     std::string                backup_filename;
- 
+
     { // Build Distributed_DB
     int mpi_rank = comm_world().rank();
     int mpi_size = comm_world().size();
-        
+
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     }
@@ -183,7 +183,7 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-   
+
     parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
@@ -195,11 +195,11 @@ int main(int argc, char** argv) {
     segment_manager_t* segment_manager = ddb.get_segment_manager();
     bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
 
-    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
+    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst);
 
     //Setup edge list reader
     havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
-    bool has_edge_data = pelr.has_edge_data(); 
+    bool has_edge_data = pelr.has_edge_data();
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
@@ -207,8 +207,8 @@ int main(int argc, char** argv) {
     graph_type *graph = segment_manager->construct<graph_type>
         ("graph_obj")
         (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
-         edge_data); 
-    
+         edge_data);
+
     if (has_edge_data) {
       graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
       = segment_manager->construct<graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>>
