@@ -72,19 +72,19 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <strstream>
 
 namespace havoqgt {
 
-std::vector<std::string> split(const std::string& line, const char delim) {
-  std::vector<std::string> tokens;
-  std::string              token;
-  std::istringstream       iss(line);
+std::vector<std::string> split(const std::string& line) {
+  std::vector<std::string> split_tokens;
+  std::string buf;
 
-  while (std::getline(iss, token, delim)) {
-    tokens.push_back(token);
+  for (std::stringstream ss(line); ss >> buf;) {
+    split_tokens.emplace_back(buf);
   }
 
-  return tokens;
+  return split_tokens;
 }
 
 /// Parallel edge list reader
@@ -199,7 +199,7 @@ class parallel_edge_list_reader {
       std::string   line;
       std::ifstream input_file(m_local_filenames[0], std::ifstream::in);
       if (std::getline(input_file, line)) {
-        auto tokens = split(line, ' ');
+        const auto tokens = split(line);
         if (tokens.size() > 2) {
           m_has_edge_data = true;
         }
