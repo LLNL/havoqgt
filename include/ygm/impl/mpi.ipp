@@ -39,6 +39,16 @@ inline comm::comm(split _split) : free_comm_in_destructor(true) {
   init_rank_size();
 }
 
+inline comm::~comm() {
+  if (free_comm_in_destructor) {
+    int is_finalized;
+    MPI_Finalized(&is_finalized);
+    if (!is_finalized) {
+      chk_ret(MPI_Comm_free(&m_comm));
+    }
+  }
+}
+
 inline void comm::init_rank_size() {
   chk_ret(MPI_Comm_size(m_comm, &m_size));
   chk_ret(MPI_Comm_rank(m_comm, &m_rank));
@@ -205,8 +215,20 @@ inline void do_once(T func) {
 namespace detail {
 class init_final {
  public:
-  init_final(int* argc, char*** argv) { MPI_Init(argc, argv); }
-  ~init_final() { MPI_Finalize(); }
+  init_final(int* argc, char*** argv) {
+    int is_initialized;
+    MPI_Initialized(&is_initialized);
+    if (!is_initialized) {
+      MPI_Init(argc, argv);
+    }
+  }
+  ~init_final() {
+    int is_finalized;
+    MPI_Finalized(&is_finalized);
+    if (!is_finalized) {
+      MPI_Finalize();
+    }
+  }
 };
 }
 
