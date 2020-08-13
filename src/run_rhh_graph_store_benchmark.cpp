@@ -53,28 +53,31 @@
  */
 
 #include <metall/metall.hpp>
-#include <rhh/dynamic_graph_store.hpp>
+#include <rhh/graph_store.hpp>
 
-//using graph_type =
-//rhh::dynamic_graph_store<uint64_t, std::byte, std::byte,
-//                         metall::manager::allocator_type<std::byte>>;
-
-#include <boost/interprocess/managed_mapped_file.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
-namespace bip = boost::interprocess;
-using allocator_type = bip::allocator<std::byte, bip::managed_mapped_file::segment_manager>;
-
-//using graph_type =
-//    rhh::dynamic_graph_store<uint64_t, std::byte, std::byte, allocator_type>;
-
-using graph_type = rhh::dynamic_graph_store<uint64_t, std::byte, std::byte>;
-
+using graph_type = rhh::graph_store<uint64_t, double, bool,
+                                    metall::manager::allocator_type<std::byte>>;
 int main() {
-  // metall::manager manager(metall::create_only, "/tmp/test");
-  // bip::managed_mapped_file mfile(bip::create_only, "/tmp/test", 1024);
+  metall::manager manager(metall::create_only, "/tmp/test");
 
-//  graph_type graph(mfile.get_allocator<std::byte>());
-  graph_type graph;
+  graph_type graph(manager.get_allocator<std::byte>());
+
+  graph.has_vertex(1);
+
+  const uint64_t v0 = 0;
+  const uint64_t v1 = 1;
+  graph.insert_vertex(v0);
+  graph.insert_vertex(1);
+
+  graph.insert_edge(v0, v1);
+  graph.insert_edge(0, 1);
+
+  graph.vertex_value(v0) = 10.1;
+  graph.edge_value(v0, v1) = true;
+
+  graph_type const_graph(graph);
+  std::cout << const_graph.vertex_value(v0) << std::endl;
+  std::cout << const_graph.edge_value(v0, v1) << std::endl;
 
   return 0;
 }

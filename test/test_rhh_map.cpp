@@ -59,8 +59,8 @@ namespace {
 TEST(rhhMapTest, init) {
   map_type map;
 
-  ASSERT_EQ(map.capacity(), 1);
-  ASSERT_EQ(map.size(), 0);
+  ASSERT_EQ(map.capacity(), 1ULL);
+  ASSERT_EQ(map.size(), 0ULL);
 }
 
 
@@ -69,15 +69,15 @@ TEST(rhhMapTest, insert) {
 
   typename map_type::value_type val1{1, 1};
   ASSERT_EQ(map.at(map.insert(val1)), val1);
-  ASSERT_EQ(map.size(), 1);
+  ASSERT_EQ(map.size(), 1ULL);
 
   typename map_type::value_type val2{1, 2};
   ASSERT_EQ(map.at(map.insert(val2)), val2);
-  ASSERT_EQ(map.size(), 2);
+  ASSERT_EQ(map.size(), 2ULL);
 
   typename map_type::value_type val3{2, 1};
   ASSERT_EQ(map.at(map.insert(val3)), val3);
-  ASSERT_EQ(map.size(), 3);
+  ASSERT_EQ(map.size(), 3ULL);
 }
 
 TEST(rhhSetTest, insertString) {
@@ -85,29 +85,29 @@ TEST(rhhSetTest, insertString) {
 
   const std::pair<std::string, std::string> val1("10", "100");
   ASSERT_EQ(map.at(map.insert(val1)), val1);
-  ASSERT_EQ(map.size(), 1);
+  ASSERT_EQ(map.size(), 1ULL);
 
   const std::pair<std::string, std::string> val2("20", "200");
   ASSERT_EQ(map.at(map.insert(val2)), val2);
-  ASSERT_EQ(map.size(), 2);
+  ASSERT_EQ(map.size(), 2ULL);
 
   const std::pair<std::string, std::string> val3("30", "300");
   ASSERT_EQ(map.at(map.insert(val3)), val3);
-  ASSERT_EQ(map.size(), 3);
+  ASSERT_EQ(map.size(), 3ULL);
 }
 
 TEST(rhhMapTest, erase) {
   map_type map;
 
-  ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0);
-  ASSERT_GE(map.insert(typename map_type::value_type{1, 2}), 0);
-  ASSERT_GE(map.insert(typename map_type::value_type{2, 3}), 0);
+  ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0ULL);
+  ASSERT_GE(map.insert(typename map_type::value_type{1, 2}), 0ULL);
+  ASSERT_GE(map.insert(typename map_type::value_type{2, 3}), 0ULL);
 
-  ASSERT_EQ(map.erase(1), 2);
-  ASSERT_EQ(map.size(), 1);
+  ASSERT_EQ(map.erase(1), 2ULL);
+  ASSERT_EQ(map.size(), 1ULL);
 
-  ASSERT_EQ(map.erase(2), 1);
-  ASSERT_EQ(map.size(), 0);
+  ASSERT_EQ(map.erase(2), 1ULL);
+  ASSERT_EQ(map.size(), 0ULL);
 }
 
 TEST(rhhMapTest, find) {
@@ -116,9 +116,9 @@ TEST(rhhMapTest, find) {
   typename map_type::value_type val1{1, 1};
   typename map_type::value_type val2{1, 2};
   typename map_type::value_type val3{2, 3};
-  ASSERT_GE(map.insert(val1), 0);
-  ASSERT_GE(map.insert(val2), 0);
-  ASSERT_GE(map.insert(val3), 0);
+  ASSERT_GE(map.insert(val1), 0ULL);
+  ASSERT_GE(map.insert(val2), 0ULL);
+  ASSERT_GE(map.insert(val3), 0ULL);
 
   const auto pos1 = map.find(1);
   ASSERT_TRUE(map.at(pos1) == val1 || map.at(pos1) == val2);
@@ -144,13 +144,13 @@ TEST(rhhMapTest, find) {
 TEST(rhhMapTest, clear) {
   map_type map;
 
-  ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0);
-  ASSERT_GE(map.insert(typename map_type::value_type{1, 2}), 0);
-  ASSERT_GE(map.insert(typename map_type::value_type{2, 3}), 0);
+  ASSERT_GE(map.insert(typename map_type::value_type{1, 1}), 0ULL);
+  ASSERT_GE(map.insert(typename map_type::value_type{1, 2}), 0ULL);
+  ASSERT_GE(map.insert(typename map_type::value_type{2, 3}), 0ULL);
 
   map.clear();
 
-  ASSERT_EQ(map.size(), 0);
+  ASSERT_EQ(map.size(), 0ULL);
   ASSERT_EQ(map.find(1), map.capacity());
   ASSERT_EQ(map.find(2), map.capacity());
 }
@@ -163,12 +163,12 @@ TEST(rhhMapTest, swap) {
   typename map_type::value_type val2{1, 2};
   typename map_type::value_type val3{2, 3};
 
-  ASSERT_GE(map1.insert(val1), 0);
-  ASSERT_GE(map1.insert(val2), 0);
-  ASSERT_GE(map1.insert(val3), 0);
+  ASSERT_GE(map1.insert(val1), 0ULL);
+  ASSERT_GE(map1.insert(val2), 0ULL);
+  ASSERT_GE(map1.insert(val3), 0ULL);
 
   typename map_type::value_type val4{2, 4};
-  ASSERT_GE(map2.insert(val4), 0);
+  ASSERT_GE(map2.insert(val4), 0ULL);
 
   map1.swap(map2);
 

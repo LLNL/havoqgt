@@ -7,17 +7,14 @@
 
 #include <memory>
 #include <boost/container/vector.hpp>
-#include <boost/container/scoped_allocator.hpp>
 
 namespace rhh {
 namespace detail {
 namespace utility {
 
 template <typename T, typename allocator>
-using dynamic_array = boost::container::vector<T, typename std::allocator_traits<allocator>::template rebind_alloc<T>>;
-
-template <typename allocator>
-using scp_alloc = boost::container::scoped_allocator_adaptor<allocator>;
+using dynamic_array = boost::container::vector<
+    T, typename std::allocator_traits<allocator>::template rebind_alloc<T>>;
 
 } // namespace rhh
 } // namespace detail

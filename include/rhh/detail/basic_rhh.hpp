@@ -60,157 +60,120 @@
 #include <functional>
 #include <utility>
 
-#include <rhh/detail/utility/dynamic_array.hpp>
-#include <rhh/detail/utility/packed_tuple.hpp>
+#include <boost/container/vector.hpp>
 #include <rhh/detail/utility/value_type.hpp>
 
 namespace rhh {
 namespace detail {
-//namespace utility {
-//
-//struct void_mapped_value_tag;
-//
-//// ----------------------------------------------------------------------------------------------------
-//// //
-////                                 Class value_type_selector
-//// utility class to construct a rhh class which doesn't have mapped_value
-//// ----------------------------------------------------------------------------------------------------
-//// //
-///// \brief Generalized class for the cases mapped_value_type is not
-///// void_mapped_value_tag value_type is std::pair<key_type, mapped_value_type>
-///// \tparam key_type Type of the key
-///// \tparam mapped_value_type Type of the value
-//template <typename key_type, typename mapped_value_type>
-//class value_accessor {
-// public:
-//  using value_type = std::pair<key_type, mapped_value_type>;
-//
-//  static const key_type &get_key(value_type &value) { return value.first; }
-//
-//  static const key_type &get_key(const value_type &value) {
-//    return value.first;
-//  }
-//
-//  static void destroy_mapped_value(value_type *value) {
-//    value->second.~mapped_value_type();
-//  }
-//
-//  // ----- Explicitly delete constructors ----- //
-//  using self_type  = value_accessor<key_type, mapped_value_type>;
-//  value_accessor() = delete;
-//  value_accessor(const self_type &) = delete;
-//  value_accessor(self_type &&)      = delete;
-//  ~value_accessor()                 = delete;
-//};
-//
-///// \brief Specialized class whose second template type is void_mapped_value_tag
-///// therefore, value_type is same to key_type
-///// \tparam key_type Type of the key
-//template <typename key_type>
-//class value_accessor<key_type, void_mapped_value_tag> {
-// public:
-//  using value_type = key_type;
-//
-//  static key_type &get_key(value_type &value) { return value; }
-//
-//  static const key_type &get_key(const value_type &value) { return value; }
-//
-//  static void destroy_mapped_value(value_type *) {
-//    // Does nothing
-//  }
-//
-//  // ----- Explicitly delete constructors ----- //
-//  using self_type  = value_accessor<key_type, void_mapped_value_tag>;
-//  value_accessor() = delete;
-//  value_accessor(const self_type &) = delete;
-//  value_accessor(self_type &&)      = delete;
-//  ~value_accessor()                 = delete;
-//};
-//
-//}  // namespace utility
+
+class rhh_header {
+ private:
+  static constexpr uint8_t k_tomb_stone_flag = 0x01;
+  static constexpr uint8_t k_hold_value_flag = 0x10;
+
+ public:
+  using raw_type = uint8_t;
+
+  rhh_header()                       = delete;
+  ~rhh_header()                      = delete;
+  rhh_header(const rhh_header &)     = delete;
+  rhh_header(rhh_header &&) noexcept = delete;
+  rhh_header &operator=(const rhh_header &) = delete;
+  rhh_header &operator=(rhh_header &&) noexcept = delete;
+
+  static void clear(raw_type &data) { data = static_cast<raw_type>(0); }
+
+  static bool get_tomb_stone(const raw_type &data) {
+    return static_cast<bool>(data & k_tomb_stone_flag);
+  }
+
+  static void set_tomb_stone(raw_type &data) { data |= k_tomb_stone_flag; }
+
+  static void init_for_new_value(raw_type &data) {
+    clear(data);
+    data = k_hold_value_flag;
+  }
+
+  static bool empty(const raw_type &data) {
+    return data == static_cast<raw_type>(0);
+  }
+};
 
 /// \brief Robin Hood Hashing class
-/// \tparam key_type Type of the key values
-/// \tparam mapped_value_type Type of the mapped values
+/// \tparam value_wrapper Type of a value (key and mapped value)
 /// \tparam hash Hash function
 /// \tparam EqualTo Equal to function
 /// \tparam AllocatorType Type of the allocator
-template <typename _value_wrapper_type, typename _hash, typename _key_equal,
+template <typename value_wrapper, typename _hash, typename _key_equal,
           typename _allocator>
 class basic_rhh {
  public:
-  // ----------------------------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
   //                               Public type
-  // ----------------------------------------------------------------------------------------------------
-  // //
-  using key_type       = typename _value_wrapper_type::key_type;
-  using value_type     = typename _value_wrapper_type::value_type;
+  // --------------------------------------------------------------------------
+  using key_type       = typename value_wrapper::key_type;
+  using value_type     = typename value_wrapper::value_type;
   using hash           = _hash;
   using key_equal      = _key_equal;
   using allocator_type = _allocator;
   using size_type = typename std::allocator_traits<allocator_type>::size_type;
 
  private:
-  using self_type =
-      basic_rhh<_value_wrapper_type, _hash, _key_equal, _allocator>;
+  using self_type = basic_rhh<value_wrapper, _hash, _key_equal, allocator_type>;
 
-  struct element_type {
-    class header_type;
-
-    element_type()                         = default;
-    ~element_type()                        = default;
-    element_type(const element_type &)     = default;
-    element_type(element_type &&) noexcept = default;
-    element_type &operator=(const element_type &) = default;
-    element_type &operator=(element_type &&) noexcept = default;
-
-    header_type         header;
-    _value_wrapper_type value_wrapper;
-  };
-
+  // Use tuple instead of pair because nested pair causes a problem with
+  // scoped allocator adaptor.
+  // C++ Standards Committee Library Working Group (LWG) issue# is 2975
+  using block_type = std::tuple<rhh_header::raw_type, value_type>;
   using internal_table_allocator_type = typename std::allocator_traits<
-      _allocator>::template rebind_alloc<element_type>;
-
+      allocator_type>::template rebind_alloc<block_type>;
   using internal_table_type =
-      utility::dynamic_array<element_type,
-                             utility::scp_alloc<internal_table_allocator_type>>;
-
-  // Internal data structure
-  //  element {
-  //    header {
-  //      probe_distance
-  //      tomb_stone
-  //    };
-  //    value {
-  //      key
-  //      mapped_value // or no mapped_value
-  //    };
-  //  };
+      boost::container::vector<block_type,
+                               boost::container::scoped_allocator_adaptor<
+                                   internal_table_allocator_type>>;
 
  public:
-  // --------------------------------------------------------------------------------
-  // // Constructor & assign operator
-  // --------------------------------------------------------------------------------
-  // //
-  explicit basic_rhh(const _allocator &allocator = _allocator())
-      : m_num_elements(0), m_table(1, element_type(), allocator) {}
+  // --------------------------------------------------------------------------
+  // Constructor & assign operator
+  // --------------------------------------------------------------------------
 
-  basic_rhh(const size_type   initial_capacity,
-            const _allocator &allocator = _allocator())
-      : m_num_elements(0),
-        m_table(initial_capacity, element_type(), allocator) {}
+  basic_rhh() = default;
+
+  // Always has at least one capacity to simplify the implementation
+  explicit basic_rhh(const allocator_type &allocator)
+      : m_num_blocks(0),
+        m_table(1, block_type(std::allocator_arg, allocator), allocator) {}
+
+  explicit basic_rhh(const size_type initial_capacity)
+      : m_num_blocks(0), m_table(initial_capacity) {}
+
+  basic_rhh(const size_type initial_capacity, const allocator_type &allocator)
+      : m_num_blocks(0),
+        m_table(initial_capacity, block_type(std::allocator_arg, allocator),
+                allocator) {}
 
   ~basic_rhh() = default;
 
   // Copy constructor
   basic_rhh(const basic_rhh &) = default;
 
+  // Allocator-extended copy constructor
+  basic_rhh(const basic_rhh &other, const allocator_type &allocator)
+      : m_num_blocks(other.m_num_blocks),
+        m_table(other.m_table, internal_table_allocator_type(allocator)) {}
+
   // Move constructor
   basic_rhh(basic_rhh &&other) noexcept
-      : m_num_elements(other.m_num_elements),
-        m_table(std::move(other.m_table)) {
-    other.m_num_elements = 0;
+      : m_num_blocks(other.m_num_blocks), m_table(std::move(other.m_table)) {
+    other.m_num_blocks = 0;
+  }
+
+  // Allocator-extended move constructor
+  basic_rhh(basic_rhh &&other, const allocator_type &allocator)
+      : m_num_blocks(other.m_num_blocks),
+        m_table(std::move(other.m_table),
+                internal_table_allocator_type(allocator)) {
+    other.m_num_blocks = 0;
   }
 
   // Copy assignments
@@ -218,27 +181,27 @@ class basic_rhh {
 
   // Move assignments
   basic_rhh &operator=(basic_rhh &&other) noexcept {
-    m_num_elements       = other.m_num_elements;
-    other.m_num_elements = 0;
-    m_table              = std::move(other.m_table);
+    m_num_blocks       = other.m_num_blocks;
+    other.m_num_blocks = 0;
+    m_table            = std::move(other.m_table);
     return *this;
   }
 
-  // --------------------------------------------------------------------------------
-  // // Public methods
-  // --------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
+  // Public methods
+  // --------------------------------------------------------------------------
+
   // -------------------- Capacity -------------------- //
   /// \brief Returns the number of values in the container.
   /// \return the number of values in the container.
-  size_type size() const { return m_num_elements; }
+  size_type size() const { return m_num_blocks; }
 
   /// \brief Returns the capacity of the container.
   /// \return The current capacity of the container.
   size_type capacity() const { return m_table.size(); }
 
   // -------------------- Element access -------------------- //
-  /// \brief Accesses the element at 'position'.
+  /// \brief Accesses the block at 'position'.
   /// \param position The position of a value to access.
   /// \return A reference to the value at 'position'.
   /// Specifically, returns std::pair<key, mapped_value>&.
@@ -249,15 +212,15 @@ class basic_rhh {
   //  when mapped_value is not utility::void_mapped_value_tag
   value_type &at(const size_type position) {
     assert(position < capacity());
-    return m_table[position].value_wrapper.value();
+    return priv_value_at(position);
   }
 
-  /// \brief Accesses the element at 'position'.
+  /// \brief Accesses the block at 'position'.
   /// \param position The position of a value to access.
-  /// \return A const reference to the element at 'position'.
+  /// \return A const reference to the block at 'position'.
   const value_type &at(const size_type position) const {
     assert(position < capacity());
-    return m_table[position].value_wrapper;
+    return priv_value_at(position);
   }
 
   // -------------------- Element lookup -------------------- //
@@ -290,18 +253,18 @@ class basic_rhh {
   /// \param start_position The current position.
   /// \return The position of the next value.
   size_type find_next(const size_type start_position) const {
-    return priv_find_valid_element(start_position);
+    return priv_find_valid_block(start_position);
   }
 
   // -------------------- Modifiers -------------------- //
-  /// \brief Inserts a value. Does not check duplicate element.
+  /// \brief Inserts a value. Does not check duplicate block.
   /// \param value A value to insert.
   /// \return Returns the position the value was inserted.
   size_type insert(const value_type &value) {
     return priv_check_capacity_and_insert(value);
   }
 
-  /// \brief Inserts a value. Does not check duplicate element.
+  /// \brief Inserts a value. Does not check duplicate block.
   /// \param value A value to insert.
   /// \return Returns the position the value was inserted.
   size_type insert(value_type &&value) {
@@ -312,26 +275,27 @@ class basic_rhh {
   /// \param key A key to erase.
   /// \return The number of values erased.
   size_type erase(const key_type &key) {
-    const auto old_num_elements = size();
+    const auto old_num_blocks = size();
     priv_erase_multiple(key);
-    return old_num_elements - size();
+    return old_num_blocks - size();
   }
 
-  /// \brief Erases the element at 'position'
+  /// \brief Erases the block at 'position'
   /// \param position The position of a value to erase.
   void erase_at(const size_type position) { priv_erase_at(position); }
 
   /// \brief Clears all values. Does not change the capacity.
   void clear() {
-    m_num_elements = 0;
+    m_num_blocks = 0;
     for (size_type i = 0; i < capacity(); ++i) {
-      if (!m_table[i].header.empty()) m_table[i].header.reset();
+      if (!rhh_header::empty(priv_header_at(i)))
+        rhh_header::clear(priv_header_at(i));
     }
   }
 
   void swap(basic_rhh &other) noexcept {
     using std::swap;
-    swap(m_num_elements, other.m_num_elements);
+    swap(m_num_blocks, other.m_num_blocks);
     swap(m_table, other.m_table);
   }
 
@@ -345,66 +309,74 @@ class basic_rhh {
   }
 
   // -------------------- Statistic -------------------- //
-  /// \brief Return an average probe distance of valid (non empty) elements
-  /// \return an average probe distance of valid (non empty) elements
+  /// \brief Return an average probe distance of valid (non empty) blocks
+  /// \return an average probe distance of valid (non empty) blocks
   double load_factor() const {
     size_type sum = 0;
     for (size_type i = 0; i < capacity(); ++i) {
-      if (!m_table[i].header.empty()) {
+      if (!rhh_header::empty(priv_header_at(i))) {
         sum += priv_probe_distance(i);
       }
     }
 
-    return static_cast<double>(sum) / m_num_elements;
+    return static_cast<double>(sum) / m_num_blocks;
   }
 
  private:
-  // ----------------------------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
   //                               Private static constant variables
-  // ----------------------------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
   static constexpr const size_type k_table_lenght_growing_factor = 2;
 
-  // ----------------------------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
   //                               Private functions
-  // ----------------------------------------------------------------------------------------------------
-  // //
+  // --------------------------------------------------------------------------
+  auto &priv_header_at(const size_type position) {
+    return std::get<0>(m_table[position]);
+  }
+
+  const auto &priv_header_at(const size_type position) const {
+    return std::get<0>(m_table[position]);
+  }
+
+  value_type &priv_value_at(const size_type position) {
+    return std::get<1>(m_table[position]);
+  }
+
+  const value_type &priv_value_at(const size_type position) const {
+    return std::get<1>(m_table[position]);
+  }
 
   // -------------------- Hash -------------------- //
   size_type priv_hash_key(const key_type &key) const { return hash()(key); }
 
   size_type priv_ideal_position(const key_type &key) const {
-    // std::cout << key << " -> " << priv_hash_key(key) << " : " <<
-    // (priv_hash_key(key) & (table_length() - 1)) << std::endl; std::cout <<
-    // key.first << " : " <<  key.second << " -> " << priv_hash_key(key) << " :
-    // " << (priv_hash_key(key) & (capacity() - 1)) << std::endl;
     return priv_hash_key(key) & (capacity() - 1);
   }
 
   // -------------------- Probe distance -------------------- //
-  size_type priv_probe_distance(const size_type current_position) const {
-    const key_type &key = m_table[current_position].value_wrapper.key();
-    return priv_probe_distance(key, current_position);
+  size_type priv_probe_distance(const size_type position) const {
+    return priv_probe_distance(value_wrapper::key(priv_value_at(position)),
+                               position);
   }
 
   size_type priv_probe_distance(const key_type &key,
-                                const size_type current_position) const {
-    return (current_position + capacity() - priv_ideal_position(key)) &
+                                const size_type position) const {
+    return (position + capacity() - priv_ideal_position(key)) &
            (capacity() - 1);
   }
 
   // -------------------- Capacity -------------------- //
-  bool priv_enough_capacity() { return (m_num_elements < capacity() * 0.9); }
+  bool priv_enough_capacity() { return (m_num_blocks < capacity() * 0.9); }
 
   void priv_grow_table() {
     const size_type new_capacity = capacity() * k_table_lenght_growing_factor;
     self_type       new_table(new_capacity, get_allocator());
 
     for (size_type i = 0; i < capacity(); ++i) {
-      if (!m_table[i].header.empty() && !m_table[i].header.get_tomb_stone()) {
-        new_table.priv_insert(std::move(m_table[i].value_wrapper.value()));
+      if (!rhh_header::empty(priv_header_at(i)) &&
+          !rhh_header::get_tomb_stone(priv_header_at(i))) {
+        new_table.priv_insert(std::move(priv_value_at(i)));
       }
     }
 
@@ -424,14 +396,15 @@ class basic_rhh {
     bool is_found_key = false;
 
     while (true) {
-      if (m_table[current_position].header.empty()) {
+      const auto &header = priv_header_at(current_position);
+      const auto &value  = priv_value_at(current_position);
+      if (rhh_header::empty(header)) {
         break;
       } else if (current_probe_distance >
                  priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(m_table[current_position].value_wrapper.key(),
-                             key) &&
-                 !m_table[current_position].header.get_tomb_stone()) {
+      } else if (key_equal()(value_wrapper::key(value), key) &&
+                 !rhh_header::get_tomb_stone(header)) {
         is_found_key = true;
         break;
       }
@@ -443,13 +416,13 @@ class basic_rhh {
     return std::make_pair(current_position, is_found_key);
   }
 
-  size_type priv_find_valid_element(const size_type start_position) const {
+  size_type priv_find_valid_block(const size_type start_position) const {
     if (start_position == capacity()) return capacity();
 
     size_type position = start_position;
     while (true) {
-      if (!(m_table[position].header.empty() ||
-            m_table[position].header.get_tomb_stone()))
+      if (!(rhh_header::empty(priv_header_at(position)) ||
+            rhh_header::get_tomb_stone(priv_header_at(position))))
         return position;
 
       position = (position + 1) & (capacity() - 1);
@@ -473,10 +446,10 @@ class basic_rhh {
   template <typename T>
   size_type priv_insert(T &&value) {
     // Find the position to insert the value
-    auto insert_position = priv_locate_key(_value_wrapper_type::key(value));
-    while (insert_position.second) {  // skip elements with the same key
-      insert_position = priv_locate_key(_value_wrapper_type::key(value),
-                                        insert_position.first + 1);
+    auto insert_position = priv_locate_key(value_wrapper::key(value));
+    while (insert_position.second) {  // skip blocks with the same key
+      insert_position =
+          priv_locate_key(value_wrapper::key(value), insert_position.first + 1);
     }
 
     priv_insert_core(std::forward<T>(value), insert_position.first);
@@ -488,25 +461,25 @@ class basic_rhh {
   void priv_insert_core(T &&value, const size_type first_insert_position) {
     size_type current_position = first_insert_position;
     size_type current_probe_distance =
-        priv_probe_distance(_value_wrapper_type::key(value), current_position);
+        priv_probe_distance(value_wrapper::key(value), current_position);
 
-    _value_wrapper_type wk_value(std::forward<T>(value));
-    ++m_num_elements;
+    auto wk_value(std::forward<T>(value));
+    ++m_num_blocks;
 
     while (true) {
-      if (m_table[current_position].header.empty()) {
-        priv_emplace_at(current_position, std::move(wk_value));
+      if (rhh_header::empty(priv_header_at(current_position))) {
+        priv_set_value_at(current_position, std::move(wk_value));
         return;
       }
 
       if (current_probe_distance > priv_probe_distance(current_position)) {
-        if (m_table[current_position].header.get_tomb_stone()) {
-          priv_emplace_at(current_position, std::move(wk_value));
+        if (rhh_header::get_tomb_stone(priv_header_at(current_position))) {
+          priv_set_value_at(current_position, std::move(wk_value));
           return;
         }
 
         using std::swap;
-        swap(m_table[current_position].value_wrapper, wk_value);
+        swap(priv_value_at(current_position), wk_value);
       }
 
       current_position = (current_position + 1) & (capacity() - 1);
@@ -514,11 +487,9 @@ class basic_rhh {
     }
   }
 
-  void priv_emplace_at(const size_type       position,
-                       _value_wrapper_type &&value_wrapper) {
-    m_table[position].value_wrapper = std::move(value_wrapper);
-    m_table[position].header.reset();
-    m_table[position].header.set();
+  void priv_set_value_at(const size_type position, value_type &&value) {
+    priv_value_at(position) = std::move(value);
+    rhh_header::init_for_new_value(priv_header_at(position));
   }
 
   // -------------------- Erase -------------------- //
@@ -537,14 +508,16 @@ class basic_rhh {
     size_type current_probe_distance = 0;
 
     while (true) {
-      if (m_table[current_position].header.empty()) {
+      const auto &header = priv_header_at(current_position);
+      const auto &value  = priv_value_at(current_position);
+
+      if (header.empty()) {
         break;
       } else if (current_probe_distance >
                  priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(m_table[current_position].value_wrapper.key(),
-                             key) &&
-                 !m_table[current_position].header.get_tomb_stone()) {
+      } else if (key_equal()(value_wrapper::key(value), key) &&
+                 !header.get_tomb_stone()) {
         priv_erase_at(current_position);
       }
 
@@ -554,51 +527,25 @@ class basic_rhh {
   }
 
   void priv_erase_at(const size_type position) {
-    assert(!m_table[position].header.get_tomb_stone());
-    m_table[position].header.set_tomb_stone();
-    m_table[position].value_wrapper.~_value_wrapper_type();
+    assert(!rhh_header::get_tomb_stone(priv_header_at(position)));
+    rhh_header::set_tomb_stone(priv_header_at(position));
+    priv_value_at(position).~value_type();
 
-    assert(m_num_elements > 0);
-    --m_num_elements;
+    assert(m_num_blocks > 0);
+    --m_num_blocks;
   }
 
-  size_type           m_num_elements;
+  size_type           m_num_blocks;
   internal_table_type m_table;
 };
 
-template <typename _value_type, typename _hash, typename _key_equal,
-          typename _allocator>
-class basic_rhh<_value_type, _hash, _key_equal,
-                _allocator>::element_type::header_type {
- public:
-  using underlying_type = uint8_t;
-
-  header_type()                        = default;
-  ~header_type()                       = default;
-  header_type(const header_type &)     = default;
-  header_type(header_type &&) noexcept = default;
-  header_type &operator=(const header_type &) = default;
-  header_type &operator=(header_type &&) noexcept = default;
-
-  bool get_tomb_stone() const { return static_cast<bool>(m_data & 0x1); }
-
-  void set_tomb_stone() { m_data |= 0x1; }
-
-  void reset_tomb_stone() {
-    const underlying_type mask =
-        ~static_cast<underlying_type>(0) - static_cast<underlying_type>(1);
-    m_data &= mask;
-  }
-
-  void set() { m_data |= 0x10; }
-
-  void reset() { m_data = static_cast<underlying_type>(0); }
-
-  bool empty() const { return m_data == static_cast<underlying_type>(0); }
-
- private:
-  underlying_type m_data{0};
-};
+template <typename value_type, typename hash, typename key_equal,
+          typename allocator>
+inline void swap(
+    basic_rhh<value_type, hash, key_equal, allocator> &lhs,
+    basic_rhh<value_type, hash, key_equal, allocator> &rhs) noexcept {
+  lhs.swap(rhs);
+}
 
 }  // namespace detail
 }  // namespace rhh

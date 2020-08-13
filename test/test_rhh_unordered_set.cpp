@@ -70,19 +70,19 @@ TEST(rhh_unordered_set_test, insert) {
 TEST(rhh_unordered_set_test, erase_with_key) {
   rhh::unordered_set<uint64_t> set;
 
-  ASSERT_EQ(set.erase(1), 0);
-  ASSERT_EQ(set.erase(2), 0);
+  ASSERT_EQ(set.erase(1), 0ULL);
+  ASSERT_EQ(set.erase(2), 0ULL);
 
   set.insert(1);
   set.insert(2);
 
-  ASSERT_EQ(set.erase(1), 1);
-  ASSERT_EQ(set.erase(1), 0);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.erase(1), 1ULL);
+  ASSERT_EQ(set.erase(1), 0ULL);
+  ASSERT_EQ(set.size(), 1ULL);
 
-  ASSERT_EQ(set.erase(2), 1);
-  ASSERT_EQ(set.erase(2), 0);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.erase(2), 1ULL);
+  ASSERT_EQ(set.erase(2), 0ULL);
+  ASSERT_EQ(set.size(), 0ULL);
 
 }
 
@@ -95,12 +95,12 @@ TEST(rhh_unordered_set_test, erase_with_iterator) {
   auto itr1_next = set.find(1);
   ++itr1_next;
   ASSERT_EQ(set.erase(set.find(1)), itr1_next);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.size(), 1ULL);
 
   auto itr2_next = set.find(2);
   ++itr2_next;
   ASSERT_EQ(set.erase(set.find(2)), itr2_next);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), 0ULL);
 
 }
 
@@ -119,29 +119,29 @@ TEST(rhh_unordered_set_test, erase_with_range) {
 
   // Erase a value
   ASSERT_EQ(set.erase(itr1, itr1_next), itr1_next);
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), 3ULL);
 
   // Erase all values
   ASSERT_EQ(set.erase(set.begin(), set.end()), set.end());
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), 0ULL);
 }
 
 TEST(rhh_unordered_set_test, count) {
   rhh::unordered_set<uint64_t> set;
 
-  ASSERT_EQ(set.count(1), 0);
+  ASSERT_EQ(set.count(1), 0ULL);
   set.insert(1);
   set.insert(1);
-  ASSERT_EQ(set.count(1), 1);
+  ASSERT_EQ(set.count(1), 1ULL);
   set.erase(1);
-  ASSERT_EQ(set.count(1), 0);
+  ASSERT_EQ(set.count(1), 0ULL);
 
   set.insert(1);
-  ASSERT_EQ(set.count(2), 0);
+  ASSERT_EQ(set.count(2), 0ULL);
   set.insert(2);
-  ASSERT_EQ(set.count(2), 1);
+  ASSERT_EQ(set.count(2), 1ULL);
   set.erase(2);
-  ASSERT_EQ(set.count(2), 0);
+  ASSERT_EQ(set.count(2), 0ULL);
 }
 
 TEST(rhh_unordered_set_test, find) {
@@ -151,10 +151,10 @@ TEST(rhh_unordered_set_test, find) {
   set.insert(2);
 
   const auto iterator1 = set.find(1);
-  ASSERT_EQ(*iterator1, 1);
+  ASSERT_EQ(*iterator1, 1ULL);
 
   const auto iterator2 = set.find(2);
-  ASSERT_EQ(*iterator2, 2);
+  ASSERT_EQ(*iterator2, 2ULL);
 }
 
 TEST(rhh_unordered_set_test, begin_end) {
@@ -190,11 +190,11 @@ TEST(rhh_unordered_set_test, random_insert_and_erase) {
   }
 
   for (auto key : set_std) {
-    ASSERT_EQ(set_rhh.count(key), 1) << "key = " << key;
+    ASSERT_EQ(set_rhh.count(key), 1ULL) << "key = " << key;
   }
 
   for (auto key : set_rhh) {
-    ASSERT_EQ(set_std.count(key), 1) << "key = " << key;
+    ASSERT_EQ(set_std.count(key), 1ULL) << "key = " << key;
   }
 }
 

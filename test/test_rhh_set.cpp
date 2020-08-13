@@ -57,8 +57,8 @@ namespace {
 TEST(rhh_set_test, init) {
   rhh::rhh_set<char> set;
 
-  ASSERT_EQ(set.capacity(), 1);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.capacity(), 1ULL);
+  ASSERT_EQ(set.size(), 0ULL);
 }
 
 TEST(rhh_set_test, insert) {
@@ -66,15 +66,15 @@ TEST(rhh_set_test, insert) {
 
   const int val1(10);
   ASSERT_EQ(set.at(set.insert(val1)), val1);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.size(), 1ULL);
 
   const int val2(20);
   ASSERT_EQ(set.at(set.insert(val2)), val2);
-  ASSERT_EQ(set.size(), 2);
+  ASSERT_EQ(set.size(), 2ULL);
 
   const int val3(30);
   ASSERT_EQ(set.at(set.insert(val3)), val3);
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), 3ULL);
 }
 
 TEST(rhh_set_test, insertString) {
@@ -82,29 +82,29 @@ TEST(rhh_set_test, insertString) {
 
   const std::string val1("10");
   ASSERT_EQ(set.at(set.insert(val1)), val1);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.size(), 1ULL);
 
   const std::string val2("20");
   ASSERT_EQ(set.at(set.insert(val2)), val2);
-  ASSERT_EQ(set.size(), 2);
+  ASSERT_EQ(set.size(), 2ULL);
 
   const std::string val3("30");
   ASSERT_EQ(set.at(set.insert(val3)), val3);
-  ASSERT_EQ(set.size(), 3);
+  ASSERT_EQ(set.size(), 3ULL);
 }
 
 TEST(rhh_set_test, erase) {
   rhh::rhh_set<int> set;
 
-  ASSERT_GE(set.insert(10), 0);
-  ASSERT_GE(set.insert(20), 0);
-  ASSERT_GE(set.insert(10), 0);
+  ASSERT_GE(set.insert(10), 0ULL);
+  ASSERT_GE(set.insert(20), 0ULL);
+  ASSERT_GE(set.insert(10), 0ULL);
 
-  ASSERT_EQ(set.erase(10), 2);
-  ASSERT_EQ(set.size(), 1);
+  ASSERT_EQ(set.erase(10), 2ULL);
+  ASSERT_EQ(set.size(), 1ULL);
 
-  ASSERT_EQ(set.erase(20), 1);
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.erase(20), 1ULL);
+  ASSERT_EQ(set.size(), 0ULL);
 }
 
 TEST(rhh_set_test, find) {
@@ -112,9 +112,9 @@ TEST(rhh_set_test, find) {
 
   const int val1(10);
   const int val2(20);
-  ASSERT_GE(set.insert(val1), 0);
-  ASSERT_GE(set.insert(val1), 0);
-  ASSERT_GE(set.insert(val2), 0);
+  ASSERT_GE(set.insert(val1), 0ULL);
+  ASSERT_GE(set.insert(val1), 0ULL);
+  ASSERT_GE(set.insert(val2), 0ULL);
 
   const auto pos1 = set.find(val1);
   ASSERT_TRUE(set.at(pos1) == val1 || set.at(pos1) == val1);
@@ -145,13 +145,13 @@ TEST(rhh_set_test, clear) {
 
   const int val1(10);
   const int val2(20);
-  ASSERT_GE(set.insert(val1), 0);
-  ASSERT_GE(set.insert(val1), 0);
-  ASSERT_GE(set.insert(val2), 0);
+  ASSERT_GE(set.insert(val1), 0ULL);
+  ASSERT_GE(set.insert(val1), 0ULL);
+  ASSERT_GE(set.insert(val2), 0ULL);
 
   set.clear();
 
-  ASSERT_EQ(set.size(), 0);
+  ASSERT_EQ(set.size(), 0ULL);
   ASSERT_EQ(set.find(val1), set.capacity());
   ASSERT_EQ(set.find(val2), set.capacity());
 }
@@ -162,12 +162,12 @@ TEST(rhh_set_test, swap) {
 
   const int val1(10);
   const int val2(20);
-  ASSERT_GE(set1.insert(val1), 0);
-  ASSERT_GE(set1.insert(val1), 0);
-  ASSERT_GE(set1.insert(val2), 0);
+  ASSERT_GE(set1.insert(val1), 0ULL);
+  ASSERT_GE(set1.insert(val1), 0ULL);
+  ASSERT_GE(set1.insert(val2), 0ULL);
 
   const int val3(20);
-  ASSERT_GE(set2.insert(val3), 0);
+  ASSERT_GE(set2.insert(val3), 0ULL);
 
   set1.swap(set2);
 

@@ -46,8 +46,8 @@ endfunction()
 add_nonmpi_ctest( sequential )
 add_nonmpi_ctest( rhh_set )
 add_nonmpi_ctest( rhh_map )
-add_nonmpi_ctest( rhh_unordered_set )
-add_nonmpi_ctest( rhh_unordered_map )
+#add_nonmpi_ctest( rhh_unordered_set )
+#add_nonmpi_ctest( rhh_unordered_map )
 
 #
 # Parallel Tests
