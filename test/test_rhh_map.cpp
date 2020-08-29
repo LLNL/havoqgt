@@ -83,15 +83,15 @@ TEST(rhhMapTest, insert) {
 TEST(rhhSetTest, insertString) {
   rhh::rhh_map<std::string, std::string> map;
 
-  const std::pair<std::string, std::string> val1("10", "100");
+  const std::tuple<std::string, std::string> val1("10", "100");
   ASSERT_EQ(map.at(map.insert(val1)), val1);
   ASSERT_EQ(map.size(), 1ULL);
 
-  const std::pair<std::string, std::string> val2("20", "200");
+  const std::tuple<std::string, std::string> val2("20", "200");
   ASSERT_EQ(map.at(map.insert(val2)), val2);
   ASSERT_EQ(map.size(), 2ULL);
 
-  const std::pair<std::string, std::string> val3("30", "300");
+  const std::tuple<std::string, std::string> val3("30", "300");
   ASSERT_EQ(map.at(map.insert(val3)), val3);
   ASSERT_EQ(map.size(), 3ULL);
 }
@@ -138,7 +138,7 @@ TEST(rhhMapTest, find) {
   ASSERT_EQ(map.at(map.find(1)), val2);
 
   map.erase_at(pos3);
-  ASSERT_EQ(map.find(2), map.capacity());
+  ASSERT_EQ(map.find(2), map.npos);
 }
 
 TEST(rhhMapTest, clear) {
@@ -151,8 +151,8 @@ TEST(rhhMapTest, clear) {
   map.clear();
 
   ASSERT_EQ(map.size(), 0ULL);
-  ASSERT_EQ(map.find(1), map.capacity());
-  ASSERT_EQ(map.find(2), map.capacity());
+  ASSERT_EQ(map.find(1), map.npos);
+  ASSERT_EQ(map.find(2), map.npos);
 }
 
 TEST(rhhMapTest, swap) {

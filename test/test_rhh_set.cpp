@@ -117,13 +117,13 @@ TEST(rhh_set_test, find) {
   ASSERT_GE(set.insert(val2), 0ULL);
 
   const auto pos1 = set.find(val1);
-  ASSERT_TRUE(set.at(pos1) == val1 || set.at(pos1) == val1);
+  ASSERT_EQ(set.at(pos1), val1);
 
   const auto pos1_2 = set.find(val1, pos1 + 1);
-  ASSERT_TRUE(set.at(pos1_2) == val1 || set.at(pos1_2) == val1);
+  ASSERT_EQ(set.at(pos1_2), val1);
 
-  ASSERT_EQ(set.find(val1, pos1 + 1), set.find_next(pos1 + 1));
-  ASSERT_EQ(set.find(val2), set.find_next(set.find_next(pos1 + 1) + 1));
+  ASSERT_EQ(set.find(val1, pos1 + 1), set.find_any(pos1 + 1));
+  ASSERT_EQ(set.find(val2), set.find_any(set.find_any(pos1 + 1) + 1));
 
   const auto pos2 = set.find(val2);
   ASSERT_EQ(set.at(pos2), val2);
@@ -137,7 +137,7 @@ TEST(rhh_set_test, find) {
   ASSERT_EQ(set.at(set.find(val1)), val1);
 
   set.erase_at(pos2);
-  ASSERT_EQ(set.find(val2), set.capacity());
+  ASSERT_EQ(set.find(val2), set.npos);
 }
 
 TEST(rhh_set_test, clear) {
@@ -152,8 +152,8 @@ TEST(rhh_set_test, clear) {
   set.clear();
 
   ASSERT_EQ(set.size(), 0ULL);
-  ASSERT_EQ(set.find(val1), set.capacity());
-  ASSERT_EQ(set.find(val2), set.capacity());
+  ASSERT_EQ(set.find(val1), set.npos);
+  ASSERT_EQ(set.find(val2), set.npos);
 }
 
 TEST(rhh_set_test, swap) {
@@ -171,9 +171,9 @@ TEST(rhh_set_test, swap) {
 
   set1.swap(set2);
 
-  ASSERT_LT(set1.find(val3), set1.capacity());
-  ASSERT_LT(set2.find(val1), set2.capacity());
-  ASSERT_LT(set2.find(val2), set2.capacity());
+  ASSERT_LT(set1.find(val3), set1.npos);
+  ASSERT_LT(set2.find(val1), set2.npos);
+  ASSERT_LT(set2.find(val2), set2.npos);
 }
 }
 

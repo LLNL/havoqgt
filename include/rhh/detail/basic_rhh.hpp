@@ -58,13 +58,22 @@
 #include <algorithm>
 #include <cassert>
 #include <functional>
+#include <type_traits>
 #include <utility>
 
+#include <boost/container/scoped_allocator.hpp>
 #include <boost/container/vector.hpp>
 #include <rhh/detail/utility/value_type.hpp>
 
 namespace rhh {
 namespace detail {
+
+// --------------------------------------------------------------------------
+//                        Forward Declaration
+// --------------------------------------------------------------------------
+template <typename value_wrapper, typename hash, typename key_equal,
+          typename allocator>
+class basic_rhh;
 
 class rhh_header {
  private:
@@ -100,57 +109,68 @@ class rhh_header {
 };
 
 /// \brief Robin Hood Hashing class
-/// \tparam value_wrapper Type of a value (key and mapped value)
+/// \tparam _value_wrapper Type of a value (key and mapped value)
 /// \tparam hash Hash function
 /// \tparam EqualTo Equal to function
 /// \tparam AllocatorType Type of the allocator
-template <typename value_wrapper, typename _hash, typename _key_equal,
-          typename _allocator>
+template <typename _value_wrapper, typename _hash, typename _key_equal,
+          typename _allocator_type>
 class basic_rhh {
- public:
-  // --------------------------------------------------------------------------
-  //                               Public type
-  // --------------------------------------------------------------------------
-  using key_type       = typename value_wrapper::key_type;
-  using value_type     = typename value_wrapper::value_type;
-  using hash           = _hash;
-  using key_equal      = _key_equal;
-  using allocator_type = _allocator;
-  using size_type = typename std::allocator_traits<allocator_type>::size_type;
-
  private:
-  using self_type = basic_rhh<value_wrapper, _hash, _key_equal, allocator_type>;
+  // --------------------------------------------------------------------------
+  // Private types & private static variables
+  // --------------------------------------------------------------------------
+  using self_type =
+      basic_rhh<_value_wrapper, _hash, _key_equal, _allocator_type>;
 
   // Use tuple instead of pair because nested pair causes a problem with
   // scoped allocator adaptor.
   // C++ Standards Committee Library Working Group (LWG) issue# is 2975
-  using block_type = std::tuple<rhh_header::raw_type, value_type>;
+  using block_type =
+      std::tuple<rhh_header::raw_type, typename _value_wrapper::value_type>;
   using internal_table_allocator_type = typename std::allocator_traits<
-      allocator_type>::template rebind_alloc<block_type>;
+      _allocator_type>::template rebind_alloc<block_type>;
   using internal_table_type =
       boost::container::vector<block_type,
                                boost::container::scoped_allocator_adaptor<
                                    internal_table_allocator_type>>;
+
+  static constexpr double k_max_load_factor = 0.9;
+
+ public:
+  // --------------------------------------------------------------------------
+  // Public type & public static variables
+  // --------------------------------------------------------------------------
+  using key_type       = typename _value_wrapper::key_type;
+  using value_type     = typename _value_wrapper::value_type;
+  using hash           = _hash;
+  using key_equal      = _key_equal;
+  using allocator_type = _allocator_type;
+  using size_type = typename std::allocator_traits<allocator_type>::size_type;
+  // friend key_iterator;
+  // '- 1' for preventing an overflow with npos + 1.
+  static constexpr size_type npos = std::numeric_limits<size_type>::max() - 1;
 
  public:
   // --------------------------------------------------------------------------
   // Constructor & assign operator
   // --------------------------------------------------------------------------
 
-  basic_rhh() = default;
+  // Note: always has at least one capacity to simplify the implementation
 
-  // Always has at least one capacity to simplify the implementation
+  basic_rhh() : m_num_blocks(0), m_table(1) {}
+
   explicit basic_rhh(const allocator_type &allocator)
       : m_num_blocks(0),
         m_table(1, block_type(std::allocator_arg, allocator), allocator) {}
 
   explicit basic_rhh(const size_type initial_capacity)
-      : m_num_blocks(0), m_table(initial_capacity) {}
+      : m_num_blocks(0), m_table(std::max(initial_capacity, (size_type)1)) {}
 
   basic_rhh(const size_type initial_capacity, const allocator_type &allocator)
       : m_num_blocks(0),
-        m_table(initial_capacity, block_type(std::allocator_arg, allocator),
-                allocator) {}
+        m_table(std::max(initial_capacity, (size_type)1),
+                block_type(std::allocator_arg, allocator), allocator) {}
 
   ~basic_rhh() = default;
 
@@ -200,23 +220,28 @@ class basic_rhh {
   /// \return The current capacity of the container.
   size_type capacity() const { return m_table.size(); }
 
+  /// \brief Returns the theoretical maximum capacity.
+  /// \return The maximum capacity.
+  size_type max_capacity() { return std::min(npos - 1, m_table.max_size()); }
+
+  /// \brief Returns the maximum number of values can hold theoretically.
+  /// \return The maximum number of values.
+  size_type max_size() { return priv_max_num_blocks(max_capacity()); }
+
   // -------------------- Element access -------------------- //
   /// \brief Accesses the block at 'position'.
-  /// \param position The position of a value to access.
+  /// \param position An position of a value to access.
   /// \return A reference to the value at 'position'.
   /// Specifically, returns std::pair<key, mapped_value>&.
   /// Note that 'key' is not const;
   /// however, if key is modified, the container will be invalid.
-  // TODO: need to return std::pair<const key, mapped_value> instead of
-  // std::pair<key, mapped_value>
-  //  when mapped_value is not utility::void_mapped_value_tag
   value_type &at(const size_type position) {
     assert(position < capacity());
     return priv_value_at(position);
   }
 
   /// \brief Accesses the block at 'position'.
-  /// \param position The position of a value to access.
+  /// \param position An position of a value to access.
   /// \return A const reference to the block at 'position'.
   const value_type &at(const size_type position) const {
     assert(position < capacity());
@@ -227,33 +252,45 @@ class basic_rhh {
   /// \brief Finds a value with key 'key'.
   /// \param key A key to search.
   /// \return The position of a value found.
-  /// If not found, returns capacity().
+  /// If not found, returns npos.
   size_type find(const key_type &key) const {
     const auto ret = priv_locate_key(key);
     if (ret.second) {
       return ret.first;  // Found the key
     }
-    return capacity();  // Didn't find the key
+    return npos;  // Didn't find the key
   }
 
-  /// \brief Finds a value with key 'key'.
+  /// \brief Finds a value with key 'key', starting from start_position.
+  /// This function does not circulate the table, i.e., a returned
+  /// value is always equal to or larger than a given start position.
   /// \param key A key to search.
-  /// \param hint_position A hint to find the value
+  /// \param start_position A start position to find the value.
   /// \return The position of a value found.
-  size_type find(const key_type &key, const size_type hint_position) const {
-    const auto ret = priv_locate_key(key, hint_position);
-    if (ret.second) {
+  /// If there is no value found, returns the result of npos.
+  size_type find(const key_type &key, const size_type start_position) const {
+    const auto ret = priv_locate_key(key, start_position);
+    if (ret.second && start_position <= ret.first) {
       return ret.first;  // Found the key
-    } else {
-      return capacity();  // Didn't find the key
     }
+    return npos;  // Didn't find the key
   }
 
-  /// \brief Finds the next value with any key.
-  /// \param start_position The current position.
-  /// \return The position of the next value.
-  size_type find_next(const size_type start_position) const {
-    return priv_find_valid_block(start_position);
+  /// \brief Finds the first valid value with any key from a given start
+  /// position. This function does not circulate the table, i.e., a returned
+  /// value is always equal to or larger than a given start position.
+  /// \param start_position A start position.
+  /// \return The position of the first valid value.
+  /// If there is no valid element, returns the result of npos.
+  size_type find_any(const size_type start_position) const {
+    return priv_find_any_valid_value(start_position);
+  }
+
+  /// \brief Returns the number of values that have the key.
+  /// \param key A key to count.
+  /// \return The number of values that have the key.
+  size_type count(const key_type &key) const {
+    return priv_count_same_keys(key);
   }
 
   // -------------------- Modifiers -------------------- //
@@ -269,6 +306,22 @@ class basic_rhh {
   /// \return Returns the position the value was inserted.
   size_type insert(value_type &&value) {
     return priv_check_capacity_and_insert(std::move(value));
+  }
+
+  /// \brief Inserts a key. Does not check duplicate block.
+  /// mapped_value will be uninitialized.
+  /// \param key A key to insert.
+  /// \return Returns the position the key was inserted.
+  size_type insert_key(const key_type &key) {
+    return priv_check_capacity_and_insert(key);
+  }
+
+  /// \brief Inserts a key. Does not check duplicate block.
+  /// mapped_value will be uninitialized.
+  /// \param key A key to insert.
+  /// \return Returns the position the key was inserted.
+  size_type insert_key(key_type &&key) {
+    return priv_check_capacity_and_insert(std::move(key));
   }
 
   /// \brief Erases values with the key.
@@ -311,7 +364,7 @@ class basic_rhh {
   // -------------------- Statistic -------------------- //
   /// \brief Return an average probe distance of valid (non empty) blocks
   /// \return an average probe distance of valid (non empty) blocks
-  double load_factor() const {
+  auto load_factor() const {
     size_type sum = 0;
     for (size_type i = 0; i < capacity(); ++i) {
       if (!rhh_header::empty(priv_header_at(i))) {
@@ -324,12 +377,12 @@ class basic_rhh {
 
  private:
   // --------------------------------------------------------------------------
-  //                               Private static constant variables
+  // Private static constant variables
   // --------------------------------------------------------------------------
   static constexpr const size_type k_table_lenght_growing_factor = 2;
 
   // --------------------------------------------------------------------------
-  //                               Private functions
+  // Private functions
   // --------------------------------------------------------------------------
   auto &priv_header_at(const size_type position) {
     return std::get<0>(m_table[position]);
@@ -356,7 +409,7 @@ class basic_rhh {
 
   // -------------------- Probe distance -------------------- //
   size_type priv_probe_distance(const size_type position) const {
-    return priv_probe_distance(value_wrapper::key(priv_value_at(position)),
+    return priv_probe_distance(_value_wrapper::key(priv_value_at(position)),
                                position);
   }
 
@@ -367,7 +420,9 @@ class basic_rhh {
   }
 
   // -------------------- Capacity -------------------- //
-  bool priv_enough_capacity() { return (m_num_blocks < capacity() * 0.9); }
+  static constexpr size_type priv_max_num_blocks(const size_type capacity) {
+    return capacity * k_max_load_factor;
+  }
 
   void priv_grow_table() {
     const size_type new_capacity = capacity() * k_table_lenght_growing_factor;
@@ -403,7 +458,7 @@ class basic_rhh {
       } else if (current_probe_distance >
                  priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(value_wrapper::key(value), key) &&
+      } else if (key_equal()(_value_wrapper::key(value), key) &&
                  !rhh_header::get_tomb_stone(header)) {
         is_found_key = true;
         break;
@@ -416,27 +471,30 @@ class basic_rhh {
     return std::make_pair(current_position, is_found_key);
   }
 
-  size_type priv_find_valid_block(const size_type start_position) const {
-    if (start_position == capacity()) return capacity();
-
-    size_type position = start_position;
-    while (true) {
-      if (!(rhh_header::empty(priv_header_at(position)) ||
-            rhh_header::get_tomb_stone(priv_header_at(position))))
+  size_type priv_find_any_valid_value(const size_type start_position) const {
+    for (auto position = start_position; position < capacity(); ++position) {
+      if (!rhh_header::empty(priv_header_at(position)) &&
+          !rhh_header::get_tomb_stone(priv_header_at(position)))
         return position;
-
-      position = (position + 1) & (capacity() - 1);
-
-      if (position == start_position) {
-        return capacity();
-      }
     }
+    return npos;
+  }
+
+  size_type priv_count_same_keys(const key_type &key) const {
+    auto      position = priv_locate_key(key);
+    size_type count    = 0;
+    while (position.second) {
+      ++count;
+      position = priv_locate_key(key, position.first + 1);
+    }
+
+    return count;
   }
 
   // -------------------- Insert -------------------- //
   template <typename T>
   size_type priv_check_capacity_and_insert(T &&value) {
-    if (!priv_enough_capacity()) {
+    if (m_num_blocks >= priv_max_num_blocks(capacity())) {
       priv_grow_table();
     }
 
@@ -446,10 +504,10 @@ class basic_rhh {
   template <typename T>
   size_type priv_insert(T &&value) {
     // Find the position to insert the value
-    auto insert_position = priv_locate_key(value_wrapper::key(value));
+    auto insert_position = priv_locate_key(_value_wrapper::key(value));
     while (insert_position.second) {  // skip blocks with the same key
-      insert_position =
-          priv_locate_key(value_wrapper::key(value), insert_position.first + 1);
+      insert_position = priv_locate_key(_value_wrapper::key(value),
+                                        insert_position.first + 1);
     }
 
     priv_insert_core(std::forward<T>(value), insert_position.first);
@@ -461,9 +519,11 @@ class basic_rhh {
   void priv_insert_core(T &&value, const size_type first_insert_position) {
     size_type current_position = first_insert_position;
     size_type current_probe_distance =
-        priv_probe_distance(value_wrapper::key(value), current_position);
+        priv_probe_distance(_value_wrapper::key(value), current_position);
 
-    auto wk_value(std::forward<T>(value));
+    auto wk_value =
+        _value_wrapper::allocate_value(get_allocator(), std::forward<T>(value));
+
     ++m_num_blocks;
 
     while (true) {
@@ -492,6 +552,15 @@ class basic_rhh {
     rhh_header::init_for_new_value(priv_header_at(position));
   }
 
+  /// \brief Insert only a key.
+  /// This function is enabled if value_wrapper has both key and value.
+  template <typename T, std::enable_if_t<std::is_same<T, key_type>::value &&
+                                         _value_wrapper::size() == 2> = 0>
+  void priv_set_value_at(const size_type position, T &&key) {
+    _value_wrapper::key(priv_value_at(position)) = std::move(key);
+    rhh_header::init_for_new_value(priv_header_at(position));
+  }
+
   // -------------------- Erase -------------------- //
   void priv_erase_multiple(const key_type &key) {
     const auto ret = priv_locate_key(key);
@@ -511,13 +580,13 @@ class basic_rhh {
       const auto &header = priv_header_at(current_position);
       const auto &value  = priv_value_at(current_position);
 
-      if (header.empty()) {
+      if (rhh_header::empty(header)) {
         break;
       } else if (current_probe_distance >
                  priv_probe_distance(current_position)) {
         break;
-      } else if (key_equal()(value_wrapper::key(value), key) &&
-                 !header.get_tomb_stone()) {
+      } else if (key_equal()(_value_wrapper::key(value), key) &&
+                 !rhh_header::get_tomb_stone(header)) {
         priv_erase_at(current_position);
       }
 
@@ -535,7 +604,7 @@ class basic_rhh {
     --m_num_blocks;
   }
 
-  size_type           m_num_blocks;
+  size_type           m_num_blocks{0};
   internal_table_type m_table;
 };
 
