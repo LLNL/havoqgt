@@ -1,3 +1,8 @@
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #include <gtest/gtest.h>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>

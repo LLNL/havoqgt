@@ -1,15 +1,6 @@
-Copyright (c) 2013-2015, Lawrence Livermore National Security, LLC. 
-Produced at the Lawrence Livermore National Laboratory. 
-Written by Roger Pearce <rpearce@llnl.gov>. 
-LLNL-CODE-644630. 
-All rights reserved.
+# Overview
 
-This file is part of HavoqGT, Version 0.1. 
-For details, see https://llnl.github.io/havoqgt/
-
---------------------------------------------------------------------------------
-
-HavoqGT (Highly Asynchronous Visitor Queue Graph Toolkit) is a framework for 
+HavoqGT (Highly Asynchronous Visitor Queue Graph Toolkit) is a framework for
 expressing asynchronous vertex-centric graph algorithms.  It provides a visitor
 interface, where actions are defined at an individual vertex level.
 This code was developed at Lawrence Livermore National Laboratory.
@@ -23,3 +14,24 @@ devices are preferred for external memory storage.
 
 For documentation, see http://havoqgt.bitbucket.org
 
+--------------------------------------------------------------------------------
+# About
+
+## Authors
+
+* Roger A Pearce (rpearce at llnl dot gov)
+* Keita Iwabuchi (kiwabuchi at llnl dot gov)
+* Tahsin A Reza (reza2 at llnl dot gov)
+
+## License
+
+HavoqGT is distributed under the terms of the MIT license.
+All new contributions must be made under this license.
+
+See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
+
+SPDX-License-Identifier: MIT
+
+## Release
+
+LLNL-CODE-644630

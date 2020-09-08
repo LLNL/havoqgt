@@ -1,3 +1,8 @@
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #include <include/havoqgt_setup.hpp>
 
 graph_type* read_delegate_graph(std::string graph_input, const int mpi_rank) {
