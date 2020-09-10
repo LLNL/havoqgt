@@ -62,11 +62,7 @@ class comm {
 
   comm(split _split);
 
-  ~comm() {
-    if (free_comm_in_destructor) {
-      chk_ret(MPI_Comm_free(&m_comm));
-    }
-  }
+  ~comm();
 
   int      size() const { return m_size; }
   int      rank() const { return m_rank; }
