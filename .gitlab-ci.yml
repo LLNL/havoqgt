@@ -18,7 +18,6 @@ variables:
   GIT_DEPTH: 0
   SPACK_ARCH_INFO: "arch=linux-rhel7-broadwell"
   GCC_VERSION: "8.1.0"
-  BOOST_VERSION: "1.74.0"
   METALL_VERSION: "0.3"
 
 
@@ -30,7 +29,8 @@ install_boost:
   script:
     - hostname
     - pwd
-    - spack install boost@${BOOST_VERSION}
+    - spack install boost@1.74.0
+    - spack install boost@1.71.0
     - spack install metall@${METALL_VERSION}
     - spack clean
     - spack find
@@ -42,10 +42,10 @@ install_boost:
     - quartz
     - shell
   script:
-    - module load gcc/${GCC_VERSION}
-    - spack load boost@${BOOST_VERSION} ${SPACK_ARCH_INFO}
-    - spack load metall@${METALL_VERSION} ${SPACK_ARCH_INFO}
     - salloc -N1 -ppdebug
+    - module load gcc/${GCC_VERSION}
+    - spack load metall@${METALL_VERSION} ${SPACK_ARCH_INFO}
+    - spack load boost@${BOOST_VERSION} ${SPACK_ARCH_INFO}
     - cd build/gitlab_ci
     - sh ./scripts/${BUILD_SCRIPT}
     - make -j
@@ -53,12 +53,26 @@ install_boost:
     - make test
 
 
-build_with_release:
+build_with_release_boost1.74.0:
   extends: .build
   variables:
     BUILD_SCRIPT: "do_cmake.sh"
+    BOOST_VERSION: "1.74.0"
 
-build_with_debug:
+build_with_debug_boost1.74.0:
   extends: .build
   variables:
     BUILD_SCRIPT: "do_cmake_debug.sh"
+    BOOST_VERSION: "1.74.0"
+
+build_with_release_boost1.71.0:
+  extends: .build
+  variables:
+    BUILD_SCRIPT: "do_cmake.sh"
+    BOOST_VERSION: "1.71.0"
+
+build_with_debug_boost1.71.0:
+  extends: .build
+  variables:
+    BUILD_SCRIPT: "do_cmake_debug.sh"
+    BOOST_VERSION: "1.71.0"
