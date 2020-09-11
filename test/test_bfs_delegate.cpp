@@ -15,7 +15,7 @@
 
 using namespace havoqgt::test;
 
-/// \brief Validate BFS results on a star graph
+/// \brief Validates BFS results
 void validate_bfs_result(const graph_type &          graph,
                          const std::size_t           max_vertex_id,
                          const bfs_level_data_type & level_data,
@@ -23,7 +23,7 @@ void validate_bfs_result(const graph_type &          graph,
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  // Load BFS level table
+  // Load the correct BFS levels
   std::unordered_map<uint64_t, uint64_t> level_table;
   {
     std::ifstream ifs("./datasets/bfs_level_rmat_s17");
@@ -39,6 +39,7 @@ void validate_bfs_result(const graph_type &          graph,
     }
   }
 
+  // Validate BFS level
   for (uint64_t i = 0; i <= max_vertex_id; ++i) {
     graph_type::vertex_locator vertex = graph.label_to_locator(i);
     if (vertex.owner() == mpi_rank) {
@@ -74,13 +75,14 @@ int main(int argc, char **argv) {
     f.emplace_back("./datasets/edge_list_rmat_s17-5");
     f.emplace_back("./datasets/edge_list_rmat_s17-6");
     f.emplace_back("./datasets/edge_list_rmat_s17-7");
-    ingest_edges(f);
+    static constexpr uint64_t delegate_degree_threshold = 1024 * 10;
+    ingest_edges(f, delegate_degree_threshold);
 
     static constexpr uint64_t max_vertex_id = 131070;
     run_bfs(max_vertex_id, validate_bfs_result);
 
     havoqgt::comm_world().barrier();
-    havoqgt::cout_rank0() << "Succeeded all BFS tests" << std::endl;
+    havoqgt::cout_rank0() << "Succeeded the BFS with delegate test" << std::endl;
   }  // End of MPI
 
   return 0;

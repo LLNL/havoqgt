@@ -15,6 +15,48 @@ devices are preferred for external memory storage.
 For documentation, see http://havoqgt.bitbucket.org
 
 --------------------------------------------------------------------------------
+# Getting Started
+
+## Required to Build HavoqGT
+
+- GCC 8.1 or more.
+- CMake 2.6 or more.
+- Boost C++ Libraries 1.64 or more (build is not required; needs only
+  their header files).
+- Metall (https://github.com/LLNL/metall) 0.3 or more.
+
+## Build
+One can install Boost C++ Libraries and Metall using Spack.
+A proper version of Boost C++ Libraries will be installed along with Metall.
+
+An example to build HavoqGT with Spack is:
+```bash
+spack install metall
+spack load metall
+cmake ../../ \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lstdc++fs -lpthread" \
+  -DHAVOQGT_BUILD_TEST=TRUE \
+  -DMPIEXEC_NUMPROC_FLAG="-n"
+make
+make test # option
+make install # option
+```
+
+Use `CMAKE_CXX_COMPILER=/path/to/g++` and `MPI_CXX_COMPILER=/path/to/mpic++` CMake options to specify a C++ compiler and a MPI compiler, respectively.
+To change the install directory, one can use `CMAKE_INSTALL_PREFIX` CMake option.
+
+
+### Build without Spack
+
+Here are the CMake variables to specify the locations of Boost C++ Libraries and Metall manually.
+* `BOOST_ROOT=/path/to/boost`
+* `METALL_ROOT=/path/to/metall`
+
+HavoqGT uses header files of the libraries. One does not need to build them.
+
+
+
 # About
 
 ## Authors
