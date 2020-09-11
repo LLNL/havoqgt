@@ -1,3 +1,8 @@
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #include <gtest/gtest.h>
 #include <include/create_delegate_graph.hpp>
 #include <include/havoqgt_setup.hpp>
@@ -7,8 +12,7 @@
 
 namespace havoqgt { namespace test {
 
-typedef graph_type::edge_data<edge_data_type, 
-  bip::allocator<edge_data_type, segment_manager_t>> edge_data_t;
+typedef graph_type::edge_data<edge_data_type, distributed_db::allocator<edge_data_type>> edge_data_t;
 
 const std::string graph_unique_instance_name = "graph_obj";
 const std::string edge_data_unique_instance_name = "graph_edge_data_obj";
@@ -48,14 +52,11 @@ void test_Delegate_Graph_Weighted_Edges() {
 
   //graph_type* g = read_delegate_graph("testD", mpi_rank);
   
-  havoqgt::distributed_db ddb(havoqgt::db_open(), 
-                              input_graph_file_name.c_str());
-  graph_type *g = ddb.get_segment_manager()->
-    find<graph_type>(graph_unique_instance_name.c_str()).first;
+  distributed_db ddb(db_open_read_only(),input_graph_file_name.c_str());
+  auto g = ddb.get_manager()->find<graph_type>(graph_unique_instance_name.c_str()).first;
   assert(g != nullptr);
 
-  edge_data_t* edge_data_ptr = ddb.get_segment_manager()->
-    find<edge_data_t>(edge_data_unique_instance_name.c_str()).first;
+  auto edge_data_ptr = ddb.get_manager()->find<edge_data_t>(edge_data_unique_instance_name.c_str()).first;
   assert(edge_data_ptr != nullptr);  
 
   MPI_Barrier(MPI_COMM_WORLD);

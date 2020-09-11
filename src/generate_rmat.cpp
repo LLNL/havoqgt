@@ -1,53 +1,7 @@
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
@@ -148,10 +102,7 @@ void parse_cmd_line(int argc, char** argv, uint64_t& scale, uint64_t& delegate_t
 }
 
 int main(int argc, char** argv) {
-
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-
-  typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
@@ -188,10 +139,7 @@ int main(int argc, char** argv) {
         << "High/Low partition passes = " << partition_passes << std::endl; 
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
-
-    segment_manager_t* segment_manager = ddb.get_segment_manager();
-    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
+    distributed_db ddb(db_create(), output_filename.c_str(), gbyte_per_rank);
 
     //Generate RMAT graph
     uint64_t num_edges_per_rank = num_vertices * 16 / mpi_size;
@@ -203,9 +151,9 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
-    graph_type *graph = segment_manager->construct<graph_type>
+    auto graph = ddb.get_manager()->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
+        (ddb.get_allocator(), MPI_COMM_WORLD, rmat, rmat.max_vertex_id(), hub_threshold, partition_passes, chunk_size);
 
 
     comm_world().barrier();
@@ -213,15 +161,16 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-    for (int i = 0; i < mpi_size; i++) {
-      if (i == mpi_rank) {
-        double percent = double(segment_manager->get_free_memory()) /
-        double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
-                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
-      }
-      comm_world().barrier();
-    }
+    // TODO: implement get_size() and get_free_memory() in Metall
+    // for (int i = 0; i < mpi_size; i++) {
+    //  if (i == mpi_rank) {
+    //    double percent = double(ddb.get_manager()->get_free_memory()) /
+    //    double(ddb.get_manager()->get_size());
+    //    std::cout << "[" << mpi_rank << "] " << ddb.get_manager()->get_free_memory()
+    //              << "/" << ddb.get_manager()->get_size() << " = " << percent << std::endl;
+    //  }
+    //  comm_world().barrier();
+    // }
 
     graph->print_graph_statistics();
 
