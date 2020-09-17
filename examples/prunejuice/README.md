@@ -1,10 +1,10 @@
 <h4>PruneJuice : A Distribute Solution for Pattern Matching in Metadata Graphs</h4>
 <p>We present an example of searching a pattern in an R-MAT generated graph using our program. The code is developed on top of HavoqGT.</p>
-<p>Clone the code from https://github.com/LLNL/havoqgt/tree/develop</p>
+<p>Clone the code from https://github.com/LLNL/havoqgt/</p>
 <p>git clone https://github.com/LLNL/havoqgt.git</p>
-<p>git checkout develop</p>
+<!--<p>git checkout develop</p>-->
 <p>Follow the <a href="https://github.com/LLNL/havoqgt/tree/develop">instructions</a> to setup HavoqGT.</p>
-<p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. Once you have checked out the code, make sure you are on the develop branch.</p>
+<p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. <!--Once you have checked out the code, make sure you are on the develop branch.--></p>
 <p>Go to the directory, havoqgt/build/catalyst.llnl.gov/:</p> 
 <p>cd havoqgt/build/catalyst.llnl.gov/</p>
 <p>Setup the CMake environment by running the following script:</p> 
@@ -16,7 +16,7 @@
 <p>make generate_rmat</p>
 <p>Create a directory, e.g., /usr/graph/, to store the generated graph. Assuming you are working within the Slurm environment, run the following command to generate an R-MAT generated graph:
 <p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/generate_rmat -s 21 -p 1 -f 1 -o /dev/shm/rmat -b /urs/graph/rmat</p>
-<p>This will create a graph with four partitions, to be run on four MPI processes. This is a Scale 21 graph (notice the parameter for the -s flag). The mmap/binary graph file will be stored in the directory /usr/graph/.</p>
+<p>This will create a graph with four partitions, to be run on four MPI processes. This is a Scale 21 graph (note the argument for the -s flag). The mmap/binary graph file will be stored in the directory /usr/graph/.</p>
 
 <h4>Input Pattern</h4>
 <p>We will search the following Tree pattern in the graph we just created. The numeric values on each vertex is the label of the respective vertex.</p>
@@ -27,7 +27,7 @@
 <p>First, build the pattern matching executable:</p>
 <p>make run_pattern_matching</p> 
 <p>Next, use the following command to search the pattern stored in havoqgt/examples/prunejuice/patterns/tree_0001/.</p> 
-<p>Note that we do not need to provide vertex labels for the Tree pattern as we will use labels based on vertex degree and the program will generate degree-based labels when no input label is provided, i.e., the -v flag is not set. The program requires a specific directory structure to output results. An example is available here, havoqgt/examples/prunejuice/output/.</p> 
+<p>Note that we do not need to provide vertex labels for the Tree pattern as we will use labels based on vertex degree and the program will generate degree-based labels when no input label is provided, i.e., the -v flag is not set. The program requires a specific directory structure to output results. An example is available here: havoqgt/examples/prunejuice/output/.</p> 
 <p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching_beta_x.x -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/patterns/tree_0001/ -o ../../examples/prunejuice/output/</p>
 <p>The program logs status information to the standard output so you know the current state of the execution.</p>
 
@@ -42,90 +42,10 @@
 <p>Following the same procedure, you can collect the list of final active edges (from the output in examples/prunejuice/output/0/all_ranks_active_edges/).</p>
 !-->
 
-<h4>Enumeration</h4>
-<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned graph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are output to the directory examples/prunejuice/output/all_ranks_subgraphs and are distributed over multiple files. </p>
+<h4>Results</h4>
+The runtime, and vertex and edge paticipation information (i.e., match count) are dispalyed on the standard output. If requested, the program also produces full match enumeration and displays the result (i.e., match count) on the standard output. If the -o flag is set (i.e., it points to the output directory), the user can obtain the pruned graph and collect additional results. The files in the (output) directory examples/prunejuice/output/all_ranks_active_vertices/ contain the matching vertices, and examples/prunejuice/output/all_ranks_active_edges/ contain the matching edges, in the final solution subgraph. 
+
+<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned graph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are output in the directory examples/prunejuice/output/all_ranks_subgraphs/. </p>
 
 <h4>Constraint Generation</h4>
 <p>tools/query_preprocessor/cpp</p>
-
-=======
-
-# Overview
-
-HavoqGT (Highly Asynchronous Visitor Queue Graph Toolkit) is a framework for
-expressing asynchronous vertex-centric graph algorithms.  It provides a visitor
-interface, where actions are defined at an individual vertex level.
-This code was developed at Lawrence Livermore National Laboratory.
-
-Built in C++, the framework provides a runtime for parallel communication and
-algorithm termination detection.   V0.1 is an initial release with only MPI support.
-All graph data is stored in mmaped files, using Boost.Interprocess and Memory 
-Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
-processed using mmap as external memory.  For best results, high speed Flash 
-devices are preferred for external memory storage.
-
-For documentation, see http://havoqgt.bitbucket.org
-
---------------------------------------------------------------------------------
-# Getting Started
-
-## Required to Build HavoqGT
-
-- GCC 8.1 or more.
-- CMake 2.6 or more.
-- Boost C++ Libraries 1.64 or more (build is not required; needs only
-  their header files).
-- Metall (https://github.com/LLNL/metall) 0.3 or more.
-
-## Build
-One can install Boost C++ Libraries and Metall using Spack.
-A proper version of Boost C++ Libraries will be installed along with Metall.
-
-An example to build HavoqGT with Spack is:
-```bash
-spack install metall
-spack load metall
-cmake ../../ \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lstdc++fs -lpthread" \
-  -DHAVOQGT_BUILD_TEST=TRUE \
-  -DMPIEXEC_NUMPROC_FLAG="-n"
-make
-make test # option
-make install # option
-```
-
-Use `CMAKE_CXX_COMPILER=/path/to/g++` and `MPI_CXX_COMPILER=/path/to/mpic++` CMake options to specify a C++ compiler and a MPI compiler, respectively.
-To change the install directory, one can use `CMAKE_INSTALL_PREFIX` CMake option.
-
-
-### Build without Spack
-
-Here are the CMake variables to specify the locations of Boost C++ Libraries and Metall manually.
-* `BOOST_ROOT=/path/to/boost`
-* `METALL_ROOT=/path/to/metall`
-
-HavoqGT uses header files of the libraries. One does not need to build them.
-
-
-
-# About
-
-## Authors
-
-* Roger A Pearce (rpearce at llnl dot gov)
-* Keita Iwabuchi (kiwabuchi at llnl dot gov)
-* Tahsin A Reza (reza2 at llnl dot gov)
-
-## License
-
-HavoqGT is distributed under the terms of the MIT license.
-All new contributions must be made under this license.
-
-See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
-
-SPDX-License-Identifier: MIT
-
-## Release
-
-LLNL-CODE-644630
