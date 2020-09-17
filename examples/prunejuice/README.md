@@ -49,4 +49,4 @@
 <!--<h4>Constraint Generation</h4>-->
 <!--<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>-->
 #### Constraint Generation
-The tool is avaibale under the following directory: [examples/prunejuice/tools/query_preprocessor/cpp](tools/query_preprocessor/cpp).
+The tool is avaibale under the following directory: [examples/prunejuice/tools/query_preprocessor/cpp/](tools/query_preprocessor/cpp).
