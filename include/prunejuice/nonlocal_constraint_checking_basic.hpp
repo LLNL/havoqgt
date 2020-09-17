@@ -913,7 +913,7 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   int mpi_size = havoqgt::comm_world().size();
 
   if (mpi_rank == 0) {
-    std::cout << "Token Passing ... " << std::endl;
+    std::cout << "Token Passing [-] | Nonlocal Constraint Chceking ... " << std::endl;
     //std::cout << "Token Passing [" << pl << "] ... " << std::endl;
   } 
 
