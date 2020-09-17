@@ -27,7 +27,7 @@
 <p>make run_pattern_matching</p> 
 <p>Next, use the following command to search the pattern stored in havoqgt/examples/prunejuice/patterns/tree_0001/.</p> 
 <p>Note that we do not need to provide vertex labels for the Tree pattern as we will use labels based on vertex degree and the program will generate degree-based labels when no input label is provided, i.e., the -v flag is not set. The program requires a specific directory structure to output results. An example is available here: havoqgt/examples/prunejuice/output/.</p> 
-<p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching_beta_x.x -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/patterns/tree_0001/ -o ../../examples/prunejuice/output/</p>
+<p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/patterns/tree_0001/ -o ../../examples/prunejuice/output/</p>
 <p>The program logs status information to the standard output. <!--so you know the current state of the execution.--></p>
 
 <!--<h4>Results</h4>
