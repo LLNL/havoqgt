@@ -4,7 +4,7 @@
 <p>git clone https://github.com/LLNL/havoqgt.git</p>
 <!--<p>git checkout develop</p>-->
 <p>Follow the <a href="https://github.com/LLNL/havoqgt/tree/develop">instructions</a> to setup HavoqGT.</p>
-<p>You will require the latest releases of OpenMPI or MAVPICH2 and the Boost library (some Boost releases have bugs, e.g., 1.58) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. <!--Once you have checked out the code, make sure you are on the develop branch.--></p>
+<p>You will require the latest releases of OpenMPI or MAVPICH2, and the Boost library (some Boost releases have bugs, e.g., 1.58) to run HavoqGT. The code has only been tested on latest generation of Linux distributions. <!--Once you have checked out the code, make sure you are on the develop branch.--></p>
 <p>Go to the directory, havoqgt/build/catalyst.llnl.gov/:</p> 
 <p>cd havoqgt/build/catalyst.llnl.gov/</p>
 <p>Setup the CMake environment by running the following script:</p> 
@@ -29,7 +29,7 @@
 <p>Next, use the following command to search the pattern stored in havoqgt/examples/prunejuice/patterns/tree_0001/.</p> 
 <p>Note that we do not need to provide vertex labels for the Tree pattern as we will use labels based on vertex degree and the program will generate degree-based labels when no input label is provided, i.e., the -v flag is not set. The program requires a specific directory structure to output results. An example is available here: havoqgt/examples/prunejuice/output/.</p> 
 <p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/run_pattern_matching_beta_x.x -i /dev/shm/rmat -b /usr/graph/rmat -p ../../examples/prunejuice/patterns/tree_0001/ -o ../../examples/prunejuice/output/</p>
-<p>The program logs status information to the standard output so you know the current state of the execution.</p>
+<p>The program logs status information to the standard output. <!--so you know the current state of the execution.--></p>
 
 <!--<h4>Results</h4>
 <p>Next, we discuss how to collect and interpret the outputs and retrieve the pruned graph. You will find (python) scripts in havoqgt/examples/prunejuice/scripts/ that should help you to parse the output files.</p>
@@ -43,9 +43,9 @@
 !-->
 
 <h4>Results</h4>
-The runtime, and vertex and edge paticipation information (i.e., match count) are dispalyed on the standard output. If requested, the program also produces full match enumeration and displays the result (i.e., match count) on the standard output. If the -o flag is set (i.e., it points to the output directory), the user can obtain the pruned graph and collect additional results. The files in the (output) directory examples/prunejuice/output/all_ranks_active_vertices/ contain the matching vertices, and examples/prunejuice/output/all_ranks_active_edges/ contain the matching edges, in the final solution subgraph. 
-
-<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned graph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are output in the directory examples/prunejuice/output/all_ranks_subgraphs/. </p>
+The runtime, and vertex and edge paticipation information (i.e., match count) are dispalyed on the standard output. If requested, the program also produces full match enumeration and displays the result (i.e., match count) on the standard output. If the -o flag is set (i.e., it points to the output directory), the user can obtain the pruned solution subgraph, and collect additional data. The files in the directory, examples/prunejuice/output/all_ranks_active_vertices/, contain matching vertices, and, examples/prunejuice/output/all_ranks_active_edges/, contain matching edges, in the final solution subgraph.
+<br> 
+<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned solution subgraph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are stored in the directory examples/prunejuice/output/all_ranks_subgraphs/. </p>
 
 <h4>Constraint Generation</h4>
-<p>tools/query_preprocessor/cpp</p>
+<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>
