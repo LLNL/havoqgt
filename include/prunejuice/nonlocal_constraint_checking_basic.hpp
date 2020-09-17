@@ -10,10 +10,6 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-//using namespace havoqgt;
-
-///namespace havoqgt { ///namespace mpi {
-
 namespace prunejuice {
 
 static bool enable_vertex_token_source = true;
@@ -23,6 +19,7 @@ template<typename Visitor>
 class tppm_queue {
 
 public:
+
   tppm_queue() {}
 
   bool push(Visitor const& element) {
@@ -53,16 +50,21 @@ public:
   }
 
 protected:
+
   //std::vector<Visitor> data;
   std::deque<Visitor> data;
+
 };
 
 // token passing pattern matching visitor class
 template<typename Graph, typename BitSet>
 class tppm_visitor {
+
 public:
+
   typedef typename Graph::vertex_locator vertex_locator;
   typedef typename Graph::edge_iterator eitr_type;
+
   tppm_visitor() : 
   itr_count(0), 
   do_pass_token(false),
@@ -396,18 +398,6 @@ public:
 
     if (!do_pass_token && is_init_step && itr_count == 0) {
       // create visitors only for the source vertices
-       
-      // Test 
-//      for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
-//        vertex_locator neighbor = eitr.target();
-//        if (g.locator_to_label(neighbor) != 46) { // TODO: put all the valid vertices form label propagation in a queue and pop here and create visitors like this 
-//          continue;    
-//        }  
-        // 65 66 67 66 67 69 68 66 67 66 67 : 0 1 2 3 4 5 6 3 4 1 2 
-//        tppm_visitor new_visitor(neighbor, g.label_to_locator(46), 0, 7, 1, pattern_indices[1], true, true, true); 
-//        vis_queue->queue_visitor(new_visitor);              
-//      }
-      // Test
        
       // TODO: this is probbaly wrong
       // for delegate vertices only start token passing from the controller   
@@ -810,7 +800,7 @@ public:
         //return false; // Test 
       //} 
 
-      // all good, forward along the token
+      // all good, forward the token
       
       // if vertex is a delegate
 /*++      if (vertex.is_delegate() && (g.master(vertex) != mpi_rank)) {
@@ -831,14 +821,6 @@ public:
       } // if vertex is a delegate 
 */
 
-      //if (vertex_pattern_index == 2) // Test 
-        //std::cout << g.locator_to_label(vertex) << " vertex_pattern_index " 
-        //<< vertex_pattern_index << " " << new_itr_count << " forwarding ... " 
-        //<< g.locator_to_label(target_vertex) << std::endl; // Test
-      //size_t max_nbr_count = 0; // Test 
-//      for(eitr_type eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
-//        vertex_locator neighbor = eitr.target();
-
       for (auto& item : std::get<15>(alg_data)[vertex]) { // vertex_active_edges_map
         vertex_locator neighbour = g.label_to_locator(item.first);
 
@@ -851,13 +833,7 @@ public:
           source_index_pattern_indices, vertex_pattern_index, expect_target_vertex); 
         // vertex_pattern_index = parent_pattern_index for the neighbours 
         vis_queue->queue_visitor(new_visitor);
-        // Test
-        //if (max_nbr_count == 20) {
-        //  break;     
-        //} else {
-        //  max_nbr_count++;
-        //}  
-        // Test    
+    
       }
 	     
 //++      return true;
@@ -930,7 +906,6 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   bool pattern_selected_vertices, bool pattern_selected_edges,
   bool pattern_mark_join_vertex, bool pattern_ignore_join_vertex, size_t pattern_join_vertex, 
   uint64_t& message_count) { // TODO: bool& pattern_found does not work, why?
-  //std::cout << "token_passing_pattern_matching_new.hpp" << std::endl;
   
   tp_visitor_count = 0;
 
@@ -943,18 +918,20 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   } 
 
   typedef tppm_visitor<TGraph, BitSet> visitor_type;
+
   auto alg_data = std::forward_as_tuple(vertex_metadata, pattern, pattern_indices, vertex_rank, 
     pattern_graph, vertex_state_map, token_source_map, pattern_cycle_length, pattern_valid_cycle, pattern_found, 
     edge_metadata, g, vertex_token_source_set, vertex_active, template_vertices, vertex_active_edges_map, 
     pattern_selected_vertices, pattern_selected_edges, 
     pattern_mark_join_vertex, pattern_ignore_join_vertex, pattern_join_vertex);
-  auto vq = havoqgt::create_visitor_queue<visitor_type, /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
-  ///vq.init_visitor_traversal_new();
-  //vq.init_visitor_traversal_new_alt();
+
+  auto vq = havoqgt::create_visitor_queue<visitor_type, 
+    /*havoqgt::detail::visitor_priority_queue*/tppm_queue>(g, alg_data);
+
   vq.init_visitor_traversal();
   MPI_Barrier(MPI_COMM_WORLD);
 
   message_count = tp_visitor_count;
 }
 
-} ///} //end namespace havoqgt::mpi
+} // end namespace prunejuice 

@@ -26,10 +26,10 @@
 #include <metadata/vertex_data_db_degree.hpp>
 
 #include <prunejuice/template.hpp>
-#include <prunejuice/non_local_constraint.hpp>
+#include <prunejuice/nonlocal_constraint.hpp>
 #include <prunejuice/algorithm_state.hpp>
 #include <prunejuice/local_constraint_checking.hpp>
-#include <prunejuice/non_local_constraint_checking_unique.hpp>
+#include <prunejuice/nonlocal_constraint_checking_basic.hpp>
 #include <prunejuice/non_local_constraint_checking_tds_batch.hpp> // TODO: optimize for batch_size = mpi_size
 
 /*
