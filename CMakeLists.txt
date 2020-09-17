@@ -7,6 +7,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules)
 #
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Use Rpath for dependencies." TRUE)
 option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
+set(METALL_ROOT "" CACHE PATH "Metall installed root directory")
 
 #
 # Main Inlucde directory
@@ -58,6 +59,23 @@ if (HAVE_POSIX_FALLOCATE)
 endif()
 
 #
+# Metall
+#
+if (METALL_ROOT)
+  if (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"))
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
+      message(FATAL_ERROR "Metall requires GCC >= 8.1")
+    endif ()
+  endif ()
+
+  if (Boost_VERSION VERSION_LESS 1.64)
+    message(FATAL_ERROR "Metall requires Boost C++ Libraries >= 1.64")
+  endif ()
+
+  include_directories(${METALL_ROOT}/include)
+endif()
+
+#
 # Doxygen
 #
 find_package(Doxygen)
@@ -100,3 +118,7 @@ if(MPI_FOUND)
   message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS 
           ${MPIEXEC_PREFLAGS} EXECUTABLE ${MPIEXEC_POSTFLAGS} ARGS")
 endif(MPI_FOUND)
+
+if (METALL_ROOT)
+  message("METALL_ROOT: ${METALL_ROOT}")
+endif()

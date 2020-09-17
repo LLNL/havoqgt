@@ -1,65 +1,7 @@
-
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Re-written by Steven Feldman <feldman12@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see
- * https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public
- * License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR
- * A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the
- * DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or
- * process
- * disclosed, or represents that its use would not infringe privately-owned
- * rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring
- * by
- * the United States Government or Lawrence Livermore National Security, LLC.
- * The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- * \file
- * Implementation of delegate_partitioned_graph and internal classes.
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
 #include <type_traits>
 
@@ -79,8 +21,8 @@ namespace havoqgt {
 template <typename Allocator>
 template <typename Container>
 delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size,
     ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
@@ -170,8 +112,8 @@ delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
 template <typename Allocator>
 template <typename Container, typename edge_data_type>
 delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, uint64_t max_vertex, uint64_t delegate_degree_threshold,
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    uint64_t max_vertex, uint64_t delegate_degree_threshold,
     uint64_t _node_partitions, uint64_t _chunk_size, edge_data_type& _edge_data,
     bool _has_edge_data, ConstructionState stop_after)
     : m_mpi_comm(mpi_comm),
@@ -266,8 +208,8 @@ delegate_partitioned_graph<Allocator>::delegate_partitioned_graph(
 template <typename Allocator>
 template <typename Container, typename edge_data_type>
 void delegate_partitioned_graph<Allocator>::complete_construction(
-    const Allocator& allocator, MPI_Comm mpi_comm,
-    Container& edges, edge_data_type& _edge_data) {
+    const Allocator& allocator, MPI_Comm mpi_comm, Container& edges,
+    edge_data_type& _edge_data) {
   m_mpi_comm = mpi_comm;
   int temp_mpi_rank, temp_mpi_size;
   CHK_MPI(MPI_Comm_size(m_mpi_comm, &temp_mpi_size));
@@ -278,9 +220,9 @@ void delegate_partitioned_graph<Allocator>::complete_construction(
   std::map<uint64_t, std::deque<OverflowSendInfo>> transfer_info;
   switch (m_graph_state) {
     case MetaDataGenerated: {
-      LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
-      calculate_overflow(transfer_info);
-      MPI_Barrier(m_mpi_comm);
+      // LogStep logstep("calculate_overflow", m_mpi_comm, m_mpi_rank);
+      // calculate_overflow(transfer_info);
+      // MPI_Barrier(m_mpi_comm);
     }
 
       {
@@ -650,11 +592,6 @@ void delegate_partitioned_graph<Allocator>::initialize_high_meta_data(
   // Setup and Compute Hub information
   //
   for (int i = 0; i < processes_per_node; i++) {
-    if (m_mpi_rank == 0) {
-      std::cout << "\t Setup and Compute Hub information: " << i << "/"
-                << processes_per_node << "." << std::endl
-                << std::flush;
-    }
     if (i == m_mpi_rank % processes_per_node) {
       std::vector<uint64_t> vec_sorted_hubs(global_hubs.begin(),
                                             global_hubs.end());
@@ -730,27 +667,18 @@ void delegate_partitioned_graph<Allocator>::initialize_edge_storage(
   // Allocate the low edge csr to accommdate the number of edges
   // This will be filled by the partion_low_edge function
   for (int i = 0; i < processes_per_node; i++) {
-    if (m_mpi_rank == 0) {
-      std::cout << "\tResizing m_owned_targets and m_delegate_targets: " << i
-                << "/" << processes_per_node << "." << std::endl
-                << std::flush;
-    }
-
     if (i == m_mpi_rank % processes_per_node) {
       // m_owned_targets.resize(m_edges_low_count);
       // m_delegate_targets.resize(m_edges_high_count);
       m_delegate_targets_size = m_edges_high_count;
       m_owned_targets_size    = m_edges_low_count;
 
-      using vertex_locator_allocator = other_allocator<Allocator, vertex_locator>;
+      using vertex_locator_allocator =
+          other_allocator<Allocator, vertex_locator>;
       vertex_locator_allocator vl_allocator(allocator);
-      {
-        m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size);
-      }
+      { m_delegate_targets = vl_allocator.allocate(m_delegate_targets_size); }
 
-      {
-        m_owned_targets = vl_allocator.allocate(m_owned_targets_size);
-      }
+      { m_owned_targets = vl_allocator.allocate(m_owned_targets_size); }
 
       // Currently, m_delegate_info holds the count of high degree edges
       // assigned to this node for each vertex.
@@ -1654,8 +1582,7 @@ inline uint64_t delegate_partitioned_graph<Allocator>::locator_to_label(
  */
 template <typename Allocator>
 inline typename delegate_partitioned_graph<Allocator>::vertex_locator
-delegate_partitioned_graph<Allocator>::label_to_locator(
-    uint64_t label) const {
+delegate_partitioned_graph<Allocator>::label_to_locator(uint64_t label) const {
   /*typename boost::unordered_map< uint64_t, vertex_locator,
               boost::hash<uint64_t>, std::equal_to<uint64_t>,
               other_allocator<Allocator,  std::pair<uint64_t,vertex_locator> >
@@ -1806,7 +1733,7 @@ inline bool delegate_partitioned_graph<Allocator>::is_label_delegate(
   return m_map_delegate_locator.count(label) > 0;
 }
 
-#if 0 // Ignore these methods for now
+#if 0  // Ignore these methods for now
 /**
  * @todo remove; make like vertex_data
  */

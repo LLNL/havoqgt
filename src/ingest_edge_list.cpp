@@ -1,61 +1,16 @@
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/parallel_edge_list_reader.hpp>
+#include <havoqgt/distributed_db.hpp>
 
 #include <havoqgt/cache_utilities.hpp>
-#include <havoqgt/distributed_db.hpp>
+
 #include <iostream>
 #include <assert.h>
 #include <deque>
@@ -72,11 +27,11 @@
 
 using namespace havoqgt;
 
-typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-typedef havoqgt::delegate_partitioned_graph<typename segment_manager_t::template allocator<void>::type> graph_type;
+typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
 typedef double edge_data_type;
-  
+typedef distributed_db::allocator<edge_data_type> edge_data_allocator_type;
+
 void usage()  {
   if(comm_world().rank() == 0) {
     std::cerr << "Usage: -o <string> -d <int> [file ...]\n"
@@ -93,7 +48,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
-                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames, 
+                    uint64_t& delegate_threshold, std::vector< std::string >& input_filenames,
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
                     bool& undirected) {
   if(comm_world().rank() == 0) {
@@ -103,7 +58,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
     }
     std::cout << std::endl;
   }
-  
+
   bool found_output_filename = false;
   delegate_threshold = 1048576;
   input_filenames.clear();
@@ -111,12 +66,12 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   partition_passes = 1;
   chunk_size = 8*1024;
   undirected = false;
-  
-  char c;
+
+  int c;
   bool prn_help = false;
   while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:h ")) != -1) {
      switch (c) {
-       case 'h':  
+       case 'h':
          prn_help = true;
          break;
        case 'd':
@@ -146,7 +101,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
          prn_help = true;
          break;
      }
-   } 
+   }
    if (prn_help || !found_output_filename) {
      usage();
      exit(-1);
@@ -167,11 +122,11 @@ int main(int argc, char** argv) {
   {
     std::string                output_filename;
     std::string                backup_filename;
- 
+
     { // Build Distributed_DB
     int mpi_rank = comm_world().rank();
     int mpi_size = comm_world().size();
-        
+
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
     }
@@ -183,35 +138,30 @@ int main(int argc, char** argv) {
     double                     gbyte_per_rank;
     uint64_t                   chunk_size;
     bool                       undirected;
-   
+
     parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected);
 
     if (mpi_rank == 0) {
       std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_create(), output_filename.c_str(), gbyte_per_rank);
-
-    segment_manager_t* segment_manager = ddb.get_segment_manager();
-    bip::allocator<void, segment_manager_t> alloc_inst(segment_manager);
-
-    graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>> edge_data(alloc_inst); 
+    distributed_db ddb(db_create(), output_filename.c_str());
+    graph_type::edge_data<edge_data_type, edge_data_allocator_type> edge_data(ddb.get_allocator());
 
     //Setup edge list reader
     havoqgt::parallel_edge_list_reader<edge_data_type> pelr(input_filenames, undirected);
-    bool has_edge_data = pelr.has_edge_data(); 
+    bool has_edge_data = pelr.has_edge_data();
 
     if (mpi_rank == 0) {
       std::cout << "Generating new graph." << std::endl;
     }
-    graph_type *graph = segment_manager->construct<graph_type>
+    graph_type *graph = ddb.get_manager()->construct<graph_type>
         ("graph_obj")
-        (alloc_inst, MPI_COMM_WORLD, pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size,
-         edge_data); 
-    
+        (ddb.get_allocator(), MPI_COMM_WORLD,pelr, pelr.max_vertex_id(), delegate_threshold, partition_passes, chunk_size, edge_data);
+
     if (has_edge_data) {
-      graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>* edge_data_ptr
-      = segment_manager->construct<graph_type::edge_data<edge_data_type, bip::allocator<edge_data_type, segment_manager_t>>>
+      graph_type::edge_data<edge_data_type, edge_data_allocator_type>* edge_data_ptr
+      = ddb.get_manager()->construct<graph_type::edge_data<edge_data_type, edge_data_allocator_type>>
           ("graph_edge_data_obj")
           (edge_data);
     }
@@ -221,15 +171,16 @@ int main(int argc, char** argv) {
       std::cout << "Graph Ready, Calculating Stats. " << std::endl;
     }
 
-    for (int i = 0; i < mpi_size; i++) {
-      if (i == mpi_rank) {
-        double percent = double(segment_manager->get_free_memory()) /
-        double(segment_manager->get_size());
-        std::cout << "[" << mpi_rank << "] " << segment_manager->get_free_memory()
-                  << "/" << segment_manager->get_size() << " = " << percent << std::endl;
-      }
-      comm_world().barrier();
-    }
+  // TODO: implement get_size() and get_free_memory() in Metall
+  // for (int i = 0; i < mpi_size; i++) {
+  //  if (i == mpi_rank) {
+  //    double percent = double(ddb.get_manager()->get_free_memory()) /
+  //    double(ddb.get_manager()->get_size());
+  //    std::cout << "[" << mpi_rank << "] " << ddb.get_manager()->get_free_memory()
+  //              << "/" << ddb.get_manager()->get_size() << " = " << percent << std::endl;
+  //  }
+  //  comm_world().barrier();
+  // }
 
 //    graph->print_graph_statistics();
 

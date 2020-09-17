@@ -7,3 +7,5 @@ build/*
 *.cobaltlog
 *.error
 .vscode/settings.json
+cmake-build-*
+.idea
