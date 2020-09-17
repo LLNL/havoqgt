@@ -47,4 +47,5 @@
 <p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned solution subgraph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are stored in the directory examples/prunejuice/output/all_ranks_subgraphs/. </p>
 
 <h4>Constraint Generation</h4>
-<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>
+<!--<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>-->
+[Constraint Generation](tools/query_preprocessor/cpp/)
