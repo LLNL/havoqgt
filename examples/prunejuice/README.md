@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <h4>Distribute Pattern Matching on Large Metadata Graphs</h4>
 <p>We present an example of searching a pattern in a R-MAT generated graph using our program. The code is developed on top of HavoqGT.</p>
 <p>Clone the code from https://github.com/LLNL/havoqgt/tree/develop_prunejuice</p>
@@ -45,8 +44,10 @@
 <p>For the Tree pattern in this example, the last step in the execution enumerates the pattern in the pruned graph. The input for enumeration is the last entry in the file examples/prunejuice/rmat_log2_tree_pattern/0/pattern_non_local_constraint. Here, the same NLCC code walks the full template with work aggregation turned off. The subgraphs are output to the directory examples/prunejuice/output/0/all_ranks_subgraphs and are distributed among multiple files. </p>
 
 <h4>Constraint Generation</h4>
-<p>https://github.com/LLNL/havoqgt/tree/develop_prunejuice/examples/prunejuice/constraint_generator</p>
+<p>https://github.com/LLNL/havoqgt/tree/develop_prunejuice/examples/prunejuice/tools/query_preprocessor/cpp</p>
+
 =======
+
 # Overview
 
 HavoqGT (Highly Asynchronous Visitor Queue Graph Toolkit) is a framework for
@@ -126,4 +127,3 @@ SPDX-License-Identifier: MIT
 ## Release
 
 LLNL-CODE-644630
->>>>>>> develop
