@@ -44,8 +44,9 @@
 <h4>Results</h4>
 <p>The runtime, and vertex and edge paticipation information (i.e., match count) are dispalyed on the standard output. If requested, the program also produces full match enumeration and displays the result (i.e., match count) on the standard output. If the -o flag is set (i.e., it points to the output directory), the user can obtain the pruned solution subgraph, and collect additional data. The files in the directory, examples/prunejuice/output/all_ranks_active_vertices/, contain matching vertices, and, examples/prunejuice/output/all_ranks_active_edges/, contain matching edges, in the final solution subgraph.</p>
  
-<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned solution subgraph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are stored in the directory examples/prunejuice/output/all_ranks_subgraphs/. </p>
+<p>For the Tree pattern used in this example, the last step in the execution enumerates the pattern in the pruned solution subgraph. The input for enumeration is the last entry in the file examples/prunejuice/patterns/tree_0001/pattern_nonlocal_constraint. The subgraphs are stored in the directory examples/prunejuice/output/all_ranks_subgraphs/.</p>
 
-<h4>Constraint Generation</h4>
+<!--<h4>Constraint Generation</h4>-->
 <!--<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>-->
-![Constraint Generation](tools/query_preprocessor/cpp)
+# Constraint Generation
+[Constraint Generation](tools/query_preprocessor/cpp)
