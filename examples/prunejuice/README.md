@@ -21,9 +21,6 @@
 <h4>Input Pattern</h4>
 <p>We will search the following Tree pattern in the graph we just created. The numeric values on each vertex is the label of the respective vertex.</p>
 <div align="center"><img src="doc/tree_0001.png" width="200" height="200"></div>
-
-![tree_0001](doc/tree_0001.png)
-
 <p>We use degree information to create numeric vertex labels, computed using the formula ceil(log_2(d(v_i)+1)). Here, d(v_i) is the degree of a vertex v_i. The input pattern is available in the dircetory havoqgt/examples/prunejuice/patterns/tree_0001/.</p>
 
 <h4>Searching a Pattern</h4>
