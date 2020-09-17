@@ -18,12 +18,11 @@
 <p>srun -N1 --ntasks-per-node=4 --distribution=block ./src/generate_rmat -s 21 -p 1 -f 1 -o /dev/shm/rmat -b /urs/graph/rmat</p>
 <p>This will create a graph with four partitions, to be run on four MPI processes. This is a Scale 21 graph (note the argument for the -s flag). The mmap/binary graph file will be stored in the directory /usr/graph/.</p>
 
-<h4>Input Pattern</h4>
+<h4>Searching a Pattern</h4>
 <p>We will search the following Tree pattern in the graph we just created. The numeric values on each vertex is the label of the respective vertex.</p>
 <div align="center"><img src="doc/tree_0001.png" width="200" height="200"></div>
 <p>We use degree information to create numeric vertex labels, computed using the formula ceil(log_2(d(v_i)+1)). Here, d(v_i) is the degree of a vertex v_i. The input pattern is available in the dircetory havoqgt/examples/prunejuice/patterns/tree_0001/.</p>
-
-<h4>Searching a Pattern</h4>
+<br>
 <p>First, build the pattern matching executable:</p>
 <p>make run_pattern_matching</p> 
 <p>Next, use the following command to search the pattern stored in havoqgt/examples/prunejuice/patterns/tree_0001/.</p> 
