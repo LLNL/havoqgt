@@ -1,4 +1,4 @@
-<h4>PruneJuice : A Distribute Solution for Pattern Matching in Metadata Graphs</h4>
+<h2>PruneJuice : A Distribute Solution for Pattern Matching in Metadata Graphs</h2>
 <p>We present an example of searching a pattern in an R-MAT generated graph using our program. The code is developed on top of HavoqGT.</p>
 <p>Clone the code from https://github.com/LLNL/havoqgt/</p>
 <p>git clone https://github.com/LLNL/havoqgt.git</p>
