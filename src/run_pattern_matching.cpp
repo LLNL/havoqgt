@@ -30,7 +30,7 @@
 #include <prunejuice/algorithm_state.hpp>
 #include <prunejuice/local_constraint_checking.hpp>
 #include <prunejuice/nonlocal_constraint_checking_basic.hpp>
-#include <prunejuice/non_local_constraint_checking_tds_batch.hpp> // TODO: optimize for batch_size = mpi_size
+#include <prunejuice/nonlocal_constraint_checking_tds_batch.hpp> // TODO: optimize for batch_size = mpi_size
 
 /*
 //#include <havoqgt/graph.hpp>
