@@ -48,4 +48,4 @@
 
 <h4>Constraint Generation</h4>
 <!--<p>examples/prunejuice/tools/query_preprocessor/cpp/</p>-->
-![Constraint Generation](tools/query_preprocessor/cpp/)
+![Constraint Generation](tools/query_preprocessor/cpp)
