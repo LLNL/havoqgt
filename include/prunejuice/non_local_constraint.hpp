@@ -14,90 +14,20 @@
 
 #include <boost/algorithm/string.hpp>
 
-//#include <havoqgt/approximate_pattern_matching/util.hpp> 
 #include <prunejuice/file_utilities.hpp>
 #include <prunejuice/utilities.hpp>
+
+namespace prunejuice {
 
 using namespace prunejuice::utilities;
 
 template <typename Vertex, typename Edge, typename VertexData, typename PatternGraph> 
 class pattern_nonlocal_constraint {
+
   public:
 
-    /*pattern_util(std::string pattern_input_filename) : 
-      input_pattern_path_length(0),
-      input_pattern(0),
-      all_patterns(0),
-      one_path_patterns(0), 
-      two_path_patterns(0) {
-    
-      std::cout << "Reading the input pattern from file ..." << std::endl; 
-      read_pattern_input(pattern_input_filename);
-      
-      input_pattern_path_length = input_pattern.size() - 1;
-    
-      std::cout << "Generating pattrens to search ..." << std::endl;
-      generate_pattern_combinations(); 
-      output_pattern_combinations(); 
-    }*/
-
-    /*pattern_util(std::string pattern_input_filename, bool is_integral_type) :
-      input_pattern_path_length(0),
-      input_pattern(0),
-      all_patterns(0),
-      one_path_patterns(0),
-      two_path_patterns(0) {
-
-      //std::cout << "Reading the input pattern list ..." << std::endl;
-      read_pattern_list(pattern_input_filename, is_integral_type);
-   
-      //std::cout << "Pattrens to search ..." << std::endl;
-      //for (auto ip : input_patterns) {
-        //std::cout << "Data: " << std::endl; 
-        //output_pattern(std::get<0>(ip));
-        //std::cout << "Indices: " << std::endl;
-        //output_pattern(std::get<1>(ip));               
-        //std::cout << std::endl; 
-      //}
-    }*/
-
-    /*pattern_util(std::string pattern_edge_filename, std::string pattern_vertex_filename, std::string pattern_vertex_data_filename, bool is_integral_type)
-    {
-      pattern_graph g(pattern_edge_filename, pattern_vertex_filename, pattern_vertex_data_filename, true, true);
-      for (Vertex v = 0; v < g.vertex_count; v++) {
-        std::cout << g.vertices[v] << " " << g.vertex_data[v] << " " << g.vertex_degree[v] << std::endl;
-        for (auto e = g.vertices[v]; e < g.vertices[v + 1]; e++) {
-          auto v_nbr = g.edges[e];   
-          std::cout << v_nbr << ", " << std::endl;
-        }
-      } 
-    }*/ 
-
-    /*pattern_util(std::string pattern_input_filename, 
-      std::string join_vertex_input_filename, bool is_integral_type) :
-      input_pattern_path_length(0),
-      input_pattern(0),
-      all_patterns(0),
-      one_path_patterns(0),
-      two_path_patterns(0), 
-      join_vertices(0) {
-
-      //std::cout << "Reading the input pattern list ..." << std::endl;
-      read_pattern_list(pattern_input_filename, is_integral_type);
-      read_join_vertex_list(join_vertex_input_filename, is_integral_type);  
-   
-      //std::cout << "Pattrens to search ..." << std::endl;
-      //for (auto ip : input_patterns) {
-        //std::cout << "Data: " << std::endl; 
-        //output_pattern(std::get<0>(ip));
-        //std::cout << "Indices: " << std::endl;
-        //output_pattern(std::get<1>(ip));               
-        //std::cout << std::endl; 
-      //}
-    }*/   
-
     pattern_nonlocal_constraint(PatternGraph& pattern_graph, 
-      std::string pattern_non_local_constraint_filename) :
+      std::string pattern_nonlocal_constraint_filename) :
       input_pattern_path_length(0),
       input_pattern(0),
       all_patterns(0),
@@ -106,12 +36,12 @@ class pattern_nonlocal_constraint {
       enumeration_patterns(0),
       aggregation_steps(0) {
 
-      read_non_local_constraint(pattern_graph, pattern_non_local_constraint_filename);
+      read_nonlocal_constraint(pattern_graph, pattern_nonlocal_constraint_filename);
     } 
 
     pattern_nonlocal_constraint(PatternGraph& pattern_graph, 
-      std::string pattern_non_local_constraint_filename,
-      std::string pattern_vertex_non_local_constraint_filename) :
+      std::string pattern_nonlocal_constraint_filename,
+      std::string pattern_vertex_nonlocal_constraint_filename) :
       input_pattern_path_length(0),
       input_pattern(0),
       all_patterns(0),
@@ -120,8 +50,8 @@ class pattern_nonlocal_constraint {
       enumeration_patterns(0),
       aggregation_steps(0) {
 
-      read_non_local_constraint(pattern_graph, pattern_non_local_constraint_filename);
-      read_vertex_non_local_constraint(pattern_vertex_non_local_constraint_filename);
+      read_nonlocal_constraint(pattern_graph, pattern_nonlocal_constraint_filename);
+      read_vertex_nonlocal_constraint(pattern_vertex_nonlocal_constraint_filename);
     } 
 
     pattern_nonlocal_constraint(std::string pattern_input_filename, 
@@ -152,39 +82,6 @@ class pattern_nonlocal_constraint {
       //}
     } 
 
-    /*pattern_util(std::string pattern_input_filename, 
-      std::string pattern_enumeration_input_filename, 
-      std::string pattern_aggregation_input_filename,
-      bool is_integral_type, bool is_enumeration) :
-      input_pattern_path_length(0),
-      input_pattern(0),
-      all_patterns(0),
-      one_path_patterns(0),
-      two_path_patterns(0),
-      enumeration_patterns(0),
-      aggregation_steps(0),
-      join_vertices(0) {
-
-      //std::cout << "Reading the input pattern list ..." << std::endl;
-      read_pattern_list(pattern_input_filename, is_integral_type);
-      if (is_enumeration) { 
-        //read_pattern_enumeration_list(pattern_enumeration_input_filename, is_integral_type);  
-        //read_pattern_enumeration_list_2(pattern_enumeration_input_filename, is_integral_type);
-        read_pattern_enumeration_list_3(pattern_enumeration_input_filename, is_integral_type);
-        read_pattern_aggregation_list_3(pattern_aggregation_input_filename, is_integral_type); 
-      }
-   
-      //std::cout << "Pattrens to search ..." << std::endl;
-      //for (auto ip : input_patterns) {
-        //std::cout << "Data: " << std::endl; 
-        //output_pattern(std::get<0>(ip));
-        //std::cout << "Indices: " << std::endl;
-        //output_pattern(std::get<1>(ip));               
-        //std::cout << std::endl; 
-      //}
-    }*/ 
-
-    //~pattern_util() {}
     ~pattern_nonlocal_constraint() {}
   
     static void output_pattern(std::vector<VertexData> pattern) {
@@ -200,7 +97,8 @@ class pattern_nonlocal_constraint {
     std::vector<std::vector<VertexData>> one_path_patterns;
     std::vector<std::vector<VertexData>> two_path_patterns; 
 
-    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, Edge, bool, bool, bool> > input_patterns;
+    std::vector< std::tuple< std::vector<VertexData>, std::vector<Vertex>, 
+      Edge, bool, bool, bool> > input_patterns;
     // TODO: verify stoull, bool, uint8_t compatibility  
     std::vector<std::vector<Vertex>> enumeration_patterns;
     std::vector<std::vector<uint8_t>> aggregation_steps;
@@ -209,18 +107,18 @@ class pattern_nonlocal_constraint {
  
   private:
 
-    void read_non_local_constraint(PatternGraph& pattern_graph, 
-      std::string pattern_non_local_constraint_filename, 
+    void read_nonlocal_constraint(PatternGraph& pattern_graph, 
+      std::string pattern_nonlocal_constraint_filename, 
       bool is_integral_type = true) {
-      std::ifstream pattern_non_local_constraint_file
-        (pattern_non_local_constraint_filename, std::ifstream::in);
-      if (is_file_empty(pattern_non_local_constraint_file)) {
-        //std::cout << pattern_non_local_constraint_filename << " is empty." 
+      std::ifstream pattern_nonlocal_constraint_file
+        (pattern_nonlocal_constraint_filename, std::ifstream::in);
+      if (is_file_empty(pattern_nonlocal_constraint_file)) {
+        //std::cout << pattern_nonlocal_constraint_filename << " is empty." 
         //  << std::endl;
         return;
       } 
       std::string line;  
-      while (std::getline(pattern_non_local_constraint_file, line)) {
+      while (std::getline(pattern_nonlocal_constraint_file, line)) {
         //std::cout << line << std::endl; // Test  
         boost::trim(line); // important 
 
@@ -263,15 +161,15 @@ class pattern_nonlocal_constraint {
           aggregation_steps.push_back(split<uint8_t>(tokens[2], ' ')); // TODO: verify type compatibility 
         }    
       }
-      pattern_non_local_constraint_file.close();
+      pattern_nonlocal_constraint_file.close();
     }
 
-    void read_vertex_non_local_constraint
-      (std::string pattern_vertex_non_local_constraint_filename) {
-      std::ifstream pattern_vertex_non_local_constraint_file
-        (pattern_vertex_non_local_constraint_filename, std::ifstream::in);
+    void read_vertex_nonlocal_constraint
+      (std::string pattern_vertex_nonlocal_constraint_filename) {
+      std::ifstream pattern_vertex_nonlocal_constraint_file
+        (pattern_vertex_nonlocal_constraint_filename, std::ifstream::in);
       std::string line;
-      while (std::getline(pattern_vertex_non_local_constraint_file, line)) {
+      while (std::getline(pattern_vertex_nonlocal_constraint_file, line)) {
         std::istringstream iss(line);
 
         auto tokens_a = split(line, ':');         
@@ -312,7 +210,7 @@ class pattern_nonlocal_constraint {
 
            
       }
-      pattern_vertex_non_local_constraint_file.close();      
+      pattern_vertex_nonlocal_constraint_file.close();      
     }  
 
     void read_pattern_list(std::string pattern_input_filename, bool is_integral_type) { 
@@ -507,3 +405,5 @@ class pattern_nonlocal_constraint {
       } 
     }     
 };
+
+} // end namespace prunejuice
