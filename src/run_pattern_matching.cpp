@@ -32,6 +32,8 @@
 #include <prunejuice/nonlocal_constraint_checking_basic.hpp>
 #include <prunejuice/nonlocal_constraint_checking_tds_batch.hpp>
 
+#define OUTPUT_RESULT
+ 
 using namespace havoqgt;
 
 typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
@@ -837,6 +839,7 @@ int main(int argc, char** argv) {
       << "] : " << time_end - time_start << std::endl;
   }
 
+#ifdef OUTPUT_RESULT
   // result
   if(mpi_rank == 0) {
     superstep_result_file << global_itr_count << ", TP, "
@@ -877,6 +880,7 @@ int main(int argc, char** argv) {
   message_count_result_file << global_itr_count << ", TP, "
     << pl << ", "
     << message_count << "\n";
+#endif
   
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
