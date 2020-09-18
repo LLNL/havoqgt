@@ -44,6 +44,7 @@ public:
   }
 
 protected:
+
   std::vector<Visitor> data;
 
 };
@@ -1250,7 +1251,6 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     message_count_result_file << global_itr_count << ", LP, "
       << superstep << ", "
       << lcc_visitor_count << "\n";   
- 
 #endif
 
     lcc_visitor_count = 0; // reset for next iteration 

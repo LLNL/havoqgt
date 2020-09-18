@@ -25,12 +25,13 @@
 namespace stdfs = std::filesystem;
 //namespace stdfs = std::experimental::filesystem;
 
-namespace havoqgt { ///namespace mpi {
+namespace havoqgt { 
 
 template<typename Visitor>
 class vertex_data_queue {
 
 public:
+
   vertex_data_queue() {}
 
   bool push(Visitor const& element) {
@@ -59,13 +60,16 @@ public:
   }
 
 protected:
+
   std::vector<Visitor> data;
+
 };
 
 template<typename Graph, typename VertexData>
 class vertex_data_visitor {
 
 public:
+
   typedef typename Graph::vertex_locator vertex_locator;
   typedef typename Graph::edge_iterator eitr_type;
 
@@ -99,13 +103,13 @@ public:
   template<typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
     if (!do_update_vertex_data) {
-      //std::cout << "False" << std::endl; // test 
+      //std::cout << "False" << std::endl; // Test 
       return false;
     } 
 
     std::get<0>(alg_data)[vertex] = vertex_data;    
     //std::cout << "Visiting " << g.locator_to_label(vertex) << " " 
-    //  << std::get<0>(alg_data)[vertex] << std::endl; // test  
+    //  << std::get<0>(alg_data)[vertex] << std::endl; // Test  
     return true;
   } 
 
@@ -128,6 +132,7 @@ template <typename TGraph, typename VertexMetadata, typename VertexEntry,
   typename VertexDataType>
 void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata, 
   VertexEntry& vertex_entry) {
+
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
@@ -152,7 +157,6 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
   // TODO: implement a more efficient 'visitor_traversal'; e.g., only visit 
   // the ones already in the queue
   //MPI_Barrier(MPI_COMM_WORLD); // TODO: fix, it causes the system to freeze
-  ///vq.init_visitor_traversal_new();
   vq.init_visitor_traversal();
   MPI_Barrier(MPI_COMM_WORLD);
 //  std::cout << "MPI Rank " << mpi_rank << " is done." << std::endl; 
@@ -160,6 +164,7 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
 
 /*bool get_files_in_dir(boost::filesystem::path& dir_path, 
   std::vector<std::string>& file_paths, std::string wildcard) {
+
   const boost::regex filename_filter(wildcard + ".*");  
 
   if(!boost::filesystem::exists(dir_path) || 
@@ -190,6 +195,7 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
 
 bool get_files_in_dir(stdfs::path& dir_path, 
   std::vector<std::string>& file_paths, std::string wildcard) {
+
   //const boost::regex filename_filter(wildcard + ".*"); 
   const std::regex filename_filter(wildcard + ".*"); // TODO: improve 
 
@@ -261,8 +267,7 @@ template <typename TGraph, typename VertexMetadata, typename Vertex,
   typename VertexData>
 void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata, 
   std::string base_filename, size_t chunk_size) {
-  ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  ///int mpi_size = havoqgt_env()->world_comm().size();
+
   int mpi_rank = comm_world().rank();
   int mpi_size = comm_world().size(); 
 
@@ -298,8 +303,8 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
     }
   }
   if (mpi_rank == 0) {
-    std::cout << "Total number of files : " << file_paths.size() << std::endl;
-    std::cout << "Maximum number of files per rank : " << 
+    std::cout << "Total Number of Files : " << file_paths.size() << std::endl;
+    std::cout << "Maximum Number of Files Per Rank : " << 
       max_files_per_rank << std::endl; 
   }
 
@@ -331,8 +336,7 @@ template <typename TGraph, typename VertexMetadata, typename Vertex,
   typename VertexData>
 void vertex_data_db_nostdfs(TGraph* g, VertexMetadata& vertex_metadata, 
   std::string base_filename, size_t chunk_size) {
-  ///int mpi_rank = havoqgt_env()->world_comm().rank();
-  ///int mpi_size = havoqgt_env()->world_comm().size();
+
   int mpi_rank = comm_world().rank();
   int mpi_size = comm_world().size(); 
 
@@ -370,8 +374,8 @@ void vertex_data_db_nostdfs(TGraph* g, VertexMetadata& vertex_metadata,
     }
   }
   if (mpi_rank == 0) {
-    std::cout << "Total number of files : " << file_paths.size() << std::endl;
-    std::cout << "Maximum number of files per rank : " << 
+    std::cout << "Total Number of Files : " << file_paths.size() << std::endl;
+    std::cout << "Maximum Number of Files Per Rank : " << 
       max_files_per_rank << std::endl; 
   }
 
@@ -399,4 +403,4 @@ void vertex_data_db_nostdfs(TGraph* g, VertexMetadata& vertex_metadata,
     
 }
 
-} ///} //end namespace havoqgt::mpi
+} // end namespace havoqgt
