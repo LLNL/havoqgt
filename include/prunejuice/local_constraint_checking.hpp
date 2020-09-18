@@ -1149,7 +1149,7 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {    
       //std::cout << "Superstep #" << superstep <<  " Synchronizing ... " << std::endl;
-      std::cout <<  " | Synchronizing ...";
+      //std::cout <<  " | Synchronizing ...";
     }
 
     //vertex_active.all_min_reduce(); // do not need this here
