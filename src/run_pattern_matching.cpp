@@ -140,11 +140,11 @@ int main(int argc, char** argv) {
 
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  ///havoqgt::get_environment();
+  //havoqgt::get_environment();
 
   if (mpi_rank == 0) {
     std::cout << "MPI Initialized With " << mpi_size << " Ranks" << std::endl;
-    ///havoqgt::get_environment().print();
+    //havoqgt::get_environment().print();
     //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);  
@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
   //}
 
   typedef uint8_t edge_data_type; 
-  // TODO: figure out a way to get it from graph_type
+  // TODO: figure out a way to get it from graph_type;
   // see edge_data_value_type in parallel_edge_list_reader.hpp
 
   typedef graph_type::edge_data<edge_data_type, 
@@ -224,10 +224,14 @@ int main(int argc, char** argv) {
    
   {
 
+  if(mpi_rank == 0) {
+    std::cout << "Pattern Matching ... " << std::endl;
+  }
+
   // types used by the delegate partitioned graph
   typedef typename graph_type::vertex_iterator vitr_type;
   typedef typename graph_type::vertex_locator vloc_type;
-  //typedef typename graph_type::edge_iterator eitr_type;
+  typedef typename graph_type::edge_iterator eitr_type;
  
   typedef uint64_t Vertex;
   typedef uint64_t Edge;
@@ -235,8 +239,6 @@ int main(int argc, char** argv) {
   //typedef uint8_t VertexData; // for log binning 
   //typedef edge_data_type EdgeData;
   typedef uint8_t EdgeData; 
-  
-  typedef uint64_t VertexRankType; // TODO: delete
 
   static constexpr size_t max_bit_vector_size = 16; // TODO:
   static constexpr size_t max_template_vertex_count = 16;  
@@ -244,23 +246,18 @@ int main(int argc, char** argv) {
   typedef BitSet TemplateVertexBitSet; 
   typedef uint16_t TemplateVertexType; // TODO: rename to TemplateVertexBitSetToUint
   
-  typedef uint8_t Boolean; // TODO: replace all bool with Boolean?
+  typedef uint8_t Boolean; // TODO: replace all bool with Boolean ?
 
   // TODO: mmap
   //typedef graph_type::vertex_data<VertexData, SegmentAllocator<VertexData> > VertexMetadata;
-  //typedef graph_type::vertex_data<VertexRankType, SegmentAllocator<VertexRankType> > VertexRank;
   //typedef graph_type::vertex_data<bool, SegmentAllocator<bool> > VertexActive;
-  //typedef graph_type::vertex_data<uint64_t, SegmentAllocator<uint64_t> > VertexIteration;
 
   typedef graph_type::vertex_data<VertexData, std::allocator<VertexData> > VertexMetadata;
-  typedef graph_type::vertex_data<Boolean, std::allocator<Boolean> > VertexActive; // TODO: solution_graph // TODO: you are mixing bool and uint!
-  typedef graph_type::vertex_data<TemplateVertexType, std::allocator<TemplateVertexType> > TemplateVertex; // TODO: solution_graph, rename to VertexTemplateVertexBitSetToUint
+  typedef graph_type::vertex_data<Boolean, std::allocator<Boolean> > VertexActive; 
+  // TODO: solution_graph; you are mixing bool and uint, fix it
+  typedef graph_type::vertex_data<TemplateVertexType, std::allocator<TemplateVertexType> > TemplateVertex; 
+  // TODO: solution_graph, rename to VertexTemplateVertexBitSetToUint
 
-  typedef graph_type::vertex_data<uint64_t, std::allocator<uint64_t> > VertexIteration; // TODO: delete
-  typedef graph_type::vertex_data<VertexRankType, std::allocator<VertexRankType> > VertexRank; // TODO: delete
-
-  //typedef vertex_state<uint8_t> VertexState;
-///  typedef prunejuice::vertex_state_generic<Vertex, VertexData, uint8_t, BitSet> VertexState;
   typedef prunejuice::vertex_state<Vertex, VertexData, BitSet> VertexState;
   typedef std::unordered_map<Vertex, VertexState> VertexStateMap; // TODO: solution_graph
 
@@ -277,12 +274,6 @@ int main(int argc, char** argv) {
 
   ////////////////////////////////////////////////////////////////////////////// 
 
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching ... " << std::endl;
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-
   double time_start = MPI_Wtime();
   double time_end = MPI_Wtime();
 
@@ -291,26 +282,21 @@ int main(int argc, char** argv) {
 
   // vertex containers    
   // TODO: need a new alloc_inst to use bip/mmap
-//  VertexMetadata vertex_metadata(*graph, alloc_inst);
-//  VertexRank vertex_rank(*graph, alloc_inst);
-//  VertexActive vertex_active(*graph, alloc_inst);
-//  VertexIteration vertex_iteration(*graph, alloc_inst);
+  // VertexMetadata vertex_metadata(*graph, alloc_inst);
+  // VertexActive vertex_active(*graph, alloc_inst);
  
   VertexMetadata vertex_metadata(*graph); 
   VertexActive vertex_active(*graph);
   TemplateVertex template_vertices(*graph);
   VertexUint8MapCollection vertex_active_edges_map(*graph);
   VertexSetCollection vertex_token_source_set(*graph); // per vertex set
-//--  VertexSetCollection token_source_edge_set(*graph); // per vertex set // edge aware
-
-//  VertexRank vertex_rank(*graph);
-  uint8_t vertex_rank; // TODO: dummy
-//  VertexIteration vertex_iteration(*graph);
-  uint8_t vertex_iteration; // TODO: dummy  
 
   // edge containers
   //EdgeMetadata edge_metadata(*graph);
-  ////EdgeActive edge_active(*graph);
+  //EdgeActive edge_active(*graph);
+
+  uint8_t vertex_rank; // TODO: dummy, remove
+  uint8_t vertex_iteration; // TODO: dummy, remove  
 
   if(mpi_rank == 0) {
     std::cout << "Pattern Matching | Allocated Vertex and Edge Containers" 
@@ -321,7 +307,7 @@ int main(int argc, char** argv) {
 
   // application parameters // TODO: command line input
 
-  bool do_output_vertex_data = false;
+  bool do_output_metadata = false;
 
   MPI_Barrier(MPI_COMM_WORLD);
  
@@ -347,7 +333,7 @@ int main(int argc, char** argv) {
       << time_end - time_start << std::endl;
   }
 
-  if (do_output_vertex_data) {
+  if (do_output_metadata) {
     std::string vertex_data_filename = result_dir +  
       "/all_ranks_vertex_data/vertex_data_" + std::to_string(mpi_rank);
     std::ofstream vertex_data_file(vertex_data_filename, std::ofstream::out);
@@ -382,7 +368,8 @@ int main(int argc, char** argv) {
   std::string pattern_set_result_filename = result_dir + "/result_pattern_set";
   std::ofstream pattern_set_result_file;  
   if (mpi_rank == 0) {
-    pattern_set_result_file = std::ofstream(pattern_set_result_filename, std::ofstream::out);
+    pattern_set_result_file = std::ofstream(pattern_set_result_filename, 
+      std::ofstream::out);
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -392,339 +379,339 @@ int main(int argc, char** argv) {
   // loop over the pattern set
   for (size_t ps = 0; ps < 1; ps++) { 
    
-  // setup pattern
-  if(mpi_rank == 0) { 
-    std::cout << "Setting up Pattern [" << ps << "] ... " << std::endl;
-  }
+    // setup pattern
+    if(mpi_rank == 0) { 
+      std::cout << "Setting up Pattern [" << ps << "] ... " << std::endl;
+    }
+     
+    // setup pattern for local constraint checking 
+    std::string pattern_input_filename = pattern_dir + "/pattern";
+    
+    typedef prunejuice::pattern_graph_csr<Vertex, Edge, VertexData, 
+      EdgeData> PatternGraph;
+    PatternGraph pattern_graph(
+      pattern_input_filename + "_edge",
+      pattern_input_filename + "_vertex",
+      pattern_input_filename + "_vertex_data",
+      pattern_input_filename + "_edge_data",
+      pattern_input_filename + "_stat",
+      false, false); // TODO: improve
+
+    // TODO: create a graphical representation of the pattern 
+    // using a 2D graphics library
+    // Test print
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching | Searching Pattern [" << ps
+	<< "] : " << std::endl;
+      for (auto v = 0; v < pattern_graph.vertex_count; v++) {
+	std::cout << v << " : offset " << pattern_graph.vertices[v] 
+	<< ", vertex_data " << pattern_graph.vertex_data[v] 
+	<< ", vertex_degree " << pattern_graph.vertex_degree[v] << std::endl;
+	std::cout << " neighbors : "; 
+	for (auto e = pattern_graph.vertices[v]; 
+	  e < pattern_graph.vertices[v + 1]; e++) {
+	  auto v_nbr = pattern_graph.edges[e];
+	  std::cout << v_nbr << ", " ;
+	}
+	std::cout << std::endl;
+	std::cout << " neighbor vertex data count : ";
+	for (auto& nd : pattern_graph.vertex_neighbor_data_count_map[v]) {
+	  std::cout << "(" << nd.first << ", " << nd.second << "), ";
+	}
+	std::cout << std::endl; 
+      }
+      //std::cout << "diameter : " << pattern_graph.diameter << std::endl; 
+    }
+    // Test print
+
+    // setup pattern for token passing
+    // TODO: remove from here ?    
    
-  // setup pattern for local constraint checking 
-  std::string pattern_input_filename = pattern_dir + "/pattern";
-  
-  typedef prunejuice::pattern_graph_csr<Vertex, Edge, VertexData, 
-    EdgeData> PatternGraph;
-  PatternGraph pattern_graph(
-    pattern_input_filename + "_edge",
-    pattern_input_filename + "_vertex",
-    pattern_input_filename + "_vertex_data",
-    pattern_input_filename + "_edge_data",
-    pattern_input_filename + "_stat",
-    false, false); // TODO: improve
+    typedef prunejuice::pattern_nonlocal_constraint<Vertex, Edge, VertexData, 
+      PatternGraph> PatternNonlocalConstraint;
 
-  // TODO: create a graphical representation of the pattern 
-  // using a 2D graphics library
-  // Test print
-  if(mpi_rank == 0) {
-  std::cout << "Pattern Matching | Searching Pattern [" << ps
-    << "] : " << std::endl;
-  for (auto v = 0; v < pattern_graph.vertex_count; v++) {
-    std::cout << v << " : offset " << pattern_graph.vertices[v] 
-    << ", vertex_data " << pattern_graph.vertex_data[v] 
-    << ", vertex_degree " << pattern_graph.vertex_degree[v] << std::endl;
-    std::cout << " neighbors : "; 
-    for (auto e = pattern_graph.vertices[v]; 
-      e < pattern_graph.vertices[v + 1]; e++) {
-      auto v_nbr = pattern_graph.edges[e];
-      std::cout << v_nbr << ", " ;
-    }
-    std::cout << std::endl;
-    std::cout << " neighbor vertex data count : ";
-    for (auto& nd : pattern_graph.vertex_neighbor_data_count_map[v]) {
-      std::cout << "(" << nd.first << ", " << nd.second << "), ";
-    }
-    std::cout << std::endl; 
-  }
-  //std::cout << "diameter : " << pattern_graph.diameter << std::endl; 
-  }
-  // Test print
-
-  // setup pattern for token passing
-  // TODO: remove from here ?    
- 
-  typedef prunejuice::pattern_nonlocal_constraint<Vertex, Edge, VertexData, 
-    PatternGraph> PatternNonlocalConstraint;
-
-  PatternNonlocalConstraint ptrn_util_two(pattern_graph,
-    pattern_dir + "/pattern_nonlocal_constraint"); 
+    PatternNonlocalConstraint ptrn_util_two(pattern_graph,
+      pattern_dir + "/pattern_nonlocal_constraint"); 
 
   //////////////////////////////////////////////////////////////////////////////
 
-  // initialization - per pattern
+    // per pattern initialization
 
-  // initialize containers
-  vertex_state_map.clear(); // Important
-  vertex_active.reset(true); // initially all vertices are active
-  //edge_active.reset(true); //  initially all edges are active
-  vertex_active_edges_map.clear(); // Important
-  vertex_token_source_set.clear(); // clear all the sets on all the vertices
+    // initialize containers
+    vertex_state_map.clear(); // Important
+    vertex_active.reset(true); // initially all vertices are active
+    //edge_active.reset(true); //  initially all edges are active
+    vertex_active_edges_map.clear(); // Important
+    vertex_token_source_set.clear(); // clear all the sets on all the vertices
 
-  // initialize application parameters  
-  bool global_init_step = true; // TODO: Boolean 
-  bool global_not_finished = false; // TODO: Boolean
-  uint64_t global_itr_count = 0;
+    // initialize application parameters  
+    bool global_init_step = true; // TODO: Boolean 
+    bool global_not_finished = false; // TODO: Boolean
 
-  bool do_nonlocal_constraint_checking = true; // TODO: Boolean
+    bool do_nonlocal_constraint_checking = true; // TODO: Boolean
 
-  uint64_t active_vertices_count = 0;
-  uint64_t active_edges_count = 0;
-  uint64_t message_count = 0;
+    uint64_t global_itr_count = 0;
+
+    uint64_t active_vertices_count = 0;
+    uint64_t active_edges_count = 0;
+
+    uint64_t message_count = 0;
 
   ////////////////////////////////////////////////////////////////////////////// 
 
-  // result
+    // result
 
-  std::string itr_result_filename = result_dir +  
-    "/result_iteration"; // TODO: improve
-  std::ofstream itr_result_file(itr_result_filename, std::ofstream::out);
+    std::string itr_result_filename = result_dir +  
+      "/result_iteration"; // TODO: improve
+    std::ofstream itr_result_file(itr_result_filename, std::ofstream::out);
 
-  std::string step_result_filename = result_dir +  
-    "/result_step";
-  std::ofstream step_result_file(step_result_filename, std::ofstream::out); 
+    std::string step_result_filename = result_dir +  
+      "/result_step";
+    std::ofstream step_result_file(step_result_filename, std::ofstream::out); 
 
-  std::string superstep_result_filename = result_dir + 
-    "/result_superstep";
-  std::ofstream superstep_result_file(superstep_result_filename, std::ofstream::out);
+    std::string superstep_result_filename = result_dir + 
+      "/result_superstep";
+    std::ofstream superstep_result_file(superstep_result_filename, std::ofstream::out);
 
-  std::string active_vertices_count_result_filename = result_dir +  
-    "/all_ranks_active_vertices_count/active_vertices_" + std::to_string(mpi_rank); 
-  std::ofstream active_vertices_count_result_file(active_vertices_count_result_filename, 
-    std::ofstream::out);
+    std::string active_vertices_count_result_filename = result_dir +  
+      "/all_ranks_active_vertices_count/active_vertices_" + std::to_string(mpi_rank); 
+    std::ofstream active_vertices_count_result_file(active_vertices_count_result_filename, 
+      std::ofstream::out);
 
-  std::string active_vertices_result_filename = result_dir + 
-    "/all_ranks_active_vertices/active_vertices_" + std::to_string(mpi_rank);
-  std::ofstream active_vertices_result_file(active_vertices_result_filename, std::ofstream::out);
+    std::string active_vertices_result_filename = result_dir + 
+      "/all_ranks_active_vertices/active_vertices_" + std::to_string(mpi_rank);
+    std::ofstream active_vertices_result_file(active_vertices_result_filename, std::ofstream::out);
 
-  std::string active_edges_count_result_filename = result_dir + 
-    "/all_ranks_active_edges_count/active_edges_" + std::to_string(mpi_rank);
-  std::ofstream active_edges_count_result_file(active_edges_count_result_filename, std::ofstream::out);
+    std::string active_edges_count_result_filename = result_dir + 
+      "/all_ranks_active_edges_count/active_edges_" + std::to_string(mpi_rank);
+    std::ofstream active_edges_count_result_file(active_edges_count_result_filename, std::ofstream::out);
 
-  std::string active_edges_result_filename = result_dir + 
-    "/all_ranks_active_edges/active_edges_" + std::to_string(mpi_rank);
-  std::ofstream active_edges_result_file(active_edges_result_filename, std::ofstream::out);
+    std::string active_edges_result_filename = result_dir + 
+      "/all_ranks_active_edges/active_edges_" + std::to_string(mpi_rank);
+    std::ofstream active_edges_result_file(active_edges_result_filename, std::ofstream::out);
 
-  std::string message_count_result_filename = result_dir + 
-    "/all_ranks_messages/messages_" + std::to_string(mpi_rank); // TODO:message_count
-  std::ofstream message_count_result_file(message_count_result_filename, std::ofstream::out);
+    std::string message_count_result_filename = result_dir + 
+      "/all_ranks_messages/messages_" + std::to_string(mpi_rank); // TODO:message_count
+    std::ofstream message_count_result_file(message_count_result_filename, std::ofstream::out);
 
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  //////////////////////////////////////////////////////////////////////////////
-
-  // run constraint checking
-  
-  if (mpi_rank == 0) {
-    std::cout << "Pattern Matching | Running Constraint Checking ... " << std::endl;
-  }
-
-  global_not_finished = false;
-
-  double pattern_time_start = MPI_Wtime();
-
-  double itr_time_start = MPI_Wtime();
+    MPI_Barrier(MPI_COMM_WORLD);
 
   //////////////////////////////////////////////////////////////////////////////
-  
-  // local constraint checking  
+
+    // run constraint checking
     
-  double label_propagation_time_start = MPI_Wtime();
-  double label_propagation_time_end = MPI_Wtime();
+    if (mpi_rank == 0) {
+      std::cout << "Pattern Matching | Running Constraint Checking ... " << std::endl;
+    }
 
-  prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
-    graph_type, VertexMetadata, VertexStateMap, VertexActive, 
-    VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
-    (graph, vertex_metadata, vertex_state_map, vertex_active, 
-    vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
-    global_not_finished, global_itr_count, superstep_result_file, 
-    active_vertices_count_result_file, active_edges_count_result_file,
-    message_count_result_file);
+    double pattern_time_start = MPI_Wtime();
+    double itr_time_start = MPI_Wtime();
 
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-  label_propagation_time_end = MPI_Wtime();
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching Time | Local Constraint Checking : " 
-      << label_propagation_time_end - label_propagation_time_start << std::endl;
-  }
+  //////////////////////////////////////////////////////////////////////////////
+  
+    // local constraint checking  
+      
+    double label_propagation_time_start = MPI_Wtime();
+    double label_propagation_time_end = MPI_Wtime();
 
-  // result
-  if(mpi_rank == 0) {
-    step_result_file << global_itr_count << ", LP, " << "0"  << ", "
-      << (label_propagation_time_end - label_propagation_time_start) << "\n";
-  }
+    prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
+      graph_type, VertexMetadata, VertexStateMap, VertexActive, 
+      VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
+      (graph, vertex_metadata, vertex_state_map, vertex_active, 
+      vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
+      global_not_finished, global_itr_count, superstep_result_file, 
+      active_vertices_count_result_file, active_edges_count_result_file,
+      message_count_result_file);
 
-  /////////////////////////////////////////////////////////////////////////////
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+    label_propagation_time_end = MPI_Wtime();
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching Time | Local Constraint Checking : " 
+	<< label_propagation_time_end - label_propagation_time_start << std::endl;
+    }
 
-  if (global_init_step) { // Important
-    global_init_step = false;
-  } 
-
-  // global termination detection
-
-  // global finished status
-  // TODO: in lcc, if no vertices and edges are deleted then 
-  // global_not_finished = false; change it to true ? 
-  global_not_finished = havoqgt::mpi_all_reduce(global_not_finished, 
-    std::greater<uint8_t>(), MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching | Global Finished Status : "; 
-    if (global_not_finished) { 
-      std::cout << "Continue" << std::endl;
-    } else {
-      std::cout << "Stop" << std::endl;
-      do_nonlocal_constraint_checking = false;
-    } 
-  }
-
-  // global active vertex count
-  size_t global_active_vertices_count =  
-    havoqgt::mpi_all_reduce(vertex_state_map.size(),
-    std::greater<size_t>(), MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-  if (global_active_vertices_count < 1) {
-    //break;
-    global_not_finished = false;
-    do_nonlocal_constraint_checking = false;
-  } else {
-    global_not_finished = true;
-    do_nonlocal_constraint_checking = true;
-  }
-  //if(mpi_rank == 0) {
-  //  std::cout << "Pattern Matching | Global Active Vertex Count : "
-  //  << global_active_vertices_count << std::endl;
-  //}
-
-  // end of local constraint chceking  
+    // result
+    if(mpi_rank == 0) {
+      step_result_file << global_itr_count << ", LP, " << "0"  << ", "
+	<< (label_propagation_time_end - label_propagation_time_start) << "\n";
+    }
 
   //////////////////////////////////////////////////////////////////////////////
 
-  // nonlocal constraint checking
-  // TODO: code indentation
-   
-  double token_passing_time_start = MPI_Wtime(); 
+    if (global_init_step) { // Important
+      global_init_step = false;
+    } 
 
-  if (ptrn_util_two.input_patterns.size() < 1) {
+    // global termination detection
+
+    // global finished status
+    // TODO: in lcc, if no vertices and edges are deleted then 
+    // global_not_finished = false; change it to true ? 
+    global_not_finished = havoqgt::mpi_all_reduce(global_not_finished, 
+      std::greater<uint8_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching | Global Finished Status : "; 
+      if (global_not_finished) { 
+	std::cout << "Continue" << std::endl;
+      } else {
+	std::cout << "Stop" << std::endl;
+	do_nonlocal_constraint_checking = false;
+      } 
+    }
+
+    // global active vertex count
+    size_t global_active_vertices_count =  
+      havoqgt::mpi_all_reduce(vertex_state_map.size(),
+      std::greater<size_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+    if (global_active_vertices_count < 1) {
+      //break;
+      global_not_finished = false;
+      do_nonlocal_constraint_checking = false;
+    } else {
+      global_not_finished = true;
+      do_nonlocal_constraint_checking = true;
+    }
+    //if(mpi_rank == 0) {
+    //  std::cout << "Pattern Matching | Global Active Vertex Count : "
+    //  << global_active_vertices_count << std::endl;
+    //}
+
+    // end of local constraint chceking  
+
+  //////////////////////////////////////////////////////////////////////////////
+
+    // nonlocal constraint checking
+     
+    //double token_passing_time_start = MPI_Wtime(); 
+
+    if (ptrn_util_two.input_patterns.size() < 1) {
+      global_not_finished = false;  
+      do_nonlocal_constraint_checking = false; 
+    }   
+
+    // Test
+    // forced token passing
+    //if (global_itr_count == 0) {
+    //  global_not_finished = true;  
+    //  do_nonlocal_constraint_checking = true; 
+    //}
+    // Test  
+
+    if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
+
+    VectorBoolean pattern_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
+    VectorBoolean pattern_token_source_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
+
+    VertexUint8Map token_source_map; // per vertex state
+
     global_not_finished = false;  
-    do_nonlocal_constraint_checking = false; 
-  }   
 
-  // Test
-  // forced token passing
-  //if (global_itr_count == 0) {
-  //  global_not_finished = true;  
-  //  do_nonlocal_constraint_checking = true; 
-  //}
-  // Test  
+    // loop over the set of nonlocal constraints and 
+    // run token passing and local constarint checking
+    // TODO: code indentation
+    for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
 
-  if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
+    // setup subpattern 
+    // TODO: This is actually a bad design. 
+    // It should be one object (ptrn_util_two) per entry. 
+    auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
+    auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
+    auto pattern_cycle_length_tp = std::get<2>(ptrn_util_two.input_patterns[pl]); // uint
+    auto pattern_valid_cycle_tp = std::get<3>(ptrn_util_two.input_patterns[pl]); // boolean
+    auto pattern_is_tds_tp = std::get<4>(ptrn_util_two.input_patterns[pl]); // boolean
+    auto pattern_interleave_label_propagation_tp = std::get<5>(ptrn_util_two.input_patterns[pl]); // boolean
+    auto pattern_enumeration_tp = ptrn_util_two.enumeration_patterns[pl]; 
+    auto pattern_aggregation_steps_tp = ptrn_util_two.aggregation_steps[pl]; 
 
-  global_not_finished = false;  
+    // TODO: read from file / remove
+    auto pattern_selected_vertices_tp = 0; // TODO: remove 
+    auto pattern_selected_edges_tp = false; // boolean
+    auto pattern_mark_join_vertex_tp = false; // boolean
+    auto pattern_ignore_join_vertex_tp = false; // boolean  
+    auto pattern_join_vertex_tp = 0; // TODO: 
+    //bool do_tds_tp = false;
+  
+    // Test print 
+    if(mpi_rank == 0) {
+      std::cout << "Token Passing [" << pl << "] | Searching Subpattern : ";
+      PatternNonlocalConstraint::output_pattern(pattern_tp);
+      std::cout << "Token Passing [" << pl << "] | Vertices : ";
+      PatternNonlocalConstraint::output_pattern(pattern_indices_tp);
+      std::cout << "Token Passing [" << pl << "] | Arguments : " 
+	<< pattern_cycle_length_tp << " " 
+	<< pattern_valid_cycle_tp << " " 
+	<< pattern_interleave_label_propagation_tp << std::endl; 
+      std::cout << "Token Passing [" << pl << "] | Enumeration Indices : ";
+      PatternNonlocalConstraint::output_pattern(pattern_enumeration_tp);
+      //std::cout << "Token Passing [" << pl << "] | Agreegation Steps : TODO" 
+      //  << std::endl;
+    }
+    // Test print
 
-  VectorBoolean pattern_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
-  VectorBoolean pattern_token_source_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
-
-  VertexUint8Map token_source_map; // per vertex state
-
-  // loop over the set of nonlocal constraints and 
-  // run token passing and local constarint checking 
-  for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
-
-  // result
-  // TODO: only output subgraphs when doing enumeration  
-  std::string paths_result_filename = result_dir + 
-    "/all_ranks_subgraphs/subgraphs_" +
-    std::to_string(pl) + "_" + std::to_string(mpi_rank);
-    std::ofstream paths_result_file(paths_result_filename, std::ofstream::out);
-
-  // setup subpattern 
-  // TODO: This is actually a bad design. 
-  // It should be one object (ptrn_util_two) per entry. 
-  auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
-  auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
-  auto pattern_cycle_length_tp = std::get<2>(ptrn_util_two.input_patterns[pl]); // uint
-  auto pattern_valid_cycle_tp = std::get<3>(ptrn_util_two.input_patterns[pl]); // boolean
-  auto pattern_is_tds_tp = std::get<4>(ptrn_util_two.input_patterns[pl]); // boolean
-  auto pattern_interleave_label_propagation_tp = std::get<5>(ptrn_util_two.input_patterns[pl]); // boolean
-  auto pattern_enumeration_tp = ptrn_util_two.enumeration_patterns[pl]; 
-  auto pattern_aggregation_steps_tp = ptrn_util_two.aggregation_steps[pl]; 
-
-  // TODO: read from file / remove
-  auto pattern_selected_vertices_tp = 0; // TODO: remove 
-  auto pattern_selected_edges_tp = false; // boolean
-  auto pattern_mark_join_vertex_tp = false; // boolean
-  auto pattern_ignore_join_vertex_tp = false; // boolean  
-  size_t pattern_join_vertex_tp = 0; // TODO: 
-  //bool do_tds_tp = false;
-
-  bool token_source_deleted = false;
-  message_count = 0;
+    // initialize containers  
+    token_source_map.clear(); // Important
+    vertex_token_source_set.clear(); // Important
  
-  // Test print 
-  if(mpi_rank == 0) {
-    std::cout << "Token Passing [" << pl << "] | Searching Subpattern : ";
-    PatternNonlocalConstraint::output_pattern(pattern_tp);
-    std::cout << "Token Passing [" << pl << "] | Vertices : ";
-    PatternNonlocalConstraint::output_pattern(pattern_indices_tp);
-    std::cout << "Token Passing [" << pl << "] | Arguments : " 
-      << pattern_cycle_length_tp << " " 
-      << pattern_valid_cycle_tp << " " 
-      << pattern_interleave_label_propagation_tp << std::endl; 
-    std::cout << "Token Passing [" << pl << "] | Enumeration Indices : ";
-    PatternNonlocalConstraint::output_pattern(pattern_enumeration_tp);
-    //std::cout << "Token Passing [" << pl << "] | Agreegation Steps : TODO" 
-    //  << std::endl;
-  }
-  // Test print
-
-  // initialize containers  
-  token_source_map.clear(); // Important
-  vertex_token_source_set.clear(); // Important
+    // initialize application parameters 
+    bool token_source_deleted = false;
+    message_count = 0;
  
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+    // result
+    // TODO: only output subgraphs when doing enumeration  
+    std::string paths_result_filename = result_dir + 
+      "/all_ranks_subgraphs/subgraphs_" +
+      std::to_string(pl) + "_" + std::to_string(mpi_rank);
+      std::ofstream paths_result_file(paths_result_filename, std::ofstream::out);
+  
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
   
   //////////////////////////////////////////////////////////////////////////////  
   
-  // run token passing
+    // run token passing
 
-  time_start = MPI_Wtime();
+    time_start = MPI_Wtime();
 
-  // token passing - distributed processing
+    // token passing - distributed processing
 
-  if (pattern_is_tds_tp) {
-    prunejuice::token_passing_pattern_matching<graph_type, Vertex, Edge, VertexData, 
-      EdgeData, VertexMetadata, EdgeMetadata, VertexActive, 
-      VertexUint8MapCollection, TemplateVertex, VertexStateMap, PatternGraph, 
-      PatternNonlocalConstraint, VertexUint8Map, VertexSetCollection, 
-      DelegateGraphVertexDataSTDAllocator, Boolean, BitSet>
-      (graph, vertex_metadata, vertex_active, vertex_active_edges_map, 
-      template_vertices, vertex_state_map, pattern_graph, ptrn_util_two, pl,
-      token_source_map, vertex_token_source_set, 
-      pattern_found[pl], tp_batch_size, paths_result_file, message_count);
+    if (pattern_is_tds_tp) {
+      prunejuice::token_passing_pattern_matching<graph_type, Vertex, Edge, VertexData, 
+	EdgeData, VertexMetadata, EdgeMetadata, VertexActive, 
+	VertexUint8MapCollection, TemplateVertex, VertexStateMap, PatternGraph, 
+	PatternNonlocalConstraint, VertexUint8Map, VertexSetCollection, 
+	DelegateGraphVertexDataSTDAllocator, Boolean, BitSet>
+	(graph, vertex_metadata, vertex_active, vertex_active_edges_map, 
+	template_vertices, vertex_state_map, pattern_graph, ptrn_util_two, pl,
+	token_source_map, vertex_token_source_set, 
+	pattern_found[pl], tp_batch_size, paths_result_file, message_count);
 
-  } else {     
-    prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, 
-      decltype(pattern_tp), decltype(pattern_indices_tp), uint8_t, PatternGraph,
-      VertexStateMap, VertexUint8Map, edge_data_t,
-      VertexSetCollection, VertexActive, TemplateVertex, VertexUint8MapCollection, BitSet>
-      (graph, vertex_metadata, pattern_tp,
-      pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
-      token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp,
-      pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active, 
-      template_vertices, vertex_active_edges_map, pattern_selected_vertices_tp,
-      pattern_selected_edges_tp, pattern_mark_join_vertex_tp,
-      pattern_ignore_join_vertex_tp, pattern_join_vertex_tp, message_count);
-  } 
- 
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
-  time_end = MPI_Wtime();
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching Time | Token Passing (Traversal) [" 
-      << pl << "] : " << time_end - time_start << std::endl;
-  }
+    } else {     
+      prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, 
+	decltype(pattern_tp), decltype(pattern_indices_tp), uint8_t, PatternGraph,
+	VertexStateMap, VertexUint8Map, edge_data_t,
+	VertexSetCollection, VertexActive, TemplateVertex, VertexUint8MapCollection, BitSet>
+	(graph, vertex_metadata, pattern_tp,
+	pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
+	token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp,
+	pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active, 
+	template_vertices, vertex_active_edges_map, pattern_selected_vertices_tp,
+	pattern_selected_edges_tp, pattern_mark_join_vertex_tp,
+	pattern_ignore_join_vertex_tp, pattern_join_vertex_tp, message_count);
+    } 
+   
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
+    time_end = MPI_Wtime();
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching Time | Token Passing (Traversal) [" 
+	<< pl << "] : " << time_end - time_start << std::endl;
+    }
 
   //////////////////////////////////////////////////////////////////////////////
 
   // token passing - node local processing
 
-  // remove the invalid (token source) vertices from the vertex_state_map
+  // remove invalid (token source) vertices from the vertex_state_map
   // for delegates, set vertex_active to false
 
   // TODO: in the case, a vertex is on multiple cycles/chains (not as the token source)
@@ -796,7 +783,7 @@ int main(int argc, char** argv) {
         template_vertices[vertex] = 0;
       }
     }
-  }
+  } // for
   MPI_Barrier(MPI_COMM_WORLD);
 
   template_vertices.all_max_reduce(); 
@@ -921,298 +908,298 @@ int main(int argc, char** argv) {
     }
   } // if - is_token_source_map_not_empty
  
-          // end of token passing 
+        // end of token passing 
 
   //////////////////////////////////////////////////////////////////////////////
 
-          // interleave nonlocal constraint checking with local constraint checking 
-    
-          if (token_source_deleted && pattern_interleave_label_propagation_tp) {
-
-	    label_propagation_time_start = MPI_Wtime();
-
-	    prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
-	      graph_type, VertexMetadata, VertexStateMap, VertexActive, 
-	      VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
-	      (graph, vertex_metadata, vertex_state_map, vertex_active, 
-	      vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
-	      global_not_finished, global_itr_count, superstep_result_file, 
-	      active_vertices_count_result_file, active_edges_count_result_file,
-	      message_count_result_file);  
-
-	    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-	    label_propagation_time_end = MPI_Wtime();
-	    if(mpi_rank == 0) {
-	      std::cout << "Pattern Matching Time | Local Constraint Checking (Interleaved) : " 
-		<< label_propagation_time_end - label_propagation_time_start << std::endl;
-	    }
-
-	    // result
-	    if(mpi_rank == 0) {
-	      step_result_file << global_itr_count << ", LP, " << (pl + 1) << ", "
-		<< (label_propagation_time_end - label_propagation_time_start) << "\n";
-	    }
-
-            // global termination detection
-             
-            // global active vertices count 
-            size_t global_active_vertices_count =
-              havoqgt::mpi_all_reduce(vertex_state_map.size(),
-              std::greater<size_t>(), MPI_COMM_WORLD);
-            MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-            if (global_active_vertices_count < 1) {
-              global_not_finished = false;
-              do_nonlocal_constraint_checking = false;
-              break; // exits the current loop and print results
-            } else {
-              global_not_finished = true;
-              do_nonlocal_constraint_checking = true;
-            } 
-   	  
-	  } else { 
-	    if(mpi_rank == 0) {
-	      std::cout << "Pattern Matching | Skipping Local Constraint Checking" 
-                << " (Interleaved)" << std::endl;
-	    }        
-	  } 
-
-          // end of local constraint checking
-
-  //////////////////////////////////////////////////////////////////////////////
-
-          // result
-          paths_result_file.close();
-          MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here? 
+	// interleave nonlocal constraint checking with local constraint checking 
   
-          // end of the current nonlocal constraint
+	if (token_source_deleted && pattern_interleave_label_propagation_tp) {
 
-	} // for - loop over nonlocal constraints 
+	  label_propagation_time_start = MPI_Wtime();
+
+	  prunejuice::label_propagation_pattern_matching_bsp<Vertex, VertexData, 
+	    graph_type, VertexMetadata, VertexStateMap, VertexActive, 
+	    VertexUint8MapCollection, TemplateVertexBitSet, TemplateVertex, PatternGraph>
+	    (graph, vertex_metadata, vertex_state_map, vertex_active, 
+	    vertex_active_edges_map, template_vertices, pattern_graph, global_init_step, 
+	    global_not_finished, global_itr_count, superstep_result_file, 
+	    active_vertices_count_result_file, active_edges_count_result_file,
+	    message_count_result_file);  
+
+	  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+	  label_propagation_time_end = MPI_Wtime();
+	  if(mpi_rank == 0) {
+	    std::cout << "Pattern Matching Time | Local Constraint Checking (Interleaved) : " 
+	      << label_propagation_time_end - label_propagation_time_start << std::endl;
+	  }
+
+	  // result
+	  if(mpi_rank == 0) {
+	    step_result_file << global_itr_count << ", LP, " << (pl + 1) << ", "
+	      << (label_propagation_time_end - label_propagation_time_start) << "\n";
+	  }
+
+	  // global termination detection
+	   
+	  // global active vertices count 
+	  size_t global_active_vertices_count =
+	    havoqgt::mpi_all_reduce(vertex_state_map.size(),
+	    std::greater<size_t>(), MPI_COMM_WORLD);
+	  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+	  if (global_active_vertices_count < 1) {
+	    global_not_finished = false;
+	    do_nonlocal_constraint_checking = false;
+	    break; // exits the current loop and print results
+	  } else {
+	    global_not_finished = true;
+	    do_nonlocal_constraint_checking = true;
+	  } 
+	
+	} else { 
+	  if(mpi_rank == 0) {
+	    std::cout << "Pattern Matching | Skipping Local Constraint Checking" 
+	      << " (Interleaved)" << std::endl;
+	  }        
+	} 
+
+	// end of local constraint checking
+
+  //////////////////////////////////////////////////////////////////////////////
+
+	// result
+	paths_result_file.close();
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here? 
+
+	// end of the current nonlocal constraint
+
+      } // for - loop over nonlocal constraints 
 
   ////////////////////////////////////////////////////////////////////////////// 
 
-	// end of nonlocal constraint checking  
+      // end of nonlocal constraint checking  
 
-	// subpattrens (nonlocal constraints) were found or not // TODO: write output to file 
-	havoqgt::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
-	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
-	if(mpi_rank == 0) {   
-	  for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
-	    if (pattern_token_source_found[pl]) {
-	      std::string s = pattern_found[pl] == 1 ? "True" : "False";
-	      std::cout << "Token Passing [" << pl << "] | Found Subpattern : " << s << std::endl;
-	    } else {
-	      std::cout << "Token Passing [" << pl << "] | No Token Source Found" << std::endl;
-	    }
+      // subpattrens (nonlocal constraints) were found or not // TODO: write output to file 
+      havoqgt::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), MPI_COMM_WORLD);
+      MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
+      if(mpi_rank == 0) {   
+	for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
+	  if (pattern_token_source_found[pl]) {
+	    std::string s = pattern_found[pl] == 1 ? "True" : "False";
+	    std::cout << "Token Passing [" << pl << "] | Found Subpattern : " << s << std::endl;
+	  } else {
+	    std::cout << "Token Passing [" << pl << "] | No Token Source Found" << std::endl;
 	  }
 	}
+      }
 
-        // result
-        // Important : this may slow down things - only for presenting results
-        //--  active_vertices_count = 0;
-        //--  for (auto& v : vertex_state_map) {
-        //--    auto v_locator = graph->label_to_locator(v.first);
-        //--    if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
-        //--      active_vertices_count++;
-        //--    } else if (!v_locator.is_delegate()) {
-        //--      active_vertices_count++;
-        //--    }
-        //--  }
+      // result
+      // Important : this may slow down things - only for presenting results
+      //--  active_vertices_count = 0;
+      //--  for (auto& v : vertex_state_map) {
+      //--    auto v_locator = graph->label_to_locator(v.first);
+      //--    if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
+      //--      active_vertices_count++;
+      //--    } else if (!v_locator.is_delegate()) {
+      //--      active_vertices_count++;
+      //--    }
+      //--  }
 
-        //--  active_vertices_count_result_file << global_itr_count << ", TP, "
-        //--    << "0, "  
-        //--    << active_vertices_count << "\n";    
-     
-      } else {
-	if(mpi_rank == 0) { 
-	  std::cout << "Pattern Matching | Skipping Token Passing" << std::endl;
-	}
-	global_not_finished = false;
-
-      } // if - do token passing
-
-      // done token passing // TODO: not useful anymore 
-      //double token_passing_time_end = MPI_Wtime();
-      //if(mpi_rank == 0) {
-      //  std::cout << "Fuzzy Pattern Matching Time | Token Passing : " 
-      //    << (token_passing_time_end - token_passing_time_start) << std::endl;
-      //}
-
-      // result // TODO: not useful anymore
-      //if(mpi_rank == 0) {
-      //  step_result_file << global_itr_count << ", TP, "  
-      //    << (token_passing_time_end - token_passing_time_start) << "\n"; 
-      //}
-
+      //--  active_vertices_count_result_file << global_itr_count << ", TP, "
+      //--    << "0, "  
+      //--    << active_vertices_count << "\n";    
+   
+    } else {
+      if(mpi_rank == 0) { 
+	std::cout << "Pattern Matching | Skipping Token Passing" << std::endl;
+      }
       global_not_finished = false;
 
-      // end of constraint checking for the current pattern
+    } // if - do token passing
+
+    // done token passing // TODO: not useful anymore 
+    //double token_passing_time_end = MPI_Wtime();
+    //if(mpi_rank == 0) {
+    //  std::cout << "Fuzzy Pattern Matching Time | Token Passing : " 
+    //    << (token_passing_time_end - token_passing_time_start) << std::endl;
+    //}
+
+    // result // TODO: not useful anymore
+    //if(mpi_rank == 0) {
+    //  step_result_file << global_itr_count << ", TP, "  
+    //    << (token_passing_time_end - token_passing_time_start) << "\n"; 
+    //}
+
+    global_not_finished = false;
+
+    // end of constraint checking for the current pattern
 
   ///////////////////////////////////////////////////////////////////////////// 
 
-      MPI_Barrier(MPI_COMM_WORLD);  
-      double pattern_time_end = MPI_Wtime();
-      if(mpi_rank == 0) {
-        std::cout << "Pattern Matching Time | Pattern [" << ps << "] : " 
-        << pattern_time_end - pattern_time_start << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);  
+    double pattern_time_end = MPI_Wtime();
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching Time | Pattern [" << ps << "] : " 
+      << pattern_time_end - pattern_time_start << std::endl;
+    }
+
+    // global termination detection // TODO: remove ? 
+    global_not_finished = havoqgt::mpi_all_reduce(global_not_finished, 
+      std::greater<uint8_t>(), MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
+
+    if(mpi_rank == 0) {
+      std::cout << "Pattern Matching | Global Finished Status : ";
+      if (global_not_finished) {
+	std::cout << "Continue" << std::endl;
+      } else {
+	std::cout << "Stop" << std::endl;
       }
+    }
 
-      // global termination detection // TODO: remove ? 
-      global_not_finished = havoqgt::mpi_all_reduce(global_not_finished, 
-        std::greater<uint8_t>(), MPI_COMM_WORLD);
-      MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
+    double itr_time_end = MPI_Wtime(); 
+    //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
+    //  std::cout << "Pattern Matching Time | Pattern [" << ps 
+    //    << "] | Iteration [" << global_itr_count << "] : " 
+    //    << itr_time_end - itr_time_start << std::endl;  
+    //}
 
-      if(mpi_rank == 0) {
-        std::cout << "Pattern Matching | Global Finished Status : ";
-        if (global_not_finished) {
-          std::cout << "Continue" << std::endl;
-        } else {
-          std::cout << "Stop" << std::endl;
-        }
-      }
+    // result 
+    if(mpi_rank == 0) {
+      // iteration number, time
+      itr_result_file << global_itr_count << ", "
+	<< (itr_time_end - itr_time_start) << "\n";
+    }
 
-      double itr_time_end = MPI_Wtime(); 
-      //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
-      //  std::cout << "Pattern Matching Time | Pattern [" << ps 
-      //    << "] | Iteration [" << global_itr_count << "] : " 
-      //    << itr_time_end - itr_time_start << std::endl;  
-      //}
- 
-      // result 
-      if(mpi_rank == 0) {
-        // iteration number, time
-        itr_result_file << global_itr_count << ", "
-          << (itr_time_end - itr_time_start) << "\n";
-      }
+    global_itr_count++; //TODO: sum of LCC and NLCC iterations
 
-      global_itr_count++; //TODO: sum of LCC and NLCC iterations
-  
-      //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
-      //std::cout << "Pattern Matching | Pattern [" << ps 
-      //  << "] | # Iterations : " << global_itr_count << std::endl;
-      //}
+    //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
+    //std::cout << "Pattern Matching | Pattern [" << ps 
+    //  << "] | # Iterations : " << global_itr_count << std::endl;
+    //}
 
-      // TODO: mention whether the pattern was found or not  
+    // TODO: mention whether the pattern was found or not  
  
   //////////////////////////////////////////////////////////////////////////////
 
-      // result
-       
-      if(mpi_rank == 0) {  
-	// pattern set element ID, number of ranks, 
-	// total number of iterations (lcc + nlcc), time, 
-	// #edges in the pattern, #vertices in the pattern,  
-	// #nonlocal constraints
-	pattern_set_result_file << ps << ", " 
-	  << mpi_size << ", "
-	  << global_itr_count << ", " 
-	  << (pattern_time_end - pattern_time_start) << ", "
-	  << pattern_graph.edge_count << ", " 
-	  << pattern_graph.vertex_count << ", "
-	  << ptrn_util_two.input_patterns.size() << "\n"; 
-      }
-
-      // Important : this may slow things down - only for presenting results
-
-      size_t active_edge_count_local = 0;
-
-      for (auto& v : vertex_state_map) {
-	auto v_locator = graph->label_to_locator(v.first);
-	if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
-	  BitSet v_template_vertices(template_vertices[v_locator]); 
-	  active_vertices_result_file << mpi_rank << ", "
-	    << v.first << ", " 
-	    //<< v.second.vertex_pattern_index << ", "
-	    << "0, " 
-	    << vertex_metadata[v_locator] << ", "
-	    << v_template_vertices << "\n";
-	 
-	  // edges 
-	  for (auto& n : vertex_active_edges_map[v_locator]) { 	 
-	    active_edges_result_file << mpi_rank << ", "
-	      << v.first << ", "
-	      << n.first //<< ", "
-	      //<< (size_t)n.second << ", "
-	      //<< vertex_active_edges_map[v_locator].size() 
-	      << "\n";
-	  }
+    // result
      
-	  active_edge_count_local += vertex_active_edges_map[v_locator].size(); 
-      
-	} else if (!v_locator.is_delegate()) {
-	  BitSet v_template_vertices(template_vertices[v_locator]);
-	  active_vertices_result_file << mpi_rank << ", "
+    if(mpi_rank == 0) {  
+      // pattern set element ID, number of ranks, 
+      // total number of iterations (lcc + nlcc), time, 
+      // #edges in the pattern, #vertices in the pattern,  
+      // #nonlocal constraints
+      pattern_set_result_file << ps << ", " 
+	<< mpi_size << ", "
+	<< global_itr_count << ", " 
+	<< (pattern_time_end - pattern_time_start) << ", "
+	<< pattern_graph.edge_count << ", " 
+	<< pattern_graph.vertex_count << ", "
+	<< ptrn_util_two.input_patterns.size() << "\n"; 
+    }
+
+    // Important : this may slow things down - only for presenting results
+
+    size_t active_edge_count_local = 0;
+
+    for (auto& v : vertex_state_map) {
+      auto v_locator = graph->label_to_locator(v.first);
+      if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
+	BitSet v_template_vertices(template_vertices[v_locator]); 
+	active_vertices_result_file << mpi_rank << ", "
+	  << v.first << ", " 
+	  //<< v.second.vertex_pattern_index << ", "
+	  << "0, " 
+	  << vertex_metadata[v_locator] << ", "
+	  << v_template_vertices << "\n";
+       
+	// edges 
+	for (auto& n : vertex_active_edges_map[v_locator]) { 	 
+	  active_edges_result_file << mpi_rank << ", "
 	    << v.first << ", "
-	    //<< v.second.vertex_pattern_index << ", "
-	    << "0, "
-	    << vertex_metadata[v_locator] << ", "
-	    << v_template_vertices << "\n";
-
-	  // edges
-	  for (auto& n : vertex_active_edges_map[v_locator]) {  
-	    active_edges_result_file << mpi_rank << ", "
-	      << v.first << ", "
-	      << n.first //<< ", "          
-	      //<< (size_t)n.second << ", " 
-	      //<< vertex_active_edges_map[v_locator].size()
-	      << "\n"; 
-	  }
-
-	  active_edge_count_local += vertex_active_edges_map[v_locator].size(); 
-
+	    << n.first //<< ", "
+	    //<< (size_t)n.second << ", "
+	    //<< vertex_active_edges_map[v_locator].size() 
+	    << "\n";
 	}
+   
+	active_edge_count_local += vertex_active_edges_map[v_locator].size(); 
+    
+      } else if (!v_locator.is_delegate()) {
+	BitSet v_template_vertices(template_vertices[v_locator]);
+	active_vertices_result_file << mpi_rank << ", "
+	  << v.first << ", "
+	  //<< v.second.vertex_pattern_index << ", "
+	  << "0, "
+	  << vertex_metadata[v_locator] << ", "
+	  << v_template_vertices << "\n";
+
+	// edges
+	for (auto& n : vertex_active_edges_map[v_locator]) {  
+	  active_edges_result_file << mpi_rank << ", "
+	    << v.first << ", "
+	    << n.first //<< ", "          
+	    //<< (size_t)n.second << ", " 
+	    //<< vertex_active_edges_map[v_locator].size()
+	    << "\n"; 
+	}
+
+	active_edge_count_local += vertex_active_edges_map[v_locator].size(); 
+
       }
+    }
 
-      MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 
-      size_t vertex_state_map_set_size_global =
-      havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
-        MPI_COMM_WORLD);
-      MPI_Barrier(MPI_COMM_WORLD);
+    size_t vertex_state_map_set_size_global =
+    havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 
-      size_t active_edge_count_global =
-      havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
-        MPI_COMM_WORLD);
-      MPI_Barrier(MPI_COMM_WORLD);
-
-      if (mpi_rank == 0) {
-        std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
-          << ps << "] : "
-          << vertex_state_map_set_size_global << std::endl;
-        std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
-          << ps << "] : "
-          << active_edge_count_global << std::endl;
-      }  
-
-  //////////////////////////////////////////////////////////////////////////////
-
-      // cleanup memeory
-       
-      //vertex_active.clear(); // TODO: add clear() method to vertex_data.cpp
-      //vertex_state_map.clear();
-
-      // close files
-       
-      itr_result_file.close();
-      step_result_file.close();
-      superstep_result_file.close();
-      active_vertices_count_result_file.close(); 
-      active_vertices_result_file.close();
-      active_edges_count_result_file.close();
-      active_edges_result_file.close();
-      message_count_result_file.close();
-
-      // end of the current pattern
-
-    } // for - loop over the pattern set
-
-  //////////////////////////////////////////////////////////////////////////////
-
-    // end of all patterns 
+    size_t active_edge_count_global =
+    havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     if (mpi_rank == 0) {
-        pattern_set_result_file.close(); // close file
-        std::cout << "Pattern Matching | Done" << std::endl;
-    }
+      std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
+	<< ps << "] : "
+	<< vertex_state_map_set_size_global << std::endl;
+      std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
+	<< ps << "] : "
+	<< active_edge_count_global << std::endl;
+    }  
+
+  //////////////////////////////////////////////////////////////////////////////
+
+    // cleanup memeory
+     
+    //vertex_active.clear(); // TODO: add clear() method to vertex_data.cpp
+    //vertex_state_map.clear();
+
+    // close files
+     
+    itr_result_file.close();
+    step_result_file.close();
+    superstep_result_file.close();
+    active_vertices_count_result_file.close(); 
+    active_vertices_result_file.close();
+    active_edges_count_result_file.close();
+    active_edges_result_file.close();
+    message_count_result_file.close();
+
+    // end of the current pattern
+
+  } // for - loop over the pattern set
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  // end of all patterns 
+
+  if (mpi_rank == 0) {
+      pattern_set_result_file.close(); // close file
+      std::cout << "Pattern Matching | Done" << std::endl;
+  }
 
   } // pattern matching  
 
