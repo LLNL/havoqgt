@@ -641,7 +641,7 @@ int main(int argc, char** argv) {
   auto pattern_aggregation_steps_tp = ptrn_util_two.aggregation_steps[pl]; 
 
   // TODO: read from file / remove
-  //auto pattern_selected_vertices_tp = 0; // TODO: remove 
+  auto pattern_selected_vertices_tp = 0; // TODO: remove 
   auto pattern_selected_edges_tp = false; // boolean
   auto pattern_mark_join_vertex_tp = false; // boolean
   auto pattern_ignore_join_vertex_tp = false; // boolean  
