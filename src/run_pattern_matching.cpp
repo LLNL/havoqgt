@@ -416,8 +416,8 @@ int main(int argc, char** argv) {
     << "] : " << std::endl;
   for (auto v = 0; v < pattern_graph.vertex_count; v++) {
     std::cout << v << " : offset " << pattern_graph.vertices[v] 
-    << " vertex_data " << pattern_graph.vertex_data[v] 
-    << " vertex_degree " << pattern_graph.vertex_degree[v] << std::endl;
+    << ", vertex_data " << pattern_graph.vertex_data[v] 
+    << ", vertex_degree " << pattern_graph.vertex_degree[v] << std::endl;
     std::cout << " neighbors : "; 
     for (auto e = pattern_graph.vertices[v]; 
       e < pattern_graph.vertices[v + 1]; e++) {
@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
     std::cout << " neighbor vertex data count : ";
     for (auto& nd : pattern_graph.vertex_neighbor_data_count_map[v]) {
-      std::cout << "(" << nd.first << ", " << nd.second << ") ";
+      std::cout << "(" << nd.first << ", " << nd.second << "), ";
     }
     std::cout << std::endl; 
   }
@@ -584,6 +584,10 @@ int main(int argc, char** argv) {
   } else {
     global_not_finished = true;
     do_nonlocal_constraint_checking = true;
+  }
+  if(mpi_rank == 0) {
+    std::cout << "Pattern Matching | Global Active Vertex Count : "
+    << global_active_vertices_count;
   }
 
   // end of local constraint chceking  

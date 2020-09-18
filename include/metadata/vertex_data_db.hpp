@@ -327,7 +327,7 @@ void vertex_data_db(TGraph* g, VertexMetadata& vertex_metadata,
   } 
 
   if (mpi_rank == 0) {
-    std::cout << "Done Building Vertex Metadata Store." << std::endl;
+    std::cout << "Done Building Vertex Metadata Store" << std::endl;
   }   
     
 }
@@ -398,7 +398,7 @@ void vertex_data_db_nostdfs(TGraph* g, VertexMetadata& vertex_metadata,
   } 
 
   if (mpi_rank == 0) {
-    std::cout << "Done Building Vertex Metadata Store." << std::endl;
+    std::cout << "Done Building Vertex Metadata Store" << std::endl;
   }   
     
 }

@@ -123,7 +123,7 @@ void vertex_data_db_degree(TGraph* g, VertexMetaData& vertex_metadata) {
   int mpi_rank = comm_world().rank();
 
   if (mpi_rank == 0) {
-    std::cout << "Building Distributed Vertex Metadata Store (Vertex Degree) ... " << std::endl;
+    std::cout << "Building Distributed Vertex Metadata Store (log2 of Vertex Degree) ... " << std::endl;
   }
 
   typedef vertex_data_degree_visitor<TGraph, VertexData> visitor_type;
@@ -134,7 +134,7 @@ void vertex_data_db_degree(TGraph* g, VertexMetaData& vertex_metadata) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (mpi_rank == 0) {
-    std::cout << "Done Building Vertex Metadata Store." << std::endl;
+    std::cout << "Done Building Vertex Metadata Store" << std::endl;
   }   
 }
 
