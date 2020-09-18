@@ -585,10 +585,10 @@ int main(int argc, char** argv) {
     global_not_finished = true;
     do_nonlocal_constraint_checking = true;
   }
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching | Global Active Vertex Count : "
-    << global_active_vertices_count;
-  }
+  //if(mpi_rank == 0) {
+  //  std::cout << "Pattern Matching | Global Active Vertex Count : "
+  //  << global_active_vertices_count << std::endl;
+  //}
 
   // end of local constraint chceking  
 
