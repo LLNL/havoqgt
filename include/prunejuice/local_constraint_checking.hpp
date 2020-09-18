@@ -5,7 +5,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-//#define OUTPUT_RESULT
+#define OUTPUT_RESULT
 
 namespace prunejuice {
 
