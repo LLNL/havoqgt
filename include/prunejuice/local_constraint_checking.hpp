@@ -1193,8 +1193,10 @@ void label_propagation_pattern_matching_bsp(TGraph* g,
     }
 
     if(mpi_rank == 0) {
-       std::cout << "Local Constraint Checking | Global Active Vertex Count : "
-         << global_active_vertices_count << std::endl;
+       //std::cout << "Local Constraint Checking | Global Active Vertex Count : "
+       //  << global_active_vertices_count << std::endl;
+       std::cout << "Local Constraint Checking | Max Local Active Vertex Count : "
+         << global_active_vertices_count << std::endl;  
     }
 
     if (mpi_rank == 0) {
