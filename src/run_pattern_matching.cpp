@@ -459,9 +459,9 @@ int main(int argc, char** argv) {
 
     // result
 
-    std::string itr_result_filename = result_dir +  
-      "/result_iteration"; // TODO: improve
-    std::ofstream itr_result_file(itr_result_filename, std::ofstream::out);
+    //std::string itr_result_filename = result_dir +  
+    //  "/result_iteration"; // TODO: improve
+    //std::ofstream itr_result_file(itr_result_filename, std::ofstream::out);
 
     std::string step_result_filename = result_dir +  
       "/result_step";
@@ -503,7 +503,7 @@ int main(int argc, char** argv) {
     }
 
     double pattern_time_start = MPI_Wtime();
-    double itr_time_start = MPI_Wtime();
+    //double itr_time_start = MPI_Wtime();
 
   //////////////////////////////////////////////////////////////////////////////
   
@@ -575,6 +575,8 @@ int main(int argc, char** argv) {
     //  std::cout << "Pattern Matching | Global Active Vertex Count : "
     //  << global_active_vertices_count << std::endl;
     //}
+
+    global_itr_count++; 
 
     // end of local constraint chceking  
 
@@ -911,6 +913,8 @@ int main(int argc, char** argv) {
 	  }
 	} // if - is_token_source_map_not_empty
    
+        global_itr_count++; 
+
         // end of token passing 
 
   //////////////////////////////////////////////////////////////////////////////
@@ -939,7 +943,7 @@ int main(int argc, char** argv) {
 
 	  // result
 	  if(mpi_rank == 0) {
-	    step_result_file << global_itr_count << ", LP, " << (pl + 1) << ", "
+	    step_result_file << global_itr_count << ", LP, " << pl << ", "
 	      << (label_propagation_time_end - label_propagation_time_start) << "\n";
 	  }
 
@@ -964,7 +968,9 @@ int main(int argc, char** argv) {
 	    std::cout << "Pattern Matching | Skipping Local Constraint Checking" 
 	      << " (Interleaved)" << std::endl;
 	  }        
-	} 
+	}
+
+        global_itr_count++;  
 
 	// end of local constraint checking
 
@@ -1018,7 +1024,7 @@ int main(int argc, char** argv) {
       }
       global_not_finished = false;
 
-    } // if - do token passing
+    } // if - do_nonlocal_constraint_checking 
 
     // done token passing // TODO: not useful anymore 
     //double token_passing_time_end = MPI_Wtime();
@@ -1060,7 +1066,7 @@ int main(int argc, char** argv) {
       }
     }
 
-    double itr_time_end = MPI_Wtime(); 
+    //double itr_time_end = MPI_Wtime(); 
     //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
     //  std::cout << "Pattern Matching Time | Pattern [" << ps 
     //    << "] | Iteration [" << global_itr_count << "] : " 
@@ -1068,13 +1074,13 @@ int main(int argc, char** argv) {
     //}
 
     // result 
-    if(mpi_rank == 0) {
+    //if(mpi_rank == 0) {
       // iteration number, time
-      itr_result_file << global_itr_count << ", "
-	<< (itr_time_end - itr_time_start) << "\n";
-    }
+      //itr_result_file << global_itr_count << ", "
+	//<< (itr_time_end - itr_time_start) << "\n";
+    //}
 
-    global_itr_count++; //TODO: sum of LCC and NLCC iterations
+    //global_itr_count++; //TODO: sum of LCC and NLCC iterations
 
     //if(mpi_rank == 0) { //TODO: sum of LCC and NLCC iterations
     //std::cout << "Pattern Matching | Pattern [" << ps 
@@ -1082,23 +1088,46 @@ int main(int argc, char** argv) {
     //}
 
     // TODO: mention whether the pattern was found or not  
- 
+
+    size_t vertex_state_map_set_size_global =
+    havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    size_t active_edge_count_global =
+    havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (mpi_rank == 0) {
+      std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
+	<< ps << "] : "
+	<< vertex_state_map_set_size_global << std::endl;
+      std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
+	<< ps << "] : "
+	<< active_edge_count_global << std::endl;
+    }  
+
   //////////////////////////////////////////////////////////////////////////////
 
     // result
      
     if(mpi_rank == 0) {  
-      // pattern set element ID, number of ranks, 
-      // total number of iterations (lcc + nlcc), time, 
-      // #edges in the pattern, #vertices in the pattern,  
-      // #nonlocal constraints
+      // pattern set element ID, number of MPI ranks, 
+      // total number of iterations (lcc + nlcc), total time, 
+      // #vertices in the pattern, #edges in the pattern, 
+      // #nonlocal constraints,
+      // #vertices in the solution subgraph, #edges in the solution subgraph
       pattern_set_result_file << ps << ", " 
 	<< mpi_size << ", "
 	<< global_itr_count << ", " 
 	<< (pattern_time_end - pattern_time_start) << ", "
-	<< pattern_graph.edge_count << ", " 
 	<< pattern_graph.vertex_count << ", "
-	<< ptrn_util_two.input_patterns.size() << "\n"; 
+	<< pattern_graph.edge_count << ", " 
+	<< ptrn_util_two.input_patterns.size() << ", "
+        << vertex_state_map_set_size_global << ", "
+        << active_edge_count_global << ", "
+        << "\n"; 
     }
 
     // Important : this may slow things down - only for presenting results
@@ -1154,25 +1183,6 @@ int main(int argc, char** argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    size_t vertex_state_map_set_size_global =
-    havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
-      MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    size_t active_edge_count_global =
-    havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
-      MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    if (mpi_rank == 0) {
-      std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
-	<< ps << "] : "
-	<< vertex_state_map_set_size_global << std::endl;
-      std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
-	<< ps << "] : "
-	<< active_edge_count_global << std::endl;
-    }  
-
   //////////////////////////////////////////////////////////////////////////////
 
     // cleanup memeory
@@ -1182,7 +1192,7 @@ int main(int argc, char** argv) {
 
     // close files
      
-    itr_result_file.close();
+    //itr_result_file.close();
     step_result_file.close();
     superstep_result_file.close();
     active_vertices_count_result_file.close(); 
