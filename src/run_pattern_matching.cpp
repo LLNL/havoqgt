@@ -706,6 +706,11 @@ int main(int argc, char** argv) {
 	    << pl << "] : " << time_end - time_start << std::endl;
 	}
 
+	// result
+	paths_result_file.close();
+
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+
   //////////////////////////////////////////////////////////////////////////////
 
 	// token passing - node local processing
@@ -819,6 +824,7 @@ int main(int argc, char** argv) {
  
   //////////////////////////////////////////////////////////////////////////////
 
+        //MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 	time_end = MPI_Wtime();
 	if(mpi_rank == 0) {
 	  std::cout << "Pattern Matching Time | Token Passing [" << pl 
@@ -961,7 +967,9 @@ int main(int argc, char** argv) {
 	  } else {
 	    global_not_finished = true;
 	    do_nonlocal_constraint_checking = true;
-	  } 
+	  }
+
+          global_itr_count++;  
 	
 	} else { 
 	  if(mpi_rank == 0) {
@@ -969,16 +977,10 @@ int main(int argc, char** argv) {
 	      << " (Interleaved)" << std::endl;
 	  }        
 	}
-
-        global_itr_count++;  
-
+        
 	// end of local constraint checking
 
   //////////////////////////////////////////////////////////////////////////////
-
-	// result
-	paths_result_file.close();
-	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here? 
 
 	// end of the current nonlocal constraint
 
