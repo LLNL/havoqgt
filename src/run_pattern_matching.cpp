@@ -601,313 +601,313 @@ int main(int argc, char** argv) {
 
     if (do_nonlocal_constraint_checking && global_not_finished) { // TODO: do we need this? 
 
-    VectorBoolean pattern_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
-    VectorBoolean pattern_token_source_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
+      VectorBoolean pattern_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
+      VectorBoolean pattern_token_source_found(ptrn_util_two.input_patterns.size(), 0); // per rank state
 
-    VertexUint8Map token_source_map; // per vertex state
+      VertexUint8Map token_source_map; // per vertex state
 
-    global_not_finished = false;  
+      global_not_finished = false;  
 
-    // loop over the set of nonlocal constraints and 
-    // run token passing and local constarint checking
-    // TODO: code indentation
-    for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
+      // loop over the set of nonlocal constraints and 
+      // run token passing and local constarint checking
+      // TODO: code indentation
+      for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
 
-    // setup subpattern 
-    // TODO: This is actually a bad design. 
-    // It should be one object (ptrn_util_two) per entry. 
-    auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
-    auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
-    auto pattern_cycle_length_tp = std::get<2>(ptrn_util_two.input_patterns[pl]); // uint
-    auto pattern_valid_cycle_tp = std::get<3>(ptrn_util_two.input_patterns[pl]); // boolean
-    auto pattern_is_tds_tp = std::get<4>(ptrn_util_two.input_patterns[pl]); // boolean
-    auto pattern_interleave_label_propagation_tp = std::get<5>(ptrn_util_two.input_patterns[pl]); // boolean
-    auto pattern_enumeration_tp = ptrn_util_two.enumeration_patterns[pl]; 
-    auto pattern_aggregation_steps_tp = ptrn_util_two.aggregation_steps[pl]; 
+	// setup subpattern 
+	// TODO: This is actually a bad design. 
+	// It should be one object (ptrn_util_two) per entry. 
+	auto pattern_tp = std::get<0>(ptrn_util_two.input_patterns[pl]);
+	auto pattern_indices_tp = std::get<1>(ptrn_util_two.input_patterns[pl]);
+	auto pattern_cycle_length_tp = std::get<2>(ptrn_util_two.input_patterns[pl]); // uint
+	auto pattern_valid_cycle_tp = std::get<3>(ptrn_util_two.input_patterns[pl]); // boolean
+	auto pattern_is_tds_tp = std::get<4>(ptrn_util_two.input_patterns[pl]); // boolean
+	auto pattern_interleave_label_propagation_tp = std::get<5>(ptrn_util_two.input_patterns[pl]); // boolean
+	auto pattern_enumeration_tp = ptrn_util_two.enumeration_patterns[pl]; 
+	auto pattern_aggregation_steps_tp = ptrn_util_two.aggregation_steps[pl]; 
 
-    // TODO: read from file / remove
-    auto pattern_selected_vertices_tp = 0; // TODO: remove 
-    auto pattern_selected_edges_tp = false; // boolean
-    auto pattern_mark_join_vertex_tp = false; // boolean
-    auto pattern_ignore_join_vertex_tp = false; // boolean  
-    auto pattern_join_vertex_tp = 0; // TODO: 
-    //bool do_tds_tp = false;
-  
-    // Test print 
-    if(mpi_rank == 0) {
-      std::cout << "Token Passing [" << pl << "] | Searching Subpattern : ";
-      PatternNonlocalConstraint::output_pattern(pattern_tp);
-      std::cout << "Token Passing [" << pl << "] | Vertices : ";
-      PatternNonlocalConstraint::output_pattern(pattern_indices_tp);
-      std::cout << "Token Passing [" << pl << "] | Arguments : " 
-	<< pattern_cycle_length_tp << " " 
-	<< pattern_valid_cycle_tp << " " 
-	<< pattern_interleave_label_propagation_tp << std::endl; 
-      std::cout << "Token Passing [" << pl << "] | Enumeration Indices : ";
-      PatternNonlocalConstraint::output_pattern(pattern_enumeration_tp);
-      //std::cout << "Token Passing [" << pl << "] | Agreegation Steps : TODO" 
-      //  << std::endl;
-    }
-    // Test print
+	// TODO: read from file / remove
+	auto pattern_selected_vertices_tp = 0; // TODO: remove 
+	auto pattern_selected_edges_tp = false; // boolean
+	auto pattern_mark_join_vertex_tp = false; // boolean
+	auto pattern_ignore_join_vertex_tp = false; // boolean  
+	auto pattern_join_vertex_tp = 0; // TODO: 
+	//bool do_tds_tp = false;
+    
+	// Test print 
+	if(mpi_rank == 0) {
+	  std::cout << "Token Passing [" << pl << "] | Searching Subpattern : ";
+	  PatternNonlocalConstraint::output_pattern(pattern_tp);
+	  std::cout << "Token Passing [" << pl << "] | Vertices : ";
+	  PatternNonlocalConstraint::output_pattern(pattern_indices_tp);
+	  std::cout << "Token Passing [" << pl << "] | Arguments : " 
+	    << pattern_cycle_length_tp << " " 
+	    << pattern_valid_cycle_tp << " " 
+	    << pattern_interleave_label_propagation_tp << std::endl; 
+	  std::cout << "Token Passing [" << pl << "] | Enumeration Indices : ";
+	  PatternNonlocalConstraint::output_pattern(pattern_enumeration_tp);
+	  //std::cout << "Token Passing [" << pl << "] | Agreegation Steps : TODO" 
+	  //  << std::endl;
+	}
+	// Test print
 
-    // initialize containers  
-    token_source_map.clear(); // Important
-    vertex_token_source_set.clear(); // Important
- 
-    // initialize application parameters 
-    bool token_source_deleted = false;
-    message_count = 0;
- 
-    // result
-    // TODO: only output subgraphs when doing enumeration  
-    std::string paths_result_filename = result_dir + 
-      "/all_ranks_subgraphs/subgraphs_" +
-      std::to_string(pl) + "_" + std::to_string(mpi_rank);
-      std::ofstream paths_result_file(paths_result_filename, std::ofstream::out);
-  
-    MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
-  
-  //////////////////////////////////////////////////////////////////////////////  
-  
-    // run token passing
-
-    time_start = MPI_Wtime();
-
-    // token passing - distributed processing
-
-    if (pattern_is_tds_tp) {
-      prunejuice::token_passing_pattern_matching<graph_type, Vertex, Edge, VertexData, 
-	EdgeData, VertexMetadata, EdgeMetadata, VertexActive, 
-	VertexUint8MapCollection, TemplateVertex, VertexStateMap, PatternGraph, 
-	PatternNonlocalConstraint, VertexUint8Map, VertexSetCollection, 
-	DelegateGraphVertexDataSTDAllocator, Boolean, BitSet>
-	(graph, vertex_metadata, vertex_active, vertex_active_edges_map, 
-	template_vertices, vertex_state_map, pattern_graph, ptrn_util_two, pl,
-	token_source_map, vertex_token_source_set, 
-	pattern_found[pl], tp_batch_size, paths_result_file, message_count);
-
-    } else {     
-      prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, 
-	decltype(pattern_tp), decltype(pattern_indices_tp), uint8_t, PatternGraph,
-	VertexStateMap, VertexUint8Map, edge_data_t,
-	VertexSetCollection, VertexActive, TemplateVertex, VertexUint8MapCollection, BitSet>
-	(graph, vertex_metadata, pattern_tp,
-	pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
-	token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp,
-	pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active, 
-	template_vertices, vertex_active_edges_map, pattern_selected_vertices_tp,
-	pattern_selected_edges_tp, pattern_mark_join_vertex_tp,
-	pattern_ignore_join_vertex_tp, pattern_join_vertex_tp, message_count);
-    } 
-   
-    MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
-    time_end = MPI_Wtime();
-    if(mpi_rank == 0) {
-      std::cout << "Pattern Matching Time | Token Passing (Traversal) [" 
-	<< pl << "] : " << time_end - time_start << std::endl;
-    }
-
-  //////////////////////////////////////////////////////////////////////////////
-
-  // token passing - node local processing
-
-  // remove invalid (token source) vertices from the vertex_state_map
-  // for delegates, set vertex_active to false
-
-  // TODO: in the case, a vertex is on multiple cycles/chains (not as the token source)
-  // only invalidate it as a token source, but do not remove it from the vertex_state_map
-
-  size_t token_source_pattern_indices_tp_index = 0; // TODO: this is confusing, update 
-  
-  bool is_token_source_map_not_empty = havoqgt::mpi_all_reduce
-    (!token_source_map.empty(), std::greater<uint8_t>(), MPI_COMM_WORLD); // TODO: less did not work ?
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
-  pattern_token_source_found[pl] = is_token_source_map_not_empty;
-
-  uint64_t remove_count = 0;      
-
-  for (auto& s : token_source_map) {
-    if (!s.second) {
-      auto v_locator = graph->label_to_locator(s.first);
-      BitSet v_template_vertices(template_vertices[v_locator]);
-
-      if (v_template_vertices.none()) {
-        continue;
-      } 
-
-      //pattern_indices_tp[0]; // token source template vertex ID
-
-      if (v_template_vertices.test(pattern_indices_tp[token_source_pattern_indices_tp_index])) {
-        assert(pattern_indices_tp[token_source_pattern_indices_tp_index] < max_template_vertex_count); // Test
-        v_template_vertices.reset(pattern_indices_tp[token_source_pattern_indices_tp_index]);
-        template_vertices[v_locator] = v_template_vertices.to_ulong();
-      }
-
-      if (v_template_vertices.none()) {
-        vertex_active[graph->label_to_locator(s.first)] = false;
-      }
-
-      if (!global_not_finished) {
-        global_not_finished = true;
-      }
- 
-      if (!token_source_deleted) {  
-	token_source_deleted = true;
-      }
-
-      //if (global_itr_count > 0) { // Test
-      //  std::cout << "MPI Rank: " << mpi_rank << " template vertices " 
-      //    << v_template_vertices << " global_not_finished " 
-      //    << global_not_finished << std::endl;
-      //} 
-       
-    } // if
-  } // for
-
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
-
-  vertex_active.all_min_reduce(); 
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
-
-  // TODO: this is a temporary patch, forcing all the delegates 
-  // to have no identity
-  for(vitr_type vitr = graph->delegate_vertices_begin();
-    vitr != graph->delegate_vertices_end(); ++vitr) {
-    auto vertex = *vitr;
-    if (vertex.is_delegate() && (graph->master(vertex) == mpi_rank)) {
-      continue;  // skip the controller
-    }
-    else {
-      auto find_vertex = vertex_state_map.find(graph->locator_to_label(vertex));
-      if (find_vertex == vertex_state_map.end()) {
-        template_vertices[vertex] = 0;
-      }
-    }
-  } // for
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  template_vertices.all_max_reduce(); 
-  // ensure all the delegates have the same value as the controller
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
-
-  // remove deleted token sources from vertex_state_map
-  for (auto& s : token_source_map) {
-    auto v_locator = graph->label_to_locator(s.first);
-    if (!vertex_active[v_locator]) {
-      auto find_vertex = 
-        vertex_state_map.find(s.first);
- 
-      if (find_vertex != vertex_state_map.end()) { 
+	// initialize containers  
+	token_source_map.clear(); // Important
+	vertex_token_source_set.clear(); // Important
+     
+	// initialize application parameters 
+	bool token_source_deleted = false;
+	message_count = 0;
+     
+	// result
+	// TODO: only output subgraphs when doing enumeration  
+	std::string paths_result_filename = result_dir + 
+	  "/all_ranks_subgraphs/subgraphs_" +
+	  std::to_string(pl) + "_" + std::to_string(mpi_rank);
+	  std::ofstream paths_result_file(paths_result_filename, std::ofstream::out);
       
-        if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
-          std::cerr << "Error: failed to remove an element from the map."
-          << std::endl;
-        } else {
-          remove_count++;
-          //if (!global_not_finished) {
-          //  global_not_finished = true;
-          //}
-        }   
-      } // if
-    } // if 
-  } // for
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+  
+  ////////////////////////////////////////////////////////////////////////////// 
+  
+	// run token passing
 
-  //  if(mpi_rank == 0) {
-  //    std::cout << "Token Passing [" << pl << "] | MPI Rank [" << mpi_rank 
-  //      << "] | Removed " << remove_count << " vertices."<< std::endl; 
-  //      TODO: not useful informtion
-  //  }
+	time_start = MPI_Wtime();
+
+	// token passing - distributed processing
+
+	if (pattern_is_tds_tp) {
+	  prunejuice::token_passing_pattern_matching<graph_type, Vertex, Edge, VertexData, 
+	    EdgeData, VertexMetadata, EdgeMetadata, VertexActive, 
+	    VertexUint8MapCollection, TemplateVertex, VertexStateMap, PatternGraph, 
+	    PatternNonlocalConstraint, VertexUint8Map, VertexSetCollection, 
+	    DelegateGraphVertexDataSTDAllocator, Boolean, BitSet>
+	    (graph, vertex_metadata, vertex_active, vertex_active_edges_map, 
+	    template_vertices, vertex_state_map, pattern_graph, ptrn_util_two, pl,
+	    token_source_map, vertex_token_source_set, 
+	    pattern_found[pl], tp_batch_size, paths_result_file, message_count);
+
+	} else {     
+	  prunejuice::token_passing_pattern_matching<graph_type, VertexMetadata, 
+	    decltype(pattern_tp), decltype(pattern_indices_tp), uint8_t, PatternGraph,
+	    VertexStateMap, VertexUint8Map, edge_data_t,
+	    VertexSetCollection, VertexActive, TemplateVertex, VertexUint8MapCollection, BitSet>
+	    (graph, vertex_metadata, pattern_tp,
+	    pattern_indices_tp, vertex_rank, pattern_graph, vertex_state_map,
+	    token_source_map, pattern_cycle_length_tp, pattern_valid_cycle_tp,
+	    pattern_found[pl], *edge_data_ptr, vertex_token_source_set, vertex_active, 
+	    template_vertices, vertex_active_edges_map, pattern_selected_vertices_tp,
+	    pattern_selected_edges_tp, pattern_mark_join_vertex_tp,
+	    pattern_ignore_join_vertex_tp, pattern_join_vertex_tp, message_count);
+	} 
+       
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?    
+	time_end = MPI_Wtime();
+	if(mpi_rank == 0) {
+	  std::cout << "Pattern Matching Time | Token Passing (Traversal) [" 
+	    << pl << "] : " << time_end - time_start << std::endl;
+	}
+
+  //////////////////////////////////////////////////////////////////////////////
+
+	// token passing - node local processing
+
+	// remove invalid (token source) vertices from the vertex_state_map
+	// for delegates, set vertex_active to false
+
+	// TODO: in the case, a vertex is on multiple cycles/chains (not as the token source)
+	// only invalidate it as a token source, but do not remove it from the vertex_state_map
+
+	size_t token_source_pattern_indices_tp_index = 0; // TODO: this is confusing, update 
+	
+	bool is_token_source_map_not_empty = havoqgt::mpi_all_reduce
+	  (!token_source_map.empty(), std::greater<uint8_t>(), MPI_COMM_WORLD); // TODO: less did not work ?
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here
+	pattern_token_source_found[pl] = is_token_source_map_not_empty;
+
+	uint64_t remove_count = 0;      
+
+	for (auto& s : token_source_map) {
+	  if (!s.second) {
+	    auto v_locator = graph->label_to_locator(s.first);
+	    BitSet v_template_vertices(template_vertices[v_locator]);
+
+	    if (v_template_vertices.none()) {
+	      continue;
+	    } 
+
+	    //pattern_indices_tp[0]; // token source template vertex ID
+
+	    if (v_template_vertices.test(pattern_indices_tp[token_source_pattern_indices_tp_index])) {
+	      assert(pattern_indices_tp[token_source_pattern_indices_tp_index] < max_template_vertex_count); // Test
+	      v_template_vertices.reset(pattern_indices_tp[token_source_pattern_indices_tp_index]);
+	      template_vertices[v_locator] = v_template_vertices.to_ulong();
+	    }
+
+	    if (v_template_vertices.none()) {
+	      vertex_active[graph->label_to_locator(s.first)] = false;
+	    }
+
+	    if (!global_not_finished) {
+	      global_not_finished = true;
+	    }
+       
+	    if (!token_source_deleted) {  
+	      token_source_deleted = true;
+	    }
+
+	    //if (global_itr_count > 0) { // Test
+	    //  std::cout << "MPI Rank: " << mpi_rank << " template vertices " 
+	    //    << v_template_vertices << " global_not_finished " 
+	    //    << global_not_finished << std::endl;
+	    //} 
+	     
+	  } // if
+	} // for
+
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+
+	vertex_active.all_min_reduce(); 
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+
+	// TODO: this is a temporary patch, forcing all the delegates 
+	// to have no identity
+	for(vitr_type vitr = graph->delegate_vertices_begin();
+	  vitr != graph->delegate_vertices_end(); ++vitr) {
+	  auto vertex = *vitr;
+	  if (vertex.is_delegate() && (graph->master(vertex) == mpi_rank)) {
+	    continue;  // skip the controller
+	  }
+	  else {
+	    auto find_vertex = vertex_state_map.find(graph->locator_to_label(vertex));
+	    if (find_vertex == vertex_state_map.end()) {
+	      template_vertices[vertex] = 0;
+	    }
+	  }
+	} // for
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	template_vertices.all_max_reduce(); 
+	// ensure all the delegates have the same value as the controller
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+
+	// remove deleted token sources from vertex_state_map
+	for (auto& s : token_source_map) {
+	  auto v_locator = graph->label_to_locator(s.first);
+	  if (!vertex_active[v_locator]) {
+	    auto find_vertex = 
+	      vertex_state_map.find(s.first);
+       
+	    if (find_vertex != vertex_state_map.end()) { 
+	    
+	      if (vertex_state_map.erase(s.first) < 1) { // s.first is the vertex
+		std::cerr << "Error: failed to remove an element from the map."
+		<< std::endl;
+	      } else {
+		remove_count++;
+		//if (!global_not_finished) {
+		//  global_not_finished = true;
+		//}
+	      }   
+	    } // if
+	  } // if 
+	} // for
+
+	//  if(mpi_rank == 0) {
+	//    std::cout << "Token Passing [" << pl << "] | MPI Rank [" << mpi_rank 
+	//      << "] | Removed " << remove_count << " vertices."<< std::endl; 
+	//      TODO: not useful informtion
+	//  }
  
   //////////////////////////////////////////////////////////////////////////////
 
-  time_end = MPI_Wtime();
-  if(mpi_rank == 0) {
-    std::cout << "Pattern Matching Time | Token Passing [" << pl 
-      << "] : " << time_end - time_start << std::endl;
-  }
+	time_end = MPI_Wtime();
+	if(mpi_rank == 0) {
+	  std::cout << "Pattern Matching Time | Token Passing [" << pl 
+	    << "] : " << time_end - time_start << std::endl;
+	}
 
 #ifdef OUTPUT_RESULT
-  // result
-  if(mpi_rank == 0) {
-    superstep_result_file << global_itr_count << ", TP, "
-      << pl << ", "
-      << time_end - time_start << "\n";
-  }
+	// result
+	if(mpi_rank == 0) {
+	  superstep_result_file << global_itr_count << ", TP, "
+	    << pl << ", "
+	    << time_end - time_start << "\n";
+	}
 
-  // Important : this may slow down things - only for presenting results
-  active_vertices_count = 0;
-  active_edges_count = 0;   
+	// Important : this may slow down things - only for presenting results
+	active_vertices_count = 0;
+	active_edges_count = 0;   
 
-  for (auto& v : vertex_state_map) {
-    auto v_locator = graph->label_to_locator(v.first);
-    if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
-      active_vertices_count++;
+	for (auto& v : vertex_state_map) {
+	  auto v_locator = graph->label_to_locator(v.first);
+	  if (v_locator.is_delegate() && (graph->master(v_locator) == mpi_rank)) {
+	    active_vertices_count++;
 
-      // edges
-      active_edges_count+=vertex_active_edges_map[v_locator].size();   
-    } else if (!v_locator.is_delegate()) {
-      active_vertices_count++;
+	    // edges
+	    active_edges_count+=vertex_active_edges_map[v_locator].size();   
+	  } else if (!v_locator.is_delegate()) {
+	    active_vertices_count++;
 
-      // edges
-      active_edges_count+=vertex_active_edges_map[v_locator].size();   
-    }
-  }
+	    // edges
+	    active_edges_count+=vertex_active_edges_map[v_locator].size();   
+	  }
+	}
 
-  // vertices
-  active_vertices_count_result_file << global_itr_count << ", TP, "
-    << pl << ", "  
-    << active_vertices_count << "\n";  
+	// vertices
+	active_vertices_count_result_file << global_itr_count << ", TP, "
+	  << pl << ", "  
+	  << active_vertices_count << "\n";  
 
-  // edges   
-  active_edges_count_result_file << global_itr_count << ", TP, "
-    << pl << ", "
-    << active_edges_count << "\n";
+	// edges   
+	active_edges_count_result_file << global_itr_count << ", TP, "
+	  << pl << ", "
+	  << active_edges_count << "\n";
 
-  // messages
-  message_count_result_file << global_itr_count << ", TP, "
-    << pl << ", "
-    << message_count << "\n";
+	// messages
+	message_count_result_file << global_itr_count << ", TP, "
+	  << pl << ", "
+	  << message_count << "\n";
 #endif
   
-  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+	MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
-  // token source found or not; token source deleted or not
-  if (is_token_source_map_not_empty) {
+	// token source found or not; token source deleted or not
+	if (is_token_source_map_not_empty) {
 
-    // subpattren (nonlocal constraint) was found or not 
-    // TODO: write output to file 
-    havoqgt::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), 
-      MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
-    if(mpi_rank == 0) {   
-      std::string s = pattern_found[pl] == 1 ? "True" : "False";
-      std::cout << "Token Passing [" << pl << "] | Found Subpattern : " 
-        << s << std::endl;
-    }
+	  // subpattren (nonlocal constraint) was found or not 
+	  // TODO: write output to file 
+	  havoqgt::mpi_all_reduce_inplace(pattern_found, std::greater<uint8_t>(), 
+	    MPI_COMM_WORLD);
+	  MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?   
+	  if(mpi_rank == 0) {   
+	    std::string s = pattern_found[pl] == 1 ? "True" : "False";
+	    std::cout << "Token Passing [" << pl << "] | Found Subpattern : " 
+	      << s << std::endl;
+	  }
 
-    //MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
+	  //MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this here?
 
-    // verify global token source deleted status
-    token_source_deleted = havoqgt::mpi_all_reduce(token_source_deleted,
-      std::greater<uint8_t>(), MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
-    if(mpi_rank == 0) {
-      std::cout << "Token Passing [" << pl 
-        << "] | Token Source Deleted Status : ";
-      if (token_source_deleted) {
-	std::cout << "Deleted" << std::endl;
-      } else {
-	std::cout << "Not Deleted" << std::endl;
-      }
-    } 
+	  // verify global token source deleted status
+	  token_source_deleted = havoqgt::mpi_all_reduce(token_source_deleted,
+	    std::greater<uint8_t>(), MPI_COMM_WORLD);
+	  MPI_Barrier(MPI_COMM_WORLD); // TODO: might not need this here 
+	  if(mpi_rank == 0) {
+	    std::cout << "Token Passing [" << pl 
+	      << "] | Token Source Deleted Status : ";
+	    if (token_source_deleted) {
+	      std::cout << "Deleted" << std::endl;
+	    } else {
+	      std::cout << "Not Deleted" << std::endl;
+	    }
+	  } 
 
-  } else {
-    if(mpi_rank == 0) {
-      std::cout << "Token Passing [" << pl << "] | No Token Source Found"  
-        << std::endl; 
-    }
-  } // if - is_token_source_map_not_empty
- 
+	} else {
+	  if(mpi_rank == 0) {
+	    std::cout << "Token Passing [" << pl << "] | No Token Source Found"  
+	      << std::endl; 
+	  }
+	} // if - is_token_source_map_not_empty
+   
         // end of token passing 
 
   //////////////////////////////////////////////////////////////////////////////
