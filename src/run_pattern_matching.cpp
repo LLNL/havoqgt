@@ -1089,46 +1089,9 @@ int main(int argc, char** argv) {
 
     // TODO: mention whether the pattern was found or not  
 
-    size_t vertex_state_map_set_size_global =
-    havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
-      MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    size_t active_edge_count_global =
-    havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
-      MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    if (mpi_rank == 0) {
-      std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
-	<< ps << "] : "
-	<< vertex_state_map_set_size_global << std::endl;
-      std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
-	<< ps << "] : "
-	<< active_edge_count_global << std::endl;
-    }  
-
   //////////////////////////////////////////////////////////////////////////////
 
     // result
-     
-    if(mpi_rank == 0) {  
-      // pattern set element ID, number of MPI ranks, 
-      // total number of iterations (lcc + nlcc), total time, 
-      // #vertices in the pattern, #edges in the pattern, 
-      // #nonlocal constraints,
-      // #vertices in the solution subgraph, #edges in the solution subgraph
-      pattern_set_result_file << ps << ", " 
-	<< mpi_size << ", "
-	<< global_itr_count << ", " 
-	<< (pattern_time_end - pattern_time_start) << ", "
-	<< pattern_graph.vertex_count << ", "
-	<< pattern_graph.edge_count << ", " 
-	<< ptrn_util_two.input_patterns.size() << ", "
-        << vertex_state_map_set_size_global << ", "
-        << active_edge_count_global << ", "
-        << "\n"; 
-    }
 
     // Important : this may slow things down - only for presenting results
 
@@ -1183,6 +1146,44 @@ int main(int argc, char** argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
+    size_t vertex_state_map_set_size_global =
+    havoqgt::mpi_all_reduce(vertex_state_map.size(), std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    size_t active_edge_count_global =
+    havoqgt::mpi_all_reduce(active_edge_count_local, std::plus<size_t>(), 
+      MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (mpi_rank == 0) {
+      std::cout << "Pattern Matching | Pattern Vertex Match Count | Pattern [" 
+	<< ps << "] : "
+	<< vertex_state_map_set_size_global << std::endl;
+      std::cout << "Pattern Matching | Pattern Edge Match Count | Pattern [" 
+	<< ps << "] : "
+	<< active_edge_count_global << std::endl;
+    }  
+
+    // result
+    if(mpi_rank == 0) {  
+      // pattern set element ID, number of MPI ranks, 
+      // total number of iterations (lcc + nlcc), total time, 
+      // #vertices in the pattern, #edges in the pattern, 
+      // #nonlocal constraints,
+      // #vertices in the solution subgraph, #edges in the solution subgraph
+      pattern_set_result_file << ps << ", " 
+	<< mpi_size << ", "
+	<< global_itr_count << ", " 
+	<< (pattern_time_end - pattern_time_start) << ", "
+	<< pattern_graph.vertex_count << ", "
+	<< pattern_graph.edge_count << ", " 
+	<< ptrn_util_two.input_patterns.size() << ", "
+        << vertex_state_map_set_size_global << ", "
+        << active_edge_count_global << ", "
+        << "\n"; 
+    }
+
   //////////////////////////////////////////////////////////////////////////////
 
     // cleanup memeory
@@ -1213,6 +1214,8 @@ int main(int argc, char** argv) {
       pattern_set_result_file.close(); // close file
       std::cout << "Pattern Matching | Done" << std::endl;
   }
+
+  MPI_Barrier(MPI_COMM_WORLD);
 
   } // pattern matching  
 
