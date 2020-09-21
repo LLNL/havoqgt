@@ -373,8 +373,6 @@ int main(int argc, char** argv) {
   }
 
   //////////////////////////////////////////////////////////////////////////////
- 
-  // TODO: code indentation
    
   // loop over the pattern set
   for (size_t ps = 0; ps < 1; ps++) { 
@@ -610,7 +608,6 @@ int main(int argc, char** argv) {
 
       // loop over the set of nonlocal constraints and 
       // run token passing and local constarint checking
-      // TODO: code indentation
       for (size_t pl = 0; pl < ptrn_util_two.input_patterns.size(); pl++) {
 
 	// setup subpattern 
@@ -833,6 +830,12 @@ int main(int argc, char** argv) {
 	    << pl << ", "
 	    << time_end - time_start << "\n";
 	}
+
+        if(mpi_rank == 0) {
+          step_result_file << global_itr_count << ", TP, "
+            << pl << ", "
+            << time_end - time_start << "\n";
+        } 
 
 	// Important : this may slow down things - only for presenting results
 	active_vertices_count = 0;
