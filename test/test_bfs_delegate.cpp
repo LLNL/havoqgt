@@ -45,11 +45,10 @@ void validate_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       size_t level = level_data[vertex];
       if (level_table[i] != level) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 

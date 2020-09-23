@@ -27,19 +27,18 @@ void validate_chain_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if (i != level) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator(i - 1);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
@@ -56,19 +55,18 @@ void validate_star_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if ((i == 0 && level != 0) || (i > 0 && level != 1)) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator(0);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
@@ -85,19 +83,18 @@ void validate_binary_tree_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if (level != (uint64_t)std::log2(i + 1)) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator((i - 1) / 2);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
