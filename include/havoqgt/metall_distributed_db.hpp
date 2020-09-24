@@ -54,9 +54,13 @@ class metall_distributed_db {
     return m_impl.snapshot(destination_dir_path);
   }
 
-  static bool remove(const char *dir_path,
+  static bool remove(const std::string &dir_path,
                      const MPI_Comm &comm = MPI_COMM_WORLD) {
-    return impl_t::remove(dir_path, comm);
+    return impl_t::remove(dir_path.c_str(), comm);
+  }
+
+  static int size(const std::string &data_store_dir, const MPI_Comm &comm = MPI_COMM_WORLD) {
+    return impl_t::size(data_store_dir.c_str(), comm);
   }
 
   manager_type *get_manager() { return &(m_impl.get_local_manager()); }
