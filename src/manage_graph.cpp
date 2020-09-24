@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
   // Check if the correct number of MPI procs is used.
   if (mpi_rank == 0) {
     const int required_mpi_procs =
-        havoqgt::distributed_db::size(dir_path1, MPI_COMM_WORLD);
+        havoqgt::distributed_db::partitions(dir_path1, MPI_COMM_WORLD);
     if (mpi_size != required_mpi_procs) {
       std::cerr << "Invalid #of MPI processes. Must be " << required_mpi_procs
                 << ", not " << mpi_size << std::endl;
