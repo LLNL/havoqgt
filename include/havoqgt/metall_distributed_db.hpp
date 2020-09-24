@@ -44,10 +44,10 @@ class metall_distributed_db {
                         const MPI_Comm &comm = MPI_COMM_WORLD)
       : m_impl(metall::create_only, data_store_dir, uint64_t(gbyte_per_rank * 1024 * 1024) * 1024ULL, comm) {}
 
-  static bool transfer(const char *const src_base_fname,
-                       const char *const dest_base_fname,
+  static bool transfer(const std::string& src_base_fname,
+                       const std::string& dest_base_fname,
                        const MPI_Comm &comm = MPI_COMM_WORLD) {
-    return metall::utility::metall_mpi_adaptor::copy(src_base_fname, dest_base_fname, comm);
+    return metall::utility::metall_mpi_adaptor::copy(src_base_fname.c_str(), dest_base_fname.c_str(), comm);
   }
 
   bool snapshot(const char *destination_dir_path) {
