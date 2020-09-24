@@ -11,6 +11,7 @@
 #include <bfs.hpp>
 #include <havoqgt/mpi.hpp>
 #include <util.hpp>
+#include <ingest_edges.hpp>
 
 using namespace havoqgt::test;
 
@@ -114,7 +115,7 @@ int main(int argc, char **argv) {
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/chain_10");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(9, validate_chain_bfs_result);
     }
 
@@ -122,14 +123,14 @@ int main(int argc, char **argv) {
       std::vector<std::string> f;
       f.emplace_back("./datasets/chain_1024-0");
       f.emplace_back("./datasets/chain_1024-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(1023, validate_chain_bfs_result);
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/star_10");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(9, validate_star_bfs_result);
     }
 
@@ -137,14 +138,14 @@ int main(int argc, char **argv) {
       std::vector<std::string> f;
       f.emplace_back("./datasets/star_1024-0");
       f.emplace_back("./datasets/star_1024-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(1023, validate_star_bfs_result);
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/binary_tree_7");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(6, validate_binary_tree_bfs_result);
     }
 
@@ -152,7 +153,7 @@ int main(int argc, char **argv) {
       std::vector<std::string> f;
       f.emplace_back("./datasets/binary_tree_1023-0");
       f.emplace_back("./datasets/binary_tree_1023-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name);
       run_bfs(1022, validate_binary_tree_bfs_result);
     }
 

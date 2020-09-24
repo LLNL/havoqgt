@@ -16,20 +16,9 @@
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/distributed_db.hpp>
 #include <havoqgt/mpi.hpp>
-#include <havoqgt/parallel_edge_list_reader.hpp>
-#include <util.hpp>
+#include <ingest_edges.hpp>
 
 namespace havoqgt::test {
-
-// Graph type
-typedef havoqgt::delegate_partitioned_graph<
-    havoqgt::distributed_db::allocator<>>
-                graph_type;
-
-// Edge data type
-typedef uint8_t edge_data_type;
-typedef havoqgt::distributed_db::allocator<edge_data_type>
-    edge_data_allocator_type;
 
 // BFS data types
 typedef graph_type::vertex_data<uint16_t, std::allocator<uint16_t>>
@@ -42,28 +31,6 @@ static constexpr const char *k_test_name      = "test_bfs";
 static constexpr const char *k_graph_key_name = "graph_obj";
 static constexpr uint16_t k_unvisited_level = std::numeric_limits<uint16_t>::max();
 
-/// \brief Ingest edge lists
-void ingest_edges(const std::vector<std::string> &edge_list_file_names,
-                  const uint64_t delegate_degree_threshold = 1024 * 10) {
-  havoqgt::parallel_edge_list_reader<edge_data_type> pelr(edge_list_file_names,
-                                                          true);
-  bool has_edge_data = pelr.has_edge_data();
-  if (has_edge_data) {
-    MPI_Abort(MPI_COMM_WORLD, -1);
-  }
-
-  havoqgt::distributed_db ddb(havoqgt::db_create(),
-                              gen_test_dir_path(k_test_name));
-  graph_type::edge_data<edge_data_type, edge_data_allocator_type>
-              dummy_edge_data(ddb.get_allocator());
-  graph_type *graph =
-      ddb.get_manager()->construct<graph_type>(k_graph_key_name)(
-          ddb.get_allocator(), MPI_COMM_WORLD, pelr, pelr.max_vertex_id(),
-          delegate_degree_threshold, 1, 8192, dummy_edge_data);
-  if (!graph) {
-    MPI_Abort(MPI_COMM_WORLD, -1);
-  }
-}
 
 /// \brief Run BFS from vertex 0
 void run_bfs(const uint64_t max_vertex_id,

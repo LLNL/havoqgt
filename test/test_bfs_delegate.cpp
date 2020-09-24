@@ -6,11 +6,12 @@
 #include <cmath>
 #include <iostream>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include <bfs.hpp>
 #include <havoqgt/mpi.hpp>
+#include <ingest_edges.hpp>
 #include <util.hpp>
 
 using namespace havoqgt::test;
@@ -75,13 +76,15 @@ int main(int argc, char **argv) {
     f.emplace_back("./datasets/edge_list_rmat_s17-6");
     f.emplace_back("./datasets/edge_list_rmat_s17-7");
     static constexpr uint64_t delegate_degree_threshold = 1024 * 10;
-    ingest_edges(f, delegate_degree_threshold);
+    ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name,
+                            delegate_degree_threshold);
 
     static constexpr uint64_t max_vertex_id = 131070;
     run_bfs(max_vertex_id, validate_bfs_result);
 
     havoqgt::comm_world().barrier();
-    havoqgt::cout_rank0() << "Succeeded the BFS with delegate test" << std::endl;
+    havoqgt::cout_rank0() << "Succeeded the BFS with delegate test"
+                          << std::endl;
   }  // End of MPI
 
   return 0;
