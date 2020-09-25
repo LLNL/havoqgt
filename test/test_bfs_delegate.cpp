@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
     f.emplace_back("./datasets/edge_list_rmat_s17-6");
     f.emplace_back("./datasets/edge_list_rmat_s17-7");
     static constexpr uint64_t delegate_degree_threshold = 1024 * 10;
-    ingest_unweighted_edges(f, gen_test_dir_path(k_test_name), k_graph_key_name,
+    ingest_unweighted_edges(f, gen_test_dir_path(k_test_name),
                             delegate_degree_threshold);
 
     static constexpr uint64_t max_vertex_id = 131070;

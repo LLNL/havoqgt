@@ -35,7 +35,6 @@ typedef graph_type::edge_data<dummy_edge_data_type,
 void ingest_unweighted_edges(
     const std::vector<std::string> &edge_list_file_names,
     const std::string &             data_store_path,
-    const std::string &             graph_name,
     const uint64_t                  delegate_degree_threshold = 1024 * 10) {
 
   havoqgt::parallel_edge_list_reader<dummy_edge_data_type> pelr(
@@ -53,7 +52,7 @@ void ingest_unweighted_edges(
 
   // Allocates and constructs a graph
   graph_type *              graph =
-      ddb.get_manager()->construct<graph_type>(graph_name.c_str())(
+      ddb.get_manager()->construct<graph_type>(metall::unique_instance)(
           ddb.get_allocator(), MPI_COMM_WORLD, pelr, pelr.max_vertex_id(),
           delegate_degree_threshold, 1, 8192, dummy_edge_data);
 

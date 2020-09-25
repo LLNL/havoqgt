@@ -21,3 +21,5 @@ configure_file(edge_list_rmat_s17-6 edge_list_rmat_s17-6 COPYONLY)
 configure_file(edge_list_rmat_s17-7 edge_list_rmat_s17-7 COPYONLY)
 
 configure_file(bfs_level_rmat_s17 bfs_level_rmat_s17 COPYONLY)
+
+configure_file(cc_rmat_s17 cc_rmat_s17 COPYONLY)

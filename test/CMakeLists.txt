@@ -26,5 +26,6 @@ endfunction()
 add_mpi_ctest_no_gtest( bfs )
 add_mpi_ctest_no_gtest( bfs_delegate )
 add_mpi_ctest_no_gtest( cc )
+add_mpi_ctest_no_gtest( cc_delegate )
 
 add_subdirectory(datasets)
