@@ -1,3 +1,8 @@
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <iostream>
 #include <sstream>
@@ -37,6 +42,16 @@ inline comm::comm(split _split) : free_comm_in_destructor(true) {
     MPI_Abort(MPI_COMM_WORLD, -1);
   }
   init_rank_size();
+}
+
+inline comm::~comm() {
+  if (free_comm_in_destructor) {
+    int is_finalized;
+    MPI_Finalized(&is_finalized);
+    if (!is_finalized) {
+      chk_ret(MPI_Comm_free(&m_comm));
+    }
+  }
 }
 
 inline void comm::init_rank_size() {
@@ -205,8 +220,20 @@ inline void do_once(T func) {
 namespace detail {
 class init_final {
  public:
-  init_final(int* argc, char*** argv) { MPI_Init(argc, argv); }
-  ~init_final() { MPI_Finalize(); }
+  init_final(int* argc, char*** argv) {
+    int is_initialized;
+    MPI_Initialized(&is_initialized);
+    if (!is_initialized) {
+      MPI_Init(argc, argv);
+    }
+  }
+  ~init_final() {
+    int is_finalized;
+    MPI_Finalized(&is_finalized);
+    if (!is_finalized) {
+      MPI_Finalize();
+    }
+  }
 };
 }
 

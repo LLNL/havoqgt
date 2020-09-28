@@ -1,3 +1,8 @@
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include <fcntl.h>
@@ -62,11 +67,7 @@ class comm {
 
   comm(split _split);
 
-  ~comm() {
-    if (free_comm_in_destructor) {
-      chk_ret(MPI_Comm_free(&m_comm));
-    }
-  }
+  ~comm();
 
   int      size() const { return m_size; }
   int      rank() const { return m_rank; }
