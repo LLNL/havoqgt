@@ -23,43 +23,11 @@
 using namespace havoqgt::test;
 
 /// \brief Validates BFS results
-void validate_cc_result(const graph_type &  graph,
-                        const uint32_t   max_vertex_id,
+void validate_cc_result(const graph_type &graph, const uint32_t max_vertex_id,
                         const cc_data_type &cc_data) {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  // ---------- Compute the ID of each CC ---------- //
-  // Note: as cc_data is nondeterministic,
-  // we define the ID of a CC as the min vertex ID of the vertices in the CC.
-  // Find the local minimum vertex ID of each CC.
-  std::vector<uint32_t> local_min_vid(max_vertex_id + 1,
-                                      std::numeric_limits<uint32_t>::max());
-  for (uint32_t v = 0; v <= 500; ++v) {
-    graph_type::vertex_locator vertex = graph.label_to_locator(v);
-    if (vertex.is_delegate() || vertex.owner() == mpi_rank) {
-      const auto x     = graph.locator_to_label(cc_data[vertex]);
-      local_min_vid[x] = std::min(v, local_min_vid[x]);
-      std::cout << v << " : " << graph.degree(vertex) << " in " << x << std::endl;
-    }
-    havoqgt::comm_world().barrier(); // DB
-  }
-  return; // DB
-//  for (uint32_t v = 0; v <= 500; ++v) {
-//    std::cout << v << " "
-//              << local_min_vid[graph.locator_to_label(
-//                     cc_data[graph.label_to_locator(v)])]
-//              << std::endl;
-//  }
-//
-//  return;
-
-  // Compute the global minimum vertex ID of each CC.
-  std::vector<uint32_t> global_min_vid;
-  havoqgt::mpi_all_reduce(local_min_vid, global_min_vid, std::less<uint32_t>(),
-                          MPI_COMM_WORLD);
-
-  // ---------- Validation step ---------- //
   // Read the correct CC ID
   std::vector<uint32_t> ans_cc_id(max_vertex_id + 1,
                                   std::numeric_limits<uint32_t>::max());
@@ -82,8 +50,7 @@ void validate_cc_result(const graph_type &  graph,
   for (uint32_t v = 0; v <= max_vertex_id; ++v) {
     graph_type::vertex_locator vertex = graph.label_to_locator(v);
     if (vertex.owner() == mpi_rank) {
-      const auto cc_id =
-          global_min_vid[graph.locator_to_label(cc_data[vertex])];
+      const auto cc_id = graph.locator_to_label(cc_data[vertex]);
       // std::cout << cc_id << " == " << ans_cc_id[v] << std::endl;
       if (cc_id != ans_cc_id[v]) {
         std::cerr << "Unexpected CC ID" << std::endl;
