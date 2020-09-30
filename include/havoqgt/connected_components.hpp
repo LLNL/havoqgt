@@ -10,30 +10,32 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 
-namespace havoqgt { 
+namespace havoqgt {
 
 template<typename Graph>
 class cc_visitor {
-public:
+ public:
   typedef typename Graph::vertex_locator                 vertex_locator;
   cc_visitor() { }
   cc_visitor(vertex_locator _vertex, vertex_locator _cc)
-    : vertex(_vertex)
-    , m_cc(_cc) { }
+      : vertex(_vertex)
+      , m_cc(_cc) { }
 
   cc_visitor(vertex_locator _vertex)
-    : vertex(_vertex)
-    , m_cc(_vertex) { }
+      : vertex(_vertex)
+      , m_cc(_vertex) { }
 
   template<typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
-    if(m_cc < (*alg_data)[vertex]) { 
-      (*alg_data)[vertex] = m_cc; 
+    auto& graph = std::get<0>(alg_data);
+    auto& cc_data = std::get<1>(alg_data);
+    if(graph.locator_to_label(m_cc) < graph.locator_to_label(cc_data[vertex])) {
+      cc_data[vertex] = m_cc;
       return true;
     }
     return false;
   }
-  
+
   template<typename VisitorQueueHandle, typename AlgData>
   bool init_visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
     return visit(g, vis_queue, alg_data);
@@ -41,10 +43,14 @@ public:
 
   template<typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    if((*alg_data)[vertex] == m_cc) {
+    auto& graph = std::get<0>(alg_data);
+    auto& cc_data = std::get<1>(alg_data);
+
+    if(graph.locator_to_label(cc_data[vertex]) >= graph.locator_to_label(m_cc)) {
+      cc_data[vertex] = m_cc;
       for(auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         auto neighbor = eitr.target();
-        if(m_cc < neighbor) {
+        if(graph.locator_to_label(m_cc) < graph.locator_to_label(neighbor)) {
           cc_visitor new_visitor(neighbor, m_cc);
           vis_queue->queue_visitor(new_visitor);
         }
@@ -75,16 +81,16 @@ template <typename TGraph, typename CCData>
 void connected_components(TGraph* g, CCData& cc_data) {
 
   typedef  cc_visitor<TGraph>    visitor_type;
- 
+
   for(auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
     cc_data[*vitr] = *vitr;
   }
   for(auto citr = g->controller_begin(); citr != g->controller_end(); ++citr) {
     cc_data[*citr] = *citr;
-  } 
-  
-  auto alg_data = &cc_data;
-  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data); 
+  }
+
+  auto alg_data = std::forward_as_tuple(*g, cc_data);
+  auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(g, alg_data);
   vq.init_visitor_traversal();
 }
 
