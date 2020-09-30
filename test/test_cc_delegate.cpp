@@ -92,6 +92,8 @@ int main(int argc, char **argv) {
 
     havoqgt::comm_world().barrier();
     havoqgt::cout_rank0() << "Succeeded the CC with delegate test" << std::endl;
+
+    havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
   }  // End of MPI
 
   return 0;

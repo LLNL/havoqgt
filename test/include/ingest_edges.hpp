@@ -46,6 +46,7 @@ void ingest_unweighted_edges(
   }
 
   // Create a new graph
+  havoqgt::distributed_db::remove(data_store_path);
   havoqgt::distributed_db   ddb(havoqgt::db_create(), data_store_path);
 
   unweighted_edge_data_type dummy_edge_data(ddb.get_allocator());
