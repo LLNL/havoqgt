@@ -45,7 +45,9 @@ public:
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
     auto& graph = std::get<0>(alg_data);
     auto& cc_data = std::get<1>(alg_data);
-    if(cc_data[vertex] == m_cc) {
+
+    if(graph.locator_to_label(cc_data[vertex]) >= graph.locator_to_label(m_cc)) {
+      cc_data[vertex] = m_cc;
       for(auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         auto neighbor = eitr.target();
         if(graph.locator_to_label(m_cc) < graph.locator_to_label(neighbor)) {
