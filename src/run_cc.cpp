@@ -123,7 +123,9 @@ int main(int argc, char** argv) {
     std::map<uint64_t, uint64_t> cc_count;
     for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end();
          ++vitr) {
-      cc_count[graph->locator_to_label(cc_data[*vitr])]++;
+      if (graph->degree(*vitr) > 0) {
+        cc_count[graph->locator_to_label(cc_data[*vitr])]++;
+      }
     }
     auto     cc_count_itr = cc_count.begin();
     uint64_t largest_cc   = 0;
