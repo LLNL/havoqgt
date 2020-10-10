@@ -128,8 +128,8 @@ int main(int argc, char** argv) {
     auto     cc_count_itr = cc_count.begin();
     uint64_t largest_cc   = 0;
     uint64_t num_ccs      = 0;
-    while (!mpi::global_iterator_range_empty(cc_count_itr, cc_count.end(),
-                                             MPI_COMM_WORLD)) {
+    while (!global_iterator_range_empty(cc_count_itr, cc_count.end(),
+                                        MPI_COMM_WORLD)) {
       uint64_t local_next_cc = cc_count_itr->first;
       uint64_t global_next_cc =
           mpi_all_reduce(local_next_cc, std::less<uint64_t>(), MPI_COMM_WORLD);
