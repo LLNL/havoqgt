@@ -127,6 +127,14 @@ int main(int argc, char** argv) {
         cc_count[graph->locator_to_label(cc_data[*vitr])]++;
       }
     }
+
+    for (auto citr = g->controller_begin(); citr != g->controller_end();
+         ++citr) {
+      if (graph->degree(*vitr) > 0) {
+        cc_count[graph->locator_to_label(cc_data[*vitr])]++;
+      }
+    }
+
     auto     cc_count_itr = cc_count.begin();
     uint64_t largest_cc   = 0;
     uint64_t num_ccs      = 0;
@@ -149,7 +157,6 @@ int main(int argc, char** argv) {
     if (mpi_rank == 0) {
       std::cout << "Num CCs = " << num_ccs << ", largest CC = " << largest_cc
                 << ", Traversal Time = " << time_end - time_start << std::endl;
-      std::cout << "Traversal Time = " << time_end - time_start << std::endl;
     }
   }  // END Main MPI
   ;
