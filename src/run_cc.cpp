@@ -142,12 +142,23 @@ int main(int argc, char** argv) {
     if (!has_edge_filter) {
       connected_components(graph, cc_data);
     } else {
-      auto edge_weights =
-          ddb.get_manager()
-              ->find<graph_type::edge_data<edge_data_type,
-                                           edge_data_allocator_type>>(
-                  "graph_edge_data_obj")
-              .first;
+      auto finder = ddb.get_manager()
+                        ->find<graph_type::edge_data<edge_data_type,
+                                                     edge_data_allocator_type>>(
+                            "graph_edge_data_obj");
+      if (finder.second == false) {
+        throw std::runtime_error("Edge weights not found");
+      }
+      auto edge_weights = finder.first;
+      auto v_predicate  = [](const auto& vi) { return true; };
+      auto e_predicate  = [edge_weights, edge_filter](auto e) {
+        if ((*edge_weights)[e] > edge_filter) {
+          return false;
+        } else {
+          return true;
+        }
+      };
+      connected_components(graph, cc_data, v_predicate, e_predicate);
     }
     MPI_Barrier(MPI_COMM_WORLD);
     double time_end = MPI_Wtime();
@@ -171,6 +182,7 @@ int main(int argc, char** argv) {
       auto     cc_count_itr = cc_count.begin();
       uint64_t largest_cc   = 0;
       uint64_t num_ccs      = 0;
+      size_t   ccs_printed(0);
       while (!detail::global_iterator_range_empty(cc_count_itr, cc_count.end(),
                                                   MPI_COMM_WORLD)) {
         uint64_t local_next_cc  = cc_count_itr->first;
@@ -186,9 +198,13 @@ int main(int argc, char** argv) {
         }
         largest_cc = std::max(global_cc_count, largest_cc);
         num_ccs++;
+        if (++ccs_printed >= print_threshold) {
+          break;
+        }
       }
       if (mpi_rank == 0) {
-        std::cout << "Num CCs = " << num_ccs << ", largest CC = " << largest_cc
+        std::cout << "Num CCs = " << num_ccs
+                  << ", largest CC (approx) = " << largest_cc
                   << ", Traversal Time = " << time_end - time_start
                   << std::endl;
       }

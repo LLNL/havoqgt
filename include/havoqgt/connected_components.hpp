@@ -23,6 +23,10 @@ class cc_visitor {
 
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
+    auto& v_predicate = std::get<2>(alg_data);
+    if (!v_predicate(vertex)) {
+      return false;
+    }
     auto& graph   = std::get<0>(alg_data);
     auto& cc_data = std::get<1>(alg_data);
     if (graph.locator_to_label(m_cc) <
@@ -41,9 +45,13 @@ class cc_visitor {
 
   template <typename VisitorQueueHandle, typename AlgData>
   bool visit(Graph& g, VisitorQueueHandle vis_queue, AlgData& alg_data) const {
-    auto& graph     = std::get<0>(alg_data);
-    auto& cc_data   = std::get<1>(alg_data);
-    auto& predicate = std::get<2>(alg_data);
+    auto& graph       = std::get<0>(alg_data);
+    auto& cc_data     = std::get<1>(alg_data);
+    auto& v_predicate = std::get<2>(alg_data);
+    auto& e_predicate = std::get<3>(alg_data);
+    if (!v_predicate(vertex)) {
+      return false;
+    }
 
     if (graph.locator_to_label(cc_data[vertex]) >=
         graph.locator_to_label(m_cc)) {
@@ -51,7 +59,7 @@ class cc_visitor {
       for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
            ++eitr) {
         auto neighbor = eitr.target();
-        if (predicate(vertex, neighbor, eitr)) {
+        if (e_predicate(eitr)) {
           if (graph.locator_to_label(m_cc) < graph.locator_to_label(neighbor)) {
             cc_visitor new_visitor(neighbor, m_cc);
             vis_queue->queue_visitor(new_visitor);
@@ -79,14 +87,15 @@ class cc_visitor {
 
 template <typename TGraph, typename CCData>
 void connected_components(TGraph* g, CCData& cc_data) {
-  auto predicate = [](const auto& vi, const auto& vj, const auto& ei) {
-    return true;
-  };
-  connected_components(g, cc_data, predicate);
+  auto v_predicate = [](const auto& vi) { return true; };
+  auto e_predicate = [](const auto& e) { return true; };
+  connected_components(g, cc_data, v_predicate, e_predicate);
 }
 
-template <typename TGraph, typename CCData, typename Function>
-void connected_components(TGraph* g, CCData& cc_data, Function& predicate) {
+template <typename TGraph, typename CCData, typename VFunction,
+          typename EFunction>
+void connected_components(TGraph* g, CCData& cc_data, VFunction& v_predicate,
+                          EFunction& e_predicate) {
   typedef cc_visitor<TGraph> visitor_type;
 
   for (auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
@@ -96,7 +105,7 @@ void connected_components(TGraph* g, CCData& cc_data, Function& predicate) {
     cc_data[*citr] = *citr;
   }
 
-  auto alg_data = std::forward_as_tuple(*g, cc_data, predicate);
+  auto alg_data = std::forward_as_tuple(*g, cc_data, v_predicate, e_predicate);
   auto vq = create_visitor_queue<visitor_type, detail::visitor_priority_queue>(
       g, alg_data);
   vq.init_visitor_traversal();
