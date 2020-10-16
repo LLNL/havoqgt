@@ -185,9 +185,12 @@ int main(int argc, char** argv) {
       size_t   ccs_printed(0);
       while (!detail::global_iterator_range_empty(cc_count_itr, cc_count.end(),
                                                   MPI_COMM_WORLD)) {
-        uint64_t local_next_cc  = cc_count_itr->first;
+        uint64_t local_next_cc = (cc_count_itr != cc_count.end())
+                                     ? cc_count_itr->first
+                                     : std::numeric_limits<uint64_t>::max();
         uint64_t global_next_cc = mpi_all_reduce(
             local_next_cc, std::less<uint64_t>(), MPI_COMM_WORLD);
+        assert(global_next_cc != std::numeric_limits<uint64_t>::max());
         uint64_t local_count =
             (local_next_cc == global_next_cc) ? (cc_count_itr++)->second : 0;
         uint64_t global_cc_count =
