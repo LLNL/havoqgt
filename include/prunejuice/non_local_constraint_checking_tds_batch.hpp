@@ -710,11 +710,11 @@ public:
             vis_queue->queue_visitor(new_visitor); 
 
             // write to the paths_result_file  
-            /*std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
+            std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
             for (size_t i = 0; i <= new_itr_count ; i++) { 
               std::get<17>(alg_data) << g.locator_to_label(visited_vertices[i]) << ", ";  
             }
-            std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";*/
+            std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";
 
             path_count++; // Test 
  
@@ -747,11 +747,11 @@ public:
           std::get<9>(alg_data) = 1; // true; // pattern_found
    
           // write to the paths_result_file  
-          /*std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
+          std::get<17>(alg_data) << "[" << mpi_rank << "], "; 
           for (size_t i = 0; i <= new_itr_count ; i++) { 
             std::get<17>(alg_data) << g.locator_to_label(visited_vertices[i]) << ", ";  
           }
-          std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";*/
+          std::get<17>(alg_data) << "[" << g.locator_to_label(vertex) << "]\n";
 
           path_count++; // Test  
   
