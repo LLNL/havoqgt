@@ -987,6 +987,11 @@ void token_passing_pattern_matching(TGraph* g, VertexMetaData& vertex_metadata,
   }  
 
   message_count = tp_visitor_count;
+
+  tp_visitor_count = 0;
+  tp_token_source_count = 0;
+  tp_path_count = 0;
+
 }
 
 } ///} //end namespace havoqgt::mpi
