@@ -15,9 +15,9 @@ All graph data is stored in mmaped files, using Boost.Interprocess and Memory Ma
 mmap as external memory. For best results, high speed Flash devices are preferred 
 for external memory storage.
 
-Copyright (c) 2013-2015, Lawrence Livermore National Security, LLC. Produced at the 
+Copyright (c) 2013-2020, Lawrence Livermore National Security, LLC. Produced at the
 Lawrence Livermore National Laboratory. Written by <a href="http://people.llnl.gov/rpearce">Roger Pearce</a>, rpearce@llnl.gov. 
-LLNL-CODE-644630. All rights reserved.
+LLNL-CODE-814805. All rights reserved.
 
 \warning This manual is under construction.  Please direct questions to Roger Pearce, rpearce@llnl.gov.
 

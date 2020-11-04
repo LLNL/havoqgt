@@ -44,19 +44,23 @@ class metall_distributed_db {
                         const MPI_Comm &comm = MPI_COMM_WORLD)
       : m_impl(metall::create_only, data_store_dir, uint64_t(gbyte_per_rank * 1024 * 1024) * 1024ULL, comm) {}
 
-  static bool transfer(const char *const src_base_fname,
-                       const char *const dest_base_fname,
+  static bool transfer(const std::string& src_base_fname,
+                       const std::string& dest_base_fname,
                        const MPI_Comm &comm = MPI_COMM_WORLD) {
-    return metall::utility::metall_mpi_adaptor::copy(src_base_fname, dest_base_fname, comm);
+    return metall::utility::metall_mpi_adaptor::copy(src_base_fname.c_str(), dest_base_fname.c_str(), comm);
   }
 
   bool snapshot(const char *destination_dir_path) {
     return m_impl.snapshot(destination_dir_path);
   }
 
-  static bool remove(const char *dir_path,
+  static bool remove(const std::string &dir_path,
                      const MPI_Comm &comm = MPI_COMM_WORLD) {
-    return impl_t::remove(dir_path, comm);
+    return impl_t::remove(dir_path.c_str(), comm);
+  }
+
+  static int partitions(const std::string &data_store_dir, const MPI_Comm &comm = MPI_COMM_WORLD) {
+    return impl_t::partitions(data_store_dir.c_str(), comm);
   }
 
   manager_type *get_manager() { return &(m_impl.get_local_manager()); }
