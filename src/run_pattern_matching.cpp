@@ -24,6 +24,8 @@
 
 #include <metadata/vertex_data_db.hpp>
 #include <metadata/vertex_data_db_degree.hpp>
+#include <metadata/vertex_data_db_same_label.hpp>
+//#include <metadata/vertex_data_db_random_label.hpp>
 
 #include <prunejuice/template.hpp>
 #include <prunejuice/nonlocal_constraint.hpp>
@@ -306,7 +308,8 @@ int main(int argc, char** argv) {
   ////////////////////////////////////////////////////////////////////////////// 
 
   // application parameters // TODO: command line input
-
+  
+  bool is_no_vertex_metadata = true;
   bool do_output_metadata = false;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -322,8 +325,13 @@ int main(int argc, char** argv) {
       (graph, vertex_metadata, vertex_metadata_input, 10000);
       // TODO: each rank reads 10K lines from file at a time
   } else {
-    vertex_data_db_degree<graph_type, VertexMetadata, Vertex, VertexData>
-      (graph, vertex_metadata);
+    if (is_no_vertex_metadata) { 
+      vertex_data_db_same_label<graph_type, VertexMetadata, Vertex, VertexData>
+        (graph, vertex_metadata);
+    } else {
+      vertex_data_db_degree<graph_type, VertexMetadata, Vertex, VertexData>
+        (graph, vertex_metadata);
+    }
   }
 
   MPI_Barrier(MPI_COMM_WORLD); // TODO: do we need this?
