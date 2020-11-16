@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/chain_10");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(9, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
@@ -59,6 +60,7 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/chain_1024-1");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(1023, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
@@ -66,6 +68,7 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/star_10");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(9, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
@@ -74,6 +77,7 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/star_1024-1");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(1023, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
@@ -81,6 +85,7 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/binary_tree_7");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(6, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
@@ -89,12 +94,11 @@ int main(int argc, char **argv) {
       f.emplace_back("./datasets/binary_tree_1023-1");
       ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_cc(1022, validate_cc_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     havoqgt::comm_world().barrier();
     havoqgt::cout_rank0() << "Succeeded all CC tests" << std::endl;
-
-    havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
   }  // End of MPI
 
   return 0;
