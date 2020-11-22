@@ -16,13 +16,17 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <prunejuice/utilities.hpp>
+
 namespace prunejuice {
+
+static std::vector<std::vector<uint64_t>> vertex_data_list;
 
 template<typename Vertex, typename Edge, typename VertexData, 
   typename EdgeData = uint64_t, typename Uint = uint64_t>
 class pattern_graph_csr {
   public:
-    pattern_graph_csr(std::string vertex_input_filename,  std::string edge_input_filename, 
+    pattern_graph_csr(std::string vertex_input_filename, std::string edge_input_filename, 
       std::string vertex_data_input_filename, const bool _directed = true) :
       directed(_directed), 
       vertices(0),
@@ -122,6 +126,39 @@ class pattern_graph_csr {
 //      std::cout << "Disposing graph ... " << std::endl;
     } 
 
+    static size_t read_vertex_data_list_2(std::string vertex_data_list_input_filename) {
+      std::ifstream vertex_data_list_input_file(vertex_data_list_input_filename, 
+        std::ifstream::in);
+      std::string line;
+      while (std::getline(vertex_data_list_input_file, line)) {
+
+        boost::trim(line); // important
+
+        auto tokens = prunejuice::utilities::split<VertexData>(line, ' ');
+
+        //prunejuice::pattern_graph_csr<Vertex, Edge, VertexData,
+        //  EdgeData>::vertex_data_list.push_back(std::vector(tokens.begin(), tokens.end()));
+
+        //vertex_data_list.push_back(tokens);
+        //vertex_data_list.push_back(std::vector(tokens.begin() + 1, tokens.end() - 1));
+        vertex_data_list.push_back(std::vector(tokens.begin(), tokens.end() - 1));
+        
+      }
+
+      //std::cout << vertex_data_list[0][0] << " " << vertex_data_list[0][1] << std::endl; // Test
+
+      vertex_data_list_input_file.close();
+ 
+      return vertex_data_list.size();   
+    }
+
+    void set_vertex_data(size_t index) {
+      pattern_ID = vertex_data_list[index][0];
+      vertex_data.assign(vertex_data_list[index].begin() + 1, 
+        vertex_data_list[index].end()); 
+      assert(vertex_data.size() == vertex_count);	
+    }
+
     const bool directed; 
     Vertex vertex_count;
     Edge edge_count;
@@ -133,7 +170,9 @@ class pattern_graph_csr {
     std::vector<Edge> edge_ID; 
     std::vector<EdgeData> edge_data; 
     std::vector<std::tuple<Vertex, Vertex>> edge_list;
-    std::vector<std::unordered_map<VertexData, Uint>> vertex_neighbor_data_count_map;  
+    std::vector<std::unordered_map<VertexData, Uint>> vertex_neighbor_data_count_map; 
+    //static std::vector<std::vector<VertexData>> vertex_data_list;
+    size_t pattern_ID; 
 
   private:
     Vertex read_vertex_list(std::string vertex_input_filename) { 
@@ -271,7 +310,7 @@ class pattern_graph_csr {
       for (auto v = 0; v < vertex_count; v++) {
         //std::cout << v << " vertex_data " << vertex_data[v]  
         //  << " vertex_degree " << vertex_degree[v] << std::endl;
-        //  std::cout << " neighbours : ";
+        //  std::cout << " neighbors : ";
         for (auto e = vertices[v]; e < vertices[v + 1]; e++) {
           auto v_nbr = edges[e];    
           auto v_nbr_vertex_data = vertex_data[v_nbr];
