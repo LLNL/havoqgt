@@ -12,8 +12,6 @@ Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
 devices are preferred for external memory storage.
 
-For documentation, see http://havoqgt.bitbucket.org
-
 --------------------------------------------------------------------------------
 # Getting Started
 
