@@ -220,11 +220,6 @@ int main(int argc, char** argv) {
                                backup_filename.c_str());
     }
     comm_world().barrier();
-    if (comm_nl().rank() == 0) {
-      sync();
-    }
-    comm_world().barrier();
-  }  // END Main MPI
-  ;
+  } //END Main MPI
   return 0;
 }

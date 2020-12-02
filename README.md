@@ -21,7 +21,7 @@ devices are preferred for external memory storage.
 - CMake 2.6 or more.
 - Boost C++ Libraries 1.64 or more (build is not required; needs only
   their header files).
-- Metall (https://github.com/LLNL/metall) 0.3 or more.
+- Metall (https://github.com/LLNL/metall) 0.5 or more.
 
 ## Build
 One can install Boost C++ Libraries and Metall using Spack.
@@ -31,7 +31,12 @@ An example to build HavoqGT with Spack is:
 ```bash
 spack install metall
 spack load metall
-cmake ../../ \
+git clone https://github.com/LLNL/havoqgt.git
+cd havoqgt
+git checkout -b develop
+mkdir build_dir
+cd build_dir
+cmake ../ \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lstdc++fs -lpthread" \
   -DHAVOQGT_BUILD_TEST=TRUE \
