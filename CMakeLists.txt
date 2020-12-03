@@ -76,6 +76,18 @@ if (METALL_ROOT)
 endif()
 
 #
+# HDF5
+#
+find_package(HDF5 COMPONENTS CXX C HL)
+if (HDF5_FOUND)
+  include_directories(${HDF5_INCLUDE_DIRS})
+  add_definitions(${HDF5_DEFINITIONS})
+endif()
+macro(include_link_hdf5 target)
+  target_link_libraries(${target} ${HDF5_LIBRARIES})
+endmacro()
+
+#
 # Doxygen
 #
 find_package(Doxygen)
