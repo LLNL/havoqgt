@@ -11,6 +11,7 @@
 #include <bfs.hpp>
 #include <havoqgt/mpi.hpp>
 #include <util.hpp>
+#include <ingest_edges.hpp>
 
 using namespace havoqgt::test;
 
@@ -27,19 +28,18 @@ void validate_chain_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if (i != level) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator(i - 1);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
@@ -56,19 +56,18 @@ void validate_star_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if ((i == 0 && level != 0) || (i > 0 && level != 1)) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator(0);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
@@ -85,19 +84,18 @@ void validate_binary_tree_bfs_result(const graph_type &          graph,
     if (vertex.owner() == mpi_rank) {
       const auto level = level_data[vertex];
       if (level != (uint64_t)std::log2(i + 1)) {
-        std::cout << "Unexpected BFS level" << std::endl;
+        std::cerr << "Unexpected BFS level" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
 
       if (i > 0) {
         const auto parent = graph.label_to_locator((i - 1) / 2);
         if (parent_data[vertex] != parent) {
-          std::cout << "Unexpected BFS parent" << std::endl;
+          std::cerr << "Unexpected BFS parent" << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -1);
         }
       }
     }
-    havoqgt::comm_world().barrier();
   }
 }
 
@@ -117,46 +115,52 @@ int main(int argc, char **argv) {
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/chain_10");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(9, validate_chain_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/chain_1024-0");
       f.emplace_back("./datasets/chain_1024-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(1023, validate_chain_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/star_10");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(9, validate_star_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/star_1024-0");
       f.emplace_back("./datasets/star_1024-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(1023, validate_star_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/binary_tree_7");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(6, validate_binary_tree_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     {
       std::vector<std::string> f;
       f.emplace_back("./datasets/binary_tree_1023-0");
       f.emplace_back("./datasets/binary_tree_1023-1");
-      ingest_edges(f);
+      ingest_unweighted_edges(f, gen_test_dir_path(k_test_name));
       run_bfs(1022, validate_binary_tree_bfs_result);
+      havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
     }
 
     havoqgt::comm_world().barrier();

@@ -12,8 +12,6 @@ Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
 devices are preferred for external memory storage.
 
-For documentation, see http://havoqgt.bitbucket.org
-
 --------------------------------------------------------------------------------
 # Getting Started
 
@@ -33,7 +31,12 @@ An example to build HavoqGT with Spack is:
 ```bash
 spack install metall
 spack load metall
-cmake ../../ \
+git clone https://github.com/LLNL/havoqgt.git
+cd havoqgt
+git checkout -b develop
+mkdir build_dir
+cd build_dir
+cmake ../ \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lstdc++fs -lpthread" \
   -DHAVOQGT_BUILD_TEST=TRUE \
