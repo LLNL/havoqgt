@@ -8,6 +8,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules)
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Use Rpath for dependencies." TRUE)
 option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
 set(METALL_ROOT "" CACHE PATH "Metall installed root directory")
+option(USE_UMAP "Use Umap instead of the system mmap" OFF)
+set(UMAP_ROOT "" CACHE PATH "UMap installed root directory")
 
 #
 # Main Inlucde directory
@@ -85,6 +87,25 @@ if (HDF5_FOUND)
 endif()
 macro(include_link_hdf5 target)
   target_link_libraries(${target} ${HDF5_LIBRARIES})
+endmacro()
+
+#
+# Umap
+#
+if (USE_UMAP)
+  if (UMAP_ROOT)
+    find_library(LIBUMAP umap PATHS ${UMAP_ROOT}/lib REQUIRED)
+    find_path(UMAP_INCLUDE_DIR umap/umap.h PATHS ${UMAP_ROOT}/include REQUIRED)
+  else ()
+    find_library(LIBUMAP umap REQUIRED)
+    find_path(UMAP_INCLUDE_DIR umap/umap.h REQUIRED)
+  endif ()
+endif ()
+
+macro(include_link_umap target)
+  target_include_directories(${target} PUBLIC ${UMAP_INCLUDE_DIR})
+  target_link_libraries(${target} ${LIBUMAP})
+  target_compile_definitions(${target} PUBLIC METALL_USE_UMAP)
 endmacro()
 
 #
