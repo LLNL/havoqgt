@@ -20,9 +20,11 @@
 using namespace havoqgt;
 
 typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
+typedef hdf5_edge_list_reader::weight_type weight_type;
+typedef distributed_db::allocator<weight_type> edge_data_allocator_type;
+typedef graph_type::edge_data<weight_type, edge_data_allocator_type> edge_data_type;
 
-typedef double edge_data_type;
-typedef std::allocator<edge_data_type> edge_data_allocator_type;
+constexpr const char *k_edge_data_name = "graph_edge_data_obj";
 
 void usage()  {
   if(comm_world().rank() == 0) {
@@ -30,6 +32,7 @@ void usage()  {
               << " -o <string>   - output graph base filename (required)\n"
               << " -s <string>   - key name of source vertex list (required)\n"
               << " -t <string>   - key name of destination vertex list (required)\n"
+              << " -w <string>   - key name of edge weight list\n"
               << " -b <string>   - backup graph base filename \n"
               << " -d <int>      - delegate threshold (Default is 1048576)\n"
               << " -h            - print help and exit\n"
@@ -44,7 +47,7 @@ void usage()  {
 void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::string& backup_filename,
                     uint64_t& delegate_threshold, std::vector< std::string >& input_filenames,
                     double& gbyte_per_rank, uint64_t& partition_passes, uint64_t& chunk_size,
-                    bool& undirected, std::string &src_key, std::string &dst_key) {
+                    bool& undirected, std::string &src_key, std::string &dst_key, std::string& weight_key) {
   if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
@@ -63,7 +66,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
 
   int c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:hs:t: ")) != -1) {
+  while ((c = getopt(argc, argv, "o:d:p:f:c:b:u:hs:t:w:")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
@@ -96,6 +99,9 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
       case 't':
         dst_key = optarg;
         break;
+      case 'w':
+        weight_key = optarg;
+        break;
       default:
         std::cerr << "Unrecognized option: "<<c<<", ignore."<<std::endl;
         prn_help = true;
@@ -116,38 +122,41 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
 auto read_edge(const std::vector<std::string> &input_filenames,
                const std::string &src_key,
                const std::string &dst_key,
+               const std::string &weight_key,
                const bool undirected) {
-  const int mpi_rank = havoqgt::comm_world().rank();
-  const int mpi_size = havoqgt::comm_world().size();
+  const int mpi_rank = comm_world().rank();
+  const int mpi_size = comm_world().size();
 
-  std::vector<std::tuple<uint64_t, uint64_t, edge_data_type>> edge_pair_list;
+  std::vector<std::tuple<uint64_t, uint64_t, weight_type>> edge_list;
   for (std::size_t i = 0; i < input_filenames.size(); ++i) {
     if (i % mpi_size == mpi_rank) {
-      havoqgt::hdf5_edge_list_reader reader;
-      if (!reader.read(input_filenames[i], src_key, dst_key)) {
+      hdf5_edge_list_reader reader;
+      if (!reader.read(input_filenames[i], src_key, dst_key, weight_key)) {
         std::cerr << "Failed to read edge: " << input_filenames[i] << std::endl;
       }
       const auto &read_edge_lists = reader.edges();
-      assert(read_edge_lists.first.size() == read_edge_lists.second.size());
-      for (std::size_t e = 0; e < read_edge_lists.first.size(); ++e) {
-        edge_pair_list.emplace_back(read_edge_lists.first[e], read_edge_lists.first[e], edge_data_type());
-        if (undirected)
-          edge_pair_list.emplace_back(read_edge_lists.first[e], read_edge_lists.first[e], edge_data_type());
+      assert(std::get<0>(read_edge_lists).size() == std::get<1>(read_edge_lists).size());
+      for (std::size_t e = 0; e < std::get<0>(read_edge_lists).size(); ++e) {
+        const auto src = std::get<0>(read_edge_lists)[e];
+        const auto dst = std::get<1>(read_edge_lists)[e];
+        const auto weight = weight_key.empty() ? weight_type() : std::get<2>(read_edge_lists)[e];
+        edge_list.emplace_back(src, dst, weight);
+        if (undirected) edge_list.emplace_back(dst, src, weight);
       }
     }
   }
 
-  return edge_pair_list;
+  return edge_list;
 }
 
-uint64_t find_global_max_vertex_id(const std::vector<std::tuple<uint64_t, uint64_t, edge_data_type>> &edge_list) {
+uint64_t find_global_max_vertex_id(const std::vector<std::tuple<uint64_t, uint64_t, weight_type>> &edge_list) {
   uint64_t local_max_vertex = 0;
   for (const auto &edge : edge_list) {
     local_max_vertex = std::max(std::get<0>(edge), local_max_vertex);
     local_max_vertex = std::max(std::get<1>(edge), local_max_vertex);
   }
 
-  const auto global_max_vertex = havoqgt::mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
+  const auto global_max_vertex = mpi_all_reduce(local_max_vertex, std::greater<uint64_t>(), MPI_COMM_WORLD);
 
   return global_max_vertex;
 }
@@ -160,13 +169,9 @@ int main(int argc, char** argv) {
     std::string                backup_filename;
 
     { // Build Distributed_DB
-      int mpi_rank = comm_world().rank();
-      int mpi_size = comm_world().size();
+      const int mpi_size = comm_world().size();
 
-      if (mpi_rank == 0) {
-        std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      }
-      comm_world().barrier();
+      cout_rank0_barrier() << "MPI initialized with " << mpi_size << " ranks." << std::endl;
 
       uint64_t                   delegate_threshold;
       std::vector< std::string > input_filenames;
@@ -176,39 +181,38 @@ int main(int argc, char** argv) {
       bool                       undirected;
       std::string src_key;
       std::string dst_key;
+      std::string weight_key;
 
-      parse_cmd_line(argc, argv, output_filename, backup_filename, delegate_threshold, input_filenames, gbyte_per_rank, partition_passes, chunk_size, undirected, src_key, dst_key);
+      parse_cmd_line(argc, argv, output_filename, backup_filename,
+                     delegate_threshold, input_filenames, gbyte_per_rank,
+                     partition_passes, chunk_size, undirected, src_key, dst_key,
+                     weight_key);
 
-      if (mpi_rank == 0) {
-        std::cout << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
-      }
+      cout_rank0_barrier() << "Ingesting graph from " << input_filenames.size() << " files." << std::endl;
 
       distributed_db ddb(db_create(), output_filename.c_str());
-      graph_type::edge_data<edge_data_type, edge_data_allocator_type> dummy_edge_data;
+      auto* edge_data_ptr = ddb.get_manager()->construct<edge_data_type>(k_edge_data_name)(ddb.get_allocator());
 
-      //Setup edge list reader
-      const auto edge_list = read_edge(input_filenames, src_key, dst_key, undirected);
+      const auto edge_list = read_edge(input_filenames, src_key, dst_key, weight_key, undirected);
       const auto max_vertex_id = find_global_max_vertex_id(edge_list);
-      const bool has_edge_data = false;
 
-      if (mpi_rank == 0) {
-        std::cout << "Generating new graph." << std::endl;
-      }
+      cout_rank0_barrier() << "Generating new graph." << std::endl;
       graph_type *graph = ddb.get_manager()->construct<graph_type>
           ("graph_obj")
-          (ddb.get_allocator(), MPI_COMM_WORLD,edge_list, max_vertex_id, delegate_threshold, partition_passes, chunk_size, dummy_edge_data);
+          (ddb.get_allocator(), MPI_COMM_WORLD,edge_list, max_vertex_id, delegate_threshold, partition_passes, chunk_size, *edge_data_ptr);
 
-      comm_world().barrier();
-      if (mpi_rank == 0) {
-        std::cout << "Graph Ready, Calculating Stats. " << std::endl;
+      if (weight_key.empty()) {
+        ddb.get_manager()->destroy<edge_data_type>(k_edge_data_name);
+        edge_data_ptr = nullptr;
       }
 
-      comm_world().barrier();
+      cout_rank0_barrier() << "Graph Ready." << std::endl;
     } // Complete build distributed_db
+
     if(backup_filename.size() > 0) {
       distributed_db::transfer(output_filename.c_str(), backup_filename.c_str());
+      cout_rank0_barrier() << "Created Backup" << std::endl;
     }
-    comm_world().barrier();
   } //END Main MPI
 
   return 0;

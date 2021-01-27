@@ -20,16 +20,23 @@ namespace havoqgt {
 class hdf5_edge_list_reader {
  public:
   using vertex_id_type = int64_t;
-  using edge_list_type = std::pair<std::vector<vertex_id_type>, std::vector<vertex_id_type>>;
+  using weight_type = int64_t;
+  using edge_list_type = std::tuple<std::vector<vertex_id_type>, std::vector<vertex_id_type>, std::vector<weight_type>>;
 
   hdf5_edge_list_reader() = default;
 
-  bool read(const std::string &hdf5_file_name, const std::string &col_name0, const std::string &col_name1) {
+  bool read(const std::string &hdf5_file_name, const std::string &col_name0, const std::string &col_name1, const std::string &weight_name) {
 
     auto file = priv_open_file(hdf5_file_name);
-    if (!priv_read_array_dataset(*file, col_name0, &(m_edge_buf.first)) ||
-        !priv_read_array_dataset(*file, col_name1, &(m_edge_buf.second))) {
+    if (!priv_read_array_dataset(*file, col_name0, &std::get<0>(m_edge_buf)) ||
+        !priv_read_array_dataset(*file, col_name1, &std::get<1>(m_edge_buf))) {
       return false;
+    }
+
+    if (!weight_name.empty()) {
+      if (!priv_read_array_dataset(*file, weight_name,&std::get<2>(m_edge_buf))) {
+        return false;
+      }
     }
 
     return true;
