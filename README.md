@@ -59,6 +59,12 @@ Here are the CMake variables to specify the locations of Boost C++ Libraries and
 HavoqGT uses header files of the libraries. One does not need to build them.
 
 
+## Build with Umap
+
+To use Umap instead of system mmap(), use CMake option `-DUSE_UMAP=on`.
+
+CMake tries to find the library from its default search paths.
+To manually specify the location of Umap, use CMake variable `-DUMAP_ROOT=/path/to/umap/install/dir/root`.
 
 # About
 
