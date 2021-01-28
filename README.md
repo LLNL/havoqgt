@@ -17,11 +17,10 @@ devices are preferred for external memory storage.
 
 ## Required to Build HavoqGT
 
-- GCC 8.1 or more.
-- CMake 2.6 or more.
-- Boost C++ Libraries 1.64 or more (build is not required; needs only
-  their header files).
-- Metall (https://github.com/LLNL/metall) 0.5 or more.
+- GCC 8.1 or later.
+- CMake 2.6 or later.
+- Boost C++ Libraries 1.64 or later (only headers required).
+- Metall (https://github.com/LLNL/metall) 0.5 or later.
 
 ## Build
 One can install Boost C++ Libraries and Metall using Spack.
