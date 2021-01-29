@@ -6,9 +6,9 @@ interface, where actions are defined at an individual vertex level.
 This code was developed at Lawrence Livermore National Laboratory.
 
 Built in C++, the framework provides a runtime for parallel communication and
-algorithm termination detection.   V0.1 is an initial release with only MPI support.
-All graph data is stored in mmaped files, using Boost.Interprocess and Memory 
-Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
+algorithm termination detection.   V0.2 is pre-release with only MPI support.
+All graph data is stored in mmaped files, using Metall (https://github.com/LLNL/metall).   
+Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
 devices are preferred for external memory storage.
 
