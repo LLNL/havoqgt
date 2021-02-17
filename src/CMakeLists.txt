@@ -39,7 +39,7 @@ add_exe( manage_graph )
 add_executable(run_shm_cc run_shm_cc)
 install(TARGETS run_shm_cc DESTINATION bin)
 
-if (HDF5_FOUND)
+if ((DEFINED HDF5_FOUND) AND (HDF5_FOUND))
   add_exe( ingest_hdf5_edge_list )
   include_link_hdf5( ingest_hdf5_edge_list )
 endif()
