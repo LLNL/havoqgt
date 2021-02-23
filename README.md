@@ -65,6 +65,14 @@ To use Umap instead of system mmap(), use CMake option `-DUSE_UMAP=on`.
 CMake tries to find the library from its default search paths.
 To manually specify the location of Umap, use CMake variable `-DUMAP_ROOT=/path/to/umap/install/dir/root`.
 
+
+## Build with HDF5
+
+To build executable(s) that use HDF5, use CMake option `-DUSE_HDF5=ON`.
+CMake tries to find the library from its default search paths ---
+for instance, one can control the search path by using CMake variable `CMAKE_PREFIX_PATH`
+
+
 # About
 
 ## Authors

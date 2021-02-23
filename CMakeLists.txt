@@ -10,6 +10,7 @@ option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
 set(METALL_ROOT "" CACHE PATH "Metall installed root directory")
 option(USE_UMAP "Use Umap instead of the system mmap" OFF)
 set(UMAP_ROOT "" CACHE PATH "UMap installed root directory")
+option(USE_HDF5 "Build executable(s) that use HDF5" OFF)
 
 #
 # Main Inlucde directory
@@ -80,10 +81,12 @@ endif()
 #
 # HDF5
 #
-find_package(HDF5 COMPONENTS CXX C HL)
-if (HDF5_FOUND)
-  include_directories(${HDF5_INCLUDE_DIRS})
-  add_definitions(${HDF5_DEFINITIONS})
+if (USE_HDF5)
+  find_package(HDF5 COMPONENTS CXX C HL) # TODO, add required version info
+  if (HDF5_FOUND)
+    include_directories(${HDF5_INCLUDE_DIRS})
+    add_definitions(${HDF5_DEFINITIONS})
+  endif()
 endif()
 macro(include_link_hdf5 target)
   target_link_libraries(${target} ${HDF5_LIBRARIES})
