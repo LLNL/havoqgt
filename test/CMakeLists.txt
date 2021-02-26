@@ -15,6 +15,7 @@ function ( add_mpi_ctest_no_gtest test_name )
   include_link_boost(${test_exe})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR})
   include_link_stdcppfs(${test_exe})
+  include_metall(${test_exe})
   SET( num_procs 2)
   WHILE( 8 GREATER ${num_procs} )
     add_test( "${test_name}_${num_procs}" ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}

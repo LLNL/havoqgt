@@ -40,11 +40,11 @@ endmacro()
 #
 # BOOST is required
 #
-find_package( Boost )
+find_package( Boost 1.64 REQUIRED )
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-endmacro() 
+endmacro()
 
 #
 #  stdc++fs is required
@@ -64,19 +64,30 @@ endif()
 #
 # Metall
 #
+if (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"))
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
+    message(FATAL_ERROR "Metall requires GCC >= 8.1")
+  endif ()
+endif ()
+
 if (METALL_ROOT)
-  if (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"))
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
-      message(FATAL_ERROR "Metall requires GCC >= 8.1")
-    endif ()
-  endif ()
-
-  if (Boost_VERSION VERSION_LESS 1.64)
-    message(FATAL_ERROR "Metall requires Boost C++ Libraries >= 1.64")
-  endif ()
-
-  include_directories(${METALL_ROOT}/include)
+  find_path(METALL_INCLUDE_DIR metall/metall.hpp
+            PATHS ${METALL_ROOT}/include
+            REQUIRED
+            NO_DEFAULT_PATH)
+else()
+  find_path(METALL_INCLUDE_DIR metall/metall.hpp
+            REQUIRED)
 endif()
+
+# REQUIRED option in find_path() is available from CMake v3.18?
+if (NOT METALL_INCLUDE_DIR)
+  message(FATAL_ERROR "Cannot find Metall")
+endif()
+
+macro(include_metall target)
+  target_include_directories(${target} PUBLIC ${METALL_INCLUDE_DIR})
+endmacro()
 
 #
 # HDF5
@@ -116,7 +127,7 @@ endmacro()
 #
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
                ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
 add_custom_target(doc
     ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
@@ -151,10 +162,9 @@ message("   MPI_FOUND:          ${MPI_FOUND}")
 #message("   DOXYGEN_FOUND:      ${DOXYGEN_FOUND}")
 #MPI params found
 if(MPI_FOUND)
-  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS 
+  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS
           ${MPIEXEC_PREFLAGS} EXECUTABLE ${MPIEXEC_POSTFLAGS} ARGS")
 endif(MPI_FOUND)
-
-if (METALL_ROOT)
-  message("METALL_ROOT: ${METALL_ROOT}")
+if (METALL_INCLUDE_DIR)
+  message("   METALL_INCLUDE_DIR: ${METALL_INCLUDE_DIR}")
 endif()
