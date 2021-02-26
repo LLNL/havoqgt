@@ -108,12 +108,22 @@ endmacro()
 #
 if (USE_UMAP)
   if (UMAP_ROOT)
-    find_library(LIBUMAP umap PATHS ${UMAP_ROOT}/lib REQUIRED)
-    find_path(UMAP_INCLUDE_DIR umap/umap.h PATHS ${UMAP_ROOT}/include REQUIRED)
+    find_library(LIBUMAP umap
+                 PATHS ${UMAP_ROOT}/lib
+                 REQUIRED
+                 NO_DEFAULT_PATH)
+    find_path(UMAP_INCLUDE_DIR umap/umap.h
+              PATHS ${UMAP_ROOT}/include
+              REQUIRED
+              NO_DEFAULT_PATH)
   else ()
     find_library(LIBUMAP umap REQUIRED)
     find_path(UMAP_INCLUDE_DIR umap/umap.h REQUIRED)
   endif ()
+
+  if ((NOT LIBUMAP) OR (NOT UMAP_INCLUDE_DIR))
+    message(FATAL_ERROR "Cannot find UMap")
+  endif()
 endif ()
 
 macro(include_link_umap target)
