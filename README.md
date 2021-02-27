@@ -12,8 +12,6 @@ Mapped (mmap) I/O.   Large graphs that cannot fit in main-memory may still be
 processed using mmap as external memory.  For best results, high speed Flash 
 devices are preferred for external memory storage.
 
-For documentation, see http://havoqgt.bitbucket.org
-
 --------------------------------------------------------------------------------
 # Getting Started
 
@@ -23,7 +21,7 @@ For documentation, see http://havoqgt.bitbucket.org
 - CMake 2.6 or more.
 - Boost C++ Libraries 1.64 or more (build is not required; needs only
   their header files).
-- Metall (https://github.com/LLNL/metall) 0.3 or more.
+- Metall (https://github.com/LLNL/metall) 0.5 or more.
 
 ## Build
 One can install Boost C++ Libraries and Metall using Spack.
@@ -33,7 +31,12 @@ An example to build HavoqGT with Spack is:
 ```bash
 spack install metall
 spack load metall
-cmake ../../ \
+git clone https://github.com/LLNL/havoqgt.git
+cd havoqgt
+git checkout -b develop
+mkdir build_dir
+cd build_dir
+cmake ../ \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_FLAGS="-std=c++17 -lrt -lstdc++fs -lpthread" \
   -DHAVOQGT_BUILD_TEST=TRUE \
@@ -56,6 +59,12 @@ Here are the CMake variables to specify the locations of Boost C++ Libraries and
 HavoqGT uses header files of the libraries. One does not need to build them.
 
 
+## Build with Umap
+
+To use Umap instead of system mmap(), use CMake option `-DUSE_UMAP=on`.
+
+CMake tries to find the library from its default search paths.
+To manually specify the location of Umap, use CMake variable `-DUMAP_ROOT=/path/to/umap/install/dir/root`.
 
 # About
 

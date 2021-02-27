@@ -3,13 +3,19 @@
 //
 // SPDX-License-Identifier: MIT
 
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
+
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include <bfs.hpp>
+#include <cc.hpp>
 #include <havoqgt/mpi.hpp>
 #include <ingest_edges.hpp>
 #include <util.hpp>
@@ -17,36 +23,38 @@
 using namespace havoqgt::test;
 
 /// \brief Validates BFS results
-void validate_bfs_result(const graph_type &          graph,
-                         const std::size_t           max_vertex_id,
-                         const bfs_level_data_type & level_data,
-                         const bfs_parent_data_type &parent_data) {
+void validate_cc_result(const graph_type &graph, const uint32_t max_vertex_id,
+                        const cc_data_type &cc_data) {
   int mpi_rank(0);
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-  // Load the correct BFS levels
-  std::unordered_map<uint64_t, uint64_t> level_table;
+  // Read the correct CC ID
+  std::vector<uint32_t> ans_cc_id(max_vertex_id + 1,
+                                  std::numeric_limits<uint32_t>::max());
+
   {
-    std::ifstream ifs("./datasets/bfs_level_rmat_s17");
+    std::ifstream ifs("./datasets/cc_rmat_s17");
     if (!ifs) {
       std::cerr << "Cannot open" << std::endl;
       CHK_MPI(MPI_Abort(MPI_COMM_WORLD, -1));
     }
 
-    uint64_t vid;
-    uint64_t level;
-    while (ifs >> vid >> level) {
-      level_table[vid] = level;
+    uint32_t vid;
+    uint32_t cc_id;
+    while (ifs >> vid >> cc_id) {
+      ans_cc_id[vid] = cc_id;
     }
   }
 
-  // Validate BFS level
-  for (uint64_t i = 0; i <= max_vertex_id; ++i) {
-    graph_type::vertex_locator vertex = graph.label_to_locator(i);
+  // Check CC ID
+  for (uint32_t v = 0; v <= max_vertex_id; ++v) {
+    graph_type::vertex_locator vertex = graph.label_to_locator(v);
     if (vertex.owner() == mpi_rank) {
-      size_t level = level_data[vertex];
-      if (level_table[i] != level) {
-        std::cerr << "Unexpected BFS level" << std::endl;
+      const auto cc_id = graph.locator_to_label(cc_data[vertex]);
+      // std::cout << cc_id << " == " << ans_cc_id[v] << std::endl;
+      if (cc_id != ans_cc_id[v]) {
+        std::cerr << "Unexpected CC ID" << std::endl;
+        std::cerr << "Vertex " << v << " is in CC " << cc_id << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
       }
     }
@@ -79,12 +87,11 @@ int main(int argc, char **argv) {
     ingest_unweighted_edges(f, gen_test_dir_path(k_test_name),
                             delegate_degree_threshold);
 
-    static constexpr uint64_t max_vertex_id = 131070;
-    run_bfs(max_vertex_id, validate_bfs_result);
+    static constexpr uint32_t max_vertex_id = 131070;
+    run_cc(max_vertex_id, validate_cc_result);
 
     havoqgt::comm_world().barrier();
-    havoqgt::cout_rank0() << "Succeeded the BFS with delegate test"
-                          << std::endl;
+    havoqgt::cout_rank0() << "Succeeded the CC with delegate test" << std::endl;
 
     havoqgt::distributed_db::remove(gen_test_dir_path(k_test_name));
   }  // End of MPI

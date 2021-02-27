@@ -6,7 +6,7 @@
 #ifndef HAVOQGT_METALL_DISTRIBUTED_DB_HPP_INCLUDED
 #define HAVOQGT_METALL_DISTRIBUTED_DB_HPP_INCLUDED
 
-#include <metall_utility/metall_mpi_adaptor.hpp>
+#include <metall/utility/metall_mpi_adaptor.hpp>
 
 namespace havoqgt {
 
