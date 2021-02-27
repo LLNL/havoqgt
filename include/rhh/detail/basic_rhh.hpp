@@ -179,6 +179,23 @@ class basic_rhh {
   /// \return The maximum number of values.
   size_type max_size() { return priv_max_num_blocks(max_capacity()); }
 
+  /// \brief Sets the number of buckets to the number needed to accommodate at least count elements
+  /// without exceeding maximum load factor and rehashes the container,
+  /// i.e. puts the elements into appropriate buckets considering that total number of buckets has changed.
+  /// \param count new size of the container
+  void reserve(const size_type count) {
+    if (count <= priv_max_num_blocks(capacity())) {
+      return; // Enough capacity
+    }
+
+    size_type new_capacity = capacity();
+    while (priv_max_num_blocks(new_capacity) < count) {
+      new_capacity *= k_table_lenght_growing_factor;
+    }
+
+    priv_grow_table(capacity() * k_table_lenght_growing_factor);
+  }
+
   // -------------------- Element access -------------------- //
   /// \brief Accesses the block at 'position'.
   /// \param position An position of a value to access.
@@ -375,8 +392,7 @@ class basic_rhh {
     return capacity * k_max_load_factor;
   }
 
-  void priv_grow_table() {
-    const size_type new_capacity = capacity() * k_table_lenght_growing_factor;
+  void priv_grow_table(const size_type new_capacity) {
     self_type       new_table(new_capacity, get_allocator());
 
     for (size_type i = 0; i < capacity(); ++i) {
@@ -446,7 +462,7 @@ class basic_rhh {
   template <typename T>
   size_type priv_check_capacity_and_insert(T &&value) {
     if (m_num_blocks >= priv_max_num_blocks(capacity())) {
-      priv_grow_table();
+      priv_grow_table(capacity() * k_table_lenght_growing_factor);
     }
 
     return priv_insert(std::forward<T>(value));
