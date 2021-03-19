@@ -110,7 +110,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   }
   if (prn_help || !found_output_filename || src_key.empty() || dst_key.empty()) {
     usage();
-    exit(-1);
+    MPI_Abort(MPI_COMM_WORLD, -1);
   }
 
   for (int index = optind; index < argc; index++) {
@@ -130,9 +130,10 @@ auto read_edge(const std::vector<std::string> &input_filenames,
   std::vector<std::tuple<uint64_t, uint64_t, weight_type>> edge_list;
   for (std::size_t i = 0; i < input_filenames.size(); ++i) {
     if (i % mpi_size == mpi_rank) {
-      hdf5_edge_list_reader reader;
-      if (!reader.read(input_filenames[i], src_key, dst_key, weight_key)) {
+      hdf5_edge_list_reader reader(input_filenames[i]);
+      if (!reader.read(src_key, dst_key, weight_key)) {
         std::cerr << "Failed to read edge: " << input_filenames[i] << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
       }
       const auto &read_edge_lists = reader.edges();
       assert(std::get<0>(read_edge_lists).size() == std::get<1>(read_edge_lists).size());
