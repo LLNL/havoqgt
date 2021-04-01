@@ -29,10 +29,14 @@ class hdf5_vertex_data_writer {
     priv_create_file(hdf5_file_names);
   }
 
-  bool write_data(const vertex_data_table_type &vertex_data) {
-    auto success = priv_write_array_dataset(
-        "vertex", H5::PredType::NATIVE_UINT64, std::get<0>(vertex_data));
-    success &= priv_write_array_dataset("data", H5::PredType::IEEE_F64LE,
+  bool write_data(const vertex_data_table_type &vertex_data,
+                  const std::string &           vertex_column_name,
+                  const std::string &           vertex_data_column_name) {
+    auto success = priv_write_array_dataset(vertex_column_name,
+                                            H5::PredType::NATIVE_UINT64,
+                                            std::get<0>(vertex_data));
+    success &= priv_write_array_dataset(vertex_data_column_name,
+                                        H5::PredType::IEEE_F64LE,
                                         std::get<1>(vertex_data));
 
     return success;

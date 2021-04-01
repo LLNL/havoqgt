@@ -227,9 +227,16 @@ int main(int argc, char** argv) {
       std::stringstream output_filename;
       output_filename << output_base_filename << "_" << mpi_rank << ".hdf";
       hdf5_vertex_data_writer writer(output_filename.str());
-      if (!writer.write_data(data)) {
+      if (!writer.write_data(data, "vertex", "compid")) {
         std::cerr << "Failed to write CC data" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+      if (mpi_rank == 0) {
+        std::cout << "Out HDF5 files: " << std::endl;
+        std::cout << output_base_filename << "_" << 0 << ".hdf -- "
+                  << output_base_filename << "_" << mpi_size - 1 << ".hdf"
+                  << std::endl;
       }
     }
 
