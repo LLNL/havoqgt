@@ -420,11 +420,11 @@ int main(int argc, char** argv) {
 	  std::cout << v_nbr << ", " ;
 	}
 	std::cout << std::endl;
-	std::cout << " neighbor vertex data count : ";
-	for (auto& nd : pattern_graph.vertex_neighbor_data_count_map[v]) {
-	  std::cout << "(" << nd.first << ", " << nd.second << "), ";
-	}
-	std::cout << std::endl; 
+	//std::cout << " neighbor vertex data count : "; // TODO: ?
+	//for (auto& nd : pattern_graph.vertex_neighbor_data_count_map[v]) {
+	//  std::cout << "(" << nd.first << ", " << nd.second << "), ";
+	//}
+	//std::cout << std::endl; 
       }
       //std::cout << "diameter : " << pattern_graph.diameter << std::endl; 
     }
