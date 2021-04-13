@@ -112,7 +112,7 @@ class pattern_graph_csr {
 
       read_stat(stat_input_filename);
 
-      generate_vertex_neighbor_data_count_map(); 
+//      generate_vertex_neighbor_data_count_map(); 
 
 //      std::cout << "Completed building graph." << std::endl;
 //      output_graph_stat(); 
