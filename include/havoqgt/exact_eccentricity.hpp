@@ -63,7 +63,6 @@
 
 #include <boost/container/flat_map.hpp>
 
-#include <havoqgt/environment.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/detail/hash.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
@@ -83,10 +82,10 @@ const int k_strategy_id_degree = 99;
 const int k_strategy_id_ds = 999;
 
 namespace havoqgt {
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
 class exact_eccentricity_vertex_data {
  private:
-  using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+  using graph_t = havoqgt::delegate_partitioned_graph<graph_allocator_t>;
   using ecc_t = typename graph_t::template vertex_data<level_t, std::allocator<level_t>>;
   using flag_t = typename graph_t::template vertex_data<uint8_t, std::allocator<uint8_t>>;
   using bool_t = typename graph_t::template vertex_data<bool, std::allocator<bool>>;
@@ -171,11 +170,10 @@ class exact_eccentricity_vertex_data {
 #endif
 };
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
 class exact_eccentricity {
  private:
-  using self_type = exact_eccentricity<segment_manager_t, level_t, k_num_sources>;
-  using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+  using graph_t = havoqgt::delegate_partitioned_graph<graph_allocator_t>;
   using vertex_locator_t = typename graph_t::vertex_locator;
   using source_score_function_t = std::function<uint64_t(const vertex_locator_t)>;
   using source_score_function_list_t = std::vector<source_score_function_t>;
@@ -187,13 +185,12 @@ class exact_eccentricity {
 //  class single_source_visitor;
 
  public:
-  using kbfs_t = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
+  using kbfs_t = k_breadth_first_search<graph_allocator_t, level_t, k_num_sources>;
   using kbfs_vertex_data_t = typename kbfs_t::vertex_data_t;
-  using ecc_vertex_data_t = exact_eccentricity_vertex_data<segment_manager_t, level_t, k_num_sources>;
+  using ecc_vertex_data_t = exact_eccentricity_vertex_data<graph_allocator_t, level_t, k_num_sources>;
   using kth_core_vertex_data_t = typename graph_t::template vertex_data<kth_core_data, std::allocator<kth_core_data>>;
 
-  explicit exact_eccentricity<segment_manager_t, level_t, k_num_sources>(graph_t &graph,
-                                                                         const std::set<int> &use_algorithm)
+  explicit exact_eccentricity(graph_t &graph, const std::set<int> &use_algorithm)
       : m_graph(graph),
         m_kbfs(graph),
         m_ecc_vertex_data(graph),
@@ -1208,7 +1205,7 @@ class exact_eccentricity {
     auto alg_data = std::forward_as_tuple(m_ecc_vertex_data, m_2core_vertex_data, local_num_pruned);
     auto vq = create_visitor_queue<take_pruning_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph,
                                                                                                   alg_data);
-    vq.init_visitor_traversal_new();
+    vq.init_visitor_traversal();
     MPI_Barrier(MPI_COMM_WORLD);
 
     const size_t global_num_pruned = mpi_all_reduce(local_num_pruned, std::plus<level_t>(), MPI_COMM_WORLD);
@@ -1227,7 +1224,7 @@ class exact_eccentricity {
                                           local_num_pruned);
     auto vq = create_visitor_queue<hanging_tree_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph,
                                                                                                   alg_data);
-    vq.init_visitor_traversal_new();
+    vq.init_visitor_traversal();
     MPI_Barrier(MPI_COMM_WORLD);
 
     const size_t global_num_pruned = mpi_all_reduce(local_num_pruned, std::plus<level_t>(), MPI_COMM_WORLD);
@@ -1244,7 +1241,7 @@ class exact_eccentricity {
 
     auto alg_data = std::forward_as_tuple(m_kbfs.vertex_data(), m_ecc_vertex_data);
     auto vq = create_visitor_queue<unsolved_visitor, havoqgt::detail::visitor_priority_queue>(&m_graph, alg_data);
-    vq.init_visitor_traversal_new();
+    vq.init_visitor_traversal();
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
@@ -1479,8 +1476,8 @@ class exact_eccentricity {
 // std::vector<size_t> m_contribution_score;
 };
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::take_pruning_visitor {
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<graph_allocator_t, level_t, k_num_sources>::take_pruning_visitor {
  private:
   enum index {
     ecc_data = 0,
@@ -1557,8 +1554,8 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::take_prunin
   level_t ecc;
 } __attribute__ ((packed));
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_visitor {
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<graph_allocator_t, level_t, k_num_sources>::unsolved_visitor {
  private:
   enum index {
     kbfs_data = 0,
@@ -1619,8 +1616,8 @@ class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::unsolved_vi
   vertex_locator_t vertex;
 } __attribute__ ((packed));
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-class exact_eccentricity<segment_manager_t, level_t, k_num_sources>::hanging_tree_visitor {
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+class exact_eccentricity<graph_allocator_t, level_t, k_num_sources>::hanging_tree_visitor {
  private:
   enum index {
     kbfs_data = 0,

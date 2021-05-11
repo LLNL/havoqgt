@@ -37,6 +37,9 @@ add_exe( CORAL2_benchmark)
 # add_exe( new_mailbox_rate_test )
 add_exe( manage_graph )
 
+add_exe( run_kbfs_sync )
+add_exe( run_exact_ecc )
+
 add_executable(run_shm_cc run_shm_cc)
 install(TARGETS run_shm_cc DESTINATION bin)
 

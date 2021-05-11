@@ -72,7 +72,7 @@
 namespace havoqgt
 {
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
 class k_breadth_first_search_vertex_data
 {
  public:
@@ -80,7 +80,7 @@ class k_breadth_first_search_vertex_data
   using k_bitmap_t = typename havoqgt::detail::static_bitmap<k_num_sources>;
 
  private:
-  using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+  using graph_t = havoqgt::delegate_partitioned_graph<graph_allocator_t>;
   using vertex_data_visited_level_t = typename graph_t::template vertex_data<k_level_t, std::allocator<k_level_t>>;
   using vertex_data_visited_sources_bitmap_t = typename graph_t::template vertex_data<k_bitmap_t, std::allocator<k_bitmap_t>>;
   using queue_status_t = typename graph_t::template vertex_data<uint8_t, std::allocator<uint8_t>>;
@@ -219,31 +219,31 @@ class k_breadth_first_search_vertex_data
 #endif
 };
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-constexpr level_t  k_breadth_first_search_vertex_data<segment_manager_t, level_t, k_num_sources>::unvisited_level;
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+constexpr level_t  k_breadth_first_search_vertex_data<graph_allocator_t, level_t, k_num_sources>::unvisited_level;
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-constexpr uint8_t k_breadth_first_search_vertex_data<segment_manager_t, level_t, k_num_sources>::k_not_in_queue_bit;
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+constexpr uint8_t k_breadth_first_search_vertex_data<graph_allocator_t, level_t, k_num_sources>::k_not_in_queue_bit;
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-constexpr uint8_t k_breadth_first_search_vertex_data<segment_manager_t, level_t, k_num_sources>::k_in_frontier_bit;
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+constexpr uint8_t k_breadth_first_search_vertex_data<graph_allocator_t, level_t, k_num_sources>::k_in_frontier_bit;
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-constexpr uint8_t k_breadth_first_search_vertex_data<segment_manager_t, level_t, k_num_sources>::k_in_next_queue_bit;
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+constexpr uint8_t k_breadth_first_search_vertex_data<graph_allocator_t, level_t, k_num_sources>::k_in_next_queue_bit;
 
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
 class k_breadth_first_search
 {
  private:
-  using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
-  using self_type = k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
+  using graph_t = havoqgt::delegate_partitioned_graph<graph_allocator_t>;
+  using self_type = k_breadth_first_search<graph_allocator_t, level_t, k_num_sources>;
 
  public:
-  using vertex_data_t = k_breadth_first_search_vertex_data<segment_manager_t, level_t, k_num_sources>;
+  using vertex_data_t = k_breadth_first_search_vertex_data<graph_allocator_t, level_t, k_num_sources>;
   class kbfs_visitor;
 
-  k_breadth_first_search<segment_manager_t, level_t, k_num_sources>(graph_t& graph)
+  k_breadth_first_search<graph_allocator_t, level_t, k_num_sources>(graph_t& graph)
   : m_graph(graph),
     m_vertex_data(graph)
   { }
@@ -272,7 +272,7 @@ class k_breadth_first_search
       // ------------------------------ Traversal ------------------------------ //
       {
         const double time_start = MPI_Wtime();
-        vq.init_visitor_traversal_new();
+        vq.init_visitor_traversal();
         MPI_Barrier(MPI_COMM_WORLD);
         const double time_end = MPI_Wtime();
         if (mpi_rank == 0) std::cout << time_end - time_start << "\t";
@@ -347,8 +347,8 @@ class k_breadth_first_search
   vertex_data_t m_vertex_data;
 };
 
-template <typename segment_manager_t, typename level_t, uint32_t k_num_sources>
-class k_breadth_first_search<segment_manager_t, level_t, k_num_sources>::kbfs_visitor
+template <typename graph_allocator_t, typename level_t, uint32_t k_num_sources>
+class k_breadth_first_search<graph_allocator_t, level_t, k_num_sources>::kbfs_visitor
 {
  private:
   enum index

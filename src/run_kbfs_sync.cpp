@@ -49,7 +49,6 @@
  *
  */
 
-#include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/k_breadth_first_search_sync_level_per_source.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -79,14 +78,13 @@ constexpr uint32_t k_num_sources = 8;
 #endif
 using level_t = uint16_t;
 
-using segment_manager_t = havoqgt::distributed_db::segment_manager_type;
-using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
-using kbfs_t = havoqgt::k_breadth_first_search<segment_manager_t, level_t, k_num_sources>;
+using graph_t = havoqgt::delegate_partitioned_graph<distributed_db::allocator<>>;
+using kbfs_t = havoqgt::k_breadth_first_search<distributed_db::allocator<>, level_t, k_num_sources>;
 // using kbfs_vertex_data_t = typename havoqgt::kbfs_t::vertex_data_t;
 
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
               << " -i <string>   - input graph base filename (required)\n"
               << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
@@ -96,7 +94,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename, std::vector<uint64_t>& source_vertex_list) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -147,17 +145,14 @@ int main(int argc, char** argv) {
   int mpi_rank(0), mpi_size(0);
 
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
     CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-    havoqgt::get_environment();
 
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
       std::cout << "k_num_sources " << k_num_sources << std::endl;
-      //print_system_info(false);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -177,10 +172,9 @@ int main(int argc, char** argv) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+    distributed_db ddb(db_open_read_only(), graph_input);
 
-    graph_t *graph = ddb.get_segment_manager()->
-      find<graph_t>("graph_obj").first;
+    auto graph = ddb.get_manager()->find<graph_t>("graph_obj").first;
     assert(graph != nullptr);
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -245,7 +239,6 @@ int main(int argc, char** argv) {
 
     }  // End BFS
   }  // END Main MPI
-  havoqgt::havoqgt_finalize();
 
   return 0;
 }

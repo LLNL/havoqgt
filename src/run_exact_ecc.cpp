@@ -67,7 +67,6 @@
 #include <boost/function.hpp>
 #include <boost/interprocess/managed_heap_memory.hpp>
 
-#include <havoqgt/environment.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
 #include <havoqgt/gen_preferential_attachment_edge_list.hpp>
@@ -80,8 +79,7 @@
 // -------------------------------------------------------------------------------------------------------------- //
 using namespace havoqgt;
 
-using segment_manager_t = havoqgt::distributed_db::segment_manager_type;
-using graph_t = havoqgt::delegate_partitioned_graph<segment_manager_t>;
+using graph_t = delegate_partitioned_graph<distributed_db::allocator<>>;
 
 #ifdef NUM_SOURCES
 constexpr uint32_t k_num_sources = NUM_SOURCES;
@@ -90,18 +88,17 @@ constexpr uint32_t k_num_sources = 8;
 #endif
 
 using level_t = uint16_t;
-using exact_eccentricity_t = exact_eccentricity<segment_manager_t, level_t, k_num_sources>;
+using exact_eccentricity_t = exact_eccentricity<distributed_db::allocator<>, level_t, k_num_sources>;
 
 // -------------------------------------------------------------------------------------------------------------- //
 // Parse command line
 // -------------------------------------------------------------------------------------------------------------- //
 void usage()
 {
-  if (havoqgt_env()->world_comm().rank() == 0) {
+  if (comm_world().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
               << " -i <string>    - input graph base filename (required)\n"
               << " -b <string>    - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
-              << " -s <int>:<int> - Colon separated k source vertices (required)\n"
               << " -h             - print help and exit\n\n";
   }
 }
@@ -113,7 +110,7 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::set<int>& use_algorithm,
                     std::string& two_core_info_filename)
 {
-  if (havoqgt_env()->world_comm().rank() == 0) {
+  if (comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i = 0; i < argc; ++i) {
       std::cout << " " << argv[i];
@@ -125,19 +122,11 @@ void parse_cmd_line(int argc, char **argv, std::string &input_filename,
 
   char c;
   bool prn_help = false;
-  while ((c = getopt(argc, argv, "i:s:b:e:a:c:h")) != -1) {
+  while ((c = getopt(argc, argv, "i:b:e:a:c:h")) != -1) {
     switch (c) {
       case 'h':
         prn_help = true;
         break;
-
-      case 's': {
-        std::string buf;
-        std::stringstream sstrm(optarg);
-        while (std::getline(sstrm, buf, ':'))
-          source_id_list.push_back(std::stoull(buf.c_str()));
-        break;
-      }
 
       case 'i':
         found_input_filename = true;
@@ -233,18 +222,16 @@ int main(int argc, char **argv)
   int mpi_rank(0), mpi_size(0);
 
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     // -------------------------------------------------------------------------------------------------------------- //
     //                                            Parse options & Prepare graph
     // -------------------------------------------------------------------------------------------------------------- //
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
     CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-    havoqgt::get_environment();
 
     if (mpi_rank == 0) {
       std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-      havoqgt::get_environment().print();
       std::cout << "k_num_sources: " << k_num_sources << std::endl;
       //print_system_info(false);
     }
@@ -253,24 +240,26 @@ int main(int argc, char **argv)
     std::string graph_input;
     std::string backup_filename;
     std::string ecc_output_filename;
-    std::vector<uint64_t> parsed_source_id_list;
     std::set<int> use_algorithm;
     std::string two_core_info_filename;
 
-    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, parsed_source_id_list, use_algorithm, two_core_info_filename);
-    MPI_Barrier(MPI_COMM_WORLD);
+    parse_cmd_line(argc, argv, graph_input, backup_filename, ecc_output_filename, use_algorithm, two_core_info_filename);
 
-    if (!backup_filename.empty()) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(backup_filename.size() > 0) {
       distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
     }
 
-    havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
-    graph_t *graph = ddb.get_segment_manager()->find<graph_t>("graph_obj").first;
+    distributed_db ddb(db_open_read_only(), graph_input);
+    auto graph = ddb.get_manager()->find<graph_t>("graph_obj").first;
     assert(graph != nullptr);
+
     MPI_Barrier(MPI_COMM_WORLD);
     if (mpi_rank == 0) {
       std::cout << "Graph Loaded Ready." << std::endl;
     }
+    //graph->print_graph_statistics();
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // -------------------------------------------------------------------------------------------------------------- //
     //                                        Touch graph
@@ -316,7 +305,6 @@ int main(int argc, char **argv)
       if (mpi_rank == 0) std::cout << "Dumped EEC in " << ecc_output_filename << std::endl;
     }
   }  // END Main MPI
-  havoqgt_finalize();
 
   return 0;
 }

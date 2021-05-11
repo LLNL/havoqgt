@@ -236,7 +236,7 @@ void kth_core(TGraph &graph, KCoreData &k_core_data, const int k)
     const uint16_t max_height = mpi_all_reduce(local_max_height, std::greater<uint16_t>(), MPI_COMM_WORLD);
     const size_t num_articulation = mpi_all_reduce(local_articulation, std::plus<size_t>(), MPI_COMM_WORLD);
     const size_t num_height_1 = mpi_all_reduce(local_num_height_1, std::plus<size_t>(), MPI_COMM_WORLD);
-    if (havoqgt_env()->world_comm().rank() == 0) {
+    if (comm_world().rank() == 0) {
       std::cout << "Core " << std::get<1>(alg_data)
                 << ", size = " << count_alive
                 << ", max cut = " << max_cut
