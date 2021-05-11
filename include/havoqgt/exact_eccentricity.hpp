@@ -434,13 +434,16 @@ class exact_eccentricity {
 // -------------------------------------------------------------------------------------------------------------- //
 // find max ecc
 // -------------------------------------------------------------------------------------------------------------- //
-  uint16_t
-  find_max_ecc() {
+  uint16_t find_max_ecc() {
     uint16_t max_ecc = 0;
-    for (auto vitr = m_graph.vertices_begin(), end = m_graph.vertices_end(); vitr != end; ++vitr)
-      max_ecc = std::max(max_ecc, m_ecc_vertex_data.lower(*vitr));
-    for (auto vitr = m_graph.controller_begin(), end = m_graph.controller_end(); vitr != end; ++vitr)
-      max_ecc = std::max(max_ecc, m_ecc_vertex_data.lower(*vitr));
+    for (auto vitr = m_graph.vertices_begin(), end = m_graph.vertices_end(); vitr != end; ++vitr) {
+      if (m_ecc_vertex_data.lower(*vitr) == m_ecc_vertex_data.upper(*vitr))
+        max_ecc = std::max(max_ecc, m_ecc_vertex_data.upper(*vitr));
+    }
+    for (auto vitr = m_graph.controller_begin(), end = m_graph.controller_end(); vitr != end; ++vitr) {
+      if (m_ecc_vertex_data.lower(*vitr) == m_ecc_vertex_data.upper(*vitr))
+        max_ecc = std::max(max_ecc, m_ecc_vertex_data.upper(*vitr));
+    }
 
     max_ecc = mpi_all_reduce(max_ecc, std::greater<uint16_t>(), MPI_COMM_WORLD);
 
