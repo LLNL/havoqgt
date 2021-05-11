@@ -1,55 +1,9 @@
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/page_rank.hpp>
 #include <havoqgt/delegate_partitioned_graph.hpp>
@@ -72,7 +26,7 @@
 using namespace havoqgt;
 
 void usage()  {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cerr << "Usage: -i <string> -s <int>\n"
          << " -i <string>   - input graph base filename (required)\n"
          << " -b <string>   - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
@@ -81,7 +35,7 @@ void usage()  {
 }
 
 void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::string& backup_filename) {
-  if(havoqgt_env()->world_comm().rank() == 0) {
+  if(comm_world().rank() == 0) {
     std::cout << "CMD line:";
     for (int i=0; i<argc; ++i) {
       std::cout << " " << argv[i];
@@ -118,20 +72,17 @@ void parse_cmd_line(int argc, char** argv, std::string& input_filename, std::str
 }
 
 int main(int argc, char** argv) {
-  typedef havoqgt::distributed_db::segment_manager_type segment_manager_t;
-  typedef havoqgt::delegate_partitioned_graph<segment_manager_t> graph_type;
+  typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
 
   int mpi_rank(0), mpi_size(0);
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
   CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
   CHK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
-  havoqgt::get_environment();
-
+  
   if (mpi_rank == 0) {
     std::cout << "MPI initialized with " << mpi_size << " ranks." << std::endl;
-    //havoqgt::get_environment().print();
     //print_system_info(false);
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -148,10 +99,9 @@ int main(int argc, char** argv) {
     distributed_db::transfer(backup_filename.c_str(), graph_input.c_str());
   }
 
-  havoqgt::distributed_db ddb(havoqgt::db_open(), graph_input.c_str());
+  distributed_db ddb(db_open_read_only(), graph_input.c_str());
 
-  graph_type *graph = ddb.get_segment_manager()->
-    find<graph_type>("graph_obj").first;
+  auto graph = ddb.get_manager()->find<graph_type>("graph_obj").first;
   assert(graph != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -177,7 +127,7 @@ int main(int argc, char** argv) {
   // }
   
   }  // END Main MPI
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }

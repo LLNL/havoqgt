@@ -1,52 +1,32 @@
 #
 # Directly include GTest here, and add include.
 #
-add_subdirectory (gtest)
-include_directories(gtest/include)
 add_subdirectory (include)
 include_directories(include)
 
 #
-# This function adds a sequential (nompi) test.
+# This function adds a mpi test without Google Test.
 #
-function ( add_nonmpi_ctest test_name )
-  set(test_source "test_${test_name}.cpp")
-  set(test_exe    "test_${test_name}")
-  add_executable(${test_exe} ${test_source})
-  include_link_boost(${test_exe})
-  include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-  target_link_libraries(${test_exe} gtest gtest_main)
-  add_test( "${test_name}_nompi" ${test_exe})
-endfunction()
-
-#
-# This function adds a mpi test.
-#
-function ( add_mpi_ctest test_name )
+function ( add_mpi_ctest_no_gtest test_name )
   set(test_source "test_${test_name}.cpp")
   set(test_exe    "test_${test_name}")
   add_executable(${test_exe} ${test_source})
   include_link_mpi(${test_exe})
   include_link_boost(${test_exe})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-  target_link_libraries(${test_exe} gtest)
+  include_link_stdcppfs(${test_exe})
+  include_metall(${test_exe})
   SET( num_procs 2)
   WHILE( 8 GREATER ${num_procs} )
     add_test( "${test_name}_${num_procs}" ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
-      ${num_procs} ${MPIEXEC_PREFLAGS} "${CMAKE_CURRENT_BINARY_DIR}/${test_exe}")
+            ${num_procs} ${MPIEXEC_PREFLAGS} "${CMAKE_CURRENT_BINARY_DIR}/${test_exe}")
     MATH( EXPR num_procs "${num_procs} * 2" ) #double num_procs
   ENDWHILE()
 endfunction()
 
+add_mpi_ctest_no_gtest( bfs )
+add_mpi_ctest_no_gtest( bfs_delegate )
+add_mpi_ctest_no_gtest( cc )
+add_mpi_ctest_no_gtest( cc_delegate )
 
-#
-# Sequential Tests
-#
-add_nonmpi_ctest( sequential )
-
-#
-# Parallel Tests
-#
-add_mpi_ctest( mpi_communicator )
-add_mpi_ctest( delegate_graph_static )
-add_mpi_ctest( static_bfs )
+add_subdirectory(datasets)

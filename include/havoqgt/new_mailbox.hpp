@@ -1,60 +1,14 @@
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
 #ifndef HAVOQGT_MAILBOX_HPP_INCLUDED
 #define HAVOQGT_MAILBOX_HPP_INCLUDED
 
 
 #include <havoqgt/mpi.hpp>
-#include <havoqgt/environment.hpp>
+
 
 #include <vector>
 #include <deque>
@@ -80,13 +34,13 @@ class mailbox {
 public:
   mailbox(int _mpi_tag) {
     m_mpi_tag = _mpi_tag;
-    m_mpi_comm = havoqgt_env()->node_offset_comm().comm();
-    m_mpi_rank = havoqgt_env()->node_offset_comm().rank();
-    m_mpi_size = havoqgt_env()->node_offset_comm().size();
-    m_shm_rank = havoqgt_env()->node_local_comm().rank();
-    m_shm_size = havoqgt_env()->node_local_comm().size();
-    m_world_rank = havoqgt_env()->world_comm().rank();
-    m_world_size = havoqgt_env()->world_comm().size();
+    m_mpi_comm = comm_nr().mpi_comm();
+    m_mpi_rank = comm_nr().rank();
+    m_mpi_size = comm_nr().size();
+    m_shm_rank = comm_nl().rank();
+    m_shm_size = comm_nl().size();
+    m_world_rank = comm_world().rank();
+    m_world_size = comm_world().size();
 
     init_environment_config();
 
@@ -131,13 +85,13 @@ public:
 
     m_my_exchange->~shm_exchange(); //frees mutexes
     delete m_pmsm;        //frees managed_shared_memory
-    havoqgt_env()->node_local_comm().barrier();
+    comm_nl().barrier();
     boost::interprocess::shared_memory_object::remove(msm_fname); //removes shared memory file
     for(auto itr = m_free_mpi_list.begin(); itr != m_free_mpi_list.end(); ++itr) {
       free(*itr);
 
     }
-    havoqgt_env()->world_comm().barrier();
+    comm_world().barrier();
   }
 
 private:
@@ -173,32 +127,32 @@ private:
     //Open Shared Mem segment
     size_t shm_file_size = msg_bundle_shm::padded_size * shm_exchange::capacity * m_shm_size * 4;
 
-    m_shm_rank = havoqgt_env()->node_local_comm().rank();
+    m_shm_rank = comm_nl().rank();
     if(m_shm_rank == 0) {
       boost::interprocess::shared_memory_object::remove(msm_fname);
       m_pmsm = new managed_shared_memory( boost::interprocess::create_only, msm_fname, shm_file_size);
       m_poffset_exchange = m_pmsm->construct<offset_ptr<shm_exchange>>("exchange")[m_shm_size]();
     }
-    havoqgt_env()->node_local_comm().barrier();
+    comm_nl().barrier();
     if(m_shm_rank != 0) {
       m_pmsm = new managed_shared_memory( boost::interprocess::open_only, msm_fname );
       std::pair<offset_ptr<shm_exchange>*, managed_shared_memory::size_type> res;
       res = m_pmsm->find<offset_ptr<shm_exchange>>("exchange");
-      assert(res.second == havoqgt_env()->node_local_comm().size());
+      assert(res.second == comm_nl().size());
       m_poffset_exchange = res.first;
     }
-    havoqgt_env()->node_local_comm().barrier();
+    comm_nl().barrier();
     void* aligned = m_pmsm->allocate_aligned(sizeof(shm_exchange), 4096);
     m_my_exchange = new (aligned) shm_exchange(m_shm_rank);
     m_poffset_exchange[m_shm_rank] = m_my_exchange;
     m_shm_transfer_count=0;
     m_shm_transfer_bytes=0;
-    havoqgt_env()->node_local_comm().barrier();
+    comm_nl().barrier();
     m_pp_exchange.resize(m_shm_size, nullptr);
     for(size_t i=0; i<m_shm_size; ++i) {
       m_pp_exchange[i] = m_poffset_exchange[i].get();
     }
-    havoqgt_env()->node_local_comm().barrier();
+    comm_nl().barrier();
   }
 
   void init_alloc_bundle_shared() {
@@ -356,7 +310,7 @@ public:
 
   template <typename OutputIterator>
   void send(size_t world_dest, const T& raw_msg, OutputIterator oitr, bool intercept) {
-    //std::cout << havoqgt_env()->whoami() << " send to " << world_dest << std::endl;
+    //std::cout << whoami() << " send to " << world_dest << std::endl;
     ++m_send_recv_balance;
     if(world_dest == m_world_rank) {
       *oitr = raw_msg;
@@ -467,12 +421,12 @@ private:
   template <typename OutputIterator>
   bool route_shm(size_t shm_rank, msg_wrapper& wrapped, OutputIterator oitr) {
     assert(shm_rank != m_shm_rank);
-    //std::cout << havoqgt_env()->whoami() << " route_shm to rank " << shm_rank << std::endl;
+    //std::cout << whoami() << " route_shm to rank " << shm_rank << std::endl;
     bool to_return = false;
     if(m_bundle_per_shm_rank[shm_rank] == nullptr) {
       bool print = true;
       msg_bundle_shm* bundle = get_free_shm_bundle();
-      //std::cout << havoqgt_env()->whoami() << " route_shm size = " << bundle->size << ", source_core = " << bundle->get_source_core() << std::endl;
+      //std::cout << whoami() << " route_shm size = " << bundle->size << ", source_core = " << bundle->get_source_core() << std::endl;
       m_bundle_per_shm_rank[shm_rank] = bundle;
       assert(m_bundle_per_shm_rank[shm_rank]->size == 0);
       assert(m_pending_iterator_per_shm_rank[shm_rank] == m_shm_pending_list.end());
@@ -503,7 +457,7 @@ private:
       /*if(stuck_time > 0.0) {
         stuck_time = MPI_Wtime() - stuck_time;
         if(stuck_time > 0.5) {
-          std::cout << havoqgt_env()->whoami() << " is stuck in route_shm, try_transfer_shm for "<< stuck_time << " seconds"  << std::endl;
+          std::cout << whoami() << " is stuck in route_shm, try_transfer_shm for "<< stuck_time << " seconds"  << std::endl;
         }
       }*/
     }
@@ -521,7 +475,7 @@ private:
   template <typename OutputIterator>
   bool route_mpi(size_t mpi_rank, msg_wrapper& wrapped, OutputIterator oitr) {
     assert(mpi_rank != m_mpi_rank);
-    //std::cout << havoqgt_env()->whoami() << " route_mpi sending to " << mpi_rank << std::endl;
+    //std::cout << whoami() << " route_mpi sending to " << mpi_rank << std::endl;
     bool to_return = false;
     if(m_bundle_per_mpi_rank[mpi_rank] == nullptr) {
       m_bundle_per_mpi_rank[mpi_rank] = get_free_mpi_bundle();
@@ -555,7 +509,7 @@ private:
       m_shm_request_list.push_back(to_transfer);
       return true;
     }
-    //std::cout << havoqgt_env()->whoami() << " transfer_shm FAILED dest_core = " << rank << std::endl;
+    //std::cout << whoami() << " transfer_shm FAILED dest_core = " << rank << std::endl;
     return false;
   }
 
@@ -569,7 +523,7 @@ private:
     req_pair.second = to_transfer;
     void* buffer_ptr = (void*) to_transfer;
     size_t size_in_bytes = to_transfer->message_size();
-    //std::cout << havoqgt_env()->whoami() << " posting ISend to node " << rank << std::endl;
+    //std::cout << whoami() << " posting ISend to node " << rank << std::endl;
     //std::cout << "Inspecting contents, byte_size = " << size_in_bytes << " size = " << to_transfer->size << ", first hop_count = " << to_transfer->data[0].msg.m_hop_count << std::endl;
     size_t world_dest;
     if(s_b_route_on_dest) {
@@ -590,7 +544,7 @@ private:
     m_isend_request_list.push_back(req_pair);
     m_mpi_pending_list.erase(m_pending_iterator_per_mpi_rank[rank]);
     m_pending_iterator_per_mpi_rank[rank] = m_mpi_pending_list.end();
-    //std::cout << havoqgt_env()->whoami() << " Inspecting m_mpi_pending_list:  size = " << m_mpi_pending_list.size()  << std::endl;
+    //std::cout << whoami() << " Inspecting m_mpi_pending_list:  size = " << m_mpi_pending_list.size()  << std::endl;
     /*for(auto itr = m_mpi_pending_list.begin(); itr != m_mpi_pending_list.end(); ++itr) {
       //std::cout << *itr << std::endl;
     }*/
@@ -683,7 +637,7 @@ private:
         } else if(s_b_route_on_dest) {
           if(recvptr->data[i].dest_node == m_mpi_rank/* && recvptr->data[i].dest_core == m_shm_rank*/) {
             if(recvptr->data[i].dest_core != m_shm_rank) {
-              //std::cout << havoqgt_env()->whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
+              //std::cout << whoami() << "recvptr->data[i].dest_core != m_shm_rank: dest = " << recvptr->data[i].msg.dest() << ", dest_node = " << recvptr->data[i].dest_node << ", dest_core = " << recvptr->data[i].dest_core << ", hop length = " << recvptr->data[i].msg.m_hop_count << std::endl;
             }
             assert(recvptr->data[i].dest_core == m_shm_rank);
             *oitr = recvptr->data[i].msg;
@@ -829,15 +783,15 @@ struct mailbox<T>::shm_exchange {
 
 #if 0
   bool try_send(msg_bundle_shm* to_send) {
-    assert(to_send->get_source_core() == havoqgt_env()->node_local_comm().rank());
-    //std::cout << havoqgt_env()->whoami() << " sending to " << source_core << ", size = " << to_send->size << std::endl;
+    assert(to_send->get_source_core() == comm_nl().rank());
+    //std::cout << whoami() << " sending to " << source_core << ", size = " << to_send->size << std::endl;
     //double lock_start = MPI_Wtime();
     scoped_lock lock(recv_mutex, boost::interprocess::try_to_lock);
     bool print = false;
     while(!lock) {
       if(print) {
         print = false;
-        std::cout << havoqgt_env()->whoami() << " lock failed" << std::endl;
+        std::cout << whoami() << " lock failed" << std::endl;
       }
       lock.try_lock();
       //sched_yield();
@@ -847,7 +801,7 @@ struct mailbox<T>::shm_exchange {
       recv_list[recv_end++ % capacity] = to_send;
       return true;
     }
-    //std::cout << havoqgt_env()->whoami() << ": Try_send Failed, sending_to_core = " << source_core << ", recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
+    //std::cout << whoami() << ": Try_send Failed, sending_to_core = " << source_core << ", recv_end = " << recv_end << ", recv_beg = " << recv_beg << std::endl;
     return false;
   }
 #else
@@ -885,7 +839,7 @@ struct mailbox<T>::shm_exchange {
     }
     //lock_time += MPI_Wtime() - lock_start;
     while(/*size_recv > 0*/recv_end > recv_beg) {
-      /*//std::cout << havoqgt_env()->whoami() << " recv size = " << size_recv << std::endl;
+      /*//std::cout << whoami() << " recv size = " << size_recv << std::endl;
       to_recv.resize(size_recv);
       for(size_t i=0; i<size_recv; ++i) {
         to_recv[i] = recv_list[i].get();

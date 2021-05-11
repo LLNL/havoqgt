@@ -6,6 +6,6 @@ Makefile
 build/*
 *.cobaltlog
 *.error
-cmake-build-debug
+.vscode/settings.json
+cmake-build-*
 .idea
-.idea/*

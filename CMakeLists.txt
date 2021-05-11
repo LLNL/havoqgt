@@ -7,6 +7,10 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules)
 #
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Use Rpath for dependencies." TRUE)
 option(HAVOQGT_BUILD_TEST "Build HAVOQGT tests." TRUE)
+set(METALL_ROOT "" CACHE PATH "Metall installed root directory")
+option(USE_UMAP "Use Umap instead of the system mmap" OFF)
+set(UMAP_ROOT "" CACHE PATH "UMap installed root directory")
+option(USE_HDF5 "Build executable(s) that use HDF5" OFF)
 
 #
 # Main Inlucde directory
@@ -36,11 +40,18 @@ endmacro()
 #
 # BOOST is required
 #
-find_package( Boost )
+find_package( Boost 1.64 REQUIRED )
 macro(include_link_boost target)
   include_directories(${Boost_INCLUDE_DIRS})
   target_link_libraries(${target} ${Boost_LIBRARIES})
-endmacro() 
+endmacro()
+
+#
+#  stdc++fs is required
+#
+macro(include_link_stdcppfs target)
+  target_link_libraries(${target} stdc++fs)
+endmacro()
 
 #
 #  Posix_fallocate
@@ -51,11 +62,82 @@ if (HAVE_POSIX_FALLOCATE)
 endif()
 
 #
+# Metall
+#
+if (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"))
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.1)
+    message(FATAL_ERROR "Metall requires GCC >= 8.1")
+  endif ()
+endif ()
+
+if (METALL_ROOT)
+  find_path(METALL_INCLUDE_DIR metall/metall.hpp
+            PATHS ${METALL_ROOT}/include
+            REQUIRED
+            NO_DEFAULT_PATH)
+else()
+  find_path(METALL_INCLUDE_DIR metall/metall.hpp
+            REQUIRED)
+endif()
+
+# REQUIRED option in find_path() is available from CMake v3.18?
+if (NOT METALL_INCLUDE_DIR)
+  message(FATAL_ERROR "Cannot find Metall")
+endif()
+
+macro(include_metall target)
+  target_include_directories(${target} PUBLIC ${METALL_INCLUDE_DIR})
+endmacro()
+
+#
+# HDF5
+#
+if (USE_HDF5)
+  find_package(HDF5 COMPONENTS CXX C HL) # TODO, add required version info
+  if (HDF5_FOUND)
+    include_directories(${HDF5_INCLUDE_DIRS})
+    add_definitions(${HDF5_DEFINITIONS})
+  endif()
+endif()
+macro(include_link_hdf5 target)
+  target_link_libraries(${target} ${HDF5_LIBRARIES})
+endmacro()
+
+#
+# Umap
+#
+if (USE_UMAP)
+  if (UMAP_ROOT)
+    find_library(LIBUMAP umap
+                 PATHS ${UMAP_ROOT}/lib
+                 REQUIRED
+                 NO_DEFAULT_PATH)
+    find_path(UMAP_INCLUDE_DIR umap/umap.h
+              PATHS ${UMAP_ROOT}/include
+              REQUIRED
+              NO_DEFAULT_PATH)
+  else ()
+    find_library(LIBUMAP umap REQUIRED)
+    find_path(UMAP_INCLUDE_DIR umap/umap.h REQUIRED)
+  endif ()
+
+  if ((NOT LIBUMAP) OR (NOT UMAP_INCLUDE_DIR))
+    message(FATAL_ERROR "Cannot find UMap")
+  endif()
+endif ()
+
+macro(include_link_umap target)
+  target_include_directories(${target} PUBLIC ${UMAP_INCLUDE_DIR})
+  target_link_libraries(${target} ${LIBUMAP})
+  target_compile_definitions(${target} PUBLIC METALL_USE_UMAP)
+endmacro()
+
+#
 # Doxygen
 #
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
                ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
 add_custom_target(doc
     ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
@@ -90,6 +172,9 @@ message("   MPI_FOUND:          ${MPI_FOUND}")
 #message("   DOXYGEN_FOUND:      ${DOXYGEN_FOUND}")
 #MPI params found
 if(MPI_FOUND)
-  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS 
+  message("   MPIEXEC: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} PROCS
           ${MPIEXEC_PREFLAGS} EXECUTABLE ${MPIEXEC_POSTFLAGS} ARGS")
 endif(MPI_FOUND)
+if (METALL_INCLUDE_DIR)
+  message("   METALL_INCLUDE_DIR: ${METALL_INCLUDE_DIR}")
+endif()

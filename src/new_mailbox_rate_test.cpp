@@ -1,55 +1,9 @@
-/*
- * Copyright (c) 2013, Lawrence Livermore National Security, LLC.
- * Produced at the Lawrence Livermore National Laboratory.
- * Written by Roger Pearce <rpearce@llnl.gov>.
- * LLNL-CODE-644630.
- * All rights reserved.
- *
- * This file is part of HavoqGT, Version 0.1.
- * For details, see https://computation.llnl.gov/casc/dcca-pub/dcca/Downloads.html
- *
- * Please also read this link – Our Notice and GNU Lesser General Public License.
- *   http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License (as published by the Free
- * Software Foundation) version 2.1 dated February 1999.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the terms and conditions of the GNU General Public
- * License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
- *
- * Our Preamble Notice
- *
- * A. This notice is required to be provided under our contract with the
- * U.S. Department of Energy (DOE). This work was produced at the Lawrence
- * Livermore National Laboratory under Contract No. DE-AC52-07NA27344 with the DOE.
- *
- * B. Neither the United States Government nor Lawrence Livermore National
- * Security, LLC nor any of their employees, makes any warranty, express or
- * implied, or assumes any liability or responsibility for the accuracy,
- * completeness, or usefulness of any information, apparatus, product, or process
- * disclosed, or represents that its use would not infringe privately-owned rights.
- *
- * C. Also, reference herein to any specific commercial products, process, or
- * services by trade name, trademark, manufacturer or otherwise does not
- * necessarily constitute or imply its endorsement, recommendation, or favoring by
- * the United States Government or Lawrence Livermore National Security, LLC. The
- * views and opinions of authors expressed herein do not necessarily state or
- * reflect those of the United States Government or Lawrence Livermore National
- * Security, LLC, and shall not be used for advertising or product endorsement
- * purposes.
- *
- */
+// Copyright 2013-2020 Lawrence Livermore National Security, LLC and other
+// HavoqGT Project Developers. See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: MIT
 
-#include <havoqgt/environment.hpp>
+
 #include <havoqgt/mpi.hpp>
 #include <havoqgt/cache_utilities.hpp>
 #include <havoqgt/new_mailbox.hpp>
@@ -80,7 +34,7 @@ public:
        m_hop_state++;
      }
      m_dest = m_hop_state % s_mpi_size;
-    } while(m_dest ==  havoqgt_env()->world_comm().rank());  
+    } while(m_dest ==  comm_world().rank());  
   }
 
   msg_hopper() {}
@@ -106,7 +60,7 @@ public:
         to_return.m_hop_state++;
       }
       to_return.m_dest = to_return.m_hop_state % s_mpi_size;
-    } while (to_return.m_dest ==  havoqgt_env()->world_comm().rank());
+    } while (to_return.m_dest ==  comm_world().rank());
     return to_return;
   }
 
@@ -131,15 +85,15 @@ public:
 
   template <typename T>
   receive_iterator& operator=(const T& value) {
-    if(value.dest() != havoqgt_env()->world_comm().rank()) {
+    if(value.dest() != comm_world().rank()) {
       HAVOQGT_ERROR_MSG("Invalid receive!!");
     }
     if(value.finished()) {
       ptd->inc_completed();
       ++count_finished;
-      //std::cout << "Hop Finished on Rank " << havoqgt_env()->world_comm().rank()  << "!!!" << std::endl;
+      //std::cout << "Hop Finished on Rank " << comm_world().rank()  << "!!!" << std::endl;
     } else {
-      //std::cout << "Just received hop " << value.m_hop_count << ", rank = " << havoqgt_env()->world_comm().rank() << std::endl;
+      //std::cout << "Just received hop " << value.m_hop_count << ", rank = " << comm_world().rank() << std::endl;
       ++count_fwd;
       T next = value.next();
       ppending->push_back(next);
@@ -166,11 +120,11 @@ int main(int argc, char** argv) {
   count_finished = 0;
   count_fwd = 0;
 
-  havoqgt::havoqgt_init(&argc, &argv);
+  havoqgt::init(&argc, &argv);
   {
     havoqgt::get_environment();
-    int mpi_rank = havoqgt_env()->world_comm().rank();
-    int mpi_size = havoqgt_env()->world_comm().size();
+    int mpi_rank = comm_world().rank();
+    int mpi_size = comm_world().size();
     std::stringstream gmon;
     gmon << "havoqgt_rank_" << mpi_rank;
     setenv("GMON_OUT_PREFIX", gmon.str().c_str(), 1);
@@ -189,7 +143,7 @@ int main(int argc, char** argv) {
     }
 
   
-    mailbox<msg_hopper> mailbox(/*havoqgt_env()->world_comm().comm(),*/ 1);
+    mailbox<msg_hopper> mailbox(/*comm_world().comm(),*/ 1);
     termination_detection<uint64_t> td(MPI_COMM_WORLD);
     std::vector<msg_hopper> pending;
 
@@ -199,7 +153,7 @@ int main(int argc, char** argv) {
     //boost::counting_iterator<uint64_t> seq_beg(0);
     //boost::counting_iterator<uint64_t> seq_end((mpi_rank == 0) ? 1 : 0);
 
-    havoqgt_env()->world_comm().barrier();   
+    comm_world().barrier();   
     double time_start = MPI_Wtime();
 
     uint64_t recv_counter = 0;
@@ -224,7 +178,7 @@ int main(int argc, char** argv) {
       }
     } while(!pending.empty() || !mailbox.is_idle() || !td.test_for_termination());
 
-    havoqgt_env()->world_comm().barrier();   
+    comm_world().barrier();   
     double time_end = MPI_Wtime();
 
     if(mpi_rank == 0) {
@@ -238,7 +192,7 @@ int main(int argc, char** argv) {
     }
 
   }
-  havoqgt::havoqgt_finalize();
+  ;
 
   return 0;
 }
