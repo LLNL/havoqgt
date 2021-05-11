@@ -201,12 +201,12 @@ class exact_eccentricity {
     int mpi_rank(0);
     CHK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
 
-    use_tk = (std::getenv("USE_TAKE") > 0);
-    use_soft_contribution_score = (std::getenv("USE_SOFT_CONT_SCORE") > 0);
-    use_ds_fix = (std::getenv("USE_DS_FIX") > 0);
-    use_ds_adp = (std::getenv("USE_DS_ADP") > 0);
-    use_hanging_tree = (std::getenv("USE_TREE") > 0);
-    use_ds_fix_middle_shel = (std::getenv("USE_DS_FIX_MS") > 0);
+    use_tk = !!std::getenv("USE_TAKE");
+    use_soft_contribution_score = !!std::getenv("USE_SOFT_CONT_SCORE");
+    use_ds_fix = !!std::getenv("USE_DS_FIX");
+    use_ds_adp = !!std::getenv("USE_DS_ADP");
+    use_hanging_tree = !!std::getenv("USE_TREE");
+    use_ds_fix_middle_shel = !!std::getenv("USE_DS_FIX_MS");
     if (mpi_rank == 0) {
       std::cout << "use_tk: " << use_tk << std::endl;
       std::cout << "use_soft_contribution_score: " << use_soft_contribution_score << std::endl;

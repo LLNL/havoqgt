@@ -96,9 +96,10 @@ using exact_eccentricity_t = exact_eccentricity<distributed_db::allocator<>, lev
 void usage()
 {
   if (comm_world().rank() == 0) {
-    std::cerr << "Usage: -i <string> -s <int>\n"
+    std::cout << "Usage: env [USE_TAKE, USE_DS_FIX, USE_DS_ADP, or USE_DS_FIX_MS] ./run_exact_ecc -i <string>\n"
               << " -i <string>    - input graph base filename (required)\n"
               << " -b <string>    - backup graph base filename.  If set, \"input\" graph will be deleted if it exists\n"
+              << " -a <string>    - colon separated source selection algorithms IDs for USE_DS_AD\n"
               << " -h             - print help and exit\n\n";
   }
 }
@@ -106,7 +107,6 @@ void usage()
 void parse_cmd_line(int argc, char **argv, std::string &input_filename,
                     std::string &backup_filename,
                     std::string &ecc_output_filename,
-                    std::vector<uint64_t> &source_id_list,
                     std::set<int>& use_algorithm,
                     std::string& two_core_info_filename)
 {
