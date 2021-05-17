@@ -429,6 +429,11 @@ class exact_eccentricity {
       }
       ++m_progress_info.iteration_no;
     }
+
+    {
+      const uint16_t diameter = find_max_ecc();
+      if (mpi_rank == 0) std::cout << "Current max ECC: " << diameter << std::endl;
+    }
   }
 
 // -------------------------------------------------------------------------------------------------------------- //
