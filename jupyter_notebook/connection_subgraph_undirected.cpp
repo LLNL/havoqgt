@@ -20,8 +20,11 @@
 
 #include "omp.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/math/special_functions/binomial.hpp>
+#include <assert.h>
+#include <unistd.h>
+
+//#include <boost/algorithm/string.hpp>
+//#include <boost/math/special_functions/binomial.hpp>
 //#include <boost/random.hpp>
 //#include <boost/random/random_device.hpp>
 //#include <boost/random/discrete_distribution.hpp>
@@ -2755,8 +2758,9 @@ int main(int argc, char** argv) {
   //std::cout << "Application ... " << std::endl;
 
   // host info
-  char hostname[HOST_NAME_MAX];
-  gethostname(hostname, HOST_NAME_MAX);
+  size_t _HOST_NAME_MAX = 256;
+  char hostname[_HOST_NAME_MAX];
+  gethostname(hostname, _HOST_NAME_MAX);
   std::cout << "Hostname: " << hostname << std::endl;
    
   //size_t host_thread_count = 0;
