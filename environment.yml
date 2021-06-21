@@ -7,7 +7,7 @@ channels:
 dependencies:
   - python>=3.8
   - nodejs>13
-#  - jupyterlab=3
+  - jupyterlab=3
   - pandas
   - ipycytoscape
   - numpy
