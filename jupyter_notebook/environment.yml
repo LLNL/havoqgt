@@ -1,0 +1,18 @@
+name: llnl-metal-example-05
+
+channels:
+  - conda-forge
+  - anaconda
+
+dependencies:
+  - python>=3.8
+  - nodejs>13
+#  - jupyterlab=3
+  - pandas
+  - ipycytoscape
+  - numpy
+  - pip
+  - pip:
+#    - py2neo
+     - matplotlib
+     - networkx      
