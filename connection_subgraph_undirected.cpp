@@ -2498,6 +2498,8 @@ void eliminate_non_path_vertices_from_bfs_intersection_tree_undirected
  
         //assert(v_successor_bitset.count() == static_cast<size_t>(0));  
         //assert(v_predecessor_bitset.count() == static_cast<size_t>(0));
+	
+	VertexSet v_nbr_set;
  
         for (Edge e = vertices[v]; e < vertices[v + 1]; e++) {
 
@@ -2539,13 +2541,16 @@ void eliminate_non_path_vertices_from_bfs_intersection_tree_undirected
           } // for
  
           active_nbr_count++;
+
+	  v_nbr_set.insert(v_nbr);
          
           //if (is_v_valid) {  
           //if (has_successor && has_predecessor) {            
             //break;
           //}   
 
-          if (has_predecessor && (active_nbr_count > 1)) {
+          //if (has_predecessor && (active_nbr_count > 1)) {
+	  if (has_predecessor && (v_nbr_set.size() > 1)) {
             break;
           }    
 
@@ -2553,7 +2558,10 @@ void eliminate_non_path_vertices_from_bfs_intersection_tree_undirected
 
         //if (!is_v_valid) {         
         //if (!has_successor || !has_predecessor) {
-        if (!(has_predecessor && (active_nbr_count > 1))) {
+        //if (!(has_predecessor && (active_nbr_count > 1))) {
+	if (has_predecessor && (v_nbr_set.size() > 1)) {
+	  // do nothing	
+	} else {	
           vertex_active[v] = static_cast<Boolean>(0); 
           finished = false;
           deleted_vertex_count++; 
@@ -2589,14 +2597,14 @@ void usage(uint64_t walker_count, uint64_t walker_hop_count,
     << "[file ...] - list of input and output files (required)\n\n";
 }
 
-template <typename VertexIDList>
+template <typename VertexIDList, typename VertexDataSet>
 void parse_cmd_line(int argc, char** argv, 
   std::string& vertex_input_filename, std::string& edge_input_filename, 
   std::string& vertex_data_input_filename, std::string& pattern_input_filename, 
   std::string& vertex_rank_output_filename, std::string& walks_output_filename, 
   uint64_t& walker_count, uint64_t& walker_hop_count, size_t& thread_count, 
   size_t default_thread_count, size_t& k_input, VertexIDList& u_vertices, 
-  VertexIDList& v_vertices, size_t& bfs_max_depth) {
+  VertexIDList& v_vertices, size_t& bfs_max_depth, VertexDataSet& vertex_data_filter) {
 
   std::cout << "CMD line: ";
   for (int i=0; i<argc; ++i) {
@@ -2620,7 +2628,7 @@ void parse_cmd_line(int argc, char** argv,
   bool prn_help = false;
   char c;
 
-  while ((c = getopt(argc, argv, "d:w:s:t:k:u:v:h ")) != -1) {
+  while ((c = getopt(argc, argv, "d:w:s:t:k:u:v:f:h ")) != -1) {
      switch (c) {
        case 'h':
          prn_help = true;
@@ -2658,6 +2666,9 @@ void parse_cmd_line(int argc, char** argv,
       case 'v' :
          //std::cout << optarg << std::endl;
          v_vertices.push_back(std::stoull(optarg));
+	 break;
+      case 'f' :
+         vertex_data_filter.insert(std::stoull(optarg));   
 	 break; 
       default:
          std::cerr << "Unrecognized option: " << c << "." <<std::endl;
@@ -2701,8 +2712,10 @@ void parse_cmd_line(int argc, char** argv,
 int main(int argc, char** argv) {
 
   typedef uint64_t Vertex;
+  typedef uint64_t VertexData;
  
   typedef std::vector<Vertex> VertexIDList;
+  typedef std::unordered_set<VertexData> VertexDataSet;
 
   std::chrono::time_point<std::chrono::steady_clock> start_time;
   std::chrono::time_point<std::chrono::steady_clock> end_time;
@@ -2735,6 +2748,7 @@ int main(int argc, char** argv) {
 
   VertexIDList u_vertices(0);
   VertexIDList v_vertices(0); 
+  VertexDataSet vertex_data_filter;
 
   // TODO: mandatory or optional edges as input?
 
@@ -2749,11 +2763,11 @@ int main(int argc, char** argv) {
   //  << std::endl;
   }
 
-  parse_cmd_line<VertexIDList>(argc, argv, vertex_input_filename, 
+  parse_cmd_line<VertexIDList, VertexDataSet>(argc, argv, vertex_input_filename, 
     edge_input_filename, vertex_data_input_filename, pattern_input_filename,
     vertex_rank_output_filename, /*walks_output_filename,*/ prototype_dir_name,
     walker_count, walker_hop_count, thread_count, host_thread_count, k_input,
-    u_vertices, v_vertices, bfs_max_depth); 
+    u_vertices, v_vertices, bfs_max_depth, vertex_data_filter); 
  
   //std::cout << "Application ... " << std::endl;
 
@@ -3159,6 +3173,20 @@ int main(int argc, char** argv) {
 
   //////////////////////////////////////////////////////////////////////////////
 
+  std::cout << "Selected veretx data: ";
+
+  for (auto& d : vertex_data_filter) {
+    std::cout << d << ", ";
+  }
+
+  if (vertex_data_filter.size() < 1) {
+    std::cout << "None" << std::endl;
+  }
+
+  std::cout << std::endl;  
+
+  //////////////////////////////////////////////////////////////////////////////
+
   // eliminate non-path vertices 
 
   std::cout << "Eliminating non-path vertices ... " << std::endl;
@@ -3497,14 +3525,16 @@ int main(int argc, char** argv) {
   {
   #pragma omp parallel for schedule (guided) 
   for (Vertex v = 0; v < vertex_count; v++) {
-    auto find_uv_veretx = uv_vertices.find(v);
-    if (find_uv_veretx != uv_vertices.end()) {          
+    auto find_uv_vertex = uv_vertices.find(v);
+    if (find_uv_vertex != uv_vertices.end()) {          
       continue;
     } else {
 
-      // TODO: user input, put them in a set   
-      if ((vertex_data[v] == static_cast<VertexData>(1546094233688003844)) || 
-        (vertex_data[v] == static_cast<VertexData>(13996733750220222916U))) {
+      // TODO: user input, put them in a set
+      auto find_veretx_data = vertex_data_filter.find(vertex_data[v]);      
+      if ((find_veretx_data != vertex_data_filter.end()) || (vertex_data_filter.size() < 1)) {
+      //if ((vertex_data[v] == static_cast<VertexData>(1546094233688003844)) || 
+      //  (vertex_data[v] == static_cast<VertexData>(13996733750220222916U))) {
         // do nothing 
       } else {
          vertex_active[static_cast<size_t>(v)] = static_cast<Boolean>(0);
