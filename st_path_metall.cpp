@@ -140,7 +140,11 @@ bool bfs_level_synchronous_single_source(Graph* graph,
   } while(!finished);
 
   if (target_vertex_found) {
-    std::cout << target_vertex << " found at depth " << bfs_level[target_vertex] << std::endl;
+    std::cout << target_vertex << " found at depth " << 
+      bfs_level[target_vertex] << std::endl;
+  } else {
+    std::cout << target_vertex << " was not found at maximum depth " << 
+      (current_level - 1) << std::endl;
   } 
 
   std::cout << "#visited vertices: " << bfs_level.size() << std::endl;
@@ -149,7 +153,7 @@ bool bfs_level_synchronous_single_source(Graph* graph,
   //  std::cout << i.first << " " << i.second << std::endl; 
   //}
 
-  return false; 
+  return target_vertex_found; 
 } // bfs_level_synchronous_single_source  
 
 int main() {
