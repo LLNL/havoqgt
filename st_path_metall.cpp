@@ -32,46 +32,71 @@ using namespace metall::container::experimental;
 
 using graph_type = jgraph::jgraph<metall::manager::allocator_type<std::byte>>;
 
+/**
+ * Returns elapsed (monotonic) time.
+ */
+double getElapsedTimeSecond(
+  std::chrono::time_point<std::chrono::steady_clock> startTime,
+  std::chrono::time_point<std::chrono::steady_clock> endTime) {
+  return ((endTime - startTime).count()) *
+    std::chrono::steady_clock::period::num /
+    static_cast<double>(std::chrono::steady_clock::period::den);
+}
+
 template <typename Graph, typename Vertex>
-bool bfs_level_synchronous_single_source(Graph* graph, const Vertex& source_veretx, 
-  const Vertex& target_vertex) {
+bool bfs_level_synchronous_single_source(Graph* graph, 
+  const Vertex& source_veretx, const Vertex& target_vertex) {
 
-    size_t current_level = 0;   
-    std::unordered_map<Vertex, size_t> bfs_level;
-    bfs_level[source_veretx] = current_level;    
+  size_t current_level = 0;   
+  std::unordered_map<Vertex, size_t> bfs_level;
+  bfs_level[source_veretx] = current_level;    
 
-    bool finished = false;
- 
-    for (auto vitr = graph->vertices_begin(), vend = graph->vertices_end(); vitr != vend; ++vitr) {
+  bool finished = false;
+  bool target_vertex_found = false; 
+
+  do {
+
+    finished = true; 
+
+    for (auto vitr = graph->vertices_begin(), vend = graph->vertices_end(); 
+      vitr != vend; ++vitr) {
 
       //std::cout << "Vertex value = " << vitr->value() << std::endl;
-      //auto& v_value = vitr->value();
+      auto& v_value = vitr->value();
       //std::cout << "Vertex value = " << v_value << std::endl;
+      auto v_id = v_value.as_object()["id"].as_string();
+      //std::cout << v_id << std::endl;
       //auto v_label = v_value.as_object()["type"].as_string();
       //auto v_label = v_value.as_object()["labels"].as_array()[0].as_string(); 
       //if (v_label == "Food") {
       //  std::cout << v_label << std::endl;    
       //}
       
-      if (vitr->key() == source_veretx) {
+      // TODO: do not use vitr->key(); use v_value.as_object()["id"]   
+
+      //if (vitr->key() == source_veretx) {
         //std::cout << source_veretx << std::endl;
-      }
+      //}
   
-      auto find_vertex = bfs_level.find(vitr->key());
+      //auto find_vertex = bfs_level.find(vitr->key());
+      auto find_vertex = bfs_level.find(v_id);
       if (find_vertex == bfs_level.end()) {
         continue;  
-      } //else {
-        //std::cout << vitr->key() << " " << bfs_level[vitr->key()] << std::endl; 
-      //}  
+      } else {
+        //std::cout << vitr->key() << " " << bfs_level[vitr->key()] << std::endl;          
+        //std::cout << v_id << " " << bfs_level[v_id] << std::endl; 
+      }  
 
-      if (bfs_level[vitr->key()] == current_level) {
+      //if (bfs_level[vitr->key()] == current_level) {
+      if (bfs_level[v_id] == current_level) {
 
-        size_t nbr_count = 0;  
+        //size_t nbr_count = 0;  
 
-        for (auto eitr = graph->edges_begin(vitr->key()), eend = graph->edges_end(vitr->key()); eitr != eend; ++eitr) {
-
+        for (auto eitr = graph->edges_begin(vitr->key()), 
+          eend = graph->edges_end(vitr->key()); eitr != eend; ++eitr) {
+          //std::cout << "Edge ID = " << eitr->key() << std::endl; 
           //std::cout << "Edge value = " << eitr->value() << std::endl;
-          nbr_count++;
+          //nbr_count++;
 
           auto& e_value = eitr->value();
           //auto v_nbr = e_value.as_object()["start"].as_object()["id"].as_string();
@@ -80,25 +105,51 @@ bool bfs_level_synchronous_single_source(Graph* graph, const Vertex& source_vere
 
           auto find_v_nbr = bfs_level.find(v_nbr);
           if (find_v_nbr == bfs_level.end()) {
-            bfs_level[v_nbr] = current_level + 1;         
+            bfs_level[v_nbr] = current_level + 1;
+            //std::cout << bfs_level[v_nbr] << std::endl; 
 
             if (finished == true) {
               finished = false;
             }
           }
+
+          if (v_nbr == target_vertex) {
+            //std::cout << v_nbr << std::endl;
+            target_vertex_found = true;
+            break;
+          }
   
         } // for  
 
-        std::cout << vitr->key() << " # neighbors: " << nbr_count << std::endl;
+        //std::cout << vitr->key() << " # neighbors: " << nbr_count << std::endl;
 
       }
 
+      if (target_vertex_found) {
+        finished = true; 
+        break;
+      } 
+
     } // for
 
+    //std::cout << current_level << " " << target_vertex_found << " " << 
+    //  finished << std::endl; 
 
-    std::cout << "#visited vertices: " << bfs_level.size() << std::endl; 
- 
-    return false; 
+    current_level++;    
+
+  } while(!finished);
+
+  if (target_vertex_found) {
+    std::cout << target_vertex << " found at depth " << bfs_level[target_vertex] << std::endl;
+  } 
+
+  std::cout << "#visited vertices: " << bfs_level.size() << std::endl;
+
+  //for (auto i : bfs_level) {
+  //  std::cout << i.first << " " << i.second << std::endl; 
+  //}
+
+  return false; 
 } // bfs_level_synchronous_single_source  
 
 int main() {
@@ -157,7 +208,7 @@ int main() {
   {
     std::cout << "\n--- Open ---" << std::endl;
     //metall::manager manager(metall::open_read_only, "/usr/workspace/reza2/metall/jgraph_spoke_undir_obj");
-    metall::manager manager(metall::open_read_only, "/dev/shm/jgraph_spoke_undir_obj");
+    metall::manager manager(metall::open_read_only, "/dev/shm/jgraph_spoke_undir_obj_2");
 
     const auto *graph = manager.find<graph_type>(metall::unique_instance).first;
 
@@ -225,16 +276,26 @@ int main() {
 
     // graph algorithm
 
-    using Vertex = std::string_view;
-    using Edge = std::string_view;
+    using Vertex = std::string; //std::string_view; // wrong
+    using Edge = std::string; //std::string_view;
     using VertexVertexMap = std::unordered_map<Vertex, Vertex>;
 
-    Vertex source_vertex = "2268378";
-    Vertex target_veretx = "2283541";
+    Vertex source_vertex = "2283541"; //"2268378";
+    Vertex target_veretx = "2268378"; //"2283541";
 
     VertexVertexMap vertex_predecessor_map;   
 
+    std::chrono::time_point<std::chrono::steady_clock> global_start_time =
+      std::chrono::steady_clock::now();
+
     bfs_level_synchronous_single_source(graph, source_vertex, target_veretx);
+
+    std::chrono::time_point<std::chrono::steady_clock> global_end_time =
+      std::chrono::steady_clock::now();
+    double global_elapsed_time = getElapsedTimeSecond(global_start_time,
+      global_end_time);
+    std::cout << "Time: " << global_elapsed_time << " seconds."
+      << std::endl;
 
   }
 
