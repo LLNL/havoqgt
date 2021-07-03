@@ -45,11 +45,12 @@ double getElapsedTimeSecond(
 
 template <typename Graph, typename Vertex>
 bool bfs_level_synchronous_single_source(Graph* graph, 
-  const Vertex& source_veretx, const Vertex& target_vertex) {
+  const Vertex& source_vertex, const Vertex& target_vertex) {
 
   size_t current_level = 0;   
-  std::unordered_map<Vertex, size_t> bfs_level;
-  bfs_level[source_veretx] = current_level;    
+  //std::unordered_map<Vertex, size_t> bfs_level;
+  std::unordered_map<Vertex, std::pair<size_t, Vertex>> bfs_level; // level, predecessor
+  bfs_level[source_vertex].first = current_level;       
 
   bool finished = false;
   bool target_vertex_found = false; 
@@ -74,8 +75,8 @@ bool bfs_level_synchronous_single_source(Graph* graph,
       
       // TODO: do not use vitr->key(); use v_value.as_object()["id"]   
 
-      //if (vitr->key() == source_veretx) {
-        //std::cout << source_veretx << std::endl;
+      //if (vitr->key() == source_vertex) {
+        //std::cout << source_vertex << std::endl;
       //}
   
       //auto find_vertex = bfs_level.find(vitr->key());
@@ -88,7 +89,7 @@ bool bfs_level_synchronous_single_source(Graph* graph,
       }  
 
       //if (bfs_level[vitr->key()] == current_level) {
-      if (bfs_level[v_id] == current_level) {
+      if (bfs_level[v_id].first == current_level) {
 
         //size_t nbr_count = 0;  
 
@@ -105,7 +106,8 @@ bool bfs_level_synchronous_single_source(Graph* graph,
 
           auto find_v_nbr = bfs_level.find(v_nbr);
           if (find_v_nbr == bfs_level.end()) {
-            bfs_level[v_nbr] = current_level + 1;
+            bfs_level[v_nbr].first = current_level + 1;
+            bfs_level[v_nbr].second = v_id; // predecessor
             //std::cout << bfs_level[v_nbr] << std::endl; 
 
             if (finished == true) {
@@ -141,7 +143,7 @@ bool bfs_level_synchronous_single_source(Graph* graph,
 
   if (target_vertex_found) {
     std::cout << target_vertex << " found at depth " << 
-      bfs_level[target_vertex] << std::endl;
+      bfs_level[target_vertex].first << std::endl;
   } else {
     std::cout << target_vertex << " was not found at maximum depth " << 
       (current_level - 1) << std::endl;
@@ -152,6 +154,35 @@ bool bfs_level_synchronous_single_source(Graph* graph,
   //for (auto i : bfs_level) {
   //  std::cout << i.first << " " << i.second << std::endl; 
   //}
+
+  // output path  
+  if (target_vertex_found && (bfs_level.size() >= 2) && 
+    bfs_level[target_vertex].first <= 25) {
+
+    current_level = bfs_level[target_vertex].first;    
+    Vertex current_path_vertex = target_vertex;
+
+    size_t path_length = 0; 
+
+    do {
+      Vertex predecessor_vertex = bfs_level[current_path_vertex].second; 
+
+      std::cout << current_path_vertex << " " << predecessor_vertex 
+        << std::endl;       
+
+      current_level = bfs_level[predecessor_vertex].first;
+      current_path_vertex = predecessor_vertex; 
+
+      if (current_level == 0 || 
+        path_length >= (bfs_level[target_vertex].first - 1)) {
+        break;
+      } else {
+        path_length++;
+      } 
+
+    } while(current_path_vertex != source_vertex);
+
+  } // if 
 
   return target_vertex_found; 
 } // bfs_level_synchronous_single_source  
@@ -285,14 +316,14 @@ int main() {
     using VertexVertexMap = std::unordered_map<Vertex, Vertex>;
 
     Vertex source_vertex = "2283541"; //"2268378";
-    Vertex target_veretx = "2268378"; //"2283541";
+    Vertex target_vertex = "2268378"; //"2283541";
 
-    VertexVertexMap vertex_predecessor_map;   
+    //VertexVertexMap vertex_predecessor_map;   
 
     std::chrono::time_point<std::chrono::steady_clock> global_start_time =
       std::chrono::steady_clock::now();
 
-    bfs_level_synchronous_single_source(graph, source_vertex, target_veretx);
+    bfs_level_synchronous_single_source(graph, source_vertex, target_vertex);
 
     std::chrono::time_point<std::chrono::steady_clock> global_end_time =
       std::chrono::steady_clock::now();
