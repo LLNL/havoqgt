@@ -16,4 +16,5 @@ dependencies:
 #    - py2neo
      - matplotlib
      - networkx     
-     - jupyter_contrib_nbextensions 
+     - jupyter_contrib_nbextensions
+     - cmake     
