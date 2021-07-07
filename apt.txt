@@ -1,5 +1,5 @@
 build-essential
-cmake-3.20.5
+cmake
 gcc-8
 g++-8
 vim
