@@ -173,7 +173,7 @@ bool bfs_level_synchronous_single_source(Graph* graph,
       current_level = bfs_level[predecessor_vertex].first;
       current_path_vertex = predecessor_vertex; 
 
-      if (current_level == 0 || 
+      if (current_level == bfs_level[source_vertex].first || 
         path_length >= (bfs_level[target_vertex].first - 1)) {
         break;
       } else {
