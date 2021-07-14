@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
     }
 
     if (!output_base_filename.empty()) {
-      hdf5_vertex_data_writer::vertex_data_table_type data;
+      hdf5_vertex_data_writer::vertex_data_table_type<uint64_t, edge_data_type> data;
 
       for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end(); ++vitr) {
         if (graph->degree(*vitr) > 0) {

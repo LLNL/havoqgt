@@ -15,12 +15,13 @@
 
 #include "H5Cpp.h"
 
+#include <havoqgt/hdf5_utilities.hpp>
+
 namespace havoqgt {
 
 class hdf5_vertex_data_writer {
  public:
-  using vertex_id_type   = uint64_t;
-  using vertex_data_type = double;
+  template <typename vertex_id_type, typename vertex_data_type>
   using vertex_data_table_type = std::tuple<std::vector<vertex_id_type>,
                                             std::vector<vertex_data_type>>;
 
@@ -29,22 +30,24 @@ class hdf5_vertex_data_writer {
     priv_create_file(hdf5_file_names);
   }
 
-  bool write_data(const vertex_data_table_type &vertex_data,
-                  const std::string &           vertex_column_name,
-                  const std::string &           vertex_data_column_name) {
+  template <class vertex_id_type, class vertex_data_type>
+  bool write_data(
+      const vertex_data_table_type<vertex_id_type, vertex_data_type> &out_data,
+      const std::string &vertex_column_name,
+      const std::string &vertex_data_column_name) {
     auto success = priv_write_array_dataset(vertex_column_name,
-                                            H5::PredType::NATIVE_UINT64,
-                                            std::get<0>(vertex_data));
+                                            h5_data_type(vertex_id_type{}),
+                                            std::get<0>(out_data));
     success &= priv_write_array_dataset(vertex_data_column_name,
-                                        H5::PredType::IEEE_F64LE,
-                                        std::get<1>(vertex_data));
+                                        h5_data_type(vertex_data_type{}),
+                                        std::get<1>(out_data));
 
     return success;
   }
 
  private:
   bool priv_create_file(const std::string &file_name) {
-    const bool success = priv_try_catch_h5([this, &file_name]() -> bool {
+    const bool success = h5_try_and_catch([this, &file_name]() -> bool {
       m_ptr_file = std::make_unique<H5::H5File>(file_name.c_str(),
                                                 H5F_ACC_TRUNC);
       return true;
@@ -62,7 +65,7 @@ class hdf5_vertex_data_writer {
                                 const std::vector<T> &data) {
     if (!m_ptr_file) return false;
 
-    return priv_try_catch_h5([this, &dataset_name, &data_type,
+    return h5_try_and_catch([this, &dataset_name, &data_type,
                               &data]() -> bool {
       hsize_t       size = data.size();
       H5::DataSpace dataspace(1, &size);
@@ -72,33 +75,6 @@ class hdf5_vertex_data_writer {
       dataset.write(data.data(), data_type);
       return true;
     });
-  }
-
-  static bool priv_try_catch_h5(const std::function<bool()> &command,
-                                const bool                   verbose = false) {
-    if (!command) return true;
-
-    try {
-      H5::Exception::dontPrint();
-      return command();
-    } catch (const H5::FileIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataSetIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataSpaceIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataTypeIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (...) {
-      if (verbose) std::cerr << "An exception was thrown" << std::endl;
-      return false;
-    }
-    assert(false);
-    return false;
   }
 
   std::unique_ptr<H5::H5File> m_ptr_file;

@@ -11,16 +11,18 @@
 #include <memory>
 #include <vector>
 
-#include <functional>
-
 #include "H5Cpp.h"
+
+#include <havoqgt/hdf5_utilities.hpp>
 
 namespace havoqgt {
 
+template <class _vertex_id_type = int64_t, class _weight_type = double>
 class hdf5_edge_list_reader {
  public:
-  using vertex_id_type = int64_t;
-  using weight_type    = int64_t;
+  using vertex_id_type = _vertex_id_type;
+  using weight_type = _weight_type;
+
   using edge_list_type = std::tuple<std::vector<vertex_id_type>,
                                     std::vector<vertex_id_type>,
                                     std::vector<weight_type>>;
@@ -50,7 +52,7 @@ class hdf5_edge_list_reader {
 
  private:
   bool priv_open_file(const std::string &file_nam) {
-    const bool success = priv_try_catch_h5([&file_nam, this]() -> bool {
+    const bool success = h5_try_and_catch([&file_nam, this]() -> bool {
       m_ptr_file = std::make_unique<H5::H5File>(file_nam.c_str(),
                                           H5F_ACC_RDONLY);
       return true;
@@ -62,48 +64,22 @@ class hdf5_edge_list_reader {
     return true;
   }
 
-  bool priv_read_array_dataset(const std::string &          dataset_name,
-                               std::vector<vertex_id_type> *buf) {
-    const bool success = priv_try_catch_h5([this, &dataset_name, buf]() {
+  template <typename T>
+  bool priv_read_array_dataset(const std::string &dataset_name,
+                               std::vector<T> *   buf) {
+    const bool success = h5_try_and_catch([this, &dataset_name, buf]() {
       H5::DataSet dataset = m_ptr_file->openDataSet(dataset_name.c_str());
 
       hsize_t length = 0;
       dataset.getSpace().getSimpleExtentDims(&length);
 
       buf->resize(length);
-      dataset.read(buf->data(), H5::PredType::NATIVE_INT64);
+      dataset.read(buf->data(), h5_data_type(T{}));
 
       return true;
     });
 
     return success;
-  }
-
-  static bool priv_try_catch_h5(const std::function<bool()> &command,
-                                const bool                   verbose = false) {
-    if (!command) return true;
-
-    try {
-      H5::Exception::dontPrint();
-      return command();
-    } catch (const H5::FileIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataSetIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataSpaceIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (const H5::DataTypeIException &error) {
-      if (verbose) error.printErrorStack();
-      return false;
-    } catch (...) {
-      if (verbose) std::cerr << "An exception was thrown" << std::endl;
-      return false;
-    }
-    assert(false);
-    return false;
   }
 
   edge_list_type m_edge_buf;
