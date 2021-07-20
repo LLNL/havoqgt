@@ -1,4 +1,4 @@
-name: llnl-metal-example-05
+name: llnl-metall-example-05
 
 channels:
   - conda-forge
