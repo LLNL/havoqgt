@@ -131,6 +131,8 @@ std::vector<std::string> local_assign_inputs(const std::vector<std::string>& all
       sub_filenames.push_back(all_filenames[i]);
     }
   }
+
+  return sub_filenames;
 }
 
 auto read_edge(const std::vector<std::string> &input_filenames,
@@ -143,7 +145,7 @@ auto read_edge(const std::vector<std::string> &input_filenames,
 
   std::vector<std::tuple<uint64_t, uint64_t, weight_type>> edge_list;
   for (const auto& file_name : assigned_filenames) {
-    hdf5_edge_list_reader<uint64_t, double> reader(file_name);
+    hdf5_edge_list_reader<uint64_t, weight_type> reader(file_name);
     if (!reader.read(src_key, dst_key, weight_key)) {
       std::cerr << "Failed to read edge: " << file_name << std::endl;
     }
