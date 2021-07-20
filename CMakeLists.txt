@@ -93,13 +93,11 @@ endmacro()
 # HDF5
 #
 if (USE_HDF5)
-  find_package(HDF5 COMPONENTS CXX C HL) # TODO, add required version info
-  if (HDF5_FOUND)
-    include_directories(${HDF5_INCLUDE_DIRS})
-    add_definitions(${HDF5_DEFINITIONS})
-  endif()
+  find_package(HDF5 1.10.7 REQUIRED COMPONENTS CXX)
 endif()
 macro(include_link_hdf5 target)
+  target_include_directories(${target} PUBLIC ${HDF5_INCLUDE_DIRS})
+  target_compile_definitions(${target} PUBLIC ${HDF5_DEFINITIONS})
   target_link_libraries(${target} ${HDF5_LIBRARIES})
 endmacro()
 

@@ -19,8 +19,8 @@
 
 using namespace havoqgt;
 
+typedef double weight_type;
 typedef delegate_partitioned_graph<distributed_db::allocator<>> graph_type;
-typedef hdf5_edge_list_reader::weight_type weight_type;
 typedef distributed_db::allocator<weight_type> edge_data_allocator_type;
 typedef graph_type::edge_data<weight_type, edge_data_allocator_type> edge_data_type;
 
@@ -110,7 +110,7 @@ void parse_cmd_line(int argc, char** argv, std::string& output_filename, std::st
   }
   if (prn_help || !found_output_filename || src_key.empty() || dst_key.empty()) {
     usage();
-    exit(-1);
+    MPI_Abort(MPI_COMM_WORLD, -1);
   }
 
   for (int index = optind; index < argc; index++) {
@@ -143,8 +143,8 @@ auto read_edge(const std::vector<std::string> &input_filenames,
 
   std::vector<std::tuple<uint64_t, uint64_t, weight_type>> edge_list;
   for (const auto& file_name : assigned_filenames) {
-    hdf5_edge_list_reader reader;
-    if (!reader.read(file_name, src_key, dst_key, weight_key)) {
+    hdf5_edge_list_reader<uint64_t, double> reader(file_name);
+    if (!reader.read(src_key, dst_key, weight_key)) {
       std::cerr << "Failed to read edge: " << file_name << std::endl;
     }
 

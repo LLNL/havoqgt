@@ -71,7 +71,23 @@ To manually specify the location of Umap, use CMake variable `-DUMAP_ROOT=/path/
 To build executable(s) that use HDF5, use CMake option `-DUSE_HDF5=ON`.
 CMake tries to find the library from its default search paths ---
 for instance, one can control the search path by using CMake variable `CMAKE_PREFIX_PATH`
+We use HDF5 v1.10.7 for developing and testing.
 
+### HDF5 on LC
+
+```bash
+module load gcc/8.3.1
+spack install hdf5@1.10.7%gcc@8.3.1+cxx
+
+# Spack sets HDF5's path in CMAKE_PREFIX_PATH. 
+spack load hdf5@1.10.7%gcc@8.3.1+cxx
+
+# Here is another way
+# Get a path to the installed HDF5 first 
+spack find --path hdf5@1.10.7%gcc@8.3.1+cxx
+# Then, set CMAKE_PREFIX_PATH manually
+export CMAKE_PREFIX_PATH=/path/to/hdf5:${CMAKE_PREFIX_PATH}
+```
 
 # About
 
