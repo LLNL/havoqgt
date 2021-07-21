@@ -315,6 +315,8 @@ def draw_cytoscape_graph (edge_list, s_t_vertices = list(), cytoscape_graph_layo
 	for i in range(len(s_t_vertices)) :
 		highlight_node(cytoscape_object, {"data" : {"id": s_t_vertices[i]}})
 
+	cytoscape_graph_set_style(cytoscape_object)
+
 	reset_node_info_widget()
 
 	display(cytoscape_object)
