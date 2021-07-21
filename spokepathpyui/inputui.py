@@ -26,9 +26,6 @@ out = Output()
 
 print("inputui.py")
 
-def print_string(str) :
-	print("UI " + str)
-
 # input widgets
 #vertex_type_count_list = inpututil.get_vertex_type_count_list(inpututil.vertex_type_map)
 
