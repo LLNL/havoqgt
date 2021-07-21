@@ -168,7 +168,7 @@ def btn_search_result_load_more_on_click(*args) :
                 #print(len(search_result_a_list))
                 
                 sub_drdn_options_list, sub_drdn_options_list_end, sub_drdn_options_list_len = \
-                    load_more_from_list_by_range(search_result_a_list, begin, end)
+                    inpututil.load_more_from_list_by_range(search_result_a_list, begin, end)
                 
                 #print(len(sub_drdn_options_list))
                 #print(sub_drdn_options_list_end)
@@ -194,7 +194,7 @@ def btn_search_result_load_more_on_click(*args) :
                 end = begin + load_more_count # (begin : end]
                                                 
                 sub_drdn_options_list, sub_drdn_options_list_end, sub_drdn_options_list_len = \
-                    load_more_from_list_by_range(search_result_b_list, begin, end)
+                    inpututil.load_more_from_list_by_range(search_result_b_list, begin, end)
                                                 
                 child.options = sub_drdn_options_list # replace the previous entries
                 sub_drdn_btn_pair_map[id(btn)][1] = sub_drdn_options_list_end # starting point for the next batch                                
@@ -217,12 +217,12 @@ def btn_kw_search_a_on_click(*args) :
     vertex_type = "dummy" # TODO: remove
     #print(text_kw_search_a.value)    
     #print(vertex_type_selected_a)
-    kw_search_filtered_by_veretx_type(vertex_type_selected_a, text_kw_search_a.value, search_result_a_list)
+    inpututil.kw_search_filtered_by_veretx_type(vertex_type_selected_a, text_kw_search_a.value, search_result_a_list)
     label_kw_search_result_count_a.value = str(len(search_result_a_list))
     #print(len(search_result_a_list))
     
     sub_drdn_options_list, sub_drdn_options_list_end, sub_drdn_options_list_len = \
-        load_more_from_list_by_range(search_result_a_list, 0, load_more_count)
+        inpututil.load_more_from_list_by_range(search_result_a_list, 0, load_more_count)
     
     sub_drdn = widgets.SelectMultiple(options=sub_drdn_options_list, description="")        
     sub_drdn.observe(on_sub_drdn_value_change_a, names='value')
@@ -249,12 +249,12 @@ def btn_kw_search_b_on_click(*args) :
     vertex_type = "dummy" # TODO: remove
     #print(text_kw_search_b.value)    
     #print(vertex_type_selected_b)
-    kw_search_filtered_by_veretx_type(vertex_type_selected_b, text_kw_search_b.value, search_result_b_list)
+    inpututil.kw_search_filtered_by_veretx_type(vertex_type_selected_b, text_kw_search_b.value, search_result_b_list)
     label_kw_search_result_count_b.value = str(len(search_result_b_list))
     #print(len(search_result_b_list))
     
     sub_drdn_options_list, sub_drdn_options_list_end, sub_drdn_options_list_len = \
-        load_more_from_list_by_range(search_result_b_list, 0, load_more_count)
+        inpututil.load_more_from_list_by_range(search_result_b_list, 0, load_more_count)
     
     sub_drdn = widgets.SelectMultiple(options=sub_drdn_options_list, description="")        
     sub_drdn.observe(on_sub_drdn_value_change_b, names='value')

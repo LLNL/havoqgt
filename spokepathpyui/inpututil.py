@@ -133,3 +133,47 @@ def load_more_from_list_by_range(item_list, begin = 0, end = 25) :
     if (end > len(item_list)) :
         end = len(item_list)
     return item_list[begin : end], end, len(item_list)
+
+# # # # # #
+
+# input parameters
+
+s_t_vertices = []
+filter_vertex_labels = []
+
+def setup_input_parameters(vertex_data_filename, vertex_type_a_set, vertex_type_b_set, vertex_type_c_set) :
+    vertex_type_c_map = dict()
+
+    with open (vertex_data_filename, "r") as read_file :
+        for line in read_file :
+            if len(vertex_type_c_set) < 1 :
+                break
+            line = line.strip()
+            tokens = line.split(" ")
+            vertex = int(tokens[0].strip(' \t\n\r'))
+            vertex_data_hash = int(tokens[1].strip(' \t\n\r'))
+            vertex_data_string = str(tokens[2].strip(' \t\n\r'))
+            if vertex_data_string in vertex_type_c_map :
+                continue
+            if vertex_data_string in vertex_type_c_set :
+                vertex_type_c_map[vertex_data_string] = vertex_data_hash
+            if len(vertex_type_c_map) == len(vertex_type_c_set) :
+                break
+
+    if len(vertex_type_c_map) != len(vertex_type_c_set) :
+        print("Error: items not found.")
+        return
+    print(vertex_type_c_map)
+
+    for i in vertex_type_a_set :
+        s_t_vertices.append(i)
+
+    for i in vertex_type_b_set :
+        s_t_vertices.append(i)
+
+    for k, v in vertex_type_c_map.items() :
+        filter_vertex_labels.append(v)
+
+    print(s_t_vertices)
+    print(filter_vertex_labels)
+
