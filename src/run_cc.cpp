@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
     // graph->print_graph_statistics();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    graph_type::vertex_data<graph_type::vertex_locator,
+    graph_type::vertex_data<uint64_t,
                             std::allocator<graph_type::vertex_locator>>
         cc_data(*graph);
 
@@ -168,14 +168,14 @@ int main(int argc, char** argv) {
       for (auto vitr = graph->vertices_begin(); vitr != graph->vertices_end();
            ++vitr) {
         if (graph->degree(*vitr) > 0) {
-          cc_count[graph->locator_to_label(cc_data[*vitr])]++;
+          cc_count[cc_data[*vitr]]++;
         }
       }
 
       for (auto citr = graph->controller_begin();
            citr != graph->controller_end(); ++citr) {
         if (graph->degree(*citr) > 0) {
-          cc_count[graph->locator_to_label(cc_data[*citr])]++;
+          cc_count[cc_data[*citr]]++;
         }
       }
 
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
            ++vitr) {
         if (graph->degree(*vitr) > 0) {
           ofs << graph->locator_to_label(*vitr) << " "
-              << graph->locator_to_label(cc_data[*vitr]) << "\n";
+              << cc_data[*vitr] << "\n";
         }
       }
 
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
            citr != graph->controller_end(); ++citr) {
         if (graph->degree(*citr) > 0) {
           ofs << graph->locator_to_label(*citr) << " "
-              << graph->locator_to_label(cc_data[*citr]) << "\n";
+              << cc_data[*citr] << "\n";
         }
       }
     }

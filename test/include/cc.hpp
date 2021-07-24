@@ -17,7 +17,7 @@
 
 namespace havoqgt::test {
 
-typedef graph_type::vertex_data<graph_type::vertex_locator,
+typedef graph_type::vertex_data<uint64_t,
                                 std::allocator<graph_type::vertex_locator>>
     cc_data_type;
 

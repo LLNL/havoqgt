@@ -50,7 +50,7 @@ void validate_cc_result(const graph_type &graph, const uint32_t max_vertex_id,
   for (uint32_t v = 0; v <= max_vertex_id; ++v) {
     graph_type::vertex_locator vertex = graph.label_to_locator(v);
     if (vertex.owner() == mpi_rank) {
-      const auto cc_id = graph.locator_to_label(cc_data[vertex]);
+      const auto cc_id = cc_data[vertex];
       // std::cout << cc_id << " == " << ans_cc_id[v] << std::endl;
       if (cc_id != ans_cc_id[v]) {
         std::cerr << "Unexpected CC ID" << std::endl;
