@@ -6,6 +6,7 @@
 #ifndef HAVOQGT_CONNECTED_COMPONENTS_HPP_INCLUDED
 #define HAVOQGT_CONNECTED_COMPONENTS_HPP_INCLUDED
 
+#include <limits>
 #include <havoqgt/detail/visitor_priority_queue.hpp>
 #include <havoqgt/visitor_queue.hpp>
 
@@ -13,13 +14,16 @@ namespace havoqgt {
 
 template <typename Graph>
 class cc_visitor {
+ private:
+  static constexpr uint64_t k_dummy_cc = std::numeric_limits<uint64_t>::max();
+
  public:
   typedef typename Graph::vertex_locator vertex_locator;
   cc_visitor() {}
-  cc_visitor(vertex_locator _vertex, vertex_locator _cc)
+  cc_visitor(vertex_locator _vertex, uint64_t _cc)
       : vertex(_vertex), m_cc(_cc) {}
 
-  cc_visitor(vertex_locator _vertex) : vertex(_vertex), m_cc(_vertex) {}
+  cc_visitor(vertex_locator _vertex) : vertex(_vertex), m_cc(k_dummy_cc) {}
 
   template <typename AlgData>
   bool pre_visit(AlgData& alg_data) const {
@@ -29,9 +33,10 @@ class cc_visitor {
     }
     auto& graph   = std::get<0>(alg_data);
     auto& cc_data = std::get<1>(alg_data);
-    if (graph.locator_to_label(m_cc) <
-        graph.locator_to_label(cc_data[vertex])) {
-      cc_data[vertex] = m_cc;
+    auto cc = (m_cc == k_dummy_cc) ? graph.locator_to_label(vertex) : m_cc;
+
+    if (cc < cc_data[vertex]) {
+      cc_data[vertex] = cc;
       return true;
     }
     return false;
@@ -53,15 +58,15 @@ class cc_visitor {
       return false;
     }
 
-    if (graph.locator_to_label(cc_data[vertex]) >=
-        graph.locator_to_label(m_cc)) {
-      cc_data[vertex] = m_cc;
-      for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex);
-           ++eitr) {
+    auto cc = (m_cc == k_dummy_cc) ? graph.locator_to_label(vertex) : m_cc;
+
+    if (cc <= cc_data[vertex]) {
+      cc_data[vertex] = cc;
+      for (auto eitr = g.edges_begin(vertex); eitr != g.edges_end(vertex); ++eitr) {
         auto neighbor = eitr.target();
         if (e_predicate(eitr)) {
-          if (graph.locator_to_label(m_cc) < graph.locator_to_label(neighbor)) {
-            cc_visitor new_visitor(neighbor, m_cc);
+          if (cc < graph.locator_to_label(neighbor)) {
+            cc_visitor new_visitor(neighbor, cc);
             vis_queue->queue_visitor(new_visitor);
           }
         }
@@ -82,7 +87,7 @@ class cc_visitor {
   }
 
   vertex_locator vertex;
-  vertex_locator m_cc;
+  uint64_t m_cc;
 };
 
 template <typename TGraph, typename CCData>
@@ -99,10 +104,10 @@ void connected_components(TGraph* g, CCData& cc_data, VFunction& v_predicate,
   typedef cc_visitor<TGraph> visitor_type;
 
   for (auto vitr = g->vertices_begin(); vitr != g->vertices_end(); ++vitr) {
-    cc_data[*vitr] = *vitr;
+    cc_data[*vitr] = g->locator_to_label(*vitr);
   }
   for (auto citr = g->controller_begin(); citr != g->controller_end(); ++citr) {
-    cc_data[*citr] = *citr;
+    cc_data[*citr] = g->locator_to_label(*citr);
   }
 
   auto alg_data = std::forward_as_tuple(*g, cc_data, v_predicate, e_predicate);
