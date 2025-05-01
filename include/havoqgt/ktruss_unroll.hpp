@@ -11,6 +11,7 @@
 #include <fstream>
 #include <havoqgt/visitor_queue.hpp>
 #include <map>
+#include <set>
 
 namespace havoqgt {
 
