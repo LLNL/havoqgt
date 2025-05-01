@@ -12,6 +12,7 @@
 #include <havoqgt/visitor_queue.hpp>
 #include <boost/container/deque.hpp>
 #include <vector>
+#include <limits>
 
 namespace havoqgt {
 
