@@ -51,6 +51,7 @@ public:
 
   typedef typename Graph::vertex_locator vertex_locator;
   typedef typename Graph::edge_iterator eitr_type;
+  typedef VertexID EdgeID; 
 
   init_prio_visitor()
     {}
@@ -73,28 +74,27 @@ public:
     //  std::cout << neighbor_priority << std::endl;	    
     //}
 
+    // temporary hack	  
+    if (vertex.is_delegate()) {
+      std::get<3>(alg_data)[vertex] = maximal_independent_set::out;	    
+      return false;
+    }
+    // temporary hack
+
     auto graph = std::get<2>(alg_data);
     auto& higher_priority_neighbor_map = std::get<4>(alg_data)[vertex];
     auto& lower_priority_neighbor_map = std::get<5>(alg_data)[vertex];
 
     auto vertex_ID = graph->locator_to_label(vertex);
 
-    if (std::get<3>(alg_data)[vertex] < 1) {
+    if (std::get<3>(alg_data)[vertex] < 1) { // vertex_priority_list
+      // vertex priority is 0, i.e., OUT     
+    
+      auto vertex_degree = graph->degree(vertex);
 
-      auto average_degree = std::get<0>(alg_data);
-      auto scaled_average_degree = std::get<1>(alg_data);
-
-      auto vertex_degree = graph->degree(vertex); 
-      auto vertex_priority = maximal_independent_set::in;
-
-      if (vertex_degree > 0) { 
-        auto x = vertex_degree - 
-          (maximal_independent_set::hash(vertex_ID) * maximal_independent_set::float_factor);
-        size_t res = static_cast<size_t>(scaled_average_degree / (average_degree + x));
-        vertex_priority = (res + res) | 1;      
-      }      
-
-      std::get<3>(alg_data)[vertex] = vertex_priority; // vertex_priority_list
+      std::get<3>(alg_data)[vertex] = 
+        maximal_independent_set::vertex_priority
+ 	  <VertexID, EdgeID, VertexPriority>(vertex_ID, vertex_degree);
     }
 
     if ((std::get<3>(alg_data)[vertex] > neighbor_priority) || 
@@ -111,7 +111,7 @@ public:
 	  return false;
 	}       	
       } else {
-        std::cerr << "Error: unexpected item in the map." << std::endl;
+//        std::cerr << "Error: unexpected item in the map." << std::endl;
         return false;     	
       }   	      
     } else {
@@ -126,7 +126,7 @@ public:
 	  return false;
 	}       	
       } else {
-        std::cerr << "Error: unexpected item in the map." << std::endl;
+//        std::cerr << "Error: unexpected item in the map." << std::endl;
         return false;     	
       }   	      
     } // else	    
@@ -150,31 +150,22 @@ public:
     //    std::get<0>(alg_data) << std::endl;   	    
     //}
     
-    auto vertex_priority = maximal_independent_set::in;
+    // temporary hack	  
+    if (vertex.is_delegate()) {
+      std::get<3>(alg_data)[vertex] = maximal_independent_set::out;	    
+      return true;	    
+    }
+    // temporary hack
 
     if (std::get<3>(alg_data)[vertex] < 1) { // vertex_priority_list
-
-      auto average_degree = std::get<0>(alg_data);
-      auto scaled_average_degree = std::get<1>(alg_data);
+      // vertex priority is 0, i.e., OUT	    
 
       auto vertex_ID = g.locator_to_label(vertex);
-      auto vertex_degree = g.degree(vertex); 
+      auto vertex_degree = g.degree(vertex);
 
-      if (vertex_degree > 0) { 
-        auto x = vertex_degree - 
-          (maximal_independent_set::hash(vertex_ID) * maximal_independent_set::float_factor);
-        size_t res = static_cast<size_t>(scaled_average_degree / (average_degree + x));
-        vertex_priority = (res + res) | 1;      
-      }      
-
-      //if (mpi_rank == 0) {
-      //  std::cout << g.locator_to_label(vertex) << " " <<
-      //  vertex_degree << " " << average_degree << " " << 
-      //  scaled_average_degree << " " << vertex_priority << " " << 
-      //  std::get<3>(alg_data)[vertex] << std::endl;
-      //}
-    
-      std::get<3>(alg_data)[vertex] = vertex_priority; // vertex_priority_list
+      std::get<3>(alg_data)[vertex] = 
+        maximal_independent_set::vertex_priority
+ 	  <VertexID, EdgeID, VertexPriority>(vertex_ID, vertex_degree); 
     }  
     
     for(eitr_type eitr = g.edges_begin(vertex);
@@ -210,9 +201,9 @@ void initialize_priority(TGraph* graph,
   VertexIDPriorityMapCollection& higher_priority_neighbor_map,
   VertexIDPriorityMapCollection& lower_priority_neighbor_map) {
 
+  typedef typename TGraph::vertex_locator vloc_type;
   typedef typename TGraph::vertex_iterator vitr_type;
   typedef typename TGraph::controller_iterator citr_type;
-  typedef typename TGraph::vertex_locator vloc_type;
   typedef typename TGraph::edge_iterator eitr_type;
 
   int mpi_rank = havoqgt::comm_world().rank();
@@ -220,41 +211,9 @@ void initialize_priority(TGraph* graph,
     std::cout << "Initialize vertex priority" << std::endl;   
   }
 
-  // vertex and edge count 
-  size_t local_vertex_count(0);
-  size_t local_edge_count(0);
-
-  for (vitr_type vitr = graph->vertices_begin(); vitr != graph->vertices_end();
-    ++vitr) {
-    vloc_type vertex = *vitr;
-    ++local_vertex_count;
-    local_edge_count+=graph->degree(vertex);
-  }  
-
-  for (citr_type citr = graph->controller_begin(); 
-    citr != graph->controller_end(); ++citr) {
-    vloc_type vertex = *citr;
-    ++local_vertex_count;
-    local_edge_count+=graph->degree(vertex); 
-  }   
-
-  const size_t vertex_count = havoqgt::mpi_all_reduce(local_vertex_count, 
-    std::plus<size_t>(), MPI_COMM_WORLD);
-  const size_t edge_count = havoqgt::mpi_all_reduce(local_edge_count, 
-    std::plus<size_t>(), MPI_COMM_WORLD);
-
-  const size_t average_degree = static_cast<size_t>(ceill(edge_count / vertex_count));
-  const double scaled_average_degree = ((maximal_independent_set::in / 2) - 1) * average_degree; 
-
-  MPI_Barrier(MPI_COMM_WORLD);  
-
-  if (mpi_rank == 0) {
-    std::cout << "#Vertices: " << vertex_count << std::endl;
-    std::cout << "#Edges: " << edge_count << std::endl;
-    std::cout << "Average degree: " << average_degree << std::endl; 
-    std::cout << "Scaled average degree: " << scaled_average_degree << 
-      std::endl; 
-  }
+  const size_t average_degree = maximal_independent_set::average_degree;
+  const double scaled_average_degree = 
+    maximal_independent_set::scaled_average_degree; 
 
   // visitor
 
@@ -270,7 +229,15 @@ void initialize_priority(TGraph* graph,
   auto vq = havoqgt::create_visitor_queue<visitor_type,
     havoqgt::detail::visitor_priority_queue>(graph, alg_data);
   vq.init_visitor_traversal();
-  MPI_Barrier(MPI_COMM_WORLD);
+  //MPI_Barrier(MPI_COMM_WORLD);
+
+  // temporary hack
+  //for(vitr_type vitr = graph->delegate_vertices_begin();
+  //  vitr != graph->delegate_vertices_end(); ++vitr) {
+  //  vloc_type vertex = *vitr;
+  //  vertex_priority_list[vertex] = maximal_independent_set::out; 
+  //} // for
+  // temporary hack
 
   // verification 
   
