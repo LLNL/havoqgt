@@ -201,7 +201,7 @@ class parallel_edge_list_reader {
       if (std::getline(input_file, line)) {
         auto tokens = split(line, ' ');
         if (tokens.size() > 2) {
-          m_has_edge_data = true;
+          m_has_edge_data = false; //true;
         }
       }
       input_file.close();
